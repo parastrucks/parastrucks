@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Paras Trucks — Commercial Vehicles & Construction Equipment | Haryana & Gujarat</title>
+<meta name="description" content="Paras Trucks is a leading dealer for Ashok Leyland, Switch Mobility & HD Hyundai CE with 11 facilities across Haryana and Gujarat. Sales, Service & Spares.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --paras-blue: #0080C9; --paras-blue-dark: #006BA8; --paras-blue-light: #E8F4FC;
+  --paras-blue-lighter: #F2F9FE; --al-blue: #0071B6; --black: #0A0A0A;
+  --gray-900: #1A1A1A; --gray-800: #2D2D2D; --gray-700: #404040; --gray-600: #555555;
+  --gray-500: #717171; --gray-400: #9A9A9A; --gray-300: #C4C4C4; --gray-200: #E0E0E0;
+  --gray-100: #F0F0F0; --gray-50: #F8F8F8; --white: #FFFFFF;
+  --font: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 20px rgba(0,0,0,0.08); --shadow-lg: 0 12px 40px rgba(0,0,0,0.1);
+  --radius: 12px; --radius-sm: 8px;
+  --transition: 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+html { scroll-behavior: smooth; }
+body { font-family: var(--font); color: var(--gray-800); line-height: 1.6; background: var(--white); overflow-x: hidden; -webkit-font-smoothing: antialiased; }
+html[lang="hi"] body { line-height: 1.9; }
+html[lang="hi"] .hero h1 { line-height: 1.25; }
+html[lang="hi"] .hero-desc { line-height: 2; }
+html[lang="hi"] .section-title { line-height: 1.35; }
+html[lang="hi"] .section-subtitle { line-height: 2; }
+html[lang="hi"] .service-card p, html[lang="hi"] .brand-card p, html[lang="hi"] .about-text p { line-height: 2.1; }
+html[lang="hi"] .footer-desc { line-height: 2; }
+img { max-width: 100%; display: block; }
+a { text-decoration: none; color: inherit; }
+button { cursor: pointer; border: none; font-family: var(--font); }
+.container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+
+/* TOPBAR */
+.topbar { background: var(--gray-900); color: var(--gray-300); font-size: 13px; padding: 8px 0; }
+.topbar .container { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+.topbar a { color: var(--gray-300); transition: color var(--transition); }
+.topbar a:hover { color: var(--white); }
+.topbar-left { display: flex; align-items: center; gap: 20px; }
+.topbar-right { display: flex; align-items: center; gap: 16px; }
+.lang-toggle { background: rgba(255,255,255,0.1); border-radius: 20px; padding: 3px; display: flex; gap: 2px; }
+.lang-btn { padding: 3px 12px; border-radius: 16px; font-size: 12px; font-weight: 500; color: var(--gray-400); background: transparent; transition: all var(--transition); }
+.lang-btn.active { background: var(--white); color: var(--gray-900); }
+.lang-btn:hover:not(.active) { color: var(--white); }
+
+/* NAVBAR */
+.navbar { background: var(--white); border-bottom: 1px solid var(--gray-200); position: sticky; top: 0; z-index: 100; transition: box-shadow var(--transition); }
+.navbar.scrolled { box-shadow: var(--shadow-md); }
+.navbar .container { display: flex; align-items: center; justify-content: space-between; height: 72px; }
+.nav-brand { display: flex; align-items: center; }
+.nav-logo { display: flex; align-items: center; }
+.nav-logo img { height: 38px; width: auto; }
+.nav-links { display: flex; align-items: center; gap: 28px; list-style: none; }
+.nav-links a { font-size: 14px; font-weight: 500; color: var(--gray-600); transition: color var(--transition); position: relative; padding: 4px 0; }
+.nav-links a::after { content: ''; position: absolute; bottom: -2px; left: 0; width: 0; height: 2px; background: var(--paras-blue); transition: width var(--transition); border-radius: 1px; }
+.nav-links a:hover { color: var(--paras-blue); }
+.nav-links a:hover::after { width: 100%; }
+.nav-links a.active { color: var(--paras-blue); }
+.nav-links a.active::after { width: 100%; }
+.nav-cta { background: var(--paras-blue) !important; color: var(--white) !important; padding: 12px 28px !important; border-radius: var(--radius-sm) !important; font-size: 15px !important; font-weight: 600 !important; transition: all var(--transition) !important; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.nav-cta::after { display: none !important; }
+.nav-cta:hover { background: var(--paras-blue-dark) !important; transform: translateY(-1px); box-shadow: 0 4px 16px rgba(0,128,201,0.35); }
+/* Dropdown */
+.nav-dropdown { position: relative; }
+.nav-dropdown > a::after { display: none; }
+.nav-dropdown-label { display: flex; align-items: center; gap: 4px; }
+.nav-dropdown-arrow { font-size: 10px; transition: transform var(--transition); }
+.nav-dropdown:hover .nav-dropdown-arrow { transform: rotate(180deg); }
+.nav-dropdown-menu { position: absolute; top: 100%; left: -16px; background: var(--white); border: 1px solid var(--gray-200); border-radius: var(--radius-sm); padding: 8px 0; min-width: 220px; box-shadow: var(--shadow-lg); opacity: 0; visibility: hidden; transform: translateY(8px); transition: all var(--transition); z-index: 50; }
+.nav-dropdown:hover .nav-dropdown-menu { opacity: 1; visibility: visible; transform: translateY(0); }
+.nav-dropdown-menu a { display: flex; align-items: center; gap: 10px; padding: 10px 16px; font-size: 14px; color: var(--gray-700); transition: background var(--transition); }
+.nav-dropdown-menu a::after { display: none; }
+.nav-dropdown-menu a:hover { background: var(--gray-50); color: var(--paras-blue); }
+.nav-dropdown-menu img { height: 20px; width: auto; }
+.mobile-toggle { display: none; flex-direction: column; gap: 5px; background: none; padding: 8px; }
+.mobile-toggle span { width: 24px; height: 2px; background: var(--gray-800); border-radius: 2px; }
+
+/* HERO */
+.hero { position: relative; min-height: 560px; display: flex; align-items: center; overflow: hidden; background: var(--gray-900); }
+.hero-bg { position: absolute; inset: 0; z-index: 1; }
+.hero-bg img { width: 100%; height: 100%; object-fit: cover; object-position: center 40%; }
+.hero-bg::after { content: ''; position: absolute; inset: 0; background: linear-gradient(105deg, rgba(10,15,25,0.93) 0%, rgba(10,15,25,0.78) 45%, rgba(10,15,25,0.35) 100%); }
+.hero .container { position: relative; z-index: 2; }
+.hero-content { max-width: 600px; padding: 60px 0; }
+.hero-badge { display: inline-flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); border-radius: 24px; padding: 6px 16px; font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.85); margin-bottom: 24px; backdrop-filter: blur(10px); }
+.hero-badge-dot { width: 6px; height: 6px; background: #4ADE80; border-radius: 50%; }
+.hero h1 { font-size: clamp(36px, 5vw, 54px); font-weight: 800; color: var(--white); line-height: 1.08; letter-spacing: -1.5px; margin-bottom: 20px; }
+.hero h1 span { color: #5CB8F0; }
+.hero-desc { font-size: 17px; color: rgba(255,255,255,0.65); line-height: 1.7; margin-bottom: 32px; max-width: 500px; }
+.hero-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.btn-primary { background: var(--paras-blue); color: var(--white); padding: 12px 22px; border-radius: var(--radius-sm); font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; gap: 8px; transition: all var(--transition); }
+.btn-primary:hover { background: var(--paras-blue-dark); transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,128,201,0.35); }
+.btn-outline { background: transparent; color: var(--white); padding: 12px 22px; border-radius: var(--radius-sm); font-size: 14px; font-weight: 600; border: 1.5px solid rgba(255,255,255,0.3); display: inline-flex; align-items: center; gap: 8px; transition: all var(--transition); }
+.btn-outline:hover { border-color: var(--white); background: rgba(255,255,255,0.05); }
+.hero-brands { display: flex; align-items: center; gap: 24px; margin-top: 40px; padding-top: 28px; border-top: 1px solid rgba(255,255,255,0.1); }
+.hero-brands-label { font-size: 12px; font-weight: 500; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 1px; }
+.hero-brand-logos { display: flex; align-items: center; gap: 20px; }
+.hero-brand-logos img { height: 24px; width: auto; filter: brightness(0) invert(0.7); opacity: 0.7; transition: opacity var(--transition); }
+.hero-brand-logos img:hover { opacity: 1; }
+
+/* SECTIONS */
+.section { padding: 80px 0; }
+.section-label { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px; color: var(--paras-blue); margin-bottom: 12px; }
+.section-title { font-size: clamp(28px, 3.5vw, 40px); font-weight: 800; color: var(--gray-900); letter-spacing: -1px; line-height: 1.15; margin-bottom: 16px; }
+.section-subtitle { font-size: 16px; color: var(--gray-500); max-width: 560px; line-height: 1.7; }
+.section-header { margin-bottom: 48px; }
+.section-header.centered { text-align: center; }
+.section-header.centered .section-subtitle { margin: 0 auto; }
+
+/* ABOUT */
+.about-section { background: var(--white); }
+.about-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: center; }
+.about-image-wrap { position: relative; border-radius: var(--radius); overflow: hidden; aspect-ratio: 4/3; background: var(--gray-100); }
+.about-image-wrap img { width: 100%; height: 100%; object-fit: cover; }
+.about-image-badge { position: absolute; bottom: 16px; left: 16px; background: var(--white); border-radius: var(--radius-sm); padding: 10px 16px; display: flex; align-items: center; gap: 10px; box-shadow: var(--shadow-lg); }
+.about-image-badge-icon { width: 36px; height: 36px; background: var(--paras-blue-light); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+.about-image-badge-text { font-size: 13px; font-weight: 600; color: var(--gray-800); line-height: 1.3; }
+.about-image-badge-text span { display: block; font-size: 11px; font-weight: 400; color: var(--gray-500); }
+.about-stats { display: flex; gap: 32px; margin-top: 32px; padding-top: 28px; border-top: 1px solid var(--gray-200); }
+.about-stat-num { font-size: 28px; font-weight: 800; color: var(--paras-blue); letter-spacing: -1px; }
+.about-stat-label { font-size: 13px; color: var(--gray-500); margin-top: 2px; }
+.about-text p { font-size: 16px; color: var(--gray-600); line-height: 1.8; margin-bottom: 16px; }
+.btn-text { display: inline-flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 600; color: var(--paras-blue); margin-top: 8px; transition: gap var(--transition); }
+.btn-text:hover { gap: 10px; }
+
+/* OUR BRANDS */
+.brands-section { background: var(--gray-50); }
+.brands-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+.brand-card { background: var(--white); border-radius: var(--radius); border: 1px solid var(--gray-200); padding: 32px 28px; transition: all var(--transition); display: flex; flex-direction: column; position: relative; overflow: hidden; }
+.brand-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--paras-blue); transform: scaleX(0); transition: transform var(--transition); }
+.brand-card:hover { border-color: var(--paras-blue); transform: translateY(-4px); box-shadow: var(--shadow-lg); }
+.brand-card:hover::before { transform: scaleX(1); }
+.brand-card-logo { height: 36px; width: auto; margin-bottom: 20px; }
+.brand-card h3 { font-size: 20px; font-weight: 700; color: var(--gray-900); margin-bottom: 8px; }
+.brand-card p { font-size: 14px; color: var(--gray-500); line-height: 1.7; margin-bottom: 16px; flex: 1; }
+.brand-card-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+.brand-tag { font-size: 11px; font-weight: 600; background: var(--paras-blue-light); color: var(--paras-blue); padding: 3px 10px; border-radius: 20px; }
+.brand-card-link { font-size: 14px; font-weight: 600; color: var(--paras-blue); display: inline-flex; align-items: center; gap: 4px; transition: gap var(--transition); }
+.brand-card-link:hover { gap: 8px; }
+
+/* SERVICES */
+.services-section { background: var(--white); }
+.services-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+.service-card { background: var(--gray-50); border-radius: var(--radius); padding: 36px 28px; border: 1px solid var(--gray-200); transition: all var(--transition); position: relative; overflow: hidden; }
+.service-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--paras-blue); transform: scaleX(0); transition: transform var(--transition); }
+.service-card:hover { border-color: var(--paras-blue); transform: translateY(-4px); box-shadow: var(--shadow-lg); background: var(--white); }
+.service-card:hover::before { transform: scaleX(1); }
+.service-icon { width: 56px; height: 56px; background: var(--paras-blue-light); border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; margin-bottom: 20px; font-size: 26px; }
+.service-card h3 { font-size: 20px; font-weight: 700; color: var(--gray-900); margin-bottom: 10px; }
+.service-card p { font-size: 14px; color: var(--gray-500); line-height: 1.7; }
+
+/* WHY */
+.why-section { background: var(--gray-50); }
+.why-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; }
+.why-card { text-align: center; padding: 32px 20px; border-radius: var(--radius); transition: all var(--transition); background: var(--white); border: 1px solid var(--gray-200); }
+.why-card:hover { border-color: var(--paras-blue); box-shadow: var(--shadow-md); }
+.why-icon { width: 64px; height: 64px; background: var(--paras-blue-light); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; font-size: 28px; transition: all var(--transition); }
+.why-card:hover .why-icon { background: var(--paras-blue); transform: scale(1.1); }
+.why-card:hover .why-icon span { filter: brightness(10); }
+.why-card h3 { font-size: 16px; font-weight: 700; color: var(--gray-900); margin-bottom: 6px; }
+.why-card p { font-size: 13px; color: var(--gray-500); line-height: 1.6; }
+
+/* NUMBERS */
+.numbers-section { background: linear-gradient(135deg, var(--gray-900) 0%, #0D2137 100%); padding: 60px 0; }
+.numbers-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 32px; text-align: center; }
+.number-item h3 { font-size: clamp(32px, 4vw, 48px); font-weight: 800; color: var(--white); letter-spacing: -1.5px; margin-bottom: 6px; }
+.number-item p { font-size: 14px; color: rgba(255,255,255,0.55); font-weight: 500; }
+.number-divider { width: 32px; height: 3px; background: var(--paras-blue); margin: 8px auto; border-radius: 2px; }
+
+/* TESTIMONIAL SLIDER */
+.testimonials-section { background: var(--white); }
+.slider-wrap { position: relative; overflow: hidden; }
+.slider-track { display: flex; transition: transform 0.45s cubic-bezier(0.25, 0.46, 0.45, 0.94); will-change: transform; }
+.slider-slide { flex: 0 0 auto; padding: 0 10px; }
+.testimonial-card { background: var(--gray-50); border-radius: var(--radius); overflow: hidden; border: 1px solid var(--gray-200); transition: all var(--transition); display: flex; flex-direction: column; height: 100%; }
+.testimonial-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-lg); }
+.testimonial-video-wrap { position: relative; aspect-ratio: 9/12; background: var(--gray-900); overflow: hidden; }
+.testimonial-video-wrap iframe { width: 100%; height: 100%; border: none; }
+.testimonial-body { padding: 16px 20px; }
+.testimonial-body h4 { font-size: 15px; font-weight: 700; color: var(--gray-900); margin-bottom: 2px; }
+.testimonial-body p { font-size: 13px; color: var(--gray-500); }
+.testimonial-fb { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--paras-blue); font-weight: 500; margin-top: 4px; }
+.slider-controls { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 28px; }
+.slider-btn { width: 40px; height: 40px; border-radius: 50%; background: var(--white); border: 1px solid var(--gray-200); display: flex; align-items: center; justify-content: center; font-size: 18px; color: var(--gray-700); transition: all var(--transition); box-shadow: var(--shadow-sm); flex-shrink: 0; }
+.slider-btn:hover { background: var(--paras-blue); color: var(--white); border-color: var(--paras-blue); }
+.slider-btn:disabled { opacity: 0.25; cursor: default; pointer-events: none; }
+.slider-dots { display: flex; gap: 6px; }
+.slider-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--gray-300); transition: all var(--transition); cursor: pointer; border: none; padding: 0; }
+.slider-dot.active { background: var(--paras-blue); width: 24px; border-radius: 4px; }
+
+/* OUTLETS */
+.outlets-section { background: var(--gray-50); }
+.outlets-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+.outlet-card { background: var(--white); border-radius: var(--radius); border: 1px solid var(--gray-200); padding: 28px; transition: all var(--transition); display: flex; flex-direction: column; gap: 12px; }
+.outlet-card:hover { border-color: var(--paras-blue); box-shadow: var(--shadow-md); }
+.outlet-card-header { display: flex; align-items: center; justify-content: space-between; }
+.outlet-card h3 { font-size: 18px; font-weight: 700; color: var(--gray-900); }
+.outlet-tag { font-size: 11px; font-weight: 600; background: var(--paras-blue-light); color: var(--paras-blue); padding: 3px 10px; border-radius: 20px; }
+.outlet-card-state { font-size: 13px; font-weight: 600; color: var(--gray-500); text-transform: uppercase; letter-spacing: 0.5px; }
+.outlet-card-brands { display: flex; gap: 8px; align-items: center; }
+.outlet-card-brands img { height: 16px; width: auto; opacity: 0.6; }
+.outlet-card-link { font-size: 13px; font-weight: 600; color: var(--paras-blue); display: inline-flex; align-items: center; gap: 4px; margin-top: auto; transition: gap var(--transition); }
+.outlet-card-link:hover { gap: 8px; }
+.outlet-viewall { text-align: center; margin-top: 32px; }
+
+/* EMI TOOL PROMO */
+.emi-promo { background: var(--white); }
+.emi-promo-card { background: linear-gradient(135deg, var(--paras-blue) 0%, #0065A0 100%); border-radius: var(--radius); padding: 48px; display: flex; align-items: center; justify-content: space-between; gap: 40px; }
+.emi-promo-text h2 { font-size: clamp(24px, 3vw, 32px); font-weight: 800; color: var(--white); letter-spacing: -0.5px; margin-bottom: 12px; }
+.emi-promo-text p { font-size: 16px; color: rgba(255,255,255,0.8); max-width: 480px; line-height: 1.7; }
+.btn-white { background: var(--white); color: var(--paras-blue); padding: 14px 28px; border-radius: var(--radius-sm); font-size: 15px; font-weight: 600; display: inline-flex; align-items: center; gap: 8px; transition: all var(--transition); white-space: nowrap; }
+.btn-white:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.15); }
+
+/* CTA */
+.cta-section { background: var(--gray-900); padding: 64px 0; text-align: center; position: relative; overflow: hidden; }
+.cta-section::before { content: ''; position: absolute; top: -50%; right: -20%; width: 400px; height: 400px; border-radius: 50%; background: rgba(0,128,201,0.08); pointer-events: none; }
+.cta-section h2 { font-size: clamp(24px, 3vw, 36px); font-weight: 800; color: var(--white); letter-spacing: -0.5px; margin-bottom: 12px; position: relative; }
+.cta-section p { font-size: 16px; color: rgba(255,255,255,0.6); margin-bottom: 28px; position: relative; }
+.cta-actions { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; position: relative; }
+.btn-outline-white { background: transparent; color: var(--white); padding: 14px 28px; border-radius: var(--radius-sm); font-size: 15px; font-weight: 600; border: 1.5px solid rgba(255,255,255,0.3); display: inline-flex; align-items: center; gap: 8px; transition: all var(--transition); }
+.btn-outline-white:hover { border-color: var(--white); background: rgba(255,255,255,0.05); }
+
+/* FOOTER */
+.footer { background: var(--gray-900); color: var(--gray-400); padding: 60px 0 0; border-top: 1px solid rgba(255,255,255,0.05); }
+.footer-grid { display: grid; grid-template-columns: 1.8fr 1fr 1fr 1.2fr; gap: 48px; padding-bottom: 48px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+.footer-brand-logo { height: 36px; width: auto; margin-bottom: 16px; filter: brightness(0) invert(1); }
+.footer-desc { font-size: 14px; line-height: 1.7; margin-bottom: 20px; color: var(--gray-400); }
+.footer-partner-logos { display: flex; gap: 16px; align-items: center; }
+.footer-partner-logos img { height: 24px; width: auto; filter: brightness(0) invert(0.6); }
+.footer h4 { font-size: 14px; font-weight: 700; color: var(--white); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 20px; }
+.footer-links { list-style: none; }
+.footer-links li { margin-bottom: 10px; }
+.footer-links a { font-size: 14px; color: var(--gray-400); transition: color var(--transition); }
+.footer-links a:hover { color: var(--white); }
+.footer-contact-item { display: flex; gap: 10px; margin-bottom: 14px; font-size: 14px; line-height: 1.6; }
+.footer-contact-icon { flex-shrink: 0; width: 20px; text-align: center; color: var(--paras-blue); }
+.footer-bottom { padding: 20px 0; display: flex; justify-content: space-between; align-items: center; font-size: 13px; flex-wrap: wrap; gap: 8px; }
+
+/* RESPONSIVE */
+@media (max-width: 1024px) {
+  .nav-links { display: none; } .mobile-toggle { display: flex; }
+  .about-grid { grid-template-columns: 1fr; gap: 32px; }
+  .brands-grid { grid-template-columns: 1fr; }
+  .services-grid { grid-template-columns: 1fr 1fr; }
+  .why-grid { grid-template-columns: 1fr 1fr; }
+  .numbers-grid { grid-template-columns: 1fr 1fr; gap: 24px; }
+  .outlets-grid { grid-template-columns: 1fr 1fr; }
+  .footer-grid { grid-template-columns: 1fr 1fr; gap: 32px; }
+  .emi-promo-card { flex-direction: column; text-align: center; padding: 36px 24px; }
+}
+@media (max-width: 640px) {
+  .topbar { display: none; } .section { padding: 48px 0; }
+  .hero { min-height: 420px; } .hero h1 { font-size: 28px; letter-spacing: -1px; }
+  .hero-desc { font-size: 15px; }
+  .hero-content { padding: 40px 0; }
+  .services-grid { grid-template-columns: 1fr; }
+  .why-grid { grid-template-columns: 1fr 1fr; }
+  .numbers-grid { grid-template-columns: 1fr 1fr; }
+  .testimonial-video-wrap { aspect-ratio: 9/10; }
+  .outlets-grid { grid-template-columns: 1fr; }
+  .footer-grid { grid-template-columns: 1fr; gap: 32px; }
+  .about-stats { gap: 20px; }
+  .hero-brands { flex-direction: column; align-items: flex-start; gap: 12px; }
+  .emi-promo-card { padding: 28px 20px; }
+  .brands-grid { gap: 16px; }
+  .brand-card { padding: 24px 20px; }
+  .nav-logo img { height: 32px; }
+  .container { padding: 0 16px; }
+  .slider-btn { width: 32px; height: 32px; font-size: 14px; }
+}
+
+/* MOBILE NAV */
+.mobile-nav { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--white); z-index: 200; padding: 20px 24px 40px; flex-direction: column; gap: 8px; overflow-y: auto; }
+.mobile-nav.open { display: flex; }
+.mobile-nav a { font-size: 16px; font-weight: 600; color: var(--gray-800); padding: 12px 0; border-bottom: 1px solid var(--gray-100); display: block; transition: color var(--transition); }
+.mobile-nav a:hover { color: var(--paras-blue); }
+.mobile-nav .mobile-brand-label { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: var(--gray-400); padding: 16px 0 4px; border: none; }
+.mobile-nav-close { position: absolute; top: 18px; right: 24px; width: 40px; height: 40px; background: var(--gray-100); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px; color: var(--gray-800); z-index: 5; }
+
+/* ANIMATIONS */
+@media (prefers-reduced-motion: no-preference) {
+  .fade-up { opacity: 0; transform: translateY(24px); transition: opacity 0.6s ease, transform 0.6s ease; }
+  .fade-up.visible { opacity: 1; transform: translateY(0); }
+}
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="container">
+    <div class="topbar-left">
+      <a href="tel:7496970303">&#9742; +91 74969 70303</a>
+      <span>|</span>
+      <a href="mailto:hi@parastrucks.in">&#9993; hi@parastrucks.in</a>
+    </div>
+    <div class="topbar-right">
+      <span data-lang-en="Commercial Vehicles &amp; Construction Equipment" data-lang-hi="वाणिज्यिक वाहन और निर्माण उपकरण">Commercial Vehicles &amp; Construction Equipment</span>
+      <div class="lang-toggle">
+        <button class="lang-btn active" onclick="setLang('en')">EN</button>
+        <button class="lang-btn" onclick="setLang('hi')">&#2361;&#2367;&#2306;&#2342;&#2368;</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- NAVBAR -->
+<nav class="navbar" id="navbar">
+  <div class="container">
+    <div class="nav-brand">
+      <a href="index.html" class="nav-logo"><img src="images/paras-logo.png" alt="Paras Trucks &amp; Buses"></a>
+    </div>
+    <ul class="nav-links">
+      <li><a href="index.html" class="active" data-lang-en="Home" data-lang-hi="&#2361;&#2379;&#2350;">Home</a></li>
+      <li><a href="about.html" data-lang-en="About Us" data-lang-hi="&#2361;&#2350;&#2366;&#2352;&#2375; &#2348;&#2366;&#2352;&#2375; &#2350;&#2375;&#2306;">About Us</a></li>
+      <li class="nav-dropdown">
+        <a href="#" class="nav-dropdown-label" data-lang-en="Our Brands <span class='nav-dropdown-arrow'>&#9662;</span>" data-lang-hi="&#2361;&#2350;&#2366;&#2352;&#2375; &#2348;&#2381;&#2352;&#2366;&#2306;&#2337; <span class='nav-dropdown-arrow'>&#9662;</span>">Our Brands <span class="nav-dropdown-arrow">&#9662;</span></a>
+        <div class="nav-dropdown-menu">
+          <a href="ashok-leyland.html"><img src="images/ashok-leyland-logo.svg" alt=""> Ashok Leyland</a>
+          <a href="switch-mobility.html"><img src="images/switch-mobility-logo.svg" alt=""> Switch Mobility</a>
+          <a href="hd-hyundai.html"><img src="images/hd-hyundai-logo.svg" alt=""> HD Hyundai CE</a>
+        </div>
+      </li>
+      <li><a href="outlets.html" data-lang-en="Outlets" data-lang-hi="&#2310;&#2313;&#2335;&#2354;&#2375;&#2335;">Outlets</a></li>
+      <li><a href="emi-calculator.html" data-lang-en="EMI Calculator" data-lang-hi="EMI &#2325;&#2376;&#2354;&#2325;&#2369;&#2354;&#2375;&#2335;&#2352;">EMI Calculator</a></li>
+      <li><a href="careers.html" data-lang-en="Careers" data-lang-hi="&#2325;&#2352;&#2367;&#2351;&#2352;">Careers</a></li>
+      <li><a href="contact.html" class="nav-cta" data-lang-en="Contact Us &rarr;" data-lang-hi="&#2360;&#2306;&#2346;&#2352;&#2381;&#2325; &#2325;&#2352;&#2375;&#2306; &rarr;">Contact Us &rarr;</a></li>
+    </ul>
+    <button class="mobile-toggle" onclick="toggleMobileNav()" aria-label="Menu"><span></span><span></span><span></span></button>
+  </div>
+</nav>
+
+<!-- MOBILE NAV -->
+<div class="mobile-nav" id="mobileNav">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:12px;border-bottom:1px solid var(--gray-200);margin-bottom:4px;gap:12px;">
+    <img src="images/paras-logo.png" alt="Paras Trucks" style="height:28px;width:auto;">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div class="lang-toggle" style="background:var(--gray-100);">
+        <button class="lang-btn active" onclick="setLang('en')" style="color:var(--gray-600);">EN</button>
+        <button class="lang-btn" onclick="setLang('hi')" style="color:var(--gray-600);">&#2361;&#2367;&#2306;&#2342;&#2368;</button>
+      </div>
+      <button onclick="toggleMobileNav()" style="width:36px;height:36px;background:var(--gray-100);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--gray-800);flex-shrink:0;">&times;</button>
+    </div>
+  </div>
+  <a href="index.html">Home</a>
+  <a href="about.html">About Us</a>
+  <span class="mobile-brand-label">Our Brands</span>
+  <a href="ashok-leyland.html" style="padding-left:16px;">Ashok Leyland</a>
+  <a href="switch-mobility.html" style="padding-left:16px;">Switch Mobility</a>
+  <a href="hd-hyundai.html" style="padding-left:16px;">HD Hyundai CE</a>
+  <a href="outlets.html">Our Outlets</a>
+  <a href="emi-calculator.html">EMI Calculator</a>
+  <a href="careers.html">Careers</a>
+  <a href="contact.html">Contact Us</a>
+  <div style="margin-top:auto;padding-top:16px;border-top:1px solid var(--gray-200);display:flex;align-items:center;gap:12px;">
+    <a href="https://www.facebook.com/parastrucksandbuses" target="_blank" style="display:flex;align-items:center;gap:6px;font-size:14px;font-weight:500;color:var(--paras-blue);padding:8px 0;border:none;">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+      Follow us on Facebook
+    </a>
+  </div>
+</div>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-bg"><img src="images/hisar-showroom.jpg" alt="Paras Trucks Hisar 3S Facility"></div>
+  <div class="container">
+    <div class="hero-content">
+      <div class="hero-badge"><span class="hero-badge-dot"></span><span data-lang-en="Commercial Vehicles &amp; Construction Equipment" data-lang-hi="&#2357;&#2366;&#2339;&#2367;&#2332;&#2381;&#2351;&#2367;&#2325; &#2357;&#2366;&#2361;&#2344; &#2324;&#2352; &#2344;&#2367;&#2352;&#2381;&#2350;&#2366;&#2339; &#2313;&#2346;&#2325;&#2352;&#2339;">Commercial Vehicles &amp; Construction Equipment</span></div>
+      <h1 data-lang-en="Powering businesses across <span>Haryana</span> &amp; <span>Gujarat</span>" data-lang-hi="<span>&#2361;&#2352;&#2367;&#2351;&#2366;&#2339;&#2366;</span> &#2324;&#2352; <span>&#2327;&#2369;&#2332;&#2352;&#2366;&#2340;</span> &#2350;&#2375;&#2306; &#2357;&#2381;&#2351;&#2357;&#2360;&#2366;&#2351;&#2379;&#2306; &#2325;&#2379; &#2360;&#2358;&#2325;&#2381;&#2340; &#2348;&#2344;&#2366; &#2352;&#2361;&#2375; &#2361;&#2376;&#2306;">Powering businesses across <span>Haryana</span> &amp; <span>Gujarat</span></h1>
+      <p class="hero-desc" data-lang-en="Your trusted partner for trucks, buses, electric vehicles and construction equipment. 11 facilities, 3 world-class brands, one commitment to excellence." data-lang-hi="&#2335;&#2381;&#2352;&#2325;, &#2348;&#2360;, &#2311;&#2354;&#2375;&#2325;&#2381;&#2335;&#2381;&#2352;&#2367;&#2325; &#2357;&#2366;&#2361;&#2344; &#2324;&#2352; &#2344;&#2367;&#2352;&#2381;&#2350;&#2366;&#2339; &#2313;&#2346;&#2325;&#2352;&#2339; &#2325;&#2375; &#2354;&#2367;&#2319; &#2310;&#2346;&#2325;&#2366; &#2357;&#2367;&#2358;&#2381;&#2357;&#2360;&#2344;&#2368;&#2351; &#2349;&#2366;&#2327;&#2368;&#2342;&#2366;&#2352;&#2404;">Your trusted partner for trucks, buses, electric vehicles and construction equipment. 11 facilities, 3 world-class brands, one commitment to excellence.</p>
+      <div class="hero-actions">
+        <a href="contact.html" class="btn-primary" data-lang-en="Get in Touch &rarr;" data-lang-hi="&#2360;&#2306;&#2346;&#2352;&#2381;&#2325; &#2325;&#2352;&#2375;&#2306; &rarr;">Get in Touch &rarr;</a>
+        <a href="outlets.html" class="btn-outline" data-lang-en="Find Nearest Outlet" data-lang-hi="&#2344;&#2367;&#2325;&#2335;&#2340;&#2350; &#2310;&#2313;&#2335;&#2354;&#2375;&#2335; &#2326;&#2379;&#2332;&#2375;&#2306;">Find Nearest Outlet</a>
+      </div>
+      <div class="hero-brands">
+        <span class="hero-brands-label" data-lang-en="Our Partners" data-lang-hi="&#2361;&#2350;&#2366;&#2352;&#2375; &#2349;&#2366;&#2327;&#2368;&#2342;&#2366;&#2352;">Our Partners</span>
+        <div class="hero-brand-logos">
+          <img src="images/ashok-leyland-logo.svg" alt="Ashok Leyland">
+          <img src="images/switch-mobility-logo.svg" alt="Switch Mobility">
+          <img src="images/hd-hyundai-logo.svg" alt="HD Hyundai CE">
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ABOUT INTRO -->
+<section class="section about-section">
+  <div class="container">
+    <div class="about-grid fade-up">
+      <div class="about-image-wrap">
+        <img src="images/ahmedabad-showroom.jpg" alt="Paras Trucks and Buses Ahmedabad 3S Facility">
+        <div class="about-image-badge">
+          <div class="about-image-badge-icon">&#127959;&#65039;</div>
+          <div class="about-image-badge-text" data-lang-en="Multi-Brand Dealership<span>3 Brands &middot; 11 Facilities</span>" data-lang-hi="&#2350;&#2354;&#2381;&#2335;&#2368;-&#2348;&#2381;&#2352;&#2366;&#2306;&#2337; &#2337;&#2368;&#2354;&#2352;&#2358;&#2367;&#2346;<span>3 &#2348;&#2381;&#2352;&#2366;&#2306;&#2337; &middot; 11 &#2360;&#2369;&#2357;&#2367;&#2343;&#2366;&#2319;&#2306;</span>">Multi-Brand Dealership<span>3 Brands &middot; 11 Facilities</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="section-header">
+          <p class="section-label" data-lang-en="About Paras Trucks" data-lang-hi="&#2346;&#2366;&#2352;&#2360; &#2335;&#2381;&#2352;&#2325;&#2381;&#2360; &#2325;&#2375; &#2348;&#2366;&#2352;&#2375; &#2350;&#2375;&#2306;">About Paras Trucks</p>
+          <h2 class="section-title" data-lang-en="Your one-stop partner for commercial vehicles &amp; construction equipment" data-lang-hi="&#2357;&#2366;&#2339;&#2367;&#2332;&#2381;&#2351;&#2367;&#2325; &#2357;&#2366;&#2361;&#2344;&#2379;&#2306; &#2324;&#2352; &#2344;&#2367;&#2352;&#2381;&#2350;&#2366;&#2339; &#2313;&#2346;&#2325;&#2352;&#2339;&#2379;&#2306; &#2325;&#2375; &#2354;&#2367;&#2319; &#2310;&#2346;&#2325;&#2366; &#2319;&#2325;&#2350;&#2366;&#2340;&#2381;&#2352; &#2349;&#2366;&#2327;&#2368;&#2342;&#2366;&#2352;">Your one-stop partner for commercial vehicles &amp; construction equipment</h2>
+        </div>
+        <div class="about-text">
+          <p data-lang-en="Since 2019, Paras Trucks has grown from a single Ashok Leyland outlet in Haryana to a multi-brand group operating across two states. Today, we represent Ashok Leyland, Switch Mobility, and HD Hyundai Construction Equipment &mdash; offering everything from trucks and buses to electric vehicles and excavators." data-lang-hi="2019 &#2360;&#2375;, &#2346;&#2366;&#2352;&#2360; &#2335;&#2381;&#2352;&#2325;&#2381;&#2360; &#2361;&#2352;&#2367;&#2351;&#2366;&#2339;&#2366; &#2350;&#2375;&#2306; &#2319;&#2325; &#2309;&#2358;&#2379;&#2325; &#2354;&#2375;&#2354;&#2376;&#2306;&#2337; &#2310;&#2313;&#2335;&#2354;&#2375;&#2335; &#2360;&#2375; &#2348;&#2338;&#2364;&#2325;&#2352; &#2342;&#2379; &#2352;&#2366;&#2332;&#2381;&#2351;&#2379;&#2306; &#2350;&#2375;&#2306; &#2360;&#2306;&#2330;&#2366;&#2354;&#2367;&#2340; &#2350;&#2354;&#2381;&#2335;&#2368;-&#2348;&#2381;&#2352;&#2366;&#2306;&#2337; &#2360;&#2350;&#2370;&#2361; &#2348;&#2344; &#2327;&#2351;&#2366; &#2361;&#2376;&#2404;">Since 2019, Paras Trucks has grown from a single Ashok Leyland outlet in Haryana to a multi-brand group operating across two states. Today, we represent Ashok Leyland, Switch Mobility, and HD Hyundai Construction Equipment &mdash; offering everything from trucks and buses to electric vehicles and excavators.</p>
+          <a href="about.html" class="btn-text" data-lang-en="Learn more about us &rarr;" data-lang-hi="&#2361;&#2350;&#2366;&#2352;&#2375; &#2348;&#2366;&#2352;&#2375; &#2350;&#2375;&#2306; &#2324;&#2352; &#2332;&#2366;&#2344;&#2375;&#2306; &rarr;">Learn more about us &rarr;</a>
+        </div>
+        <div class="about-stats">
+          <div><div class="about-stat-num">11</div><div class="about-stat-label" data-lang-en="Facilities" data-lang-hi="&#2360;&#2369;&#2357;&#2367;&#2343;&#2366;&#2319;&#2306;">Facilities</div></div>
+          <div><div class="about-stat-num">410+</div><div class="about-stat-label" data-lang-en="Employees" data-lang-hi="&#2325;&#2352;&#2381;&#2350;&#2330;&#2366;&#2352;&#2368;">Employees</div></div>
+          <div><div class="about-stat-num">3</div><div class="about-stat-label" data-lang-en="Brands" data-lang-hi="&#2348;&#2381;&#2352;&#2366;&#2306;&#2337;">Brands</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- OUR BRANDS -->
+<section class="section brands-section">
+  <div class="container">
+    <div class="section-header centered fade-up">
+      <p class="section-label" data-lang-en="Our Brands" data-lang-hi="&#2361;&#2350;&#2366;&#2352;&#2375; &#2348;&#2381;&#2352;&#2366;&#2306;&#2337;">Our Brands</p>
+      <h2 class="section-title" data-lang-en="World-class partners. Local expertise." data-lang-hi="&#2357;&#2367;&#2358;&#2381;&#2357;-&#2360;&#2381;&#2340;&#2352;&#2368;&#2351; &#2349;&#2366;&#2327;&#2368;&#2342;&#2366;&#2352;&#2404; &#2360;&#2381;&#2341;&#2366;&#2344;&#2368;&#2351; &#2357;&#2367;&#2358;&#2375;&#2359;&#2332;&#2381;&#2334;&#2340;&#2366;&#2404;">World-class partners. Local expertise.</h2>
+    </div>
+    <div class="brands-grid fade-up">
+      <a href="ashok-leyland.html" class="brand-card">
+        <img src="images/ashok-leyland-logo.svg" alt="Ashok Leyland" class="brand-card-logo">
+        <h3>Ashok Leyland</h3>
+        <p data-lang-en="India's leading commercial vehicle manufacturer. Complete range of LCV, MCV, HCV trucks and buses across Haryana and Gujarat." data-lang-hi="&#2349;&#2366;&#2352;&#2340; &#2325;&#2366; &#2309;&#2327;&#2381;&#2352;&#2339;&#2368; &#2357;&#2366;&#2339;&#2367;&#2332;&#2381;&#2351;&#2367;&#2325; &#2357;&#2366;&#2361;&#2344; &#2344;&#2367;&#2352;&#2381;&#2350;&#2366;&#2340;&#2366;&#2404; &#2361;&#2352;&#2367;&#2351;&#2366;&#2339;&#2366; &#2324;&#2352; &#2327;&#2369;&#2332;&#2352;&#2366;&#2340; &#2350;&#2375;&#2306; LCV, MCV, HCV &#2335;&#2381;&#2352;&#2325; &#2324;&#2352; &#2348;&#2360;&#2375;&#2306;&#2404;">India's leading commercial vehicle manufacturer. Complete range of LCV, MCV, HCV trucks and buses across Haryana and Gujarat.</p>
+        <div class="brand-card-tags"><span class="brand-tag">Haryana</span><span class="brand-tag">Gujarat</span><span class="brand-tag">7 Outlets</span></div>
+        <span class="brand-card-link" data-lang-en="Explore Ashok Leyland &rarr;" data-lang-hi="&#2309;&#2358;&#2379;&#2325; &#2354;&#2375;&#2354;&#2376;&#2306;&#2337; &#2342;&#2375;&#2326;&#2375;&#2306; &rarr;">Explore Ashok Leyland &rarr;</span>
+      </a>
+      <a href="switch-mobility.html" class="brand-card">
+        <img src="images/switch-mobility-logo.svg" alt="Switch Mobility" class="brand-card-logo">
+        <h3>Switch Mobility</h3>
+        <p data-lang-en="Ashok Leyland's electric vehicle subsidiary. Zero-emission electric buses and commercial vehicles for a sustainable future." data-lang-hi="&#2309;&#2358;&#2379;&#2325; &#2354;&#2375;&#2354;&#2376;&#2306;&#2337; &#2325;&#2368; &#2311;&#2354;&#2375;&#2325;&#2381;&#2335;&#2381;&#2352;&#2367;&#2325; &#2357;&#2366;&#2361;&#2344; &#2360;&#2361;&#2366;&#2351;&#2325; &#2325;&#2306;&#2346;&#2344;&#2368;&#2404; &#2360;&#2381;&#2341;&#2366;&#2351;&#2368; &#2349;&#2357;&#2367;&#2359;&#2381;&#2351; &#2325;&#2375; &#2354;&#2367;&#2319; &#2358;&#2370;&#2344;&#2381;&#2351;-&#2313;&#2340;&#2381;&#2360;&#2352;&#2381;&#2332;&#2344; &#2311;&#2354;&#2375;&#2325;&#2381;&#2335;&#2381;&#2352;&#2367;&#2325; &#2348;&#2360;&#2375;&#2306;&#2404;">Ashok Leyland's electric vehicle subsidiary. Zero-emission electric buses and commercial vehicles for a sustainable future.</p>
+        <div class="brand-card-tags"><span class="brand-tag">Haryana</span><span class="brand-tag">5 Outlets</span></div>
+        <span class="brand-card-link" data-lang-en="Explore Switch Mobility &rarr;" data-lang-hi="&#2360;&#2381;&#2357;&#2367;&#2330; &#2350;&#2379;&#2348;&#2367;&#2354;&#2367;&#2335;&#2368; &#2342;&#2375;&#2326;&#2375;&#2306; &rarr;">Explore Switch Mobility &rarr;</span>
+      </a>
+      <a href="hd-hyundai.html" class="brand-card">
+        <img src="images/hd-hyundai-logo.svg" alt="HD Hyundai CE" class="brand-card-logo">
+        <h3>HD Hyundai CE</h3>
+        <p data-lang-en="World-leading construction equipment. Excavators, wheel loaders, and heavy machinery for infrastructure and mining projects." data-lang-hi="&#2357;&#2367;&#2358;&#2381;&#2357;-&#2309;&#2327;&#2381;&#2352;&#2339;&#2368; &#2344;&#2367;&#2352;&#2381;&#2350;&#2366;&#2339; &#2313;&#2346;&#2325;&#2352;&#2339;&#2404; &#2348;&#2369;&#2344;&#2367;&#2351;&#2366;&#2342;&#2368; &#2338;&#2366;&#2306;&#2330;&#2375; &#2324;&#2352; &#2326;&#2344;&#2344; &#2346;&#2352;&#2367;&#2351;&#2379;&#2332;&#2344;&#2366;&#2323;&#2306; &#2325;&#2375; &#2354;&#2367;&#2319; &#2349;&#2366;&#2352;&#2368; &#2350;&#2358;&#2368;&#2344;&#2352;&#2368;&#2404;">World-leading construction equipment. Excavators, wheel loaders, and heavy machinery for infrastructure and mining projects.</p>
+        <div class="brand-card-tags"><span class="brand-tag">Haryana</span><span class="brand-tag">4 Outlets</span></div>
+        <span class="brand-card-link" data-lang-en="Explore HD Hyundai CE &rarr;" data-lang-hi="HD &#2361;&#2381;&#2351;&#2369;&#2306;&#2337;&#2375; CE &#2342;&#2375;&#2326;&#2375;&#2306; &rarr;">Explore HD Hyundai CE &rarr;</span>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- SERVICES -->
+<section class="section services-section">
+  <div class="container">
+    <div class="section-header centered fade-up">
+      <p class="section-label" data-lang-en="What We Offer" data-lang-hi="&#2361;&#2350; &#2325;&#2381;&#2351;&#2366; &#2346;&#2381;&#2352;&#2342;&#2366;&#2344; &#2325;&#2352;&#2340;&#2375; &#2361;&#2376;&#2306;">What We Offer</p>
+      <h2 class="section-title" data-lang-en="Complete solutions under one roof" data-lang-hi="&#2319;&#2325; &#2331;&#2340; &#2325;&#2375; &#2344;&#2368;&#2330;&#2375; &#2346;&#2370;&#2352;&#2381;&#2339; &#2360;&#2350;&#2366;&#2343;&#2366;&#2344;">Complete solutions under one roof</h2>
+    </div>
+    <div class="services-grid">
+      <div class="service-card fade-up"><div class="service-icon">&#127978;</div><h3 data-lang-en="Sales" data-lang-hi="&#2348;&#2367;&#2325;&#2381;&#2352;&#2368;">Sales</h3><p data-lang-en="Trucks, buses, electric vehicles, excavators, and loaders. Expert guidance to match the right machine to your business." data-lang-hi="&#2335;&#2381;&#2352;&#2325;, &#2348;&#2360;&#2375;&#2306;, &#2311;&#2354;&#2375;&#2325;&#2381;&#2335;&#2381;&#2352;&#2367;&#2325; &#2357;&#2366;&#2361;&#2344;, &#2319;&#2325;&#2381;&#2360;&#2325;&#2366;&#2357;&#2375;&#2335;&#2352; &#2324;&#2352; &#2354;&#2379;&#2337;&#2352;&#2404; &#2360;&#2361;&#2368; &#2350;&#2358;&#2368;&#2344; &#2330;&#2369;&#2344;&#2344;&#2375; &#2350;&#2375;&#2306; &#2357;&#2367;&#2358;&#2375;&#2359;&#2332;&#2381;&#2334; &#2350;&#2366;&#2352;&#2381;&#2327;&#2342;&#2352;&#2381;&#2358;&#2344;&#2404;">Trucks, buses, electric vehicles, excavators, and loaders. Expert guidance to match the right machine to your business.</p></div>
+      <div class="service-card fade-up"><div class="service-icon">&#128295;</div><h3 data-lang-en="Service" data-lang-hi="&#2360;&#2375;&#2357;&#2366;">Service</h3><p data-lang-en="State-of-the-art workshops servicing 1,750+ vehicles monthly. Factory-trained technicians keeping your fleet on the road." data-lang-hi="&#2309;&#2340;&#2381;&#2351;&#2366;&#2343;&#2369;&#2344;&#2367;&#2325; &#2325;&#2366;&#2352;&#2381;&#2351;&#2358;&#2366;&#2354;&#2366;&#2319;&#2306; &#2350;&#2366;&#2360;&#2367;&#2325; 1,750+ &#2357;&#2366;&#2361;&#2344;&#2379;&#2306; &#2325;&#2368; &#2360;&#2352;&#2381;&#2357;&#2367;&#2360;&#2367;&#2306;&#2327;&#2404;">State-of-the-art workshops servicing 1,750+ vehicles monthly. Factory-trained technicians keeping your fleet on the road.</p></div>
+      <div class="service-card fade-up"><div class="service-icon">&#9881;&#65039;</div><h3 data-lang-en="Spares" data-lang-hi="&#2360;&#2381;&#2346;&#2375;&#2351;&#2352; &#2346;&#2366;&#2352;&#2381;&#2335;&#2381;&#2360;">Spares</h3><p data-lang-en="Genuine spare parts for all brands. Quick availability and competitive pricing to minimize your downtime." data-lang-hi="&#2360;&#2349;&#2368; &#2348;&#2381;&#2352;&#2366;&#2306;&#2337; &#2325;&#2375; &#2354;&#2367;&#2319; &#2309;&#2360;&#2354;&#2368; &#2360;&#2381;&#2346;&#2375;&#2351;&#2352; &#2346;&#2366;&#2352;&#2381;&#2335;&#2381;&#2360;&#2404; &#2340;&#2381;&#2357;&#2352;&#2367;&#2340; &#2313;&#2346;&#2354;&#2348;&#2381;&#2343;&#2340;&#2366; &#2324;&#2352; &#2346;&#2381;&#2352;&#2340;&#2367;&#2360;&#2381;&#2346;&#2352;&#2381;&#2343;&#2368; &#2350;&#2370;&#2354;&#2381;&#2351;&#2404;">Genuine spare parts for all brands. Quick availability and competitive pricing to minimize your downtime.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- WHY CHOOSE US -->
+<section class="section why-section">
+  <div class="container">
+    <div class="section-header centered fade-up">
+      <p class="section-label" data-lang-en="Why Paras Trucks" data-lang-hi="&#2346;&#2366;&#2352;&#2360; &#2335;&#2381;&#2352;&#2325;&#2381;&#2360; &#2325;&#2381;&#2351;&#2379;&#2306;">Why Paras Trucks</p>
+      <h2 class="section-title" data-lang-en="Built different. Built to last." data-lang-hi="&#2309;&#2354;&#2327; &#2348;&#2344;&#2366;&#2319; &#2327;&#2319;&#2404; &#2335;&#2367;&#2325;&#2344;&#2375; &#2325;&#2375; &#2354;&#2367;&#2319;&#2404;">Built different. Built to last.</h2>
+    </div>
+    <div class="why-grid">
+      <div class="why-card fade-up"><div class="why-icon"><span>&#128205;</span></div><h3 data-lang-en="11 Facilities" data-lang-hi="11 &#2360;&#2369;&#2357;&#2367;&#2343;&#2366;&#2319;&#2306;">11 Facilities</h3><p data-lang-en="3S and 2S outlets across Haryana &amp; Gujarat" data-lang-hi="&#2361;&#2352;&#2367;&#2351;&#2366;&#2339;&#2366; &#2324;&#2352; &#2327;&#2369;&#2332;&#2352;&#2366;&#2340; &#2350;&#2375;&#2306; 3S &#2324;&#2352; 2S &#2310;&#2313;&#2335;&#2354;&#2375;&#2335;">3S and 2S outlets across Haryana &amp; Gujarat</p></div>
+      <div class="why-card fade-up"><div class="why-icon"><span>&#128101;</span></div><h3 data-lang-en="410+ Team" data-lang-hi="410+ &#2335;&#2368;&#2350;">410+ Team</h3><p data-lang-en="Dedicated professionals driving excellence every day" data-lang-hi="&#2360;&#2350;&#2352;&#2381;&#2346;&#2367;&#2340; &#2346;&#2375;&#2358;&#2375;&#2357;&#2352; &#2361;&#2352; &#2342;&#2367;&#2344; &#2313;&#2340;&#2381;&#2325;&#2371;&#2359;&#2381;&#2335;&#2340;&#2366;">Dedicated professionals driving excellence every day</p></div>
+      <div class="why-card fade-up"><div class="why-icon"><span>&#127942;</span></div><h3 data-lang-en="Award Winning" data-lang-hi="&#2346;&#2369;&#2352;&#2360;&#2381;&#2325;&#2366;&#2352; &#2357;&#2367;&#2332;&#2375;&#2340;&#2366;">Award Winning</h3><p data-lang-en="Best Dealer &mdash; West Zone and multiple sales awards" data-lang-hi="&#2360;&#2352;&#2381;&#2357;&#2358;&#2381;&#2352;&#2375;&#2359;&#2381;&#2336; &#2337;&#2368;&#2354;&#2352; &mdash; &#2346;&#2358;&#2381;&#2330;&#2367;&#2350; &#2325;&#2381;&#2359;&#2375;&#2340;&#2381;&#2352;">Best Dealer &mdash; West Zone and multiple sales awards</p></div>
+      <div class="why-card fade-up"><div class="why-icon"><span>&#128260;</span></div><h3 data-lang-en="3 Global Brands" data-lang-hi="3 &#2357;&#2376;&#2358;&#2381;&#2357;&#2367;&#2325; &#2348;&#2381;&#2352;&#2366;&#2306;&#2337;">3 Global Brands</h3><p data-lang-en="Ashok Leyland, Switch Mobility &amp; HD Hyundai CE" data-lang-hi="&#2309;&#2358;&#2379;&#2325; &#2354;&#2375;&#2354;&#2376;&#2306;&#2337;, &#2360;&#2381;&#2357;&#2367;&#2330; &#2350;&#2379;&#2348;&#2367;&#2354;&#2367;&#2335;&#2368; &#2324;&#2352; HD &#2361;&#2381;&#2351;&#2369;&#2306;&#2337;&#2375; CE">Ashok Leyland, Switch Mobility &amp; HD Hyundai CE</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- KEY NUMBERS -->
+<section class="numbers-section">
+  <div class="container">
+    <div class="numbers-grid fade-up">
+      <div class="number-item"><h3>11</h3><div class="number-divider"></div><p data-lang-en="Facilities" data-lang-hi="&#2360;&#2369;&#2357;&#2367;&#2343;&#2366;&#2319;&#2306;">Facilities</p></div>
+      <div class="number-item"><h3>1,750+</h3><div class="number-divider"></div><p data-lang-en="Vehicles Serviced Monthly" data-lang-hi="&#2350;&#2366;&#2360;&#2367;&#2325; &#2357;&#2366;&#2361;&#2344; &#2360;&#2352;&#2381;&#2357;&#2367;&#2360;">Vehicles Serviced Monthly</p></div>
+      <div class="number-item"><h3>410+</h3><div class="number-divider"></div><p data-lang-en="Team Members" data-lang-hi="&#2335;&#2368;&#2350; &#2360;&#2342;&#2360;&#2381;&#2351;">Team Members</p></div>
+      <div class="number-item"><h3>3</h3><div class="number-divider"></div><p data-lang-en="World-Class Brands" data-lang-hi="&#2357;&#2367;&#2358;&#2381;&#2357;-&#2360;&#2381;&#2340;&#2352;&#2368;&#2351; &#2348;&#2381;&#2352;&#2366;&#2306;&#2337;">World-Class Brands</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- TESTIMONIALS -->
+<section class="section testimonials-section">
+  <div class="container">
+    <div class="section-header centered fade-up">
+      <p class="section-label" data-lang-en="Testimonials" data-lang-hi="&#2346;&#2381;&#2352;&#2358;&#2306;&#2360;&#2366;&#2346;&#2340;&#2381;&#2352;">Testimonials</p>
+      <h2 class="section-title" data-lang-en="Hear from our customers" data-lang-hi="&#2361;&#2350;&#2366;&#2352;&#2375; &#2327;&#2381;&#2352;&#2366;&#2361;&#2325;&#2379;&#2306; &#2360;&#2375; &#2360;&#2369;&#2344;&#2375;&#2306;">Hear from our customers</h2>
+    </div>
+    <div class="slider-wrap fade-up" id="sliderWrap">
+      <div class="slider-track" id="sliderTrack">
+        <div class="slider-slide"><div class="testimonial-card"><div class="testimonial-video-wrap"><iframe src="https://www.facebook.com/plugins/video.php?height=476&href=https%3A%2F%2Fwww.facebook.com%2Freel%2F1264821298916379%2F&show_text=false&width=267&t=0" allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share" allowFullScreen="true" loading="lazy"></iframe></div><div class="testimonial-body"><h4>Jay Gurudev Transport</h4><p>Ahmedabad</p><span class="testimonial-fb">&#9654; Watch on Facebook</span></div></div></div>
+        <div class="slider-slide"><div class="testimonial-card"><div class="testimonial-video-wrap"><iframe src="https://www.facebook.com/plugins/video.php?height=476&href=https%3A%2F%2Fwww.facebook.com%2Freel%2F2231505517375123%2F&show_text=false&width=267&t=0" allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share" allowFullScreen="true" loading="lazy"></iframe></div><div class="testimonial-body"><h4>Flywing Cargo</h4><p>Ahmedabad</p><span class="testimonial-fb">&#9654; Watch on Facebook</span></div></div></div>
+        <div class="slider-slide"><div class="testimonial-card"><div class="testimonial-video-wrap"><iframe src="https://www.facebook.com/plugins/video.php?height=476&href=https%3A%2F%2Fwww.facebook.com%2Freel%2F1168015518555895%2F&show_text=false&width=267&t=0" allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share" allowFullScreen="true" loading="lazy"></iframe></div><div class="testimonial-body"><h4>Shiv Transport</h4><p>Ahmedabad</p><span class="testimonial-fb">&#9654; Watch on Facebook</span></div></div></div>
+        <div class="slider-slide"><div class="testimonial-card"><div class="testimonial-video-wrap"><iframe src="https://www.facebook.com/plugins/video.php?height=476&href=https%3A%2F%2Fwww.facebook.com%2Freel%2F1794778747860944%2F&show_text=false&width=267&t=0" allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share" allowFullScreen="true" loading="lazy"></iframe></div><div class="testimonial-body"><h4>Timbaliya Transport</h4><p>Ahmedabad</p><span class="testimonial-fb">&#9654; Watch on Facebook</span></div></div></div>
+      </div>
+      <div class="slider-controls">
+        <button class="slider-btn" id="sliderPrev" aria-label="Previous">&#8249;</button>
+        <div class="slider-dots" id="sliderDots"></div>
+        <button class="slider-btn" id="sliderNext" aria-label="Next">&#8250;</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- OUTLETS PREVIEW -->
+<section class="section outlets-section">
+  <div class="container">
+    <div class="section-header centered fade-up">
+      <p class="section-label" data-lang-en="Our Network" data-lang-hi="&#2361;&#2350;&#2366;&#2352;&#2366; &#2344;&#2375;&#2335;&#2357;&#2352;&#2381;&#2325;">Our Network</p>
+      <h2 class="section-title" data-lang-en="Find us near you" data-lang-hi="&#2361;&#2350;&#2375;&#2306; &#2309;&#2346;&#2344;&#2375; &#2346;&#2366;&#2360; &#2326;&#2379;&#2332;&#2375;&#2306;">Find us near you</h2>
+    </div>
+    <div class="outlets-grid">
+      <div class="outlet-card fade-up"><div class="outlet-card-header"><h3>Hisar</h3><span class="outlet-tag">3S</span></div><div class="outlet-card-state">Haryana</div><div class="outlet-card-brands"><img src="images/ashok-leyland-logo.svg" alt="AL"><img src="images/switch-mobility-logo.svg" alt="Switch"><img src="images/hd-hyundai-logo.svg" alt="HD"></div><a href="outlets.html" class="outlet-card-link">View details &rarr;</a></div>
+      <div class="outlet-card fade-up"><div class="outlet-card-header"><h3>Ahmedabad</h3><span class="outlet-tag">3S</span></div><div class="outlet-card-state">Gujarat</div><div class="outlet-card-brands"><img src="images/ashok-leyland-logo.svg" alt="AL"></div><a href="outlets.html" class="outlet-card-link">View details &rarr;</a></div>
+      <div class="outlet-card fade-up"><div class="outlet-card-header"><h3>Rohtak</h3><span class="outlet-tag">3S</span></div><div class="outlet-card-state">Haryana</div><div class="outlet-card-brands"><img src="images/ashok-leyland-logo.svg" alt="AL"><img src="images/switch-mobility-logo.svg" alt="Switch"><img src="images/hd-hyundai-logo.svg" alt="HD" style="opacity:0.4" title="2S"></div><a href="outlets.html" class="outlet-card-link">View details &rarr;</a></div>
+    </div>
+    <div class="outlet-viewall fade-up"><a href="outlets.html" class="btn-primary" data-lang-en="View All 11 Outlets &rarr;" data-lang-hi="&#2360;&#2349;&#2368; 11 &#2310;&#2313;&#2335;&#2354;&#2375;&#2335; &#2342;&#2375;&#2326;&#2375;&#2306; &rarr;">View All 11 Outlets &rarr;</a></div>
+  </div>
+</section>
+
+<!-- EMI CALCULATOR PROMO -->
+<section class="section emi-promo">
+  <div class="container">
+    <div class="emi-promo-card fade-up">
+      <div class="emi-promo-text">
+        <h2 data-lang-en="Plan your purchase with our EMI Calculator" data-lang-hi="&#2361;&#2350;&#2366;&#2352;&#2375; EMI &#2325;&#2376;&#2354;&#2325;&#2369;&#2354;&#2375;&#2335;&#2352; &#2360;&#2375; &#2309;&#2346;&#2344;&#2368; &#2326;&#2352;&#2368;&#2342; &#2325;&#2368; &#2351;&#2379;&#2332;&#2344;&#2366; &#2348;&#2344;&#2366;&#2319;&#2306;">Plan your purchase with our EMI Calculator</h2>
+        <p data-lang-en="Select your vehicle, adjust loan amount, tenure &amp; interest rate. Get instant EMI estimates for Ashok Leyland trucks, buses, and HD Hyundai equipment." data-lang-hi="&#2309;&#2346;&#2344;&#2366; &#2357;&#2366;&#2361;&#2344; &#2330;&#2369;&#2344;&#2375;&#2306;, &#2354;&#2379;&#2344; &#2352;&#2366;&#2358;&#2367;, &#2309;&#2357;&#2343;&#2367; &#2324;&#2352; &#2348;&#2381;&#2351;&#2366;&#2332; &#2342;&#2352; &#2360;&#2350;&#2366;&#2351;&#2379;&#2332;&#2367;&#2340; &#2325;&#2352;&#2375;&#2306;&#2404;">Select your vehicle, adjust loan amount, tenure &amp; interest rate. Get instant EMI estimates for Ashok Leyland trucks, buses, and HD Hyundai equipment.</p>
+      </div>
+      <a href="emi-calculator.html" class="btn-white" data-lang-en="Calculate EMI &rarr;" data-lang-hi="EMI &#2325;&#2376;&#2354;&#2325;&#2369;&#2354;&#2375;&#2335; &#2325;&#2352;&#2375;&#2306; &rarr;">Calculate EMI &rarr;</a>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section">
+  <div class="container">
+    <h2 data-lang-en="Ready to power your business?" data-lang-hi="&#2309;&#2346;&#2344;&#2375; &#2357;&#2381;&#2351;&#2357;&#2360;&#2366;&#2351; &#2325;&#2379; &#2360;&#2358;&#2325;&#2381;&#2340; &#2348;&#2344;&#2366;&#2344;&#2375; &#2325;&#2375; &#2354;&#2367;&#2319; &#2340;&#2376;&#2351;&#2366;&#2352;?">Ready to power your business?</h2>
+    <p data-lang-en="Get in touch with our team for expert guidance on trucks, buses, EVs, and construction equipment." data-lang-hi="&#2335;&#2381;&#2352;&#2325;, &#2348;&#2360;, EV &#2324;&#2352; &#2344;&#2367;&#2352;&#2381;&#2350;&#2366;&#2339; &#2313;&#2346;&#2325;&#2352;&#2339; &#2346;&#2352; &#2357;&#2367;&#2358;&#2375;&#2359;&#2332;&#2381;&#2334; &#2350;&#2366;&#2352;&#2381;&#2327;&#2342;&#2352;&#2381;&#2358;&#2344; &#2325;&#2375; &#2354;&#2367;&#2319; &#2361;&#2350;&#2366;&#2352;&#2368; &#2335;&#2368;&#2350; &#2360;&#2375; &#2360;&#2306;&#2346;&#2352;&#2381;&#2325; &#2325;&#2352;&#2375;&#2306;&#2404;">Get in touch with our team for expert guidance on trucks, buses, EVs, and construction equipment.</p>
+    <div class="cta-actions">
+      <a href="contact.html" class="btn-primary" style="background:var(--paras-blue);" data-lang-en="Contact Us" data-lang-hi="&#2360;&#2306;&#2346;&#2352;&#2381;&#2325; &#2325;&#2352;&#2375;&#2306;">Contact Us</a>
+      <a href="tel:7496970303" class="btn-outline-white" data-lang-en="&#9742; Call Now" data-lang-hi="&#9742; &#2309;&#2349;&#2368; &#2325;&#2377;&#2354; &#2325;&#2352;&#2375;&#2306;">&#9742; Call Now</a>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer class="footer">
+  <div class="container">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <img src="images/paras-logo.png" alt="Paras Trucks" class="footer-brand-logo">
+        <p class="footer-desc" data-lang-en="Paras Trucks is a multi-brand dealership for commercial vehicles and construction equipment, operating 11 facilities across Haryana and Gujarat." data-lang-hi="&#2346;&#2366;&#2352;&#2360; &#2335;&#2381;&#2352;&#2325;&#2381;&#2360; &#2361;&#2352;&#2367;&#2351;&#2366;&#2339;&#2366; &#2324;&#2352; &#2327;&#2369;&#2332;&#2352;&#2366;&#2340; &#2350;&#2375;&#2306; 11 &#2360;&#2369;&#2357;&#2367;&#2343;&#2366;&#2323;&#2306; &#2325;&#2375; &#2360;&#2366;&#2341; &#2357;&#2366;&#2339;&#2367;&#2332;&#2381;&#2351;&#2367;&#2325; &#2357;&#2366;&#2361;&#2344;&#2379;&#2306; &#2324;&#2352; &#2344;&#2367;&#2352;&#2381;&#2350;&#2366;&#2339; &#2313;&#2346;&#2325;&#2352;&#2339;&#2379;&#2306; &#2325;&#2375; &#2354;&#2367;&#2319; &#2350;&#2354;&#2381;&#2335;&#2368;-&#2348;&#2381;&#2352;&#2366;&#2306;&#2337; &#2337;&#2368;&#2354;&#2352;&#2358;&#2367;&#2346; &#2361;&#2376;&#2404;">Paras Trucks is a multi-brand dealership for commercial vehicles and construction equipment, operating 11 facilities across Haryana and Gujarat.</p>
+        <div class="footer-partner-logos">
+          <img src="images/ashok-leyland-logo.svg" alt="Ashok Leyland">
+          <img src="images/switch-mobility-logo.svg" alt="Switch Mobility">
+          <img src="images/hd-hyundai-logo.svg" alt="HD Hyundai CE">
+        </div>
+      </div>
+      <div>
+        <h4 data-lang-en="Quick Links" data-lang-hi="&#2340;&#2381;&#2357;&#2352;&#2367;&#2340; &#2354;&#2367;&#2306;&#2325;">Quick Links</h4>
+        <ul class="footer-links">
+          <li><a href="about.html">About Us</a></li>
+          <li><a href="outlets.html">Our Outlets</a></li>
+          <li><a href="emi-calculator.html">EMI Calculator</a></li>
+          <li><a href="careers.html">Careers</a></li>
+          <li><a href="contact.html">Contact Us</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4 data-lang-en="Our Brands" data-lang-hi="&#2361;&#2350;&#2366;&#2352;&#2375; &#2348;&#2381;&#2352;&#2366;&#2306;&#2337;">Our Brands</h4>
+        <ul class="footer-links">
+          <li><a href="ashok-leyland.html">Ashok Leyland</a></li>
+          <li><a href="switch-mobility.html">Switch Mobility</a></li>
+          <li><a href="hd-hyundai.html">HD Hyundai CE</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4 data-lang-en="Contact" data-lang-hi="&#2360;&#2306;&#2346;&#2352;&#2381;&#2325;">Contact</h4>
+        <div class="footer-contact-item"><span class="footer-contact-icon">&#9742;</span><a href="tel:7496970303" style="color:var(--gray-400)">+91 74969 70303</a></div>
+        <div class="footer-contact-item"><span class="footer-contact-icon">&#9993;</span><a href="mailto:hi@parastrucks.in" style="color:var(--gray-400)">hi@parastrucks.in</a></div>
+        <div class="footer-contact-item" style="margin-top:16px;">
+          <a href="https://www.facebook.com/parastrucksandbuses" target="_blank" style="display:inline-flex;align-items:center;gap:8px;color:var(--gray-400);transition:color 0.3s;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+            Facebook
+          </a>
+        </div>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>&copy; 2026 Paras Trucks. All rights reserved.</span>
+      <span>Ashok Leyland &middot; Switch Mobility &middot; HD Hyundai CE</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+var navbar = document.getElementById('navbar');
+window.addEventListener('scroll', function() { navbar.classList.toggle('scrolled', window.scrollY > 10); });
+function toggleMobileNav() {
+  document.getElementById('mobileNav').classList.toggle('open');
+  document.body.style.overflow = document.getElementById('mobileNav').classList.contains('open') ? 'hidden' : '';
+}
+function setLang(lang) {
+  var btns = document.querySelectorAll('.lang-btn');
+  btns.forEach(function(b) { b.classList.remove('active'); });
+  btns.forEach(function(b) {
+    if ((lang === 'en' && b.textContent.trim() === 'EN') || (lang === 'hi' && b.textContent.trim() !== 'EN')) {
+      b.classList.add('active');
+    }
+  });
+  document.querySelectorAll('[data-lang-' + lang + ']').forEach(function(el) {
+    var val = el.getAttribute('data-lang-' + lang);
+    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') { el.placeholder = val; }
+    else { el.innerHTML = val; }
+  });
+  document.documentElement.lang = lang === 'hi' ? 'hi' : 'en';
+}
+/* Slider — pixel-based, supports 1–6 slides */
+(function() {
+  var wrap = document.getElementById('sliderWrap');
+  var track = document.getElementById('sliderTrack');
+  var slides = track.children;
+  var prevBtn = document.getElementById('sliderPrev');
+  var nextBtn = document.getElementById('sliderNext');
+  var dotsWrap = document.getElementById('sliderDots');
+  var current = 0;
+  var totalSlides = slides.length;
+
+  function getConfig() {
+    var w = wrap.offsetWidth;
+    var perView, gap = 20;
+    if (w <= 480) { perView = 1.15; gap = 12; }
+    else if (w <= 640) { perView = 1.3; gap = 16; }
+    else if (w <= 900) { perView = 2; gap = 20; }
+    else { perView = 3; gap = 20; }
+    var slideW = (w - gap * (Math.floor(perView) - 1)) / perView;
+    return { perView: perView, slideW: slideW, gap: gap, wrapW: w };
+  }
+
+  function getMaxIndex() {
+    var cfg = getConfig();
+    return Math.max(0, Math.ceil(totalSlides - cfg.perView));
+  }
+
+  function layout() {
+    var cfg = getConfig();
+    for (var i = 0; i < totalSlides; i++) {
+      slides[i].style.width = cfg.slideW + 'px';
+      slides[i].style.marginRight = (i < totalSlides - 1) ? cfg.gap + 'px' : '0';
+      slides[i].style.padding = '0';
+      slides[i].style.flexShrink = '0';
+    }
+    if (current > getMaxIndex()) current = getMaxIndex();
+  }
+
+  function updatePosition() {
+    var cfg = getConfig();
+    var offset = current * (cfg.slideW + cfg.gap);
+    track.style.transform = 'translateX(-' + offset + 'px)';
+    prevBtn.disabled = current <= 0;
+    nextBtn.disabled = current >= getMaxIndex();
+    var dots = dotsWrap.children;
+    for (var i = 0; i < dots.length; i++) {
+      dots[i].className = 'slider-dot' + (i === current ? ' active' : '');
+    }
+  }
+
+  function buildDots() {
+    dotsWrap.innerHTML = '';
+    var max = getMaxIndex() + 1;
+    for (var i = 0; i < max; i++) {
+      var d = document.createElement('button');
+      d.className = 'slider-dot' + (i === current ? ' active' : '');
+      d.setAttribute('aria-label', 'Go to slide ' + (i + 1));
+      d.onclick = (function(idx) { return function() { current = idx; updatePosition(); }; })(i);
+      dotsWrap.appendChild(d);
+    }
+  }
+
+  function init() {
+    layout();
+    buildDots();
+    updatePosition();
+  }
+
+  prevBtn.addEventListener('click', function() {
+    if (current > 0) { current--; updatePosition(); }
+  });
+  nextBtn.addEventListener('click', function() {
+    if (current < getMaxIndex()) { current++; updatePosition(); }
+  });
+
+  /* Touch/swipe */
+  var startX = 0, moveX = 0, dragging = false;
+  track.addEventListener('touchstart', function(e) { startX = e.touches[0].clientX; dragging = true; track.style.transition = 'none'; }, { passive: true });
+  track.addEventListener('touchmove', function(e) {
+    if (!dragging) return;
+    moveX = e.touches[0].clientX - startX;
+    var cfg = getConfig();
+    var base = current * (cfg.slideW + cfg.gap);
+    track.style.transform = 'translateX(' + (-base + moveX) + 'px)';
+  }, { passive: true });
+  track.addEventListener('touchend', function() {
+    dragging = false;
+    track.style.transition = 'transform 0.45s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+    if (Math.abs(moveX) > 40) {
+      if (moveX < 0 && current < getMaxIndex()) current++;
+      else if (moveX > 0 && current > 0) current--;
+    }
+    moveX = 0;
+    updatePosition();
+  });
+
+  init();
+  var rt;
+  window.addEventListener('resize', function() { clearTimeout(rt); rt = setTimeout(init, 100); });
+})();
+/* Scroll animations */
+if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+  var observer = new IntersectionObserver(function(entries) { entries.forEach(function(entry) { if (entry.isIntersecting) { entry.target.classList.add('visible'); observer.unobserve(entry.target); } }); }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+  document.querySelectorAll('.fade-up').forEach(function(el) { observer.observe(el); });
+}
+</script>
+</body>
+</html>
