@@ -41,7 +41,7 @@ button { cursor: pointer; border: none; font-family: var(--font); }
 .navbar { background: var(--white); border-bottom: 1px solid var(--gray-200); position: sticky; top: 0; z-index: 100; transition: box-shadow var(--transition); }
 .navbar.scrolled { box-shadow: var(--shadow-md); }
 .navbar .container { display: flex; align-items: center; justify-content: space-between; height: 72px; }
-.nav-logo { display: flex; align-items: center; } .nav-logo img { height: 38px; width: auto; }
+.nav-logo { display: flex; align-items: center; } .nav-logo img { height: 48px; width: auto; }
 .nav-links { display: flex; align-items: center; gap: 28px; list-style: none; }
 .nav-links a { font-size: 14px; font-weight: 500; color: var(--gray-600); transition: color var(--transition); position: relative; padding: 4px 0; }
 .nav-links a::after { content: ''; position: absolute; bottom: -2px; left: 0; width: 0; height: 2px; background: var(--paras-blue); transition: width var(--transition); border-radius: 1px; }
@@ -52,7 +52,7 @@ button { cursor: pointer; border: none; font-family: var(--font); }
 .nav-dropdown-arrow { font-size: 10px; transition: transform var(--transition); } .nav-dropdown:hover .nav-dropdown-arrow { transform: rotate(180deg); }
 .nav-dropdown-menu { position: absolute; top: 100%; left: -16px; background: var(--white); border: 1px solid var(--gray-200); border-radius: var(--radius-sm); padding: 8px 0; min-width: 220px; box-shadow: var(--shadow-lg); opacity: 0; visibility: hidden; transform: translateY(8px); transition: all var(--transition); z-index: 50; }
 .nav-dropdown:hover .nav-dropdown-menu { opacity: 1; visibility: visible; transform: translateY(0); }
-.nav-dropdown-menu a { display: flex; align-items: center; gap: 10px; padding: 10px 16px; font-size: 14px; color: var(--gray-700); } .nav-dropdown-menu a::after { display: none; } .nav-dropdown-menu a:hover { background: var(--gray-50); color: var(--paras-blue); }
+.nav-dropdown-menu a { display: flex; align-items: center; gap: 10px; padding: 10px 16px; font-size: 14px; color: var(--gray-700); white-space: nowrap; } .nav-dropdown-menu a::after { display: none; } .nav-dropdown-menu a:hover { background: var(--gray-50); color: var(--paras-blue); }
 .nav-dropdown-menu img { height: 20px; width: auto; }
 .mobile-toggle { display: none; flex-direction: column; gap: 5px; background: none; padding: 8px; } .mobile-toggle span { width: 24px; height: 2px; background: var(--gray-800); border-radius: 2px; }
 .page-hero { background: linear-gradient(135deg, var(--gray-900) 0%, #0D2137 100%); padding: 64px 0 48px; }
@@ -100,9 +100,9 @@ button { cursor: pointer; border: none; font-family: var(--font); }
 .brands-strip img { height: 18px; width: auto; opacity: 0.5; }
 .footer { background: var(--gray-900); color: var(--gray-400); padding: 56px 0 0; }
 .footer-grid { display: grid; grid-template-columns: 1.8fr 1fr 1fr 1.2fr; gap: 48px; padding-bottom: 40px; border-bottom: 1px solid rgba(255,255,255,0.08); }
-.footer-brand-logo { height: 36px; width: auto; margin-bottom: 16px; filter: brightness(0) invert(1); }
+.footer-brand-logo { height: 48px; width: auto; margin-bottom: 16px; filter: brightness(0) invert(1); }
 .footer-desc { font-size: 14px; line-height: 1.7; margin-bottom: 20px; }
-.footer-partner-logos { display: flex; gap: 16px; align-items: center; } .footer-partner-logos img { height: 24px; width: auto; filter: brightness(0) invert(0.6); }
+.footer-partner-logos { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; } .footer-partner-logos img { height: 24px; width: auto; filter: brightness(0) invert(0.6); }
 .footer h4 { font-size: 14px; font-weight: 700; color: var(--white); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 20px; }
 .footer-links { list-style: none; } .footer-links li { margin-bottom: 10px; } .footer-links a { font-size: 14px; color: var(--gray-400); transition: color var(--transition); } .footer-links a:hover { color: var(--white); }
 .footer-contact-item { display: flex; gap: 10px; margin-bottom: 12px; font-size: 14px; }
