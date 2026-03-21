@@ -54,7 +54,7 @@ button { cursor: pointer; border: none; font-family: var(--font); }
 .navbar .container { display: flex; align-items: center; justify-content: space-between; height: 72px; }
 .nav-brand { display: flex; align-items: center; }
 .nav-logo { display: flex; align-items: center; }
-.nav-logo img { height: 38px; width: auto; }
+.nav-logo img { height: 48px; width: auto; }
 .nav-links { display: flex; align-items: center; gap: 28px; list-style: none; }
 .nav-links a { font-size: 14px; font-weight: 500; color: var(--gray-600); transition: color var(--transition); position: relative; padding: 4px 0; }
 .nav-links a::after { content: ''; position: absolute; bottom: -2px; left: 0; width: 0; height: 2px; background: var(--paras-blue); transition: width var(--transition); border-radius: 1px; }
@@ -99,7 +99,7 @@ button { cursor: pointer; border: none; font-family: var(--font); }
 .btn-outline:hover { border-color: var(--white); background: rgba(255,255,255,0.05); }
 .hero-brands { display: flex; align-items: center; gap: 24px; margin-top: 40px; padding-top: 28px; border-top: 1px solid rgba(255,255,255,0.1); }
 .hero-brands-label { font-size: 12px; font-weight: 500; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 1px; }
-.hero-brand-logos { display: flex; align-items: center; gap: 20px; }
+.hero-brand-logos { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
 .hero-brand-logos img { height: 24px; width: auto; filter: brightness(0) invert(0.7); opacity: 0.7; transition: opacity var(--transition); }
 .hero-brand-logos img:hover { opacity: 1; }
 
@@ -228,9 +228,9 @@ button { cursor: pointer; border: none; font-family: var(--font); }
 /* FOOTER */
 .footer { background: var(--gray-900); color: var(--gray-400); padding: 60px 0 0; border-top: 1px solid rgba(255,255,255,0.05); }
 .footer-grid { display: grid; grid-template-columns: 1.8fr 1fr 1fr 1.2fr; gap: 48px; padding-bottom: 48px; border-bottom: 1px solid rgba(255,255,255,0.08); }
-.footer-brand-logo { height: 36px; width: auto; margin-bottom: 16px; filter: brightness(0) invert(1); }
+.footer-brand-logo { height: 48px; width: auto; margin-bottom: 16px; filter: brightness(0) invert(1); }
 .footer-desc { font-size: 14px; line-height: 1.7; margin-bottom: 20px; color: var(--gray-400); }
-.footer-partner-logos { display: flex; gap: 16px; align-items: center; }
+.footer-partner-logos { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
 .footer-partner-logos img { height: 24px; width: auto; filter: brightness(0) invert(0.6); }
 .footer h4 { font-size: 14px; font-weight: 700; color: var(--white); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 20px; }
 .footer-links { list-style: none; }
@@ -269,7 +269,7 @@ button { cursor: pointer; border: none; font-family: var(--font); }
   .emi-promo-card { padding: 28px 20px; }
   .brands-grid { gap: 16px; }
   .brand-card { padding: 24px 20px; }
-  .nav-logo img { height: 32px; }
+  .nav-logo img { height: 40px; }
   .container { padding: 0 16px; }
   .slider-btn { width: 32px; height: 32px; font-size: 14px; }
 }
