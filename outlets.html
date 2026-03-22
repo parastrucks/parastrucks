@@ -395,6 +395,12 @@ function renderOutlets(){
       o.dist=R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
     });
     filtered.sort(function(a,b){return a.dist-b.dist});
+  } else if(highlightCity){
+    filtered.sort(function(a,b){
+      var aMatch=a.city.toLowerCase()===highlightCity.toLowerCase()?0:1;
+      var bMatch=b.city.toLowerCase()===highlightCity.toLowerCase()?0:1;
+      return aMatch-bMatch;
+    });
   }
   var html='';
   filtered.forEach(function(o){
@@ -404,7 +410,7 @@ function renderOutlets(){
     var typeClass=o.type==='3S'?'type-3s':'type-2s';
     var cityLabel=o.city+(o.brands.length===1&&o.brands[0]==='hd'?' (HD Hyundai CE)':'');
     var mapsUrl='https://www.google.com/maps/dir/?api=1&destination='+o.lat+','+o.lng;
-    html+='<div class="outlet-card fade-up"><div class="outlet-row"><div class="outlet-info">'+distHtml+
+    html+='<div class="outlet-card fade-up" data-city="'+o.city.toLowerCase()+'"><div class="outlet-row"><div class="outlet-info">'+distHtml+
       '<div class="outlet-header"><div class="outlet-city">'+cityLabel+'</div><span class="outlet-type '+typeClass+'">'+o.type+' Facility</span></div>'+
       '<div class="outlet-brands">'+brandTags+'</div>'+
       '<div class="outlet-state">&#127470;&#127475; '+stateLabel+'</div>'+
@@ -482,11 +488,13 @@ function findNearest(){
   },{enableHighAccuracy:false,timeout:10000,maximumAge:300000});
 }
 
-/* Check URL params for brand/state filter */
+/* Check URL params for brand/state/city filter */
+var highlightCity=null;
 (function(){
   var params=new URLSearchParams(window.location.search);
   var brand=params.get('brand');
   var state=params.get('state');
+  highlightCity=params.get('city');
   if(brand&&brandNames[brand]){
     activeBrand=brand;
     document.querySelectorAll('.filter-btn[data-filter="brand"]').forEach(function(b){b.classList.remove('active');if(b.getAttribute('data-value')===brand)b.classList.add('active')});
@@ -499,6 +507,21 @@ function findNearest(){
   }
 })();
 renderOutlets();
+
+/* Scroll to highlighted city card after render */
+if(highlightCity){
+  setTimeout(function(){
+    var target=document.querySelector('.outlet-card[data-city="'+highlightCity.toLowerCase()+'"]');
+    if(target){
+      target.classList.add('visible');
+      target.style.border='2px solid var(--paras-blue)';
+      target.style.boxShadow='0 0 0 4px rgba(0,128,201,0.15)';
+      var offset=target.getBoundingClientRect().top+window.scrollY-160;
+      window.scrollTo({top:offset,behavior:'smooth'});
+      setTimeout(function(){target.style.border='';target.style.boxShadow=''},4000);
+    }
+  },300);
+}
 
 /* COMMON */
 var navbar=document.getElementById('navbar');
