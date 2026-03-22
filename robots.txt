@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://parastrucks.in/sitemap.xml

@@ -3,8 +3,20 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Paras Trucks — Commercial Vehicles & Construction Equipment | Haryana & Gujarat</title>
-<meta name="description" content="Paras Trucks is a leading dealer for Ashok Leyland, Switch Mobility & HD Hyundai CE with 11 facilities across Haryana and Gujarat. Sales, Service & Spares.">
+<meta name="description" content="Authorized multi-brand dealership for Ashok Leyland trucks & buses, Switch Mobility EVs, and HD Hyundai construction equipment. 11 facilities across Haryana and Gujarat. Sales, service & spares.">
+<meta name="keywords" content="Ashok Leyland dealer Haryana, Ashok Leyland dealer Gujarat, Switch Mobility dealer, HD Hyundai CE dealer, commercial vehicle dealer Hisar, truck dealer Ahmedabad, bus dealer Gujarat, Paras Trucks">
+<link rel="canonical" href="https://parastrucks.in/">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Paras Trucks — Ashok Leyland, Switch Mobility & HD Hyundai CE Dealer | Haryana & Gujarat">
+<meta property="og:description" content="Authorized multi-brand dealership for Ashok Leyland trucks & buses, Switch Mobility EVs, and HD Hyundai construction equipment. 11 facilities across Haryana and Gujarat. Sales, service & spares.">
+<meta property="og:url" content="https://parastrucks.in/">
+<meta property="og:site_name" content="Paras Trucks">
+<meta property="og:image" content="https://parastrucks.in/images/hisar-showroom.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Paras Trucks — Ashok Leyland, Switch Mobility & HD Hyundai CE Dealer | Haryana & Gujarat">
+<meta name="twitter:description" content="Authorized multi-brand dealership for Ashok Leyland trucks & buses, Switch Mobility EVs, and HD Hyundai construction equipment. 11 facilities across Haryana and Gujarat. Sales, service & spares.">
+<meta name="twitter:image" content="https://parastrucks.in/images/hisar-showroom.jpg">
+<title>Paras Trucks — Ashok Leyland, Switch Mobility & HD Hyundai CE Dealer | Haryana & Gujarat</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -54,7 +66,7 @@ button { cursor: pointer; border: none; font-family: var(--font); }
 .navbar .container { display: flex; align-items: center; justify-content: space-between; height: 72px; }
 .nav-brand { display: flex; align-items: center; }
 .nav-logo { display: flex; align-items: center; }
-.nav-logo img { height: 48px; width: auto; }
+.nav-logo img { height: 56px; width: auto; }
 .nav-links { display: flex; align-items: center; gap: 28px; list-style: none; }
 .nav-links a { font-size: 14px; font-weight: 500; color: var(--gray-600); transition: color var(--transition); position: relative; padding: 4px 0; }
 .nav-links a::after { content: ''; position: absolute; bottom: -2px; left: 0; width: 0; height: 2px; background: var(--paras-blue); transition: width var(--transition); border-radius: 1px; }
@@ -71,8 +83,8 @@ button { cursor: pointer; border: none; font-family: var(--font); }
 .nav-dropdown-label { display: flex; align-items: center; gap: 4px; }
 .nav-dropdown-arrow { font-size: 10px; transition: transform var(--transition); }
 .nav-dropdown:hover .nav-dropdown-arrow { transform: rotate(180deg); }
-.nav-dropdown-menu { position: absolute; top: 100%; left: -16px; background: var(--white); border: 1px solid var(--gray-200); border-radius: var(--radius-sm); padding: 8px 0; min-width: 220px; box-shadow: var(--shadow-lg); opacity: 0; visibility: hidden; transform: translateY(8px); transition: all var(--transition); z-index: 50; }
-.nav-dropdown:hover .nav-dropdown-menu { opacity: 1; visibility: visible; transform: translateY(0); }
+.nav-dropdown-menu { position: absolute; top: 100%; left: 50%; transform: translateX(-50%) translateY(8px); background: var(--white); border: 1px solid var(--gray-200); border-radius: var(--radius-sm); padding: 8px 0; min-width: 240px; box-shadow: var(--shadow-lg); opacity: 0; visibility: hidden; transition: all var(--transition); z-index: 50; }
+.nav-dropdown:hover .nav-dropdown-menu { opacity: 1; visibility: visible; transform: translateX(-50%) translateY(0); }
 .nav-dropdown-menu a { display: flex; align-items: center; gap: 10px; padding: 10px 16px; font-size: 14px; color: var(--gray-700); transition: background var(--transition); white-space: nowrap; }
 .nav-dropdown-menu a::after { display: none; }
 .nav-dropdown-menu a:hover { background: var(--gray-50); color: var(--paras-blue); }
@@ -131,13 +143,13 @@ button { cursor: pointer; border: none; font-family: var(--font); }
 /* OUR BRANDS */
 .brands-section { background: var(--gray-50); }
 .brands-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
-.brand-card { background: var(--white); border-radius: var(--radius); border: 1px solid var(--gray-200); padding: 32px 28px; transition: all var(--transition); display: flex; flex-direction: column; position: relative; overflow: hidden; }
+.brand-card { background: var(--white); border-radius: var(--radius); border: 1px solid var(--gray-200); padding: 32px 28px; transition: all var(--transition); display: flex; flex-direction: column; position: relative; overflow: visible; word-break: break-word; }
 .brand-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--paras-blue); transform: scaleX(0); transition: transform var(--transition); }
 .brand-card:hover { border-color: var(--paras-blue); transform: translateY(-4px); box-shadow: var(--shadow-lg); }
 .brand-card:hover::before { transform: scaleX(1); }
 .brand-card-logo { height: 36px; width: auto; margin-bottom: 20px; }
-.brand-card h3 { font-size: 20px; font-weight: 700; color: var(--gray-900); margin-bottom: 8px; }
-.brand-card p { font-size: 14px; color: var(--gray-500); line-height: 1.7; margin-bottom: 16px; flex: 1; }
+.brand-card h3 { font-size: 20px; font-weight: 700; color: var(--gray-900); margin-bottom: 8px; overflow-wrap: break-word; }
+.brand-card p { font-size: 14px; color: var(--gray-500); line-height: 1.7; margin-bottom: 16px; flex: 1; overflow-wrap: break-word; }
 .brand-card-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
 .brand-tag { font-size: 11px; font-weight: 600; background: var(--paras-blue-light); color: var(--paras-blue); padding: 3px 10px; border-radius: 20px; }
 .brand-card-link { font-size: 14px; font-weight: 600; color: var(--paras-blue); display: inline-flex; align-items: center; gap: 4px; transition: gap var(--transition); }
@@ -228,7 +240,7 @@ button { cursor: pointer; border: none; font-family: var(--font); }
 /* FOOTER */
 .footer { background: var(--gray-900); color: var(--gray-400); padding: 60px 0 0; border-top: 1px solid rgba(255,255,255,0.05); }
 .footer-grid { display: grid; grid-template-columns: 1.8fr 1fr 1fr 1.2fr; gap: 48px; padding-bottom: 48px; border-bottom: 1px solid rgba(255,255,255,0.08); }
-.footer-brand-logo { height: 48px; width: auto; margin-bottom: 16px; filter: brightness(0) invert(1); }
+.footer-brand-logo { height: 56px; width: auto; margin-bottom: 16px; filter: brightness(0) invert(1); }
 .footer-desc { font-size: 14px; line-height: 1.7; margin-bottom: 20px; color: var(--gray-400); }
 .footer-partner-logos { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
 .footer-partner-logos img { height: 24px; width: auto; filter: brightness(0) invert(0.6); }
@@ -245,7 +257,7 @@ button { cursor: pointer; border: none; font-family: var(--font); }
 @media (max-width: 1024px) {
   .nav-links { display: none; } .mobile-toggle { display: flex; }
   .about-grid { grid-template-columns: 1fr; gap: 32px; }
-  .brands-grid { grid-template-columns: 1fr; }
+  .brands-grid { grid-template-columns: 1fr 1fr; }
   .services-grid { grid-template-columns: 1fr 1fr; }
   .why-grid { grid-template-columns: 1fr 1fr; }
   .numbers-grid { grid-template-columns: 1fr 1fr; gap: 24px; }
@@ -267,9 +279,9 @@ button { cursor: pointer; border: none; font-family: var(--font); }
   .about-stats { gap: 20px; }
   .hero-brands { flex-direction: column; align-items: flex-start; gap: 12px; }
   .emi-promo-card { padding: 28px 20px; }
-  .brands-grid { gap: 16px; }
+  .brands-grid { gap: 16px; grid-template-columns: 1fr; }
   .brand-card { padding: 24px 20px; }
-  .nav-logo img { height: 40px; }
+  .nav-logo img { height: 56px; }
   .container { padding: 0 16px; }
   .slider-btn { width: 32px; height: 32px; font-size: 14px; }
 }
@@ -288,6 +300,9 @@ button { cursor: pointer; border: none; font-family: var(--font); }
   .fade-up.visible { opacity: 1; transform: translateY(0); }
 }
 </style>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"Organization","name":"Paras Trucks","alternateName":"Paras Trucks and Buses","url":"https://parastrucks.in","logo":"https://parastrucks.in/images/paras-logo.png","description":"Authorized multi-brand dealership for Ashok Leyland, Switch Mobility, and HD Hyundai Construction Equipment across Haryana and Gujarat.","telephone":"+917496970303","email":"hi@parastrucks.in","address":[{"@type":"PostalAddress","addressRegion":"Haryana","addressCountry":"IN"},{"@type":"PostalAddress","addressRegion":"Gujarat","addressCountry":"IN"}],"sameAs":["https://www.facebook.com/parastrucksandbuses"],"numberOfEmployees":{"@type":"QuantitativeValue","minValue":410},"foundingDate":"2019-01"}
+</script>
 </head>
 <body>
 
