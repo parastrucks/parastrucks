@@ -98,9 +98,8 @@ img{max-width:100%;display:block}a{text-decoration:none;color:inherit}button{cur
 .model-card{background:var(--white);border:1px solid var(--gray-200);border-radius:var(--radius);overflow:hidden;transition:all var(--transition)}
 .model-card:hover{border-color:var(--al-blue);box-shadow:var(--shadow-md);transform:translateY(-2px)}
 .model-img{height:180px;background:linear-gradient(135deg,var(--al-blue-light),var(--gray-100));display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
-.model-img img{width:100%;height:100%;object-fit:cover;position:absolute;top:0;left:0}
+.model-img img{width:100%;height:100%;object-fit:cover;position:absolute;top:0;left:0;z-index:1}
 .model-img-placeholder{font-size:48px;opacity:0.3}
-.model-img img{width:100%;height:100%;object-fit:cover}
 .model-body{padding:20px}
 .model-body h3{font-size:17px;font-weight:700;color:var(--gray-900);margin-bottom:4px}
 .model-body .model-type{font-size:12px;font-weight:600;color:var(--al-blue);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px}
@@ -288,7 +287,7 @@ img{max-width:100%;display:block}a{text-decoration:none;color:inherit}button{cur
     </div>
     <div class="models-grid fade-up">
       <div class="model-card">
-        <div class="model-img"><img src="images/al-ecomet.jpg" alt="Ashok Leyland Ecomet 1615" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'model-img-placeholder',innerHTML:'&#128666;'}))"></div>
+        <div class="model-img"><div class="model-img-placeholder">&#128666;</div><img src="images/al-ecomet.jpg" alt="Ashok Leyland Ecomet 1615" onerror="this.style.display='none'"></div>
         <div class="model-body">
           <div class="model-type">ICV Truck</div>
           <h3>Ecomet 1615</h3>
@@ -298,7 +297,7 @@ img{max-width:100%;display:block}a{text-decoration:none;color:inherit}button{cur
         </div>
       </div>
       <div class="model-card">
-        <div class="model-img"><img src="images/al-haulage.jpg" alt="Ashok Leyland 3520 Haulage" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'model-img-placeholder',innerHTML:'&#128667;'}))"></div>
+        <div class="model-img"><div class="model-img-placeholder">&#128667;</div><img src="images/al-haulage.jpg" alt="Ashok Leyland 3520 Haulage" onerror="this.style.display='none'"></div>
         <div class="model-body">
           <div class="model-type">Haulage</div>
           <h3>3520 8x2 LA</h3>
@@ -308,7 +307,7 @@ img{max-width:100%;display:block}a{text-decoration:none;color:inherit}button{cur
         </div>
       </div>
       <div class="model-card">
-        <div class="model-img"><img src="images/al-tipper.jpg" alt="Ashok Leyland 2825 Tipper" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'model-img-placeholder',innerHTML:'&#9935;&#65039;'}))"></div>
+        <div class="model-img"><div class="model-img-placeholder">&#9935;&#65039;</div><img src="images/al-tipper.jpg" alt="Ashok Leyland 2825 Tipper" onerror="this.style.display='none'"></div>
         <div class="model-body">
           <div class="model-type">Tipper</div>
           <h3>2825 6x4 Tipper</h3>
@@ -318,7 +317,7 @@ img{max-width:100%;display:block}a{text-decoration:none;color:inherit}button{cur
         </div>
       </div>
       <div class="model-card">
-        <div class="model-img"><img src="images/al-viking.jpg" alt="Ashok Leyland Viking Bus" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'model-img-placeholder',innerHTML:'&#128652;'}))"></div>
+        <div class="model-img"><div class="model-img-placeholder">&#128652;</div><img src="images/al-viking.jpg" alt="Ashok Leyland Viking Bus" onerror="this.style.display='none'"></div>
         <div class="model-body">
           <div class="model-type">Bus</div>
           <h3>Viking 12M AC</h3>
@@ -328,7 +327,7 @@ img{max-width:100%;display:block}a{text-decoration:none;color:inherit}button{cur
         </div>
       </div>
       <div class="model-card">
-        <div class="model-img"><img src="images/al-boss.jpg" alt="Ashok Leyland Boss 1415" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'model-img-placeholder',innerHTML:'&#128666;'}))"></div>
+        <div class="model-img"><div class="model-img-placeholder">&#128666;</div><img src="images/al-boss.jpg" alt="Ashok Leyland Boss 1415" onerror="this.style.display='none'"></div>
         <div class="model-body">
           <div class="model-type">ICV Truck</div>
           <h3>Boss 1415</h3>
@@ -338,7 +337,7 @@ img{max-width:100%;display:block}a{text-decoration:none;color:inherit}button{cur
         </div>
       </div>
       <div class="model-card">
-        <div class="model-img"><img src="images/al-tractor.jpg" alt="Ashok Leyland Tractor 5525" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'model-img-placeholder',innerHTML:'&#128667;'}))"></div>
+        <div class="model-img"><div class="model-img-placeholder">&#128667;</div><img src="images/al-tractor.jpg" alt="Ashok Leyland Tractor 5525" onerror="this.style.display='none'"></div>
         <div class="model-body">
           <div class="model-type">Tractor</div>
           <h3>Tractor 5525</h3>
@@ -351,15 +350,13 @@ img{max-width:100%;display:block}a{text-decoration:none;color:inherit}button{cur
   </div>
 </section>
 
-<!-- EMI PROMO -->
+<!-- OUTLETS CTA -->
 <section class="section">
   <div class="container">
-    <div class="emi-promo fade-up">
-      <div>
-        <h2 data-lang-en="Plan your Ashok Leyland purchase" data-lang-hi="अपनी अशोक लेलैंड खरीद की योजना बनाएं">Plan your Ashok Leyland purchase</h2>
-        <p data-lang-en="Use our EMI calculator with latest prices for all 83 Ashok Leyland models — ICV trucks, haulage, tippers, and buses." data-lang-hi="सभी 83 अशोक लेलैंड मॉडलों के लिए नवीनतम कीमतों के साथ हमारा EMI कैलकुलेटर उपयोग करें।">Use our EMI calculator with latest prices for all 83 Ashok Leyland models — ICV trucks, haulage, tippers, and buses.</p>
-      </div>
-      <a href="emi-calculator.html" class="emi-promo-cta" data-lang-en="Open EMI Calculator &rarr;" data-lang-hi="EMI कैलकुलेटर खोलें &rarr;">Open EMI Calculator &rarr;</a>
+    <div class="outlet-cta-card fade-up">
+      <h2 data-lang-en="Find your nearest Ashok Leyland outlet" data-lang-hi="अपना निकटतम अशोक लेलैंड आउटलेट खोजें">Find your nearest Ashok Leyland outlet</h2>
+      <p data-lang-en="7 fully equipped 3S facilities across Haryana and Gujarat — Hisar, Rohtak, Sirsa, Jind, Charkhi Dadri, Ahmedabad, and Anand." data-lang-hi="हरियाणा और गुजरात में 7 पूर्ण सुसज्जित 3S सुविधाएं — हिसार, रोहतक, सिरसा, जींद, चरखी दादरी, अहमदाबाद और आणंद।">7 fully equipped 3S facilities across Haryana and Gujarat — Hisar, Rohtak, Sirsa, Jind, Charkhi Dadri, Ahmedabad, and Anand.</p>
+      <a href="outlets.html" class="outlet-cta-btn" data-lang-en="View All Outlets &rarr;" data-lang-hi="सभी आउटलेट देखें &rarr;">View All Outlets &rarr;</a>
     </div>
   </div>
 </section>
@@ -391,13 +388,15 @@ img{max-width:100%;display:block}a{text-decoration:none;color:inherit}button{cur
   </div>
 </section>
 
-<!-- OUTLETS CTA -->
+<!-- EMI PROMO -->
 <section class="section">
   <div class="container">
-    <div class="outlet-cta-card fade-up">
-      <h2 data-lang-en="Find your nearest Ashok Leyland outlet" data-lang-hi="अपना निकटतम अशोक लेलैंड आउटलेट खोजें">Find your nearest Ashok Leyland outlet</h2>
-      <p data-lang-en="7 fully equipped 3S facilities across Haryana and Gujarat — Hisar, Rohtak, Sirsa, Jind, Charkhi Dadri, Ahmedabad, and Anand." data-lang-hi="हरियाणा और गुजरात में 7 पूर्ण सुसज्जित 3S सुविधाएं — हिसार, रोहतक, सिरसा, जींद, चरखी दादरी, अहमदाबाद और आणंद।">7 fully equipped 3S facilities across Haryana and Gujarat — Hisar, Rohtak, Sirsa, Jind, Charkhi Dadri, Ahmedabad, and Anand.</p>
-      <a href="outlets.html" class="outlet-cta-btn" data-lang-en="View All Outlets &rarr;" data-lang-hi="सभी आउटलेट देखें &rarr;">View All Outlets &rarr;</a>
+    <div class="emi-promo fade-up">
+      <div>
+        <h2 data-lang-en="Plan your Ashok Leyland purchase" data-lang-hi="अपनी अशोक लेलैंड खरीद की योजना बनाएं">Plan your Ashok Leyland purchase</h2>
+        <p data-lang-en="Use our EMI calculator with latest prices for all 83 Ashok Leyland models — ICV trucks, haulage, tippers, and buses." data-lang-hi="सभी 83 अशोक लेलैंड मॉडलों के लिए नवीनतम कीमतों के साथ हमारा EMI कैलकुलेटर उपयोग करें।">Use our EMI calculator with latest prices for all 83 Ashok Leyland models — ICV trucks, haulage, tippers, and buses.</p>
+      </div>
+      <a href="emi-calculator.html" class="emi-promo-cta" data-lang-en="Open EMI Calculator &rarr;" data-lang-hi="EMI कैलकुलेटर खोलें &rarr;">Open EMI Calculator &rarr;</a>
     </div>
   </div>
 </section>
