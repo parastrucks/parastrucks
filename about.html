@@ -61,9 +61,9 @@ button { cursor: pointer; border: none; font-family: var(--font); }
 /* NAVBAR */
 .navbar { background: var(--white); border-bottom: 1px solid var(--gray-200); position: sticky; top: 0; z-index: 100; transition: box-shadow var(--transition); }
 .navbar.scrolled { box-shadow: var(--shadow-md); }
-.navbar .container { display: flex; align-items: center; justify-content: space-between; height: 72px; }
+.navbar .container { display: flex; align-items: center; justify-content: space-between; height: 80px; }
 .nav-logo { display: flex; align-items: center; }
-.nav-logo img { height: 56px; width: auto; }
+.nav-logo img { height: 72px; width: auto; }
 .nav-links { display: flex; align-items: center; gap: 28px; list-style: none; }
 .nav-links a { font-size: 14px; font-weight: 500; color: var(--gray-600); transition: color var(--transition); position: relative; padding: 4px 0; }
 .nav-links a::after { content: ''; position: absolute; bottom: -2px; left: 0; width: 0; height: 2px; background: var(--paras-blue); transition: width var(--transition); border-radius: 1px; }
@@ -193,7 +193,7 @@ button { cursor: pointer; border: none; font-family: var(--font); }
 /* FOOTER */
 .footer { background: var(--gray-900); color: var(--gray-400); padding: 56px 0 0; border-top: 1px solid rgba(255,255,255,0.05); }
 .footer-grid { display: grid; grid-template-columns: 1.8fr 1fr 1fr 1.2fr; gap: 48px; padding-bottom: 40px; border-bottom: 1px solid rgba(255,255,255,0.08); }
-.footer-brand-logo { height: 56px; width: auto; margin-bottom: 16px; filter: brightness(0) invert(1); }
+.footer-brand-logo { height: 72px; width: auto; margin-bottom: 16px; filter: brightness(0) invert(1); }
 .footer-desc { font-size: 14px; line-height: 1.7; margin-bottom: 20px; }
 .footer-partner-logos { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
 .footer-partner-logos img { height: 24px; width: auto; filter: brightness(0) invert(0.6); }
@@ -224,7 +224,7 @@ button { cursor: pointer; border: none; font-family: var(--font); }
   .numbers-grid { grid-template-columns: 1fr 1fr; }
   .footer-grid { grid-template-columns: 1fr; gap: 28px; }
   .container { padding: 0 16px; }
-  .nav-logo img { height: 56px; }
+  .nav-logo img { height: 72px; }
   .ops-card-body { padding: 20px; }
   .ops-card-header { padding: 20px; }
   .vm-card { padding: 24px 20px; }
@@ -295,7 +295,7 @@ button { cursor: pointer; border: none; font-family: var(--font); }
 <!-- MOBILE NAV -->
 <div class="mobile-nav" id="mobileNav">
   <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:12px;border-bottom:1px solid var(--gray-200);margin-bottom:4px;gap:12px;">
-    <img src="images/paras-logo.png" alt="Paras Trucks" style="height:28px;width:auto;">
+    <img src="images/paras-logo.png" alt="Paras Trucks" style="height:36px;width:auto;">
     <div style="display:flex;align-items:center;gap:10px;">
       <div class="lang-toggle" style="background:var(--gray-100);">
         <button class="lang-btn active" onclick="setLang('en')" style="color:var(--gray-600);">EN</button>
@@ -645,6 +645,7 @@ function toggleMobileNav() {
   document.body.style.overflow = document.getElementById('mobileNav').classList.contains('open') ? 'hidden' : '';
 }
 function setLang(lang) {
+  localStorage.setItem('ptb-lang', lang);
   document.querySelectorAll('.lang-btn').forEach(function(b) {
     b.classList.remove('active');
     if ((lang === 'en' && b.textContent.trim() === 'EN') || (lang === 'hi' && b.textContent.trim() !== 'EN')) b.classList.add('active');
@@ -656,6 +657,7 @@ function setLang(lang) {
   });
   document.documentElement.lang = lang === 'hi' ? 'hi' : 'en';
 }
+(function(){ var s = localStorage.getItem('ptb-lang'); if (s && s === 'hi') setLang('hi'); }());
 if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
   var observer = new IntersectionObserver(function(entries) { entries.forEach(function(entry) { if (entry.isIntersecting) { entry.target.classList.add('visible'); observer.unobserve(entry.target); } }); }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
   document.querySelectorAll('.fade-up').forEach(function(el) { observer.observe(el); });

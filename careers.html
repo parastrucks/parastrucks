@@ -41,8 +41,8 @@ img{max-width:100%;display:block}a{text-decoration:none;color:inherit}button{cur
 /* NAVBAR */
 .navbar{background:var(--white);border-bottom:1px solid var(--gray-200);position:sticky;top:0;z-index:100;transition:box-shadow var(--transition)}
 .navbar.scrolled{box-shadow:var(--shadow-md)}
-.navbar .container{display:flex;align-items:center;justify-content:space-between;height:72px}
-.nav-logo{display:flex;align-items:center}.nav-logo img { height: 56px;width:auto}
+.navbar .container{display:flex;align-items:center;justify-content:space-between;height:80px}
+.nav-logo{display:flex;align-items:center}.nav-logo img { height: 72px;width:auto}
 .nav-links{display:flex;align-items:center;gap:28px;list-style:none}
 .nav-links a{font-size:14px;font-weight:500;color:var(--gray-600);transition:color var(--transition);position:relative;padding:4px 0}
 .nav-links a::after{content:'';position:absolute;bottom:-2px;left:0;width:0;height:2px;background:var(--paras-blue);transition:width var(--transition);border-radius:1px}
@@ -61,7 +61,7 @@ img{max-width:100%;display:block}a{text-decoration:none;color:inherit}button{cur
 /* COMING SOON */
 .cs-section{flex:1;display:flex;align-items:center;justify-content:center;padding:80px 24px;text-align:center}
 .cs-inner{max-width:520px}
-.cs-icon{width:72px;height:72px;background:var(--paras-blue);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 24px;font-size:32px;color:var(--white)}
+.cs-icon{width:72px;height:80px;background:var(--paras-blue);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 24px;font-size:32px;color:var(--white)}
 .cs-title{font-size:clamp(24px,4vw,36px);font-weight:800;color:var(--gray-900);letter-spacing:-0.5px;margin-bottom:8px}
 .cs-subtitle{font-size:15px;color:var(--gray-500);line-height:1.7;margin-bottom:32px}
 .cs-cta{display:inline-flex;align-items:center;gap:8px;padding:14px 32px;background:var(--paras-blue);color:var(--white);font-size:15px;font-weight:600;border-radius:var(--radius-sm);transition:all var(--transition)}
@@ -80,7 +80,7 @@ img{max-width:100%;display:block}a{text-decoration:none;color:inherit}button{cur
 .mobile-nav .mobile-brand-label{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--gray-400);padding:16px 0 4px;border:none}
 
 @media(max-width:1024px){.nav-links{display:none}.mobile-toggle{display:flex}}
-@media(max-width:640px){.topbar{display:none}.container{padding:0 16px}.nav-logo img { height: 56px}}
+@media(max-width:640px){.topbar{display:none}.container{padding:0 16px}.nav-logo img { height: 72px}}
 </style>
 </head>
 <body>
@@ -106,7 +106,7 @@ img{max-width:100%;display:block}a{text-decoration:none;color:inherit}button{cur
 <!-- MOBILE NAV -->
 <div class="mobile-nav" id="mobileNav">
   <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:12px;border-bottom:1px solid var(--gray-200);margin-bottom:4px;gap:12px;">
-    <img src="images/paras-logo.png" alt="Paras Trucks" style="height:28px;width:auto;">
+    <img src="images/paras-logo.png" alt="Paras Trucks" style="height:36px;width:auto;">
     <div style="display:flex;align-items:center;gap:10px;">
       <div class="lang-toggle" style="background:var(--gray-100);"><button class="lang-btn active" onclick="setLang('en')" style="color:var(--gray-600);">EN</button><button class="lang-btn" onclick="setLang('hi')" style="color:var(--gray-600);">&#2361;&#2367;&#2306;&#2342;&#2368;</button></div>
       <button onclick="toggleMobileNav()" style="width:36px;height:36px;background:var(--gray-100);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--gray-800);flex-shrink:0;">&times;</button>
@@ -137,7 +137,8 @@ img{max-width:100%;display:block}a{text-decoration:none;color:inherit}button{cur
 var navbar=document.getElementById('navbar');
 window.addEventListener('scroll',function(){navbar.classList.toggle('scrolled',window.scrollY>10)});
 function toggleMobileNav(){document.getElementById('mobileNav').classList.toggle('open');document.body.style.overflow=document.getElementById('mobileNav').classList.contains('open')?'hidden':''}
-function setLang(lang){document.querySelectorAll('.lang-btn').forEach(function(b){b.classList.remove('active');if((lang==='en'&&b.textContent.trim()==='EN')||(lang==='hi'&&b.textContent.trim()!=='EN'))b.classList.add('active')});document.querySelectorAll('[data-lang-'+lang+']').forEach(function(el){var v=el.getAttribute('data-lang-'+lang);if(el.tagName==='INPUT'||el.tagName==='TEXTAREA')el.placeholder=v;else el.innerHTML=v});document.documentElement.lang=lang==='hi'?'hi':'en'}
+function setLang(lang){localStorage.setItem('ptb-lang',lang);document.querySelectorAll('.lang-btn').forEach(function(b){b.classList.remove('active');if((lang==='en'&&b.textContent.trim()==='EN')||(lang==='hi'&&b.textContent.trim()!=='EN'))b.classList.add('active')});document.querySelectorAll('[data-lang-'+lang+']').forEach(function(el){var v=el.getAttribute('data-lang-'+lang);if(el.tagName==='INPUT'||el.tagName==='TEXTAREA')el.placeholder=v;else el.innerHTML=v});document.documentElement.lang=lang==='hi'?'hi':'en'}
+(function(){var s=localStorage.getItem('ptb-lang');if(s&&s==='hi')setLang('hi')}())
 </script>
 </body>
 </html>
