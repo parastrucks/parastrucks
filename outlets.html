@@ -463,13 +463,41 @@ function findNearest(){
   var btn=document.getElementById('nearestBtn');
   var mbtn=document.getElementById('mobileNearestBtn');
   if(userLat!==null){userLat=null;userLng=null;btn.classList.remove('active');mbtn.classList.remove('active');outlets.forEach(function(o){delete o.dist});renderOutlets();return}
-  if(!navigator.geolocation){alert('Geolocation not supported.');return}
+  if(!navigator.geolocation){alert('Geolocation is not supported by your browser.');return}
+  /* Show loading state */
+  btn.querySelector('span').textContent='Locating...';
+  if(mbtn.querySelector('span'))mbtn.querySelector('span').textContent='Locating...';
   navigator.geolocation.getCurrentPosition(function(pos){
     userLat=pos.coords.latitude;userLng=pos.coords.longitude;
-    btn.classList.add('active');mbtn.classList.add('active');renderOutlets();
-  },function(){alert('Unable to get location. Please enable location access.')});
+    btn.classList.add('active');mbtn.classList.add('active');
+    btn.querySelector('span').textContent='Nearest (ON)';
+    if(mbtn.querySelector('span'))mbtn.querySelector('span').textContent='Nearest (ON)';
+    renderOutlets();
+  },function(err){
+    btn.querySelector('span').textContent='Nearest to me';
+    if(mbtn.querySelector('span'))mbtn.querySelector('span').textContent=document.documentElement.lang==='hi'?'निकटतम':'Nearest';
+    if(err.code===1)alert('Location access was denied. Please allow location access in your browser settings and try again.');
+    else if(err.code===2)alert('Unable to determine your location. Please try again.');
+    else alert('Location request timed out. Please try again.');
+  },{enableHighAccuracy:false,timeout:10000,maximumAge:300000});
 }
 
+/* Check URL params for brand/state filter */
+(function(){
+  var params=new URLSearchParams(window.location.search);
+  var brand=params.get('brand');
+  var state=params.get('state');
+  if(brand&&brandNames[brand]){
+    activeBrand=brand;
+    document.querySelectorAll('.filter-btn[data-filter="brand"]').forEach(function(b){b.classList.remove('active');if(b.getAttribute('data-value')===brand)b.classList.add('active')});
+    document.querySelectorAll('.filter-chip[data-mfilter="brand"]').forEach(function(c){c.classList.remove('active');if(c.getAttribute('data-value')===brand)c.classList.add('active')});
+  }
+  if(state&&(state==='haryana'||state==='gujarat')){
+    activeState=state;
+    document.querySelectorAll('.filter-btn[data-filter="state"]').forEach(function(b){b.classList.remove('active');if(b.getAttribute('data-value')===state)b.classList.add('active')});
+    document.querySelectorAll('.filter-chip[data-mfilter="state"]').forEach(function(c){c.classList.remove('active');if(c.getAttribute('data-value')===state)c.classList.add('active')});
+  }
+})();
 renderOutlets();
 
 /* COMMON */
