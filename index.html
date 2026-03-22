@@ -3,6 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/x-icon" href="images/favicon.ico">
+<link rel="icon" type="image/png" sizes="32x32" href="images/favicon-32x32.png">
+<link rel="apple-touch-icon" href="images/apple-touch-icon.png">
+<meta name="theme-color" content="#0080C9">
+<link rel="preload" as="image" href="images/hisar-showroom.jpg">
 <meta name="description" content="Authorized multi-brand dealership for Ashok Leyland trucks & buses, Switch Mobility EVs, and HD Hyundai construction equipment. 11 facilities across Haryana and Gujarat. Sales, service & spares.">
 <meta name="keywords" content="Ashok Leyland dealer Haryana, Ashok Leyland dealer Gujarat, Switch Mobility dealer, HD Hyundai CE dealer, commercial vehicle dealer Hisar, truck dealer Ahmedabad, bus dealer Gujarat, Paras Trucks">
 <link rel="canonical" href="https://parastrucks.in/">
@@ -19,7 +24,7 @@
 <title>Paras Trucks — Ashok Leyland, Switch Mobility & HD Hyundai CE Dealer | Haryana & Gujarat</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 :root {
@@ -325,7 +330,7 @@ button { cursor: pointer; border: none; font-family: var(--font); }
 </div>
 
 <!-- NAVBAR -->
-<nav class="navbar" id="navbar">
+<nav class="navbar" role="navigation" id="navbar">
   <div class="container">
     <div class="nav-brand">
       <a href="index.html" class="nav-logo"><img src="images/paras-logo.png" alt="Paras Trucks &amp; Buses"></a>
@@ -338,7 +343,7 @@ button { cursor: pointer; border: none; font-family: var(--font); }
         <div class="nav-dropdown-menu">
           <a href="ashok-leyland.html"><img src="images/ashok-leyland-logo.svg" alt=""> Ashok Leyland</a>
           <a href="switch-mobility.html"><img src="images/switch-mobility-logo.svg" alt=""> Switch Mobility</a>
-          <a href="hd-hyundai.html"><img src="images/hd-hyundai-logo.svg" alt=""> HD Hyundai CE</a>
+          <a href="hd-hyundai.html"><img loading="lazy" src="images/hd-hyundai-logo.svg" alt=""> HD Hyundai CE</a>
         </div>
       </li>
       <li><a href="outlets.html" data-lang-en="Outlets" data-lang-hi="&#2310;&#2313;&#2335;&#2354;&#2375;&#2335;">Outlets</a></li>
@@ -353,7 +358,7 @@ button { cursor: pointer; border: none; font-family: var(--font); }
 <!-- MOBILE NAV -->
 <div class="mobile-nav" id="mobileNav">
   <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:12px;border-bottom:1px solid var(--gray-200);margin-bottom:4px;gap:12px;">
-    <img src="images/paras-logo.png" alt="Paras Trucks" style="height:36px;width:auto;">
+    <img loading="lazy" src="images/paras-logo.png" alt="Paras Trucks" style="height:36px;width:auto;">
     <div style="display:flex;align-items:center;gap:10px;">
       <div class="lang-toggle" style="background:var(--gray-100);">
         <button class="lang-btn active" onclick="setLang('en')" style="color:var(--gray-600);">EN</button>
@@ -373,7 +378,7 @@ button { cursor: pointer; border: none; font-family: var(--font); }
   <a href="careers.html">Careers</a>
   <a href="contact.html">Contact Us</a>
   <div style="margin-top:auto;padding-top:16px;border-top:1px solid var(--gray-200);display:flex;align-items:center;gap:12px;">
-    <a href="https://www.facebook.com/parastrucksandbuses" target="_blank" style="display:flex;align-items:center;gap:6px;font-size:14px;font-weight:500;color:var(--paras-blue);padding:8px 0;border:none;">
+    <a href="https://www.facebook.com/parastrucksandbuses" target="_blank" rel="noopener noreferrer" style="display:flex;align-items:center;gap:6px;font-size:14px;font-weight:500;color:var(--paras-blue);padding:8px 0;border:none;">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
       Follow us on Facebook
     </a>
@@ -382,7 +387,7 @@ button { cursor: pointer; border: none; font-family: var(--font); }
 
 <!-- HERO -->
 <section class="hero">
-  <div class="hero-bg"><img src="images/hisar-showroom.jpg" alt="Paras Trucks Hisar 3S Facility"></div>
+  <div class="hero-bg"><img loading="lazy" src="images/hisar-showroom.jpg" alt="Paras Trucks Hisar 3S Facility"></div>
   <div class="container">
     <div class="hero-content">
       <div class="hero-badge"><span class="hero-badge-dot"></span><span data-lang-en="Commercial Vehicles &amp; Construction Equipment" data-lang-hi="&#2357;&#2366;&#2339;&#2367;&#2332;&#2381;&#2351;&#2367;&#2325; &#2357;&#2366;&#2361;&#2344; &#2324;&#2352; &#2344;&#2367;&#2352;&#2381;&#2350;&#2366;&#2339; &#2313;&#2346;&#2325;&#2352;&#2339;">Commercial Vehicles &amp; Construction Equipment</span></div>
@@ -395,9 +400,9 @@ button { cursor: pointer; border: none; font-family: var(--font); }
       <div class="hero-brands">
         <span class="hero-brands-label" data-lang-en="Our Partners" data-lang-hi="&#2361;&#2350;&#2366;&#2352;&#2375; &#2349;&#2366;&#2327;&#2368;&#2342;&#2366;&#2352;">Our Partners</span>
         <div class="hero-brand-logos">
-          <img src="images/ashok-leyland-logo.svg" alt="Ashok Leyland">
-          <img src="images/switch-mobility-logo.svg" alt="Switch Mobility">
-          <img src="images/hd-hyundai-logo.svg" alt="HD Hyundai CE">
+          <img loading="lazy" src="images/ashok-leyland-logo.svg" alt="Ashok Leyland">
+          <img loading="lazy" src="images/switch-mobility-logo.svg" alt="Switch Mobility">
+          <img loading="lazy" src="images/hd-hyundai-logo.svg" alt="HD Hyundai CE">
         </div>
       </div>
     </div>
@@ -409,7 +414,7 @@ button { cursor: pointer; border: none; font-family: var(--font); }
   <div class="container">
     <div class="about-grid fade-up">
       <div class="about-image-wrap">
-        <img src="images/ahmedabad-showroom.jpg" alt="Paras Trucks and Buses Ahmedabad 3S Facility">
+        <img loading="lazy" src="images/ahmedabad-showroom.jpg" alt="Paras Trucks and Buses Ahmedabad 3S Facility">
         <div class="about-image-badge">
           <div class="about-image-badge-icon">&#127959;&#65039;</div>
           <div class="about-image-badge-text" data-lang-en="Multi-Brand Dealership<span>3 Brands &middot; 11 Facilities</span>" data-lang-hi="&#2350;&#2354;&#2381;&#2335;&#2368;-&#2348;&#2381;&#2352;&#2366;&#2306;&#2337; &#2337;&#2368;&#2354;&#2352;&#2358;&#2367;&#2346;<span>3 &#2348;&#2381;&#2352;&#2366;&#2306;&#2337; &middot; 11 &#2360;&#2369;&#2357;&#2367;&#2343;&#2366;&#2319;&#2306;</span>">Multi-Brand Dealership<span>3 Brands &middot; 11 Facilities</span></div>
@@ -443,21 +448,21 @@ button { cursor: pointer; border: none; font-family: var(--font); }
     </div>
     <div class="brands-grid fade-up">
       <a href="ashok-leyland.html" class="brand-card">
-        <img src="images/ashok-leyland-logo.svg" alt="Ashok Leyland" class="brand-card-logo">
+        <img loading="lazy" src="images/ashok-leyland-logo.svg" alt="Ashok Leyland" class="brand-card-logo">
         <h3>Ashok Leyland</h3>
         <p data-lang-en="India's leading commercial vehicle manufacturer. Complete range of LCV, MCV, HCV trucks and buses across Haryana and Gujarat." data-lang-hi="&#2349;&#2366;&#2352;&#2340; &#2325;&#2366; &#2309;&#2327;&#2381;&#2352;&#2339;&#2368; &#2357;&#2366;&#2339;&#2367;&#2332;&#2381;&#2351;&#2367;&#2325; &#2357;&#2366;&#2361;&#2344; &#2344;&#2367;&#2352;&#2381;&#2350;&#2366;&#2340;&#2366;&#2404; &#2361;&#2352;&#2367;&#2351;&#2366;&#2339;&#2366; &#2324;&#2352; &#2327;&#2369;&#2332;&#2352;&#2366;&#2340; &#2350;&#2375;&#2306; LCV, MCV, HCV &#2335;&#2381;&#2352;&#2325; &#2324;&#2352; &#2348;&#2360;&#2375;&#2306;&#2404;">India's leading commercial vehicle manufacturer. Complete range of LCV, MCV, HCV trucks and buses across Haryana and Gujarat.</p>
         <div class="brand-card-tags"><span class="brand-tag">Haryana</span><span class="brand-tag">Gujarat</span><span class="brand-tag">7 Outlets</span></div>
         <span class="brand-card-link" data-lang-en="Explore Ashok Leyland &rarr;" data-lang-hi="&#2309;&#2358;&#2379;&#2325; &#2354;&#2375;&#2354;&#2376;&#2306;&#2337; &#2342;&#2375;&#2326;&#2375;&#2306; &rarr;">Explore Ashok Leyland &rarr;</span>
       </a>
       <a href="switch-mobility.html" class="brand-card">
-        <img src="images/switch-mobility-logo.svg" alt="Switch Mobility" class="brand-card-logo">
+        <img loading="lazy" src="images/switch-mobility-logo.svg" alt="Switch Mobility" class="brand-card-logo">
         <h3>Switch Mobility</h3>
         <p data-lang-en="Ashok Leyland's electric vehicle subsidiary. Zero-emission electric buses and commercial vehicles for a sustainable future." data-lang-hi="&#2309;&#2358;&#2379;&#2325; &#2354;&#2375;&#2354;&#2376;&#2306;&#2337; &#2325;&#2368; &#2311;&#2354;&#2375;&#2325;&#2381;&#2335;&#2381;&#2352;&#2367;&#2325; &#2357;&#2366;&#2361;&#2344; &#2360;&#2361;&#2366;&#2351;&#2325; &#2325;&#2306;&#2346;&#2344;&#2368;&#2404; &#2360;&#2381;&#2341;&#2366;&#2351;&#2368; &#2349;&#2357;&#2367;&#2359;&#2381;&#2351; &#2325;&#2375; &#2354;&#2367;&#2319; &#2358;&#2370;&#2344;&#2381;&#2351;-&#2313;&#2340;&#2381;&#2360;&#2352;&#2381;&#2332;&#2344; &#2311;&#2354;&#2375;&#2325;&#2381;&#2335;&#2381;&#2352;&#2367;&#2325; &#2348;&#2360;&#2375;&#2306;&#2404;">Ashok Leyland's electric vehicle subsidiary. Zero-emission electric buses and commercial vehicles for a sustainable future.</p>
         <div class="brand-card-tags"><span class="brand-tag">Haryana</span><span class="brand-tag">5 Outlets</span></div>
         <span class="brand-card-link" data-lang-en="Explore Switch Mobility &rarr;" data-lang-hi="&#2360;&#2381;&#2357;&#2367;&#2330; &#2350;&#2379;&#2348;&#2367;&#2354;&#2367;&#2335;&#2368; &#2342;&#2375;&#2326;&#2375;&#2306; &rarr;">Explore Switch Mobility &rarr;</span>
       </a>
       <a href="hd-hyundai.html" class="brand-card">
-        <img src="images/hd-hyundai-logo.svg" alt="HD Hyundai CE" class="brand-card-logo">
+        <img loading="lazy" src="images/hd-hyundai-logo.svg" alt="HD Hyundai CE" class="brand-card-logo">
         <h3>HD Hyundai CE</h3>
         <p data-lang-en="World-leading construction equipment. Excavators, wheel loaders, and heavy machinery for infrastructure and mining projects." data-lang-hi="&#2357;&#2367;&#2358;&#2381;&#2357;-&#2309;&#2327;&#2381;&#2352;&#2339;&#2368; &#2344;&#2367;&#2352;&#2381;&#2350;&#2366;&#2339; &#2313;&#2346;&#2325;&#2352;&#2339;&#2404; &#2348;&#2369;&#2344;&#2367;&#2351;&#2366;&#2342;&#2368; &#2338;&#2366;&#2306;&#2330;&#2375; &#2324;&#2352; &#2326;&#2344;&#2344; &#2346;&#2352;&#2367;&#2351;&#2379;&#2332;&#2344;&#2366;&#2323;&#2306; &#2325;&#2375; &#2354;&#2367;&#2319; &#2349;&#2366;&#2352;&#2368; &#2350;&#2358;&#2368;&#2344;&#2352;&#2368;&#2404;">World-leading construction equipment. Excavators, wheel loaders, and heavy machinery for infrastructure and mining projects.</p>
         <div class="brand-card-tags"><span class="brand-tag">Haryana</span><span class="brand-tag">4 Outlets</span></div>
@@ -541,9 +546,9 @@ button { cursor: pointer; border: none; font-family: var(--font); }
       <h2 class="section-title" data-lang-en="Find us near you" data-lang-hi="&#2361;&#2350;&#2375;&#2306; &#2309;&#2346;&#2344;&#2375; &#2346;&#2366;&#2360; &#2326;&#2379;&#2332;&#2375;&#2306;">Find us near you</h2>
     </div>
     <div class="outlets-grid">
-      <div class="outlet-card fade-up"><div class="outlet-card-header"><h3>Hisar</h3><span class="outlet-tag">3S</span></div><div class="outlet-card-state">Haryana</div><div class="outlet-card-brands"><img src="images/ashok-leyland-logo.svg" alt="AL"><img src="images/switch-mobility-logo.svg" alt="Switch"><img src="images/hd-hyundai-logo.svg" alt="HD"></div><a href="outlets.html?city=hisar" class="outlet-card-link">View details &rarr;</a></div>
-      <div class="outlet-card fade-up"><div class="outlet-card-header"><h3>Ahmedabad</h3><span class="outlet-tag">3S</span></div><div class="outlet-card-state">Gujarat</div><div class="outlet-card-brands"><img src="images/ashok-leyland-logo.svg" alt="AL"></div><a href="outlets.html?city=ahmedabad" class="outlet-card-link">View details &rarr;</a></div>
-      <div class="outlet-card fade-up"><div class="outlet-card-header"><h3>Rohtak</h3><span class="outlet-tag">3S</span></div><div class="outlet-card-state">Haryana</div><div class="outlet-card-brands"><img src="images/ashok-leyland-logo.svg" alt="AL"><img src="images/switch-mobility-logo.svg" alt="Switch"><img src="images/hd-hyundai-logo.svg" alt="HD" style="opacity:0.4" title="2S"></div><a href="outlets.html?city=rohtak" class="outlet-card-link">View details &rarr;</a></div>
+      <div class="outlet-card fade-up"><div class="outlet-card-header"><h3>Hisar</h3><span class="outlet-tag">3S</span></div><div class="outlet-card-state">Haryana</div><div class="outlet-card-brands"><img loading="lazy" src="images/ashok-leyland-logo.svg" alt="AL"><img loading="lazy" src="images/switch-mobility-logo.svg" alt="Switch"><img loading="lazy" src="images/hd-hyundai-logo.svg" alt="HD"></div><a href="outlets.html?city=hisar" class="outlet-card-link">View details &rarr;</a></div>
+      <div class="outlet-card fade-up"><div class="outlet-card-header"><h3>Ahmedabad</h3><span class="outlet-tag">3S</span></div><div class="outlet-card-state">Gujarat</div><div class="outlet-card-brands"><img loading="lazy" src="images/ashok-leyland-logo.svg" alt="AL"></div><a href="outlets.html?city=ahmedabad" class="outlet-card-link">View details &rarr;</a></div>
+      <div class="outlet-card fade-up"><div class="outlet-card-header"><h3>Rohtak</h3><span class="outlet-tag">3S</span></div><div class="outlet-card-state">Haryana</div><div class="outlet-card-brands"><img loading="lazy" src="images/ashok-leyland-logo.svg" alt="AL"><img loading="lazy" src="images/switch-mobility-logo.svg" alt="Switch"><img loading="lazy" src="images/hd-hyundai-logo.svg" alt="HD" style="opacity:0.4" title="2S"></div><a href="outlets.html?city=rohtak" class="outlet-card-link">View details &rarr;</a></div>
     </div>
     <div class="outlet-viewall fade-up"><a href="outlets.html" class="btn-primary" data-lang-en="View All 11 Outlets &rarr;" data-lang-hi="&#2360;&#2349;&#2368; 11 &#2310;&#2313;&#2335;&#2354;&#2375;&#2335; &#2342;&#2375;&#2326;&#2375;&#2306; &rarr;">View All 11 Outlets &rarr;</a></div>
   </div>
@@ -579,12 +584,12 @@ button { cursor: pointer; border: none; font-family: var(--font); }
   <div class="container">
     <div class="footer-grid">
       <div class="footer-brand">
-        <img src="images/paras-logo.png" alt="Paras Trucks" class="footer-brand-logo">
+        <img loading="lazy" src="images/paras-logo.png" alt="Paras Trucks" class="footer-brand-logo">
         <p class="footer-desc" data-lang-en="Paras Trucks is a multi-brand dealership for commercial vehicles and construction equipment, operating 11 facilities across Haryana and Gujarat." data-lang-hi="&#2346;&#2366;&#2352;&#2360; &#2335;&#2381;&#2352;&#2325;&#2381;&#2360; &#2361;&#2352;&#2367;&#2351;&#2366;&#2339;&#2366; &#2324;&#2352; &#2327;&#2369;&#2332;&#2352;&#2366;&#2340; &#2350;&#2375;&#2306; 11 &#2360;&#2369;&#2357;&#2367;&#2343;&#2366;&#2323;&#2306; &#2325;&#2375; &#2360;&#2366;&#2341; &#2357;&#2366;&#2339;&#2367;&#2332;&#2381;&#2351;&#2367;&#2325; &#2357;&#2366;&#2361;&#2344;&#2379;&#2306; &#2324;&#2352; &#2344;&#2367;&#2352;&#2381;&#2350;&#2366;&#2339; &#2313;&#2346;&#2325;&#2352;&#2339;&#2379;&#2306; &#2325;&#2375; &#2354;&#2367;&#2319; &#2350;&#2354;&#2381;&#2335;&#2368;-&#2348;&#2381;&#2352;&#2366;&#2306;&#2337; &#2337;&#2368;&#2354;&#2352;&#2358;&#2367;&#2346; &#2361;&#2376;&#2404;">Paras Trucks is a multi-brand dealership for commercial vehicles and construction equipment, operating 11 facilities across Haryana and Gujarat.</p>
         <div class="footer-partner-logos">
-          <img src="images/ashok-leyland-logo.svg" alt="Ashok Leyland">
-          <img src="images/switch-mobility-logo.svg" alt="Switch Mobility">
-          <img src="images/hd-hyundai-logo.svg" alt="HD Hyundai CE">
+          <img loading="lazy" src="images/ashok-leyland-logo.svg" alt="Ashok Leyland">
+          <img loading="lazy" src="images/switch-mobility-logo.svg" alt="Switch Mobility">
+          <img loading="lazy" src="images/hd-hyundai-logo.svg" alt="HD Hyundai CE">
         </div>
       </div>
       <div>
@@ -610,7 +615,7 @@ button { cursor: pointer; border: none; font-family: var(--font); }
         <div class="footer-contact-item"><span class="footer-contact-icon">&#9742;</span><a href="tel:7496970303" style="color:var(--gray-400)">+91 74969 70303</a></div>
         <div class="footer-contact-item"><span class="footer-contact-icon">&#9993;</span><a href="mailto:hi@parastrucks.in" style="color:var(--gray-400)">hi@parastrucks.in</a></div>
         <div class="footer-contact-item" style="margin-top:16px;">
-          <a href="https://www.facebook.com/parastrucksandbuses" target="_blank" style="display:inline-flex;align-items:center;gap:8px;color:var(--gray-400);transition:color 0.3s;">
+          <a href="https://www.facebook.com/parastrucksandbuses" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:8px;color:var(--gray-400);transition:color 0.3s;">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
             Facebook
           </a>
@@ -754,5 +759,6 @@ if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
   document.querySelectorAll('.fade-up').forEach(function(el) { observer.observe(el); });
 }
 </script>
+<noscript><div style="text-align:center;padding:40px 20px;font-family:sans-serif;background:#FEF3C7;color:#92400E;">This website requires JavaScript for full functionality. Please enable JavaScript in your browser settings.</div></noscript>
 </body>
 </html>
