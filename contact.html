@@ -329,7 +329,8 @@ var navbar=document.getElementById('navbar');
 window.addEventListener('scroll',function(){navbar.classList.toggle('scrolled',window.scrollY>10)});
 function toggleMobileNav(){document.getElementById('mobileNav').classList.toggle('open');document.body.style.overflow=document.getElementById('mobileNav').classList.contains('open')?'hidden':''}
 function setLang(lang){localStorage.setItem('ptb-lang',lang);document.querySelectorAll('.lang-btn').forEach(function(b){b.classList.remove('active');if((lang==='en'&&b.textContent.trim()==='EN')||(lang==='hi'&&b.textContent.trim()!=='EN'))b.classList.add('active')});document.querySelectorAll('[data-lang-'+lang+']').forEach(function(el){var v=el.getAttribute('data-lang-'+lang);if(el.tagName==='INPUT'||el.tagName==='TEXTAREA')el.placeholder=v;else el.innerHTML=v});document.documentElement.lang=lang==='hi'?'hi':'en'}
-(function(){var s=localStorage.getItem('ptb-lang');if(s&&s==='hi')setLang('hi')}())
+(function(){var s=localStorage.getItem('ptb-lang');if(s&&s==='hi')setLang('hi')}());
+(function(){var p=new URLSearchParams(window.location.search);var t=p.get('type');if(t==='career'){var sel=document.getElementById('cfType');if(sel){sel.value='Career / Job Application';sel.style.color='var(--gray-800)'}}}());
 function submitForm(){
   var n=document.getElementById('cfName').value.trim();
   var p=document.getElementById('cfPhone').value.trim();
