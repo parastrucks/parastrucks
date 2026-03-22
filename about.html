@@ -88,12 +88,9 @@ button { cursor: pointer; border: none; font-family: var(--font); }
 .mobile-toggle span { width: 24px; height: 2px; background: var(--gray-800); border-radius: 2px; }
 
 /* PAGE HERO */
-.page-hero { background: linear-gradient(135deg, var(--gray-900) 0%, #0D2137 100%); padding: 80px 0 60px; position: relative; overflow: hidden; }
-.page-hero::before { content: ''; position: absolute; top: -40%; right: -15%; width: 500px; height: 500px; border-radius: 50%; background: rgba(0,128,201,0.06); pointer-events: none; }
-.page-hero .section-label { color: rgba(255,255,255,0.5); }
-.page-hero h1 { font-size: clamp(28px, 4vw, 44px); font-weight: 800; color: var(--white); letter-spacing: -1px; line-height: 1.15; margin-bottom: 16px; }
+
 .hero-desc { font-size: 16px; color: rgba(255,255,255,0.6); max-width: 560px; line-height: 1.7; }
-.page-hero-brands { display: flex; align-items: center; gap: 16px; margin-top: 28px; flex-wrap: wrap; }
+.page-hero-brands { display: flex; align-items: center; gap: 16px; margin-top: 28px; flex-wrap: wrap; justify-content: center; }
 .page-hero-brands img { height: 22px; width: auto; filter: brightness(0) invert(0.6); opacity: 0.6; }
 
 /* SECTIONS */
@@ -206,6 +203,19 @@ button { cursor: pointer; border: none; font-family: var(--font); }
 .footer-contact-icon { flex-shrink: 0; width: 20px; text-align: center; color: var(--paras-blue); }
 .footer-bottom { padding: 20px 0; display: flex; justify-content: space-between; align-items: center; font-size: 13px; flex-wrap: wrap; gap: 8px; }
 
+.hero-shapes { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.bp { position: absolute; }
+.bp-main { top: 0; left: 0; width: 100%; height: 100%; opacity: 0.09; }
+@media(max-width:640px) { .bp-main { opacity: 0.06; } }
+.page-hero { background: linear-gradient(135deg, #0A1628 0%, #0D2844 40%, #0B4F7A 100%); padding: 80px 0 60px; position: relative; overflow: hidden; text-align: center; }
+.page-hero::before { content: ''; position: absolute; top: -80px; right: -60px; width: 400px; height: 400px; border: 2px solid rgba(0,128,201,0.12); border-radius: 50%; pointer-events: none; }
+.page-hero::after { content: ''; position: absolute; bottom: -120px; left: -80px; width: 350px; height: 350px; border: 2px solid rgba(0,128,201,0.08); border-radius: 50%; pointer-events: none; }
+
+.page-hero .container { position: relative; z-index: 1; }
+.page-hero h1 { font-size: clamp(28px, 4.5vw, 42px); font-weight: 800; color: var(--white); letter-spacing: -1px; line-height: 1.15; margin-bottom: 14px; }
+.page-hero .hero-desc { font-size: 16px; color: rgba(255,255,255, 0.55); max-width: 560px; margin: 0 auto 24px; line-height: 1.7; }
+.page-hero .section-label { color: rgba(255,255,255,0.4); font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 12px; }
+
 /* RESPONSIVE */
 @media (max-width: 1024px) {
   .nav-links { display: none; } .mobile-toggle { display: flex; }
@@ -219,7 +229,7 @@ button { cursor: pointer; border: none; font-family: var(--font); }
 @media (max-width: 640px) {
   .topbar { display: none; } .section { padding: 48px 0; }
   .page-hero { padding: 56px 0 40px; }
-  .page-hero h1 { font-size: 26px; }
+  
   .leadership-grid { grid-template-columns: 1fr; }
   .numbers-grid { grid-template-columns: 1fr 1fr; }
   .footer-grid { grid-template-columns: 1fr; gap: 28px; }
@@ -324,6 +334,37 @@ button { cursor: pointer; border: none; font-family: var(--font); }
 
 <!-- PAGE HERO -->
 <section class="page-hero">
+  <div class="hero-shapes">
+      <svg class="bp bp-main" viewBox="0 0 800 400" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <!-- Piston assembly -->
+        <rect x="580" y="60" width="80" height="140" rx="4" stroke="white" stroke-width="1.2"/>
+        <rect x="590" y="30" width="60" height="40" rx="20" stroke="white" stroke-width="1.2"/>
+        <line x1="620" y1="200" x2="620" y2="300" stroke="white" stroke-width="1.2"/>
+        <circle cx="620" cy="300" r="20" stroke="white" stroke-width="1.2"/>
+        <line x1="600" y1="300" x2="540" y2="340" stroke="white" stroke-width="1"/>
+        <!-- Dimension lines -->
+        <line x1="560" y1="60" x2="560" y2="200" stroke="white" stroke-width="0.6" stroke-dasharray="4 3"/>
+        <line x1="555" y1="60" x2="565" y2="60" stroke="white" stroke-width="0.8"/>
+        <line x1="555" y1="200" x2="565" y2="200" stroke="white" stroke-width="0.8"/>
+        <!-- Flywheel -->
+        <circle cx="180" cy="200" r="100" stroke="white" stroke-width="1"/>
+        <circle cx="180" cy="200" r="70" stroke="white" stroke-width="0.8"/>
+        <circle cx="180" cy="200" r="30" stroke="white" stroke-width="0.8"/>
+        <circle cx="180" cy="200" r="8" stroke="white" stroke-width="1" fill="rgba(255,255,255,0.1)"/>
+        <line x1="180" y1="95" x2="180" y2="305" stroke="white" stroke-width="0.4" stroke-dasharray="6 4"/>
+        <line x1="75" y1="200" x2="285" y2="200" stroke="white" stroke-width="0.4" stroke-dasharray="6 4"/>
+        <!-- Connecting rod detail -->
+        <line x1="280" y1="200" x2="540" y2="340" stroke="white" stroke-width="0.8"/>
+        <!-- Grid marks -->
+        <circle cx="50" cy="50" r="3" stroke="white" stroke-width="0.8"/>
+        <line x1="50" y1="42" x2="50" y2="58" stroke="white" stroke-width="0.6"/>
+        <line x1="42" y1="50" x2="58" y2="50" stroke="white" stroke-width="0.6"/>
+        <circle cx="750" cy="350" r="3" stroke="white" stroke-width="0.8"/>
+        <line x1="750" y1="342" x2="750" y2="358" stroke="white" stroke-width="0.6"/>
+        <line x1="742" y1="350" x2="758" y2="350" stroke="white" stroke-width="0.6"/>
+      </svg>
+    </div>
+  
   <div class="container">
     <p class="section-label" data-lang-en="About Us" data-lang-hi="हमारे बारे में">About Us</p>
     <h1 data-lang-en="Our story of growth, trust &amp; multi-brand excellence" data-lang-hi="विकास, विश्वास और मल्टी-ब्रांड उत्कृष्टता की हमारी कहानी">Our story of growth, trust &amp; multi-brand excellence</h1>
