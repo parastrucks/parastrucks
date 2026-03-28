@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/x-icon" href="images/favicon.ico">
+<link rel="icon" type="image/png" sizes="32x32" href="images/favicon-32x32.png">
+<link rel="apple-touch-icon" href="images/apple-touch-icon.png">
+<meta name="theme-color" content="#006FAD">
+<title>Bus Price Calculator — Internal Tool | Paras Trucks</title>
+<link rel="dns-prefetch" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet"></noscript>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --paras-blue:#006FAD;--paras-blue-dark:#005A8E;--paras-blue-light:#E8F4FC;--paras-blue-lighter:#F2F9FE;
+  --black:#0A0A0A;--gray-900:#1A1A1A;--gray-800:#2D2D2D;--gray-700:#404040;--gray-600:#555555;
+  --gray-500:#717171;--gray-400:#9A9A9A;--gray-300:#C4C4C4;--gray-200:#E0E0E0;--gray-100:#F0F0F0;
+  --gray-50:#F8F8F8;--white:#FFFFFF;
+  --font:'Inter','Inter Fallback',-apple-system,BlinkMacSystemFont,sans-serif;
+  --shadow-sm:0 1px 3px rgba(0,0,0,0.06),0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md:0 4px 20px rgba(0,0,0,0.08);--shadow-lg:0 12px 40px rgba(0,0,0,0.1);
+  --radius:12px;--radius-sm:8px;--transition:0.3s cubic-bezier(0.25,0.46,0.45,0.94)
+}
+@font-face{font-family:'Inter Fallback';src:local('Arial');size-adjust:107%;ascent-override:90%;descent-override:25%;line-gap-override:0%}
+html{scroll-behavior:smooth}
+body{font-family:var(--font);color:var(--gray-800);line-height:1.6;background:var(--gray-50);overflow-x:hidden;-webkit-font-smoothing:antialiased}
+img{max-width:100%;display:block}a{text-decoration:none;color:inherit}button{cursor:pointer;border:none;font-family:var(--font)}
+
+/* TOPBAR */
+.container{max-width:1200px;margin:0 auto;padding:0 24px}
+.topbar{background:var(--gray-900);color:var(--gray-300);font-size:13px;padding:8px 0}
+.topbar .container{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+.topbar a{color:var(--gray-300);transition:color var(--transition)}.topbar a:hover{color:var(--white)}
+.topbar-left{display:flex;align-items:center;gap:20px}
+.topbar-right{display:flex;align-items:center;gap:16px}
+.internal-badge{background:rgba(220,38,38,.2);border:1px solid rgba(220,38,38,.35);color:#FCA5A5;font-size:11px;font-weight:700;padding:2px 10px;border-radius:20px;letter-spacing:.6px;text-transform:uppercase}
+
+/* NAVBAR */
+.navbar{background:var(--white);border-bottom:1px solid var(--gray-200);position:sticky;top:0;z-index:100;transition:box-shadow var(--transition)}
+.navbar.scrolled{box-shadow:var(--shadow-md)}
+.navbar .container{display:flex;align-items:center;justify-content:space-between;height:80px}
+.nav-logo{display:flex;align-items:center}.nav-logo img{height:72px;width:auto}
+.nav-links{display:flex;align-items:center;gap:28px;list-style:none}
+.nav-links a{font-size:14px;font-weight:500;color:var(--gray-600);transition:color var(--transition);position:relative;padding:4px 0}
+.nav-links a::after{content:'';position:absolute;bottom:-2px;left:0;width:0;height:2px;background:var(--paras-blue);transition:width var(--transition);border-radius:1px}
+.nav-links a:hover{color:var(--paras-blue)}.nav-links a:hover::after{width:100%}
+.nav-links a.active{color:var(--paras-blue)}.nav-links a.active::after{width:100%}
+.nav-cta{background:var(--paras-blue)!important;color:var(--white)!important;padding:12px 28px!important;border-radius:var(--radius-sm)!important;font-size:15px!important;font-weight:600!important;transition:all var(--transition)!important;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.nav-cta::after{display:none!important}.nav-cta:hover{background:var(--paras-blue-dark)!important;transform:translateY(-1px)}
+.nav-dropdown{position:relative}.nav-dropdown>a::after{display:none}
+.nav-dropdown-arrow{font-size:10px;transition:transform var(--transition)}
+.nav-dropdown:hover .nav-dropdown-arrow{transform:rotate(180deg)}
+.nav-dropdown-menu{position:absolute;top:100%;left:50%;transform:translateX(-50%) translateY(8px);background:var(--white);border:1px solid var(--gray-200);border-radius:var(--radius-sm);padding:8px 0;min-width:240px;box-shadow:var(--shadow-lg);opacity:0;visibility:hidden;transition:all var(--transition);z-index:50}
+.nav-dropdown:hover .nav-dropdown-menu{opacity:1;visibility:visible;transform:translateX(-50%) translateY(0)}
+.nav-dropdown-menu a{display:flex;align-items:center;gap:12px;padding:11px 20px;font-size:14px;color:var(--gray-700);transition:background var(--transition);white-space:nowrap}
+.nav-dropdown-menu a::after{display:none}.nav-dropdown-menu a:hover{background:var(--gray-50);color:var(--paras-blue)}
+.nav-dropdown-menu img{height:16px;width:24px;object-fit:contain;flex-shrink:0}
+.mobile-toggle{display:none;flex-direction:column;gap:5px;background:none;padding:8px}
+.mobile-toggle span{width:24px;height:2px;background:var(--gray-800);border-radius:2px}
+
+/* PAGE HERO */
+.page-hero{background:linear-gradient(135deg,#0A1628 0%,#0D2844 40%,#0B4F7A 100%);padding:48px 0 40px;position:relative;overflow:hidden;text-align:center}
+.page-hero::before{content:'';position:absolute;top:-80px;right:-60px;width:400px;height:400px;border:2px solid rgba(0,128,201,.12);border-radius:50%;pointer-events:none}
+.page-hero::after{content:'';position:absolute;bottom:-120px;left:-80px;width:350px;height:350px;border:2px solid rgba(0,128,201,.08);border-radius:50%;pointer-events:none}
+.page-hero .container{position:relative;z-index:1}
+.page-hero-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(220,38,38,.15);border:1px solid rgba(220,38,38,.3);border-radius:24px;padding:5px 14px;font-size:12px;font-weight:700;color:#FCA5A5;margin-bottom:14px;letter-spacing:.5px;text-transform:uppercase}
+.page-hero h1{font-size:clamp(24px,3.5vw,36px);font-weight:800;color:var(--white);letter-spacing:-0.5px;line-height:1.2;margin-bottom:8px}
+.page-hero p{font-size:15px;color:rgba(255,255,255,.55);max-width:520px;margin:0 auto}
+
+/* MAIN CALC AREA */
+.calc-section{padding:36px 0 60px}
+.calc-layout{display:grid;grid-template-columns:1fr 360px;gap:24px;align-items:start}
+.calc-layout>div:last-child{align-self:stretch}
+
+/* CARDS */
+.card{background:var(--white);border:1px solid var(--gray-200);border-radius:var(--radius);padding:24px;margin-bottom:16px;box-shadow:var(--shadow-sm)}
+.card:last-child{margin-bottom:0}
+.card-hd{display:flex;align-items:center;gap:10px;margin-bottom:20px}
+.step-pill{background:var(--paras-blue);color:var(--white);font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;letter-spacing:.5px}
+.card-title{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gray-500)}
+
+/* SEARCH */
+.srch-wrap{position:relative}
+.srch-in{width:100%;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:var(--radius-sm);padding:11px 14px 11px 42px;font-size:14px;font-family:var(--font);color:var(--gray-800);outline:none;transition:border-color var(--transition),box-shadow var(--transition)}
+.srch-in::placeholder{color:var(--gray-400)}
+.srch-in:focus{border-color:var(--paras-blue);box-shadow:0 0 0 3px rgba(0,111,173,.1);background:var(--white)}
+.srch-ico{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--gray-400);font-size:16px;pointer-events:none}
+.srch-drop{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--white);border:1px solid var(--gray-200);border-radius:var(--radius-sm);max-height:400px;overflow-y:auto;z-index:100;display:none;box-shadow:var(--shadow-lg)}
+.srch-drop.open{display:block}
+.sr-item{padding:12px 16px;cursor:pointer;border-bottom:1px solid var(--gray-100);transition:background var(--transition)}
+.sr-item:last-child{border-bottom:none}
+.sr-item:hover,.sr-item.hi{background:var(--paras-blue-lighter)}
+.sr-cbn{font-family:monospace;font-size:11px;font-weight:700;color:var(--paras-blue);margin-bottom:3px;letter-spacing:.5px}
+.sr-name{font-size:14px;font-weight:600;color:var(--gray-800);margin-bottom:3px}
+.sr-full{font-size:11.5px;color:var(--gray-500);line-height:1.55;margin-bottom:4px;font-style:italic}
+.sr-mrp{font-size:12px;font-weight:600;color:var(--paras-blue)}
+.sr-empty{padding:16px;text-align:center;font-size:14px;color:var(--gray-400)}
+
+/* SELECTED CHASSIS CARD */
+.ch-sel{background:var(--paras-blue-lighter);border:1.5px solid var(--paras-blue-light);border-radius:var(--radius-sm);padding:16px;margin-top:14px;display:none}
+.ch-sel.on{display:block;animation:fadeUp .2s ease}
+@keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.ch-sel-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:10px}
+.ch-sel-l{flex:1;min-width:0}
+.ch-cbn{font-family:monospace;font-size:11px;font-weight:700;color:var(--paras-blue);margin-bottom:3px;letter-spacing:.5px}
+.ch-model{font-size:16px;font-weight:700;color:var(--gray-900);margin-bottom:8px}
+.ch-desc-box{font-size:12px;color:var(--gray-600);line-height:1.65;background:var(--white);border:1px solid var(--gray-200);border-radius:var(--radius-sm);padding:10px 12px}
+.ch-mrp-wrap{text-align:right;flex-shrink:0}
+.ch-mrp-lbl{font-size:10px;color:var(--gray-400);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
+.ch-mrp-val{font-size:15px;font-weight:700;color:var(--gray-900)}
+.ch-tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:10px}
+.ctag{font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px}
+.ct-oll{background:var(--paras-blue-light);color:var(--paras-blue)}
+.ct-d{background:#DCFCE7;color:#166534}
+.ct-g{background:#FEF3C7;color:#92400E}
+.ct-tm43{background:#EDE9FE;color:#5B21B6}
+.ct-ddac{background:#DBEAFE;color:#1E40AF}
+.ct-nac{background:var(--gray-100);color:var(--gray-500)}
+.ct-w{background:#F0FDF4;color:#15803D}
+
+/* DEAL PRICE SLIDER */
+.sl-grp{margin-top:18px}
+.sl-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.sl-lbl{font-size:12px;font-weight:600;color:var(--gray-600);text-transform:uppercase;letter-spacing:.4px}
+.sl-right{display:flex;align-items:center;gap:6px}
+.sl-pfx{font-size:13px;color:var(--gray-500)}
+input.numinput{width:136px;background:var(--white);border:1.5px solid var(--gray-200);border-radius:var(--radius-sm);padding:7px 10px;font-size:13px;font-family:var(--font);font-weight:600;color:var(--gray-800);text-align:right;outline:none;transition:border-color var(--transition)}
+input.numinput:focus{border-color:var(--paras-blue);box-shadow:0 0 0 3px rgba(0,111,173,.1)}
+input[type=range]{-webkit-appearance:none;width:100%;height:5px;border-radius:3px;background:var(--gray-200);outline:none;cursor:pointer;margin-bottom:5px}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:var(--paras-blue);border:3px solid var(--white);box-shadow:0 0 0 2px var(--paras-blue);cursor:pointer;transition:transform .1s}
+input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.15)}
+.sl-ends{display:flex;justify-content:space-between;font-size:11px;color:var(--gray-400)}
+.dp-chip{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;padding:4px 10px;border-radius:20px;margin-top:8px}
+.dp-chip.below{background:#DCFCE7;color:#166534}.dp-chip.above{background:#FEF3C7;color:#92400E}.dp-chip.at{background:var(--paras-blue-light);color:var(--paras-blue)}
+
+/* FORM ELEMENTS */
+.fl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--gray-500);margin-bottom:9px;display:block;margin-top:16px}
+.fl.ft{margin-top:0}
+.fml{font-size:12px;color:var(--gray-500);font-family:monospace;padding:10px 12px;background:var(--paras-blue-lighter);border-left:3px solid var(--paras-blue-light);border-radius:0 var(--radius-sm) var(--radius-sm) 0;margin-top:8px;line-height:1.8;white-space:pre-wrap}
+.note{font-size:13px;color:var(--gray-600);padding:10px 14px;border-radius:var(--radius-sm);border-left:3px solid var(--gray-200);background:var(--gray-50);line-height:1.55}
+.note.grn{border-color:#86EFAC;background:#F0FDF4;color:#166534}
+.note.blu{border-color:var(--paras-blue-light);background:var(--paras-blue-lighter);color:var(--paras-blue)}
+.note.amb{border-color:#FCD34D;background:#FFFBEB;color:#92400E}
+.dv{height:1px;background:var(--gray-100);margin:16px 0}
+
+/* RADIO BUTTONS */
+.rg{display:flex;gap:8px;flex-wrap:wrap}
+.rb{padding:8px 16px;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:var(--radius-sm);font-size:13px;font-weight:600;color:var(--gray-500);cursor:pointer;transition:all var(--transition);user-select:none}
+.rb:hover{border-color:var(--paras-blue);color:var(--paras-blue)}
+.rb.on{background:var(--paras-blue-light);border-color:var(--paras-blue);color:var(--paras-blue)}
+.rb.off{opacity:.3;pointer-events:none}
+
+/* SEAT DROPDOWN */
+.seat-sel{width:100%;background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:var(--radius-sm);padding:10px 14px;font-size:14px;font-family:var(--font);color:var(--gray-800);outline:none;cursor:pointer;transition:border-color var(--transition);appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M6 8L1 3h10z' fill='%239A9A9A'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;padding-right:36px}
+.seat-sel:focus{border-color:var(--paras-blue);box-shadow:0 0 0 3px rgba(0,111,173,.1);background-color:var(--white)}
+
+/* TOGGLE ROWS */
+.tog-row{display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-bottom:1px solid var(--gray-100);cursor:pointer;user-select:none;transition:opacity var(--transition)}
+.tog-row:last-child{border-bottom:none}
+.tog-row.disabled{opacity:.3;pointer-events:none}
+.tog-l{display:flex;flex-direction:column;gap:2px}
+.tog-name{font-size:14px;font-weight:600;color:var(--gray-800)}
+.tog-pr{font-size:12px;color:var(--gray-400)}
+.sw{width:36px;height:20px;background:var(--gray-200);border-radius:10px;position:relative;transition:background var(--transition);flex-shrink:0}
+.sw.on{background:var(--paras-blue)}
+.sw::after{content:'';position:absolute;width:14px;height:14px;background:var(--white);border-radius:50%;top:3px;left:3px;transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.sw.on::after{transform:translateX(16px)}
+
+/* SUMMARY PANEL */
+.sum-panel{background:var(--white);border:1px solid var(--gray-200);border-radius:var(--radius);position:sticky;top:88px;box-shadow:var(--shadow-sm);overflow:hidden}
+.sum-hd{background:linear-gradient(135deg,var(--gray-900) 0%,#0D2137 100%);padding:20px 22px;border-bottom:1px solid rgba(255,255,255,.06)}
+.sum-hd-lbl{font-size:10px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:rgba(255,255,255,.4);margin-bottom:6px}
+.sum-total{font-size:32px;font-weight:800;color:var(--white);letter-spacing:-1px;line-height:1}
+.sum-total.live{color:#60B4F0}
+.sum-ph{text-align:center;padding:36px 22px}
+.sum-ph-ico{font-size:40px;margin-bottom:12px;opacity:.35}
+.sum-ph-txt{font-size:13px;color:var(--gray-400);line-height:1.7}
+.sum-body{padding:18px 22px}
+.sum-sec{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--gray-400);margin:14px 0 7px}
+.sum-sec:first-child{margin-top:0}
+.sum-row{display:flex;justify-content:space-between;align-items:baseline;padding:4px 0}
+.sum-rl{font-size:13px;color:var(--gray-500);line-height:1.4}
+.sum-rv{font-size:13px;font-weight:600;color:var(--gray-800)}
+.sum-rv.dim{color:var(--gray-300)}
+.sum-rv.grn{color:#16A34A}
+.sum-rv.amb{color:#D97706}
+.sum-dv{height:1px;background:var(--gray-100);margin:10px 0}
+.sum-grand{background:var(--paras-blue-light);border:1.5px solid var(--paras-blue-light);border-radius:var(--radius-sm);padding:14px 16px;margin-top:14px;display:flex;justify-content:space-between;align-items:center}
+.sum-gl{font-size:10px;font-weight:800;color:var(--paras-blue);text-transform:uppercase;letter-spacing:.8px;line-height:1.6}
+.sum-gv{font-size:24px;font-weight:800;color:var(--paras-blue)}
+.sum-note{font-size:11px;color:var(--gray-400);margin-top:12px;line-height:1.7;padding-top:12px;border-top:1px solid var(--gray-100)}
+/* Granular breakdown toggle */
+.breakdown-toggle{display:flex;align-items:center;justify-content:space-between;cursor:pointer;padding:10px 0;border-top:1px solid var(--gray-100);margin-top:10px;user-select:none}
+.breakdown-toggle-lbl{font-size:12px;font-weight:600;color:var(--gray-500);text-transform:uppercase;letter-spacing:.6px}
+.breakdown-arrow{font-size:10px;color:var(--gray-400);transition:transform var(--transition)}
+.breakdown-arrow.open{transform:rotate(180deg)}
+.breakdown-body{display:none;margin-top:4px}
+.breakdown-body.open{display:block;animation:fadeUp .15s ease}
+
+/* FOOTER */
+.footer{background:var(--gray-900);color:var(--gray-400);padding:56px 0 0;border-top:1px solid rgba(255,255,255,.05)}
+.footer-grid{display:grid;grid-template-columns:1.8fr 1fr 1fr 1.2fr;gap:48px;padding-bottom:40px;border-bottom:1px solid rgba(255,255,255,.08)}
+.footer-brand-logo{height:72px;width:auto;margin-bottom:16px;filter:brightness(0) invert(1)}
+.footer-desc{font-size:14px;line-height:1.7;margin-bottom:20px}
+.footer-partner-logos{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.footer-partner-logos img{height:24px;width:auto;filter:brightness(0) invert(.6)}
+.footer-heading,.footer h4{font-size:14px;font-weight:700;color:var(--white);text-transform:uppercase;letter-spacing:.5px;margin-bottom:20px}
+.footer-links{list-style:none}.footer-links li{margin-bottom:10px}
+.footer-links a{font-size:14px;color:var(--gray-400);transition:color var(--transition)}.footer-links a:hover{color:var(--white)}
+.footer-contact-item{display:flex;gap:10px;margin-bottom:12px;font-size:14px}
+.footer-contact-icon{flex-shrink:0;width:20px;text-align:center;color:var(--paras-blue)}
+.footer-bottom{padding:20px 0;display:flex;justify-content:space-between;align-items:center;font-size:13px;flex-wrap:wrap;gap:8px}
+
+/* MOBILE NAV */
+.mobile-nav{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:var(--white);z-index:200;padding:20px 24px 40px;flex-direction:column;gap:8px;overflow-y:auto}
+.mobile-nav.open{display:flex}
+.mobile-nav a{font-size:16px;font-weight:600;color:var(--gray-800);padding:12px 0;border-bottom:1px solid var(--gray-100);display:block;transition:color var(--transition)}.mobile-nav a:hover{color:var(--paras-blue)}
+.mobile-nav .mobile-brand-label{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--gray-400);padding:16px 0 4px;border:none}
+
+/* RESPONSIVE */
+@media(max-width:1024px){.nav-links{display:none}.mobile-toggle{display:flex}.footer-grid{grid-template-columns:1fr 1fr;gap:32px}}
+@media(max-width:900px){.calc-layout{grid-template-columns:1fr}.sum-panel{position:static;order:-1;margin-bottom:24px}}
+@media(max-width:640px){
+  .topbar{display:none}.page-hero{padding:40px 0 32px}.calc-section{padding:24px 0 48px}
+  .footer-grid{grid-template-columns:1fr;gap:28px}.container{padding:0 16px}
+  .nav-logo img{height:72px}.ch-sel-top{flex-direction:column}.ch-mrp-wrap{text-align:left}
+  .sum-total{font-size:26px}
+  @media(max-width:640px){.footer h4,.footer-heading{margin-bottom:8px}.footer-links li{margin-bottom:6px}.footer-contact-item{margin-bottom:8px}.footer-bottom{flex-direction:column;text-align:center;padding:14px 0 20px;gap:4px}}
+}
+</style>
+</head>
+<body>
+
+<!-- PASSWORD OVERLAY -->
+<div id="pwOverlay" style="position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(10,22,40,0.7);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)">
+  <div style="background:var(--white);border-radius:var(--radius);padding:36px 32px;width:100%;max-width:380px;margin:0 16px;box-shadow:0 24px 64px rgba(0,0,0,0.25);text-align:center">
+    <img src="images/paras-logo.png" alt="Paras Trucks" style="height:48px;width:auto;margin:0 auto 20px">
+    <div style="font-size:18px;font-weight:800;color:var(--gray-900);margin-bottom:6px;letter-spacing:-0.3px">Internal Tool</div>
+    <div style="font-size:14px;color:var(--gray-500);margin-bottom:24px;line-height:1.5">Enter the password to access the Bus Price Calculator.</div>
+    <div style="position:relative;margin-bottom:12px">
+      <input type="password" id="pwInput" placeholder="Password" onkeydown="if(event.key==='Enter')checkPw()" style="width:100%;padding:11px 44px 11px 14px;border:1.5px solid var(--gray-200);border-radius:var(--radius-sm);font-size:15px;font-family:var(--font);color:var(--gray-800);outline:none;transition:border-color .2s;background:var(--gray-50)" onfocus="this.style.borderColor='var(--paras-blue)';this.style.boxShadow='0 0 0 3px rgba(0,111,173,.1)'" onblur="this.style.borderColor='var(--gray-200)';this.style.boxShadow='none'">
+      <span onclick="togglePwVis()" style="position:absolute;right:13px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:16px;color:var(--gray-400);user-select:none" id="pwEye">👁</span>
+    </div>
+    <div id="pwErr" style="display:none;font-size:12px;color:var(--red,#dc2626);margin-bottom:10px;font-weight:600">Incorrect password. Please try again.</div>
+    <button onclick="checkPw()" style="width:100%;padding:12px;background:var(--paras-blue);color:#fff;border:none;border-radius:var(--radius-sm);font-size:15px;font-weight:700;font-family:var(--font);cursor:pointer;transition:background .2s" onmouseover="this.style.background='var(--paras-blue-dark)'" onmouseout="this.style.background='var(--paras-blue)'">Access Calculator</button>
+  </div>
+</div>
+<div id="pageContent" style="display:none">
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="container">
+    <div class="topbar-left">
+      <a href="tel:7496970303">&#9742; +91 74969 70303</a>
+      <span>|</span>
+      <a href="mailto:hi@parastrucks.in">&#9993; hi@parastrucks.in</a>
+    </div>
+    <div class="topbar-right">
+      <span class="internal-badge">🔒 Internal Tool</span>
+    </div>
+  </div>
+</div>
+
+<!-- NAVBAR -->
+<nav class="navbar" role="navigation" id="navbar">
+  <div class="container">
+    <a href="/" class="nav-logo"><img src="images/paras-logo.png" alt="Paras Trucks &amp; Buses" width="197" height="72"></a>
+    <ul class="nav-links">
+      <li><a href="/">Home</a></li>
+      <li><a href="about.html">About Us</a></li>
+      <li class="nav-dropdown">
+        <a href="#">Our Brands <span class="nav-dropdown-arrow">&#9662;</span></a>
+        <div class="nav-dropdown-menu">
+          <a href="ashok-leyland.html"><img src="images/ashok-leyland-logo.svg" alt=""> Ashok Leyland</a>
+          <a href="switch-mobility.html"><img src="images/switch-mobility-logo.svg" alt=""> Switch Mobility</a>
+          <a href="hd-hyundai.html"><img src="images/hd-hyundai-logo.svg" alt=""> HD Hyundai CE</a>
+        </div>
+      </li>
+      <li><a href="outlets.html">Outlets</a></li>
+      <li><a href="emi-calculator.html">EMI Calculator</a></li>
+      <li><a href="careers.html">Careers</a></li>
+      <li><a href="contact.html" class="nav-cta">Contact Us &rarr;</a></li>
+    </ul>
+    <button class="mobile-toggle" onclick="toggleMobileNav()" aria-label="Menu"><span></span><span></span><span></span></button>
+  </div>
+</nav>
+
+<!-- MOBILE NAV -->
+<div class="mobile-nav" id="mobileNav">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:12px;border-bottom:1px solid var(--gray-200);margin-bottom:4px;gap:12px;">
+    <img src="images/paras-logo.png" alt="Paras Trucks" style="height:36px;width:auto;">
+    <button onclick="toggleMobileNav()" style="width:36px;height:36px;background:var(--gray-100);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--gray-800);">&times;</button>
+  </div>
+  <a href="/">Home</a><a href="about.html">About Us</a>
+  <span class="mobile-brand-label">Our Brands</span>
+  <a href="ashok-leyland.html" style="padding-left:16px;">Ashok Leyland</a>
+  <a href="switch-mobility.html" style="padding-left:16px;">Switch Mobility</a>
+  <a href="hd-hyundai.html" style="padding-left:16px;">HD Hyundai CE</a>
+  <a href="outlets.html">Outlets</a>
+  <a href="emi-calculator.html">EMI Calculator</a>
+  <a href="careers.html">Careers</a>
+  <a href="contact.html">Contact Us</a>
+</div>
+
+<!-- PAGE HERO -->
+<section class="page-hero">
+  <div class="container">
+    <div class="page-hero-badge">🔒 Internal Use Only</div>
+    <h1>Bus Price Calculator</h1>
+    <p>Build a complete chassis + body price estimate. Not visible to customers.</p>
+  </div>
+</section>
+
+<!-- CALCULATOR -->
+<section class="calc-section">
+  <div class="container">
+    <div class="calc-layout">
+
+      <!-- LEFT: INPUTS -->
+      <div>
+
+        <!-- STEP 1: CHASSIS -->
+        <div class="card">
+          <div class="card-hd"><span class="step-pill">STEP 1</span><div class="card-title">Chassis Selection</div></div>
+          <div class="srch-wrap">
+            <span class="srch-ico">⌕</span>
+            <input type="text" class="srch-in" id="srchIn" placeholder="Search by CBN (e.g. CCL15103), model (Viking), or length (11.4m)…" autocomplete="off" spellcheck="false">
+            <div class="srch-drop" id="srchDrop"></div>
+          </div>
+          <div class="ch-sel" id="chCard">
+            <div class="ch-sel-top">
+              <div class="ch-sel-l">
+                <div class="ch-cbn" id="chCbn"></div>
+                <div class="ch-model" id="chModel"></div>
+                <div class="ch-desc-box" id="chDesc"></div>
+              </div>
+              <div class="ch-mrp-wrap">
+                <div class="ch-mrp-lbl">MRP incl. GST</div>
+                <div class="ch-mrp-val" id="chMrp"></div>
+              </div>
+            </div>
+            <div class="ch-tags" id="chTags"></div>
+            <div class="sl-grp">
+              <div class="sl-row">
+                <span class="sl-lbl">Deal Price</span>
+                <div class="sl-right"><span class="sl-pfx">₹</span><input type="text" class="numinput" id="dpIn" oninput="onDpType()"></div>
+              </div>
+              <input type="range" id="dpSl" min="0" max="0" step="10000" value="0" oninput="onDpSlide()">
+              <div class="sl-ends"><span id="dpMinLbl"></span><span>MRP</span></div>
+              <div id="dpChip"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- STEP 2: BODY -->
+        <div class="card" id="s2" style="display:none">
+          <div class="card-hd"><span class="step-pill">STEP 2</span><div class="card-title">Body Type</div></div>
+          <span class="fl ft">Select Body</span>
+          <div class="rg">
+            <div class="rb on" id="bSchool" onclick="setBody('school')">🏫 School</div>
+            <div class="rb" id="bStaff" onclick="setBody('staff')">💼 Staff</div>
+          </div>
+          <div style="margin-top:16px">
+            <div class="sl-row" style="margin-bottom:8px">
+              <span class="sl-lbl">Body Price</span>
+              <div class="sl-right"><span class="sl-pfx">₹</span><input type="text" class="numinput" id="bpIn" oninput="calcAll()"></div>
+            </div>
+            <div class="fml" id="bpFml"></div>
+          </div>
+        </div>
+
+        <!-- STEP 3: AC -->
+        <div class="card" id="s3" style="display:none">
+          <div class="card-hd"><span class="step-pill">STEP 3</span><div class="card-title">Air Conditioning</div></div>
+          <div class="note" id="acChNote"></div>
+          <span class="fl">Requirement</span>
+          <div class="rg">
+            <div class="rb" id="bAC" onclick="setAC(true)">❄ With AC</div>
+            <div class="rb on" id="bNAC" onclick="setAC(false)">— Non-AC</div>
+          </div>
+          <div id="acSec" style="display:none;margin-top:16px">
+            <div class="sl-row" style="margin-bottom:8px">
+              <span class="sl-lbl">AC Cost</span>
+              <div class="sl-right"><span class="sl-pfx">₹</span><input type="text" class="numinput" id="acIn" oninput="calcAll()"></div>
+            </div>
+            <div class="fml" id="acFml"></div>
+          </div>
+        </div>
+
+        <!-- STEP 4: SEATING -->
+        <div class="card" id="s4" style="display:none">
+          <div class="card-hd"><span class="step-pill">STEP 4</span><div class="card-title">Seating</div></div>
+          <span class="fl ft">Configuration</span>
+          <div class="rg" id="cfgGrp"></div>
+          <div class="note blu" id="wNote" style="margin-top:10px"></div>
+          <div class="dv"></div>
+          <span class="fl">Seat Type</span>
+          <div class="rg" id="stGrp"></div>
+          <div class="dv"></div>
+          <span class="fl">Rows &amp; Seat Count</span>
+          <div class="note" id="rowNote" style="margin-bottom:10px"></div>
+          <select class="seat-sel" id="rowSel" onchange="onRowChange()"></select>
+          <div class="fml" id="seatFml"></div>
+          <div class="dv"></div>
+          <div class="tog-row" id="sbRow" onclick="togSB()">
+            <div class="tog-l">
+              <span class="tog-name">3-Point Seatbelt</span>
+              <span class="tog-pr">+₹1,000 per seat · Highback &amp; Pushback only</span>
+            </div>
+            <div class="sw" id="sw-sb"></div>
+          </div>
+          <div class="note amb" id="sbNote" style="display:none;margin-top:10px"></div>
+        </div>
+
+        <!-- STEP 5: ADD-ONS -->
+        <div class="card" id="s5" style="display:none">
+          <div class="card-hd"><span class="step-pill">STEP 5</span><div class="card-title">Add-ons</div></div>
+          <div id="aoWrap"></div>
+        </div>
+
+      </div>
+
+      <!-- RIGHT: SUMMARY -->
+      <div>
+        <div class="sum-panel">
+          <div class="sum-hd">
+            <div class="sum-hd-lbl">Total Estimated Price</div>
+            <div class="sum-total" id="sumTot">Select a chassis</div>
+          </div>
+          <div id="sumBody">
+            <div class="sum-ph">
+              <div class="sum-ph-ico">🚌</div>
+              <div class="sum-ph-txt">Search a CBN or model name in Step 1 to begin building the price estimate.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer class="footer">
+  <div class="container">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <img src="images/paras-logo.png" alt="Paras Trucks" class="footer-brand-logo" width="197" height="72">
+        <p class="footer-desc">Paras Trucks is a multi-brand dealership for commercial vehicles and construction equipment, operating 11 facilities across Haryana and Gujarat.</p>
+        <div class="footer-partner-logos">
+          <img loading="lazy" src="images/ashok-leyland-logo.svg" alt="Ashok Leyland" width="120" height="40">
+          <img loading="lazy" src="images/switch-mobility-logo.svg" alt="Switch Mobility" width="100" height="30">
+          <img loading="lazy" src="images/hd-hyundai-logo.svg" alt="HD Hyundai CE" width="100" height="40">
+        </div>
+      </div>
+      <div>
+        <h4 class="footer-heading">Quick Links</h4>
+        <ul class="footer-links">
+          <li><a href="about.html">About Us</a></li>
+          <li><a href="outlets.html">Our Outlets</a></li>
+          <li><a href="emi-calculator.html">EMI Calculator</a></li>
+          <li><a href="careers.html">Careers</a></li>
+          <li><a href="contact.html">Contact Us</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4 class="footer-heading">Our Brands</h4>
+        <ul class="footer-links">
+          <li><a href="ashok-leyland.html">Ashok Leyland</a></li>
+          <li><a href="switch-mobility.html">Switch Mobility</a></li>
+          <li><a href="hd-hyundai.html">HD Hyundai CE</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4 class="footer-heading">Contact</h4>
+        <div class="footer-contact-item"><span class="footer-contact-icon">&#9742;</span><a href="tel:7496970303" style="color:var(--gray-400)">+91 74969 70303</a></div>
+        <div class="footer-contact-item"><span class="footer-contact-icon">&#9993;</span><a href="mailto:hi@parastrucks.in" style="color:var(--gray-400)">hi@parastrucks.in</a></div>
+        <div class="footer-contact-item" style="margin-top:16px;">
+          <a href="https://www.facebook.com/parastrucksandbuses" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:8px;color:var(--gray-400);transition:color .3s;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+            Facebook
+          </a>
+        </div>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>&copy; 2026 Paras Trucks. All rights reserved.</span>
+      <span>Ashok Leyland &middot; Switch Mobility &middot; HD Hyundai CE</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+/* ══════════════════════════════════════════════
+   DATABASE — Ashok Leyland Bus Cowl Chassis (87 CBNs)
+══════════════════════════════════════════════ */
+const DB=[
+{cbn:"CCC20084D00011",fam:"CCC",model:"Cheetah",desc:"ASHOK LEYLAND CH2008.4T6R — 4200mm WB · 'H' Series iGen6 6-cyl BS VI (197 HP) · 6-speed OD gearbox · Shackle suspension · Tilt & Telescopic steering · EB, ESC · 7 × 10R20-16PR Radial",oll:8.4,fuel:"D",ac:"NAC",mrp:3103032},
+{cbn:"CCC20102D00015",fam:"CCC",model:"Cheetah",desc:"ASHOK LEYLAND CH2010.2T6R — 5334mm WB · 'H' Series iGen6 6-cyl BS VI (197 HP) · 6-speed OD gearbox · Shackle suspension · Tilt & Telescopic steering · EB, ESC · 7 × 10R20-16PR Radial",oll:10.2,fuel:"D",ac:"NAC",mrp:3139907},
+{cbn:"CCC20102D00014",fam:"CCC",model:"Cheetah",desc:"ASHOK LEYLAND CH2010.2T6R — 5334mm WB · 'H' Series iGen6 6-cyl BS VI (197 HP) · 6-speed OD gearbox · Shackle suspension · Tilt & Telescopic steering · EB, ESC · 7 × 295/80 R22.5 TL",oll:10.2,fuel:"D",ac:"NAC",mrp:3190609},
+{cbn:"CCV20109D00029",fam:"CCV",model:"Viking",desc:"ASHOK LEYLAND VK2010.9T6R — 5334mm WB · 'H' Series iGen6 6-cyl BS VI (197 HP) · 6-speed OD gearbox · Shackle suspension · Tilt & Telescopic steering · EB, ESC · 7 × 295/80 R22.5 TL",oll:10.9,fuel:"D",ac:"NAC",mrp:3172172},
+{cbn:"CCV20109D00030",fam:"CCV",model:"Viking",desc:"ASHOK LEYLAND VK2010.9T6R — 5334mm WB · 'H' Series iGen6 6-cyl BS VI (197 HP) · 6-speed OD gearbox · Shackle suspension with Retarder · Tilt & Telescopic steering · EB, ESC · 7 × 295/80 R22.5 TL (M)",oll:10.9,fuel:"D",ac:"NAC",mrp:3487453},
+{cbn:"CCV20114D00105",fam:"CCV",model:"Viking",desc:"ASHOK LEYLAND VK2011.4T6R — 5639mm WB · 'H' Series iGen6 6-cyl BS VI (197 HP) · 6-speed OD gearbox · Shackle suspension · Tilt & Telescopic steering · EB, ESC · 7 × 10R20-16PR Radial",oll:11.4,fuel:"D",ac:"NAC",mrp:3158344},
+{cbn:"CCV20114D00109",fam:"CCV",model:"Viking",desc:"ASHOK LEYLAND VK2011.4T6R — 5639mm WB · 'H' Series iGen6 6-cyl BS VI (197 HP) · 6-speed OD gearbox · Shackle suspension · Tilt & Telescopic steering · EB, ESC · 7 × 295/80 R22.5 TL",oll:11.4,fuel:"D",ac:"NAC",mrp:3190609},
+{cbn:"CCV20114D00107",fam:"CCV",model:"Viking",desc:"ASHOK LEYLAND VK2011.4T6R — 5639mm WB · 'H' Series iGen6 6-cyl BS VI (197 HP) · 6-speed OD gearbox · Rubber-ended suspension · Tilt & Telescopic steering · EB, ESC · 7 × 10R20-16PR Radial",oll:11.4,fuel:"D",ac:"NAC",mrp:3186000},
+{cbn:"CCV20114D00111",fam:"CCV",model:"Viking",desc:"ASHOK LEYLAND VK2011.4T6R — 5.57m WB · 'H' Series iGen6 6-cyl BS VI (197 HP) · 6-speed OD gearbox · Rubber-ended suspension · Tilt & Telescopic steering · EB, ESC · 7 × 295/80 R22.5 TL",oll:11.4,fuel:"D",ac:"NAC",mrp:3218266},
+{cbn:"CCV20114D00110",fam:"CCV",model:"Viking",desc:"ASHOK LEYLAND VK2011.4T6R — 5.57m WB · 'H' Series iGen6 6-cyl BS VI (197 HP) · 6-speed OD gearbox · Front rubber-ended & rear air suspension · Tilt & Telescopic steering · EB, ESC · 7 × 295/80 R22.5 TL",oll:11.4,fuel:"D",ac:"NAC",mrp:3458875},
+{cbn:"CCV20114D00115",fam:"CCV",model:"Viking",desc:"ASHOK LEYLAND VK2011.4T6R — 5639mm WB · 'H' Series iGen6 6-cyl BS VI (197 HP) · 6-speed OD gearbox · Rubber-ended suspension · Tilt & Telescopic steering · EB, ESC · 7 × 10R20-16PR Radial",oll:11.4,fuel:"D",ac:"NAC",mrp:3255141},
+{cbn:"CCV20114D00114",fam:"CCV",model:"Viking",desc:"ASHOK LEYLAND VK2011.4T6R — 5.29m WB · 'H' Series iGen6 6-cyl BS VI (197 HP) · 6-speed OD gearbox · Rubber-ended suspension · Tilt & Telescopic steering · EB, ESC · 7 × 295/80 R22.5 TL",oll:11.4,fuel:"D",ac:"NAC",mrp:3287407},
+{cbn:"CCV20114D00113",fam:"CCV",model:"Viking",desc:"ASHOK LEYLAND VK2011.4T6R — 5.29m WB · 'H' Series iGen6 6-cyl BS VI (197 HP) · 6-speed OD gearbox · Front rubber-ended & rear air suspension · Tilt & Telescopic steering · EB, ESC · 7 × 295/80 R22.5 TL",oll:11.4,fuel:"D",ac:"NAC",mrp:3528016},
+{cbn:"CCV20109D00028",fam:"CCV",model:"Viking",desc:"ASHOK LEYLAND VK2010.9T6R — 5334mm WB · 'H' Series iGen6 6-cyl BS VI (197 HP) · 6-speed OD gearbox · Front rubber-ended & rear air suspension · DDAC bracket · Tilt & Telescopic steering · EB, ESC · 7 × 295/80 R22.5 TL (M)",oll:10.9,fuel:"D",ac:"DDAC",mrp:3544609},
+{cbn:"CCV20109D00031",fam:"CCV",model:"Viking",desc:"ASHOK LEYLAND VK2010.9T6R — 5334mm WB · 'H' Series iGen6 6-cyl BS VI (197 HP) · 6-speed OD gearbox · Front rubber-ended & rear air suspension · DDAC bracket with Retarder · Tilt & Telescopic steering · EB, ESC · 7 × 295/80 R22.5 TL (M)",oll:10.9,fuel:"D",ac:"DDAC",mrp:3824859},
+{cbn:"CCV20114D00112",fam:"CCV",model:"Viking",desc:"ASHOK LEYLAND VK2011.4T6R — 5639mm WB · 'H' Series iGen6 6-cyl BS VI (197 HP) · 6-speed OD gearbox · Rubber-ended suspension · DDAC bracket · Tilt & Telescopic steering · EB, ESC · 7 × 295/80 R22.5 TL",oll:11.4,fuel:"D",ac:"DDAC",mrp:3313219},
+{cbn:"CCV20114D00106",fam:"CCV",model:"Viking",desc:"ASHOK LEYLAND VK2011.4T6R — 5639mm WB · 'H' Series iGen6 6-cyl BS VI (197 HP) · 6-speed OD gearbox · Front rubber-ended & rear air suspension · DDAC bracket · Tilt & Telescopic steering · EB, ESC · 7 × 295/80 R22.5 TL",oll:11.4,fuel:"D",ac:"DDAC",mrp:3553828},
+{cbn:"CCV13114G00016",fam:"CCV",model:"Viking CNG",desc:"ASHOK LEYLAND VK1311.4C6R — 5639mm WB · 'H' Series NA 6-cyl BS VI (127 HP) CNG engine · 6-speed gearbox · Rubber-ended suspension · 720L CNG tank · Tilt & Telescopic steering · EB, ESC · 7 × 10R20-16PR Radial",oll:11.4,fuel:"G",ac:"NAC",mrp:3449657},
+{cbn:"CCV13114G00017",fam:"CCV",model:"Viking CNG",desc:"ASHOK LEYLAND VK1311.4C6R — 5639mm WB · 'H' Series NA 6-cyl BS VI (127 HP) CNG engine · 6-speed gearbox · Rubber-ended suspension · 840L CNG tank · Tilt & Telescopic steering · EB, ESC · 7 × 295/80 R22.5 TL",oll:11.4,fuel:"G",ac:"NAC",mrp:3595313},
+{cbn:"CCV22114G00010",fam:"CCV",model:"Viking CNG TC",desc:"ASHOK LEYLAND VK2211.4C6R — 5639mm WB · 'H' Series 6-cyl BS VI CNG TC engine (216 HP) · 6-speed gearbox · Rubber-ended suspension · 720L CNG tank (WB door provision) · DDAC bracket · Tilt & Telescopic steering · EB, ESC · 7 × 295/80 R22.5 TL",oll:11.4,fuel:"G",ac:"DDAC",mrp:3666297},
+{cbn:"CCT20120D00072",fam:"CCT",model:"12M",desc:"ASHOK LEYLAND TF2012.0T6R — 6000mm WB · 'H' Series iGen6 6-cyl BS VI (197 HP) · 6-speed OD gearbox (no retarder) · Rubber-ended suspension · DDAC bracket · Unitised bearing · Tilt & Telescopic steering · EB, ESC · 7 × 295/80 R22.5 TL (M)",oll:12.0,fuel:"D",ac:"DDAC",mrp:3458875},
+{cbn:"CCT20120D00069",fam:"CCT",model:"12M",desc:"ASHOK LEYLAND TF2012.0T6R — 6000mm WB · 'H' Series iGen6 6-cyl BS VI (197 HP) · 6-speed OD gearbox (no retarder) · Front rubber-ended & rear air suspension · DDAC bracket · Tilt & Telescopic steering · EB, ESC · 7 × 295/80 R22.5 TL",oll:12.0,fuel:"D",ac:"DDAC",mrp:3618359},
+{cbn:"CCT20120D00071",fam:"CCT",model:"12M",desc:"ASHOK LEYLAND TF2012.0T6R — 6000mm WB · 'H' Series iGen6 6-cyl BS VI (197 HP) · 6-speed OD gearbox (no retarder) · Front rubber-ended & rear air suspension · DDAC bracket · Front disc brake · Unitised bearing · 7 × 295/80 R22.5 TL (M)",oll:12.0,fuel:"D",ac:"DDAC",mrp:3689344},
+{cbn:"CCT20120D00073",fam:"CCT",model:"12M",desc:"ASHOK LEYLAND TF2012.0T6R — 6000mm WB · 'H' Series iGen6 6-cyl BS VI (197 HP) · 6-speed OD gearbox (no retarder) · Full air suspension · DDAC bracket · Tilt & Telescopic steering · EB, ESC · 7 × 295/80 R22.5 TL",oll:12.0,fuel:"D",ac:"DDAC",mrp:3759407},
+{cbn:"CCT20120D00078",fam:"CCT",model:"12M",desc:"ASHOK LEYLAND TF2012.0T6R — 6000mm WB · 'H' Series iGen6 6-cyl BS VI (197 HP) · 6-speed OD gearbox (no retarder) · Full air suspension · Non-AC · Tilt & Telescopic steering · EB, ESC · 7 × 295/80 R22.5 TL",oll:12.0,fuel:"D",ac:"NAC",mrp:3800891},
+{cbn:"CCT20120D00075",fam:"CCT",model:"12M",desc:"ASHOK LEYLAND TF2012.0T6R — 6000mm WB · 'H' Series iGen6 6-cyl BS VI (197 HP) · 6-speed OD gearbox (no retarder) · Full air suspension · DDAC bracket · Front disc brake · Unitised bearing · EB, ESC · 7 × 295/80 R22.5 TL (M)",oll:12.0,fuel:"D",ac:"DDAC",mrp:3830391},
+{cbn:"CCT20120D00074",fam:"CCT",model:"12M",desc:"ASHOK LEYLAND TF2012.0T6R — 6000mm WB · 'H' Series iGen6 6-cyl BS VI (197 HP) · 6-speed OD gearbox with Retarder · Front rubber-ended & rear air suspension · DDAC bracket · 375L Polymer tank · EB, ESC · 7 × 295/80 R22.5 TL",oll:12.0,fuel:"D",ac:"DDAC",mrp:3929032},
+{cbn:"CCT20120D00070",fam:"CCT",model:"12M",desc:"ASHOK LEYLAND TF2012.0T6R — 6000mm WB · 'H' Series iGen6 6-cyl BS VI (197 HP) · 6-speed OD gearbox with Retarder · Front rubber-ended & rear air suspension · DDAC bracket · Front disc brake · Unitised bearing · EB, ESC · 7 × 295/80 R22.5 TL (M)",oll:12.0,fuel:"D",ac:"DDAC",mrp:3981578},
+{cbn:"CCT20120D00076",fam:"CCT",model:"12M",desc:"ASHOK LEYLAND TF2012.0T6R — 6000mm WB · 'H' Series iGen6 6-cyl BS VI (197 HP) · 6-speed OD gearbox with Retarder · Full air suspension · DDAC bracket · Front disc brake · Unitised bearing · EB, ESC · 7 × 295/80 R22.5 TL (M)",oll:12.0,fuel:"D",ac:"DDAC",mrp:4104188},
+{cbn:"CCT20120D00077",fam:"CCT",model:"12M",desc:"ASHOK LEYLAND TF2012.0T6R — 6000mm WB · 'H' Series iGen6 6-cyl BS VI (197 HP) · 6-speed OD gearbox with Retarder · Front rubber-ended & rear air suspension · DDAC bracket · EB, ESC · 7 × 295/80 R22.5 TL",oll:12.0,fuel:"D",ac:"DDAC",mrp:4102344},
+{cbn:"CCT25120D00023",fam:"CCT",model:"12M 250HP",desc:"ASHOK LEYLAND TF2512.0F6R — 6000mm WB · 'A' Series iGen6 4-cyl BS VI (248 HP) · 6-speed OD gearbox with Retarder · Full air suspension · DDAC bracket · Front disc brake · Unitised bearing · EB, ESC · 7 × 295/80 R22.5 TL (M)",oll:12.0,fuel:"D",ac:"DDAC",mrp:4279344},
+{cbn:"CCN25135D00033",fam:"CCN",model:"Garud 13.5M",desc:"ASHOK LEYLAND TF2513.5F6R — 7000mm WB · 'A' Series iGen6 4-cyl BS VI (248 HP) · 6-speed OD gearbox (no retarder) · Front rubber-ended & rear air suspension · DDAC bracket · Front disc brake · Unitised bearing · ESC · 7 × 295/80 R22.5 TL (M)",oll:13.5,fuel:"D",ac:"DDAC",mrp:4175172},
+{cbn:"CCN25135D00032",fam:"CCN",model:"Garud 13.5M",desc:"ASHOK LEYLAND TF2513.5F6R — 7000mm WB · 'A' Series iGen6 4-cyl BS VI (248 HP) · 6-speed OD gearbox · Front rubber-ended & rear air suspension · DDAC bracket · Retarder · ESC · 7 × 295/80 R22.5 TL (M)",oll:13.5,fuel:"D",ac:"DDAC",mrp:4366000},
+{cbn:"CCN25135D00015",fam:"CCN",model:"Garud 13.5M",desc:"ASHOK LEYLAND TF2513.5F6R — 7000mm WB · 'A' Series iGen6 4-cyl BS VI (248 HP) · 6-speed OD gearbox with Retarder · Front rubber-ended & rear air suspension · DDAC bracket · Front disc brake · Unitised bearing · ESC · 7 × 295/80 R22.5 TL (M)",oll:13.5,fuel:"D",ac:"DDAC",mrp:4436984},
+{cbn:"CCN25135D00035",fam:"CCN",model:"Garud 13.5M",desc:"ASHOK LEYLAND TF2513.5F6R — 7000mm WB · 'A' Series iGen6 4-cyl BS VI (248 HP) · 6-speed OD gearbox (no retarder) · Full air suspension · DDAC bracket · Front disc brake · Unitised bearing · ESC · 7 × 295/80 R22.5 TL (M)",oll:13.5,fuel:"D",ac:"DDAC",mrp:4440672},
+{cbn:"CCN25135D00016",fam:"CCN",model:"Garud 13.5M",desc:"ASHOK LEYLAND TF2513.5F6R — 7000mm WB · 'A' Series iGen6 4-cyl BS VI (248 HP) · 6-speed OD gearbox with Retarder · Full air suspension · DDAC bracket · Front disc brake · Unitised bearing · ESC · 7 × 295/80 R22.5 TL (M)",oll:13.5,fuel:"D",ac:"DDAC",mrp:4702484},
+{cbn:"CCN25135D00023",fam:"CCN",model:"Garud 13.5M",desc:"ASHOK LEYLAND TF2513.5F6R — 7000mm WB · 'H64V' Series iGen6 6-cyl BS VI (247 HP) · 6MT86 gearbox (no retarder) · Front rubber-ended & rear air suspension · DDAC bracket · Front disc brake · Unitised bearing · ESC · 7 × 295/80 R22.5 TL (M)",oll:13.5,fuel:"D",ac:"DDAC",mrp:4175172},
+{cbn:"CCN25135D00027",fam:"CCN",model:"Garud 13.5M",desc:"ASHOK LEYLAND TF2513.5F6R — 7000mm WB · 'H64V' Series iGen6 6-cyl BS VI (247 HP) · 6MT86 gearbox · Full air suspension · DDAC bracket · Retarder · ESC · 7 × 295/80 R22.5 TL (M)",oll:13.5,fuel:"D",ac:"DDAC",mrp:4366000},
+{cbn:"CCN25135D00025",fam:"CCN",model:"Garud 13.5M",desc:"ASHOK LEYLAND TF2513.5F6R — 7000mm WB · 'H64V' Series iGen6 6-cyl BS VI (247 HP) · 6MT86 gearbox with Retarder · Front rubber-ended & rear air suspension · DDAC bracket · Front disc brake · Unitised bearing · ESC · 7 × 295/80 R22.5 TL (M)",oll:13.5,fuel:"D",ac:"DDAC",mrp:4436984},
+{cbn:"CCN25135D00037",fam:"CCN",model:"Garud 13.5M",desc:"ASHOK LEYLAND TF2513.5F6R — 7000mm WB · 'H64V' Series iGen6 6-cyl BS VI (247 HP) · 6MT86 gearbox (no retarder) · Full air suspension · DDAC bracket · Front disc brake · Unitised bearing · ESC · 7 × 295/80 R22.5 TL (M)",oll:13.5,fuel:"D",ac:"DDAC",mrp:4440672},
+{cbn:"CCN25135D00026",fam:"CCN",model:"Garud 13.5M",desc:"ASHOK LEYLAND TF2513.5F6R — 7000mm WB · 'H64V' Series iGen6 6-cyl BS VI (247 HP) · 6MT86 gearbox with Retarder · Full air suspension · DDAC bracket · Front disc brake · Unitised bearing · ESC · 7 × 295/80 R22.5 TL (M)",oll:13.5,fuel:"D",ac:"DDAC",mrp:4702484},
+{cbn:"CCS15081D00005",fam:"CCS",model:"Sunshine",desc:"ASHOK LEYLAND SS1508.1T6R — 4560mm WB · 150HP BS VI engine · ESC · 7 × 7.50×16",oll:8.1,fuel:"D",ac:"NAC",mrp:2036496},
+{cbn:"CCS15094D00005",fam:"CCS",model:"Sunshine",desc:"ASHOK LEYLAND SS1509.4T6R — 5200mm WB · 150HP BS VI engine · ESC · 7 × 7.50×16",oll:9.4,fuel:"D",ac:"NAC",mrp:2106484},
+{cbn:"CCL15087D00029",fam:"CCL",model:"Lynx Smart",desc:"ASHOK LEYLAND LS1508.7T6RL — 4200mm WB Chassis · ESC · 7 × 7.50×16",oll:8.7,fuel:"D",ac:"NAC",mrp:2096897},
+{cbn:"CCL15099D00016",fam:"CCL",model:"Lynx Smart",desc:"ASHOK LEYLAND LS1509.9T6RL — 4900mm WB Chassis · ESC · 7 × 7.50×16",oll:9.9,fuel:"D",ac:"NAC",mrp:2190854},
+{cbn:"CCL15103D00028",fam:"CCL",model:"Lynx Smart",desc:"ASHOK LEYLAND LS1510.3T6RL — 5200mm WB Chassis · ESC · 7 × 8.25×16",oll:10.3,fuel:"D",ac:"NAC",mrp:2224411},
+{cbn:"CCL15103D00031",fam:"CCL",model:"Lynx Smart",desc:"ASHOK LEYLAND LS1510.3T6RL — 5200mm WB · LYNX MAX NAC Chassis · ESC · 7 × 235/75 R17.5",oll:10.3,fuel:"D",ac:"NAC",mrp:2286619},
+{cbn:"CCL15103D00020",fam:"CCL",model:"Lynx Smart",desc:"ASHOK LEYLAND LS1510.3T6R — 5200mm WB Chassis · ESC · 7 × 235/75 R17.5",oll:10.3,fuel:"D",ac:"NAC",mrp:2283853},
+{cbn:"CCL15103D00047",fam:"CCL",model:"Lynx Smart",desc:"ASHOK LEYLAND LS1510.3T6R — 5200mm WB Chassis (Mofussil) · ESC · 7 × 235/75 R17.5",oll:10.3,fuel:"D",ac:"NAC",mrp:2312616},
+{cbn:"CCL15103D00046",fam:"CCL",model:"Lynx Smart",desc:"ASHOK LEYLAND LS1510.3T6R — 5200mm WB Chassis (Mofussil) · ESC · 7 × 8.25×16",oll:10.3,fuel:"D",ac:"NAC",mrp:2274634},
+{cbn:"CCL15099D00028",fam:"CCL",model:"Lynx Smart",desc:"ASHOK LEYLAND LS1509.9T6R — 4900mm WB Chassis · ESC · 7 × 235/75 R17.5",oll:9.9,fuel:"D",ac:"NAC",mrp:2264678},
+{cbn:"CCL15099D00017",fam:"CCL",model:"Lynx Smart",desc:"ASHOK LEYLAND LS1509.9T6RL — 4900mm WB Chassis · ESC · 7 × 235/75 R17.5",oll:9.9,fuel:"D",ac:"NAC",mrp:2235916},
+{cbn:"CCL15099D00035",fam:"CCL",model:"Lynx Smart",desc:"ASHOK LEYLAND LS1509.9T6RL — 4900mm WB Chassis · ESC · 7 × 8.25×16",oll:9.9,fuel:"D",ac:"NAC",mrp:2255459},
+{cbn:"CCL15087D00018",fam:"CCL",model:"Lynx Smart",desc:"ASHOK LEYLAND LS1508.7T6R — 4200mm WB Chassis · ESC · 7 × 235/75 R17.5",oll:8.7,fuel:"D",ac:"NAC",mrp:2178391},
+{cbn:"CCL15087D00038",fam:"CCL",model:"Lynx Smart",desc:"ASHOK LEYLAND LS1508.7T6R — 4200mm WB Chassis · ESC · 7 × 7.50×16",oll:8.7,fuel:"D",ac:"NAC",mrp:2169172},
+{cbn:"CCL15079D00016",fam:"CCL",model:"Lynx Smart",desc:"ASHOK LEYLAND LS1507.9T6R — 3900mm WB · LYNX MAX NAC Chassis · ESC · 7 × 235/75 R17.5",oll:7.9,fuel:"D",ac:"NAC",mrp:2159216},
+{cbn:"CCL15079D00009",fam:"CCL",model:"Lynx Smart",desc:"ASHOK LEYLAND LS1507.9T6R — 3900mm WB Chassis · ESC · 7 × 235/75 R17.5",oll:7.9,fuel:"D",ac:"NAC",mrp:2149628},
+{cbn:"CCL15079D00017",fam:"CCL",model:"Lynx Smart",desc:"ASHOK LEYLAND LS1507.9T6R — 3900mm WB Chassis · ESC · 7 × 7.50×16",oll:7.9,fuel:"D",ac:"NAC",mrp:2140409},
+{cbn:"CCL15103D00036",fam:"CCL",model:"Lynx Smart",desc:"ASHOK LEYLAND LS1510.3T6RL — 5200mm WB · LYNX MAX AC Chassis · TM-43 A/C Compressor (engine-mounted) · ESC · 7 × 235/75 R17.5",oll:10.3,fuel:"D",ac:"TM43",mrp:2569204},
+{cbn:"CCL15103D00024",fam:"CCL",model:"Lynx Smart",desc:"ASHOK LEYLAND LS1510.3T6R — 5200mm WB Chassis · TM-43 A/C Compressor (engine-mounted) · ESC · 7 × 235/75 R17.5",oll:10.3,fuel:"D",ac:"TM43",mrp:2537922},
+{cbn:"CCL15099D00026",fam:"CCL",model:"Lynx Smart",desc:"ASHOK LEYLAND LS1509.9T6R — 4900mm WB Chassis · TM-43 A/C Compressor (engine-mounted) · ESC · 7 × 235/75 R17.5",oll:9.9,fuel:"D",ac:"TM43",mrp:2513953},
+{cbn:"CCL15087D00017",fam:"CCL",model:"Lynx Smart",desc:"ASHOK LEYLAND LS1508.7T6R — 4200mm WB Chassis · TM-43 A/C Compressor (engine-mounted) · ESC · 7 × 235/75 R17.5",oll:8.7,fuel:"D",ac:"TM43",mrp:2489984},
+{cbn:"CCL15079D00015",fam:"CCL",model:"Lynx Smart",desc:"ASHOK LEYLAND LS1507.9T6R — 3900mm WB Chassis · TM-43 A/C Compressor (engine-mounted) · ESC · 7 × 235/75 R17.5",oll:7.9,fuel:"D",ac:"TM43",mrp:2466016},
+{cbn:"CCL15103D00025",fam:"CCL",model:"Lynx Smart",desc:"ASHOK LEYLAND LS1510.3T6R — 5200mm WB Chassis · TM-43 A/C Compressor (engine-mounted) · AMT · Air suspension · ESC · 7 × 235/75 R17.5",oll:10.3,fuel:"D",ac:"TM43",mrp:2939638},
+{cbn:"CCL15103D00048",fam:"CCL",model:"Lynx Smart",desc:"ASHOK LEYLAND LS1510.3T6R — 5200mm WB Chassis · TM-43 A/C Compressor (engine-mounted) · Rear air suspension · ESC · 7 × 235/75 R17.5",oll:10.3,fuel:"D",ac:"TM43",mrp:2747888},
+{cbn:"CCL15099D00034",fam:"CCL",model:"Lynx Smart",desc:"ASHOK LEYLAND LS1509.9T6R — 4900mm WB Chassis · TM-43 A/C Compressor (engine-mounted) · Rear air suspension · ESC · 7 × 235/75 R17.5",oll:9.9,fuel:"D",ac:"TM43",mrp:2714332},
+{cbn:"CCL15087D00037",fam:"CCL",model:"Lynx Smart",desc:"ASHOK LEYLAND LS1508.7T6R — 4200mm WB Chassis · TM-43 A/C Compressor (engine-mounted) · Rear air suspension · ESC · 7 × 235/75 R17.5",oll:8.7,fuel:"D",ac:"TM43",mrp:2645302},
+{cbn:"CCL10099G00004",fam:"CCL",model:"Lynx Smart CNG",desc:"ASHOK LEYLAND LS1009.9C6RV — 4900mm WB Chassis · 480WLC CNG tank · School · ESC · 7 × 8.25×16",oll:9.9,fuel:"G",ac:"NAC",mrp:2331791},
+{cbn:"CCL10099G00003",fam:"CCL",model:"Lynx Smart CNG",desc:"ASHOK LEYLAND LS1009.9C6RV — 4900mm WB Chassis · 480WLC CNG tank · Staff · ESC · 7 × 235/75 R17.5",oll:9.9,fuel:"G",ac:"NAC",mrp:2360553},
+{cbn:"CCL15099G00031",fam:"CCL",model:"Lynx Smart CNG",desc:"ASHOK LEYLAND LS1509.9C6RV — 4900mm WB Chassis · 480WLC CNG tank · ESC · 7 × 8.25×16",oll:9.9,fuel:"G",ac:"NAC",mrp:2489984},
+{cbn:"CCL15103G00027",fam:"CCL",model:"Lynx Smart CNG",desc:"ASHOK LEYLAND LS1510.3C6RVL — 5200mm WB Chassis · 480WLC CNG tank · ESC · 7 × 235/75 R17.5",oll:10.3,fuel:"G",ac:"NAC",mrp:2561891},
+{cbn:"CCL15103G00033",fam:"CCL",model:"Lynx Smart CNG",desc:"ASHOK LEYLAND LS1510.3C6RVL — 5200mm WB · LYNXMAX Chassis · 480WLC CNG tank · ESC · 7 × 235/75 R17.5",oll:10.3,fuel:"G",ac:"NAC",mrp:2540688},
+{cbn:"CCL15099G00032",fam:"CCL",model:"Lynx Smart CNG",desc:"ASHOK LEYLAND LS1509.9C6RVL — 4900mm WB Chassis · 480WLC CNG tank · TM-43 A/C Compressor (engine-mounted) · ESC · 7 × 235/75 R17.5",oll:9.9,fuel:"G",ac:"TM43",mrp:2825547},
+{cbn:"CCL15103G00028",fam:"CCL",model:"Lynx Smart CNG",desc:"ASHOK LEYLAND LS1510.3C6RVL — 5200mm WB Chassis · 480WLC CNG tank · TM-43 A/C Compressor (engine-mounted) · 6-speed · ESC · 7 × 235/75 R17.5",oll:10.3,fuel:"G",ac:"TM43",mrp:2873484},
+{cbn:"CCL15103G00036",fam:"CCL",model:"Lynx Smart CNG",desc:"ASHOK LEYLAND LS1510.3C6RVL — 5200mm WB · LYNXMAX Chassis · 480WLC CNG tank · TM-43 A/C Compressor (engine-mounted) · ESC · 7 × 235/75 R17.5",oll:10.3,fuel:"G",ac:"TM43",mrp:2940597},
+{cbn:"CCG15099D00011",fam:"CCG",model:"Lynx Strong",desc:"ASHOK LEYLAND LT1509.9T6R — 4900mm WB Chassis · ESC · 7 × 9R20",oll:9.9,fuel:"D",ac:"NAC",mrp:2536004},
+{cbn:"CCG15106D00011",fam:"CCG",model:"Lynx Strong",desc:"ASHOK LEYLAND LT1510.6T6R — 5334mm WB Chassis · 12V · ESC · 7 × 10R20",oll:10.6,fuel:"D",ac:"NAC",mrp:2619416},
+{cbn:"CCG15106D00012",fam:"CCG",model:"Lynx Strong",desc:"ASHOK LEYLAND LT1510.6T6R — 5334mm WB Chassis · 24V · ESC · 7 × 10R20",oll:10.6,fuel:"D",ac:"NAC",mrp:2643384},
+{cbn:"CCG15106D00013",fam:"CCG",model:"Lynx Strong",desc:"ASHOK LEYLAND LT1510.6T6R — 5334mm WB Chassis · 24V · Air suspension · ESC · 7 × 10R20",oll:10.6,fuel:"D",ac:"NAC",mrp:2883072},
+{cbn:"CCG15111D00013",fam:"CCG",model:"Lynx Strong",desc:"ASHOK LEYLAND LT1511.1T6R — 5639mm WB Chassis · 12V · ESC · 7 × 10R20",oll:11.1,fuel:"D",ac:"NAC",mrp:2678858},
+{cbn:"CCG15111D00014",fam:"CCG",model:"Lynx Strong",desc:"ASHOK LEYLAND LT1511.1T6R — 5639mm WB Chassis · 24V · ESC · 7 × 10R20",oll:11.1,fuel:"D",ac:"NAC",mrp:2737342},
+{cbn:"CCG15111D00015",fam:"CCG",model:"Lynx Strong",desc:"ASHOK LEYLAND LT1511.1T6R — 5639mm WB Chassis · 24V · Air suspension · ESC · 7 × 10R20",oll:11.1,fuel:"D",ac:"NAC",mrp:2977029},
+{cbn:"CCG15099D00009",fam:"CCG",model:"Lynx Strong",desc:"ASHOK LEYLAND LT1509.9T6R — 4900mm WB Chassis · TM-43 A/C Compressor (engine-mounted) · ESC · 7 × 9R20",oll:9.9,fuel:"D",ac:"TM43",mrp:2815959},
+{cbn:"CCG15106G00004",fam:"CCG",model:"Lynx Strong CNG",desc:"ASHOK LEYLAND LT1510.6C6R — 5334mm WB Chassis · 600WLC CNG tank · ESC · 7 × 9.00R20",oll:10.6,fuel:"G",ac:"NAC",mrp:3252191},
+{cbn:"CCG15111G00005",fam:"CCG",model:"Lynx Strong CNG",desc:"ASHOK LEYLAND LT1511.6C6R — 5639mm WB Chassis · 660WLC CNG tank · ESC · 7 × 10.00R20",oll:11.1,fuel:"G",ac:"NAC",mrp:3345189},
+{cbn:"CCG15106G00008",fam:"CCG",model:"Lynx Strong CNG",desc:"ASHOK LEYLAND LT1510.6C6R — 5334mm WB Chassis · 600WLC CNG tank · Air suspension · ESC · 7 × 9.00R20",oll:10.6,fuel:"G",ac:"NAC",mrp:3491878},
+{cbn:"CCG15111G00006",fam:"CCG",model:"Lynx Strong CNG",desc:"ASHOK LEYLAND LT1511.6C6R — 5639mm WB Chassis · 660WLC CNG tank · Air suspension · ESC · 7 × 10.00R20",oll:11.1,fuel:"G",ac:"NAC",mrp:3584877}
+];
+
+const BODY_BASE={school:{CCS:650000,CCL:650000,CCG:810000,CCC:800000,CCV:925000,CCT:950000,CCN:1000000},staff:{CCS:830000,CCL:830000,CCG:910000,CCC:885000,CCV:925000,CCT:1050000,CCN:1100000}};
+const BODY_RATE={CCS:25000,CCL:35000,CCG:45000,CCC:45000,CCV:45000,CCT:45000,CCN:45000};
+const MIN_OLL={CCS:8,CCL:7,CCG:9,CCC:8,CCV:10,CCT:12,CCN:13};
+const AC_REF={TM43:{ref:8,cost:275000},NAC:{ref:7,cost:400000},DDAC:{ref:8,cost:275000}};
+const AC_PM=25000;
+const WIDTH={CCS:'88',CCL:'88',CCG:'96',CCC:'96',CCV:'96',CCT:'96',CCN:'96'};
+const CFG_SPR={'3x3':6,'3x2':5,'2x2':4,'2x1':3};
+const SEAT_P={bench:1200,highback:2800,pushback:4300};
+const SB_P=1000;
+const ADDONS=[
+  {id:'gallery',name:'Sunken Gallery',price:25000},
+  {id:'curtains',name:'Curtains',price:15000},
+  {id:'partition',name:'Driver Partition',price:15000},
+  {id:'routeboard',name:'LED Route Board',price:15000},
+  {id:'sdickey',name:'Side Dickey',price:10000},
+  {id:'bdickey',name:'Back Dickey',price:20000},
+  {id:'cctv_s',name:'Simple CCTV',price:15000},
+  {id:'cctv_l',name:'Live CCTV',price:30000},
+  {id:'tv',name:'TV',price:15000}
+];
+
+let sel=null,dealP=0,bodyT='school',bodyP=0,wantAC=false,acP=0,cfg='3x2',stType='bench',rows=1,sbOn=false;
+let aoState={};ADDONS.forEach(a=>aoState[a.id]=false);
+
+const L=id=>document.getElementById(id);
+const fmt=v=>'₹'+Math.round(v).toLocaleString('en-IN');
+const fmtL=v=>{const l=v/100000;return '₹'+(l%1===0?l.toFixed(0):l.toFixed(2))+'L';};
+const parseInr=s=>parseInt((s||'').replace(/[₹,\s]/g,''))||0;
+
+/* NAV */
+var navbar=document.getElementById('navbar');
+window.addEventListener('scroll',function(){navbar.classList.toggle('scrolled',window.scrollY>10)});
+function toggleMobileNav(){document.getElementById('mobileNav').classList.toggle('open');document.body.style.overflow=document.getElementById('mobileNav').classList.contains('open')?'hidden':'';}
+
+/* SEARCH */
+let hiIdx=-1,filtered=[];
+function score(d,q){
+  const ql=q.toLowerCase();const toks=ql.split(/\s+/).filter(Boolean);let s=0;
+  for(const t of toks){
+    if(d.cbn.toLowerCase().startsWith(t))s+=12;else if(d.cbn.toLowerCase().includes(t))s+=8;
+    if(d.model.toLowerCase().includes(t))s+=7;if(String(d.oll).includes(t))s+=6;
+    if(d.fam.toLowerCase()===t)s+=5;if(d.desc.toLowerCase().includes(t))s+=2;
+    if(d.fuel==='G'&&(t==='cng'||t==='gas'))s+=6;
+  }
+  return s;
+}
+L('srchIn').addEventListener('input',function(){
+  const q=this.value.trim();const drop=L('srchDrop');
+  if(q.length<1){drop.classList.remove('open');return;}
+  filtered=DB.map(d=>({...d,_s:score(d,q)})).filter(d=>d._s>0).sort((a,b)=>b._s-a._s).slice(0,12);
+  if(!filtered.length){drop.innerHTML='<div class="sr-empty">No matching chassis found</div>';}
+  else{
+    drop.innerHTML=filtered.map((d,i)=>`
+      <div class="sr-item" data-i="${i}">
+        <div class="sr-cbn">${d.cbn}</div>
+        <div class="sr-name">${d.model} · ${d.oll}m · ${d.fuel==='G'?'CNG':'Diesel'} · ${d.ac==='TM43'?'TM-43 AC Compressor':d.ac==='DDAC'?'DDAC Bracket':'Non-AC Chassis'}</div>
+        <div class="sr-full">${d.desc.substring(0,130)}${d.desc.length>130?'…':''}</div>
+        <div class="sr-mrp">${fmtL(d.mrp)} &nbsp;MRP incl. GST</div>
+      </div>`).join('');
+    drop.querySelectorAll('.sr-item').forEach(el=>el.addEventListener('click',()=>selectChassis(filtered[+el.dataset.i])));
+  }
+  hiIdx=-1;drop.classList.add('open');
+});
+L('srchIn').addEventListener('keydown',function(e){
+  const drop=L('srchDrop');const items=drop.querySelectorAll('.sr-item');
+  if(e.key==='ArrowDown'){e.preventDefault();hiIdx=Math.min(hiIdx+1,items.length-1);}
+  else if(e.key==='ArrowUp'){e.preventDefault();hiIdx=Math.max(hiIdx-1,0);}
+  else if(e.key==='Enter'&&hiIdx>=0){selectChassis(filtered[hiIdx]);return;}
+  else if(e.key==='Escape'){drop.classList.remove('open');return;}
+  items.forEach((el,i)=>{el.classList.toggle('hi',i===hiIdx);if(i===hiIdx)el.scrollIntoView({block:'nearest'});});
+});
+document.addEventListener('click',e=>{if(!e.target.closest('.srch-wrap'))L('srchDrop').classList.remove('open');});
+
+/* SELECT CHASSIS */
+function selectChassis(d){
+  sel=d;L('srchIn').value=d.cbn+' — '+d.model;L('srchDrop').classList.remove('open');
+  L('chCbn').textContent=d.cbn;
+  L('chModel').textContent=d.model+' · '+d.oll+'m · '+(d.fuel==='G'?'CNG':'Diesel')+' · '+(d.ac==='TM43'?'TM-43 AC Compressor':d.ac==='DDAC'?'DDAC Bracket':'Non-AC Chassis');
+  L('chDesc').textContent=d.desc;
+  L('chMrp').textContent=fmtL(d.mrp);
+  L('chTags').innerHTML=`
+    <span class="ctag ct-oll">${d.oll}m OLL</span>
+    <span class="ctag ${d.fuel==='G'?'ct-g':'ct-d'}">${d.fuel==='G'?'CNG':'Diesel'}</span>
+    <span class="ctag ${d.ac==='TM43'?'ct-tm43':d.ac==='DDAC'?'ct-ddac':'ct-nac'}">${d.ac==='TM43'?'TM-43 Compressor':d.ac==='DDAC'?'DDAC Bracket':'Non-AC'}</span>
+    <span class="ctag ct-w">${WIDTH[d.fam]}" Width</span>`;
+  dealP=d.mrp;
+  const sl=L('dpSl');sl.min=0;sl.max=d.mrp;sl.value=d.mrp;
+  L('dpIn').value=Math.round(d.mrp).toLocaleString('en-IN');
+  L('dpMinLbl').textContent='₹0';
+  L('chCard').classList.add('on');updateDpChip();
+  bodyP=calcBodyP();L('bpIn').value=bodyP.toLocaleString('en-IN');updateBodyFml();
+  wantAC=false;L('bAC').classList.remove('on');L('bNAC').classList.add('on');L('acSec').style.display='none';updateACNote();
+  initCfg();initSeatTypes();buildRowOpts();
+  sbOn=false;L('sw-sb').classList.remove('on');L('sbNote').style.display='none';
+  buildAddons();
+  ['s2','s3','s4','s5'].forEach(id=>L(id).style.display='');
+  calcAll();
+}
+
+/* DEAL PRICE */
+function onDpSlide(){dealP=+L('dpSl').value;L('dpIn').value=Math.round(dealP).toLocaleString('en-IN');updateDpChip();calcAll();}
+function onDpType(){const v=parseInr(L('dpIn').value);if(v>0){dealP=v;const sl=L('dpSl');sl.value=Math.min(Math.max(v,+sl.min),+sl.max);}updateDpChip();calcAll();}
+function updateDpChip(){
+  if(!sel){L('dpChip').innerHTML='';return;}
+  const diff=sel.mrp-dealP;let h='';
+  if(diff>0)h=`<div class="dp-chip below">↓ ${fmtL(diff)} below MRP (${((diff/sel.mrp)*100).toFixed(1)}% discount)</div>`;
+  else if(diff<0)h=`<div class="dp-chip above">↑ ${fmtL(Math.abs(diff))} above MRP</div>`;
+  else h=`<div class="dp-chip at">= At MRP</div>`;
+  L('dpChip').innerHTML=h;
+}
+
+/* BODY */
+function calcBodyP(){if(!sel)return 0;return BODY_BASE[bodyT][sel.fam]+Math.round(Math.max(0,Math.floor(sel.oll)-MIN_OLL[sel.fam])*BODY_RATE[sel.fam]);}
+function setBody(t){bodyT=t;L('bSchool').classList.toggle('on',t==='school');L('bStaff').classList.toggle('on',t==='staff');bodyP=calcBodyP();L('bpIn').value=bodyP.toLocaleString('en-IN');updateBodyFml();calcAll();}
+function updateBodyFml(){
+  if(!sel)return;
+  const base=BODY_BASE[bodyT][sel.fam],rate=BODY_RATE[sel.fam],extra=Math.max(0,Math.floor(sel.oll)-MIN_OLL[sel.fam]);
+  L('bpFml').textContent=`${fmt(base)}  base (${sel.fam} ${bodyT} at ${MIN_OLL[sel.fam]}m)\n+ ${extra}m extra × ${fmt(rate)}/m = ${fmt(extra*rate)}\n─────────────────────────\nBody Price = ${fmtL(base+extra*rate)}`;
+}
+
+/* AC */
+function setAC(v){
+  wantAC=v;L('bAC').classList.toggle('on',v);L('bNAC').classList.toggle('on',!v);
+  L('acSec').style.display=v?'':'none';
+  if(v){acP=calcACP();L('acIn').value=acP.toLocaleString('en-IN');updateACFml();}
+  calcAll();
+}
+function calcACP(){if(!sel||!wantAC)return 0;const r=AC_REF[sel.ac];return r.cost+Math.round(Math.max(0,Math.floor(sel.oll)-r.ref)*AC_PM);}
+function updateACNote(){
+  if(!sel)return;
+  if(sel.ac==='TM43'){L('acChNote').className='note grn';L('acChNote').textContent='Factory TM-43 engine-mounted compressor fitted on this chassis. Body builder only adds ducting and rooftop evaporator — lower cost.';}
+  else if(sel.ac==='DDAC'){L('acChNote').className='note blu';L('acChNote').textContent='DDAC bracket pre-fitted. Body builder installs rooftop unit and compressor.';}
+  else{L('acChNote').className='note amb';L('acChNote').textContent='Non-AC chassis. Full AC system required — compressor, ducting, and rooftop unit. Higher cost.';}
+}
+function updateACFml(){
+  if(!sel)return;
+  const r=AC_REF[sel.ac],extra=Math.max(0,Math.floor(sel.oll)-r.ref);
+  L('acFml').textContent=`${fmt(r.cost)}  base (${sel.ac==='TM43'?'TM-43 chassis':'NAC chassis'} @ ${r.ref}m)\n+ ${extra.toFixed(1)}m extra × ₹25,000/m = ${fmt(extra*AC_PM)}\n─────────────────────────\nAC Cost = ${fmtL(r.cost+Math.round(extra*AC_PM))}`;
+}
+
+/* SEATING */
+function getCfgs(){
+  if(!sel)return[];const w=WIDTH[sel.fam];const cs=[];
+  if(w==='96'){cs.push({id:'3x3',label:'3×3',note:'Bench only'});cs.push({id:'3x2',label:'3×2',note:'All types'});}
+  else cs.push({id:'3x2',label:'3×2',note:'Bench only'});
+  cs.push({id:'2x2',label:'2×2',note:'All types'});cs.push({id:'2x1',label:'2×1',note:'All types'});
+  return cs;
+}
+function initCfg(){
+  const av=getCfgs();if(!av.find(c=>c.id===cfg))cfg=av[0].id;
+  L('cfgGrp').innerHTML=av.map(c=>`<div class="rb ${c.id===cfg?'on':''}" onclick="setCfg('${c.id}')">${c.label} <small style="font-weight:400;opacity:.65">${c.note}</small></div>`).join('');
+  L('wNote').textContent=WIDTH[sel.fam]==='96'?'96" width chassis — 3×3 and 3×2 available.':'88" width chassis — 3×3 not available. 3×2 bench-only.';
+}
+function setCfg(c){cfg=c;initCfg();initSeatTypes();buildRowOpts();calcAll();}
+
+function getSTs(){
+  if(!sel)return[];const w=WIDTH[sel.fam];
+  if(cfg==='3x3')return[{id:'bench',label:'Bench'}];
+  if(cfg==='3x2'&&w==='88')return[{id:'bench',label:'Bench'}];
+  return[{id:'bench',label:'Bench'},{id:'highback',label:'Highback (HHR)'},{id:'pushback',label:'Pushback (SR)'}];
+}
+function initSeatTypes(){
+  const av=getSTs();if(!av.find(t=>t.id===stType))stType=av[0].id;
+  const pp={bench:'₹1,200',highback:'₹2,800',pushback:'₹4,300'};
+  L('stGrp').innerHTML=av.map(t=>`<div class="rb ${t.id===stType?'on':''}" onclick="setST('${t.id}')">${t.label} <small style="font-weight:400;opacity:.65">${pp[t.id]}/seat</small></div>`).join('');
+  const sbAllowed=stType==='highback'||stType==='pushback';
+  L('sbRow').className='tog-row'+(sbAllowed?'':' disabled');
+  if(!sbAllowed){sbOn=false;L('sw-sb').classList.remove('on');L('sbNote').style.display='none';}
+}
+function setST(t){stType=t;initSeatTypes();buildRowOpts();calcAll();}
+
+function seatsForRows(r){return r*CFG_SPR[cfg]+1;}
+function buildRowOpts(){
+  if(!sel)return;const maxR=Math.floor(sel.oll);
+  rows=maxR; // default to maximum seats
+  let h='';
+  for(let r=maxR;r>=1;r--){h+=`<option value="${r}" ${r===rows?'selected':''}>${seatsForRows(r)}+D seats — ${r} rows${r===maxR?' (maximum)':''}</option>`;}
+  L('rowSel').innerHTML=h;L('rowSel').value=rows;
+  updateRowNote();updateSeatFml();
+}
+function onRowChange(){rows=+L('rowSel').value;updateRowNote();updateSeatFml();calcAll();}
+function updateRowNote(){
+  if(!sel)return;const maxR=Math.floor(sel.oll);
+  if(rows===maxR){L('rowNote').className='note grn';L('rowNote').textContent=`Maximum configuration for ${sel.oll}m — ${maxR} rows, ${seatsForRows(rows)}+D seats in ${cfg} layout.`;}
+  else{const rem=maxR-rows;L('rowNote').className='note blu';L('rowNote').textContent=`${rem} row${rem>1?'s':''} removed vs maximum — extra legroom added to remaining rows.`;}
+}
+function updateSeatFml(){
+  if(!sel)return;const seats=seatsForRows(rows),pp=SEAT_P[stType];
+  L('seatFml').textContent=`${cfg} · ${CFG_SPR[cfg]} seats/row + 1 extra last row\n${rows} rows × ${CFG_SPR[cfg]} + 1 = ${seats} passenger seats (+D)\n─────────────────────────\n${seats} × ${fmt(pp)} = ${fmtL(seats*pp)}${sbOn?' + seatbelt ('+fmtL(seats*SB_P)+')':''}`;
+}
+
+/* SEATBELT */
+function togSB(){
+  if(stType!=='highback'&&stType!=='pushback')return;
+  sbOn=!sbOn;L('sw-sb').classList.toggle('on',sbOn);
+  L('sbNote').style.display=sbOn?'':'none';
+  if(sbOn)L('sbNote').textContent=`${seatsForRows(rows)} seats × ${fmt(SB_P)} = ${fmtL(seatsForRows(rows)*SB_P)} additional`;
+  updateSeatFml();calcAll();
+}
+
+/* ADD-ONS */
+function buildAddons(){
+  L('aoWrap').innerHTML=ADDONS.map(a=>`
+    <div class="tog-row" onclick="togAO('${a.id}')">
+      <div class="tog-l"><span class="tog-name">${a.name}</span><span class="tog-pr">${fmtL(a.price)}</span></div>
+      <div class="sw ${aoState[a.id]?'on':''}" id="sw-${a.id}"></div>
+    </div>`).join('');
+}
+function togAO(id){aoState[id]=!aoState[id];L('sw-'+id).classList.toggle('on',aoState[id]);calcAll();}
+
+/* MAIN CALC */
+function calcAll(){
+  if(!sel){renderEmpty();return;}
+  bodyP=parseInr(L('bpIn').value)||calcBodyP();
+  acP=wantAC?(parseInr(L('acIn').value)||calcACP()):0;
+  if(wantAC)updateACFml();
+  const seats=seatsForRows(rows),seatCost=seats*SEAT_P[stType],sbCost=sbOn?seats*SB_P:0;
+  const aoTotal=ADDONS.reduce((s,a)=>s+(aoState[a.id]?a.price:0),0);
+  const total=dealP+bodyP+acP+seatCost+sbCost+aoTotal;
+  updateSeatFml();
+  if(sbOn)L('sbNote').textContent=`${seats} seats × ${fmt(SB_P)} = ${fmtL(seats*SB_P)} additional`;
+  const aoRows=ADDONS.filter(a=>aoState[a.id]).map(a=>`<div class="sum-row"><span class="sum-rl">${a.name}</span><span class="sum-rv">${fmtL(a.price)}</span></div>`).join('');
+  const hasAO=ADDONS.some(a=>aoState[a.id]);
+  L('sumBody').innerHTML=`<div class="sum-body">
+    <div class="sum-row"><span class="sum-rl" style="font-weight:700;color:var(--gray-700)">Chassis</span><span class="sum-rv">${fmtL(dealP)}</span></div>
+    <div class="sum-row"><span class="sum-rl" style="font-weight:700;color:var(--gray-700)">Body${wantAC?' + AC':''}</span><span class="sum-rv">${fmtL(bodyP+acP)}</span></div>
+    <div class="sum-row"><span class="sum-rl" style="font-weight:700;color:var(--gray-700)">Seats${hasAO?' + Add-ons':''}</span><span class="sum-rv">${fmtL(seatCost+sbCost+aoTotal)}</span></div>
+    <div class="sum-grand"><div class="sum-gl">Total Fully Built<br><span style="font-size:9px;opacity:.7">All prices incl. GST</span></div><div class="sum-gv">${fmtL(total)}</div></div>
+
+    <div class="breakdown-toggle" onclick="togBreakdown()">
+      <span class="breakdown-toggle-lbl">Detailed Breakdown</span>
+      <span class="breakdown-arrow" id="bdArrow">&#9662;</span>
+    </div>
+    <div class="breakdown-body" id="bdBody">
+      <div class="sum-sec">Chassis</div>
+      <div class="sum-row"><span class="sum-rl">MRP (incl. GST)</span><span class="sum-rv dim">${fmtL(sel.mrp)}</span></div>
+      <div class="sum-row"><span class="sum-rl">Deal Price</span><span class="sum-rv ${dealP<sel.mrp?'grn':dealP>sel.mrp?'amb':''}">${fmtL(dealP)}</span></div>
+      ${dealP<sel.mrp?`<div class="sum-row"><span class="sum-rl" style="font-size:12px;color:#16A34A">Discount</span><span class="sum-rv grn" style="font-size:12px">−${fmtL(sel.mrp-dealP)} (${((sel.mrp-dealP)/sel.mrp*100).toFixed(1)}%)</span></div>`:''}
+      <div class="sum-dv"></div>
+      <div class="sum-sec">Body</div>
+      <div class="sum-row"><span class="sum-rl">${bodyT==='school'?'School':'Staff'} Body — ${sel.fam}</span><span class="sum-rv">${fmtL(bodyP)}</span></div>
+      ${wantAC?`<div class="sum-dv"></div><div class="sum-sec">Air Conditioning</div><div class="sum-row"><span class="sum-rl">AC System${sel.ac==='TM43'?' (TM-43 base)':sel.ac==='NAC'?' (full install)':''}</span><span class="sum-rv">${fmtL(acP)}</span></div>`:''}
+      <div class="sum-dv"></div>
+      <div class="sum-sec">Seating</div>
+      <div class="sum-row"><span class="sum-rl">${cfg} · ${seats}+D seats · ${rows} rows</span><span class="sum-rv">${fmtL(seatCost)}</span></div>
+      <div class="sum-row"><span class="sum-rl" style="font-size:12px">${stType.charAt(0).toUpperCase()+stType.slice(1)} @ ${fmt(SEAT_P[stType])}/seat</span><span class="sum-rv dim" style="font-size:12px">${seats} pax seats</span></div>
+      ${sbOn?`<div class="sum-row"><span class="sum-rl">3-Point Seatbelt</span><span class="sum-rv">${fmtL(sbCost)}</span></div>`:''}
+      ${hasAO?`<div class="sum-dv"></div><div class="sum-sec">Add-ons</div>${aoRows}`:''}
+      <div class="sum-note">Internal estimate only · All prices incl. GST · Deal price, body &amp; AC amounts are editable fields</div>
+    </div>
+  </div>`;
+  L('sumTot').textContent=fmtL(total);L('sumTot').className='sum-total live';
+}
+function togBreakdown(){
+  const bd=document.getElementById('bdBody');
+  const ar=document.getElementById('bdArrow');
+  if(!bd||!ar)return;
+  bd.classList.toggle('open');
+  ar.classList.toggle('open');
+}
+function renderEmpty(){
+  L('sumTot').textContent='Select a chassis';L('sumTot').className='sum-total';
+  L('sumBody').innerHTML='<div class="sum-ph"><div class="sum-ph-ico">🚌</div><div class="sum-ph-txt">Search a CBN or model name in Step 1 to begin building the price estimate.</div></div>';
+}
+</script>
+</div><!-- /pageContent -->
+
+<script>
+function checkPw(){
+  const v=document.getElementById('pwInput').value;
+  if(v==='Paras222'){
+    document.getElementById('pwOverlay').style.display='none';
+    document.getElementById('pageContent').style.display='';
+  } else {
+    const err=document.getElementById('pwErr');
+    err.style.display='block';
+    const inp=document.getElementById('pwInput');
+    inp.style.borderColor='#dc2626';
+    inp.value='';
+    inp.focus();
+    setTimeout(()=>{inp.style.borderColor='var(--gray-200)';},1500);
+  }
+}
+function togglePwVis(){
+  const inp=document.getElementById('pwInput');
+  const eye=document.getElementById('pwEye');
+  if(inp.type==='password'){inp.type='text';eye.textContent='🙈';}
+  else{inp.type='password';eye.textContent='👁';}
+}
+// Focus input on load
+window.addEventListener('load',function(){
+  document.getElementById('pwInput').focus();
+});
+</script>
+</body>
+</html>
