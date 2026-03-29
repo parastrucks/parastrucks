@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(ls:*)",
+      "Bash(find D:/PTB/Website/portal_phase1a_setup/portal/src -name *.png -o -name *.svg -o -name *.jpg)",
+      "Bash(npx vite:*)",
+      "mcp__claude_ai_Supabase__list_projects",
+      "mcp__claude_ai_Supabase__list_tables",
+      "mcp__claude_ai_Supabase__execute_sql",
+      "Bash(python3 -c \"import openpyxl; print\\(''openpyxl ok''\\)\")",
+      "Bash(python3 -c \"import pandas; print\\(''pandas ok''\\)\")",
+      "Bash(py --version)",
+      "Bash(node -e \"const xlsx = require\\(''''xlsx''''\\); console.log\\(''''xlsx ok''''\\)\")",
+      "Bash(npm list:*)",
+      "Bash(node -e \":*)",
+      "Bash(node:*)",
+      "Bash(rm D:/PTB/Website/portal_phase1a_setup/portal/seed_batch_*.sql D:/PTB/Website/portal_phase1a_setup/portal/seed_vehicles.sql)",
+      "Bash(npm uninstall:*)",
+      "mcp__claude_ai_Supabase__apply_migration",
+      "mcp__claude_ai_Supabase__list_migrations",
+      "Bash(dir \"D:\\\\PTB\\\\Sales\")",
+      "Bash(npm run:*)",
+      "Bash(gh repo:*)"
+    ]
+  }
+}
