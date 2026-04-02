@@ -154,14 +154,6 @@ export async function generateQuotationPDF(data) {
   doc.text('DATE : ' + fmtDate(date), PAGE_W - MARGIN, y, { align: 'right' })
   y += 6
 
-  if (validUntil) {
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(8)
-    doc.setTextColor(...GRAY)
-    doc.text('Valid Until: ' + fmtDate(validUntil), PAGE_W - MARGIN, y, { align: 'right' })
-    y += 4
-  }
-
   y += 1
 
   // ── CUSTOMER BLOCK ────────────────────────────────────────────
