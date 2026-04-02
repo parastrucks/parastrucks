@@ -68,6 +68,7 @@ CREATE TABLE public.vehicle_catalog (
   cbn             TEXT UNIQUE NOT NULL,
   description     TEXT NOT NULL,
   segment         TEXT NOT NULL,  -- 'Buses', 'ICV Trucks', 'Long Haul', 'Tippers', 'Tractors'
+  sub_category    TEXT,           -- GVW-based: '10T–12T', 'Up to 25T', 'City Bus', etc.
   tyres           TEXT,
   base_price      INTEGER NOT NULL,  -- AL to Dealer price
   dealer_markup   INTEGER NOT NULL,
