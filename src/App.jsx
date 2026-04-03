@@ -43,7 +43,7 @@ export default function App() {
       />
 
       {/* Protected — all roles */}
-      <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
+      <Route element={<ProtectedRoute authOnly><AppLayout /></ProtectedRoute>}>
         <Route path="/" element={<Dashboard />} />
         <Route path="/profile" element={<Profile />} />
 
