@@ -12,6 +12,7 @@ import Quotation from './pages/Quotation'
 import MyQuotations from './pages/MyQuotations'
 import QuotationLog from './pages/QuotationLog'
 import BusCalculator from './pages/BusCalculator'
+import AccessRules from './pages/AccessRules'
 
 // Placeholder for pages not yet built
 const Soon = ({ name }) => (
@@ -46,64 +47,20 @@ export default function App() {
         <Route path="/" element={<Dashboard />} />
         <Route path="/profile" element={<Profile />} />
 
-        {/* Sales + Back Office + Admin */}
-        <Route
-          path="/quotation"
-          element={
-            <ProtectedRoute allowedRoles={['sales', 'back_office', 'admin']}>
-              <Quotation />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/my-quotations"
-          element={
-            <ProtectedRoute allowedRoles={['sales', 'back_office', 'admin']}>
-              <MyQuotations />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/bus-calculator"
-          element={
-            <ProtectedRoute allowedRoles={['sales', 'back_office', 'admin']}>
-              <BusCalculator />
-            </ProtectedRoute>
-          }
-        />
+        {/* DB-driven access — ProtectedRoute reads accessRules from context */}
+        <Route path="/quotation"      element={<ProtectedRoute><Quotation /></ProtectedRoute>} />
+        <Route path="/my-quotations"  element={<ProtectedRoute><MyQuotations /></ProtectedRoute>} />
+        <Route path="/bus-calculator" element={<ProtectedRoute><BusCalculator /></ProtectedRoute>} />
+        <Route path="/employees"      element={<ProtectedRoute><Employees /></ProtectedRoute>} />
+        <Route path="/quotation-log"  element={<ProtectedRoute><QuotationLog /></ProtectedRoute>} />
+        <Route path="/catalog"        element={<ProtectedRoute><Soon name="Vehicle Catalog" /></ProtectedRoute>} />
 
-        {/* HR + Admin */}
-        <Route
-          path="/employees"
-          element={
-            <ProtectedRoute allowedRoles={['hr', 'admin']}>
-              <Employees />
-            </ProtectedRoute>
-          }
-        />
-
-        {/* Admin only */}
-        <Route
-          path="/quotation-log"
-          element={
-            <ProtectedRoute allowedRoles={['admin']}>
-              <QuotationLog />
-            </ProtectedRoute>
-          }
-        />
+        {/* Access rules — always admin-only (hardcoded safety net) */}
         <Route
           path="/access-rules"
           element={
             <ProtectedRoute allowedRoles={['admin']}>
-              <Soon name="Access Rules" />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/catalog"
-          element={
-            <ProtectedRoute allowedRoles={['admin', 'back_office']}>
-              <Soon name="Vehicle Catalog" />
+              <AccessRules />
             </ProtectedRoute>
           }
         />

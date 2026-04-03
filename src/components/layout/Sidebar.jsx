@@ -1,46 +1,35 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 
-const ROLE_NAV = {
-  sales: [
-    { to: '/',              icon: '⊞',  label: 'Dashboard' },
-    { to: '/quotation',     icon: '📄', label: 'New Quotation' },
-    { to: '/my-quotations', icon: '🗂', label: 'My Quotations' },
-    { to: '/bus-calculator',icon: '🚌', label: 'Bus Calculator', busOnly: true },
-  ],
-  back_office: [
-    { to: '/',              icon: '⊞',  label: 'Dashboard' },
-    { to: '/quotation',     icon: '📄', label: 'New Quotation' },
-    { to: '/my-quotations', icon: '🗂', label: 'My Quotations' },
-    { to: '/bus-calculator',icon: '🚌', label: 'Bus Calculator', busOnly: true },
-  ],
-  hr: [
-    { to: '/',              icon: '⊞',  label: 'Dashboard' },
-    { to: '/employees',     icon: '👥', label: 'Employees' },
-  ],
-  admin: [
-    { to: '/',              icon: '⊞',  label: 'Dashboard' },
-    { to: '/quotation',     icon: '📄', label: 'New Quotation' },
-    { to: '/my-quotations', icon: '🗂', label: 'My Quotations' },
-    { to: '/quotation-log', icon: '📊', label: 'Quotation Log' },
-    { to: '/employees',     icon: '👥', label: 'Employees' },
-    { to: '/access-rules',  icon: '🔐', label: 'Access Rules' },
-    { to: '/catalog',       icon: '🚛', label: 'Vehicle Catalog' },
-    { to: '/bus-calculator',icon: '🚌', label: 'Bus Calculator' },
-  ],
-}
+// All pages that can appear in the sidebar (order = display order)
+const ALL_PAGES = [
+  { to: '/quotation',      icon: '📄', label: 'New Quotation'   },
+  { to: '/my-quotations',  icon: '🗂', label: 'My Quotations'   },
+  { to: '/quotation-log',  icon: '📊', label: 'Quotation Log'   },
+  { to: '/employees',      icon: '👥', label: 'Employees'       },
+  { to: '/access-rules',   icon: '🔐', label: 'Access Rules'    },
+  { to: '/catalog',        icon: '🚛', label: 'Vehicle Catalog' },
+  { to: '/bus-calculator', icon: '🚌', label: 'Bus Calculator'  },
+]
 
 export default function Sidebar() {
-  const { profile, signOut } = useAuth()
+  const { profile, signOut, accessRules } = useAuth()
   const navigate = useNavigate()
   if (!profile) return null
 
-  const navItems = ROLE_NAV[profile.role] || []
-  // Filter bus calculator for sales/back_office — only show if vertical includes Bus
-  const filtered = navItems.filter(item => {
-    if (item.busOnly) {
-      return profile.vertical?.toLowerCase().includes('bus')
+  const navItems = ALL_PAGES.filter(page => {
+    // /access-rules is always admin-only regardless of DB rules
+    if (page.to === '/access-rules') return profile.role === 'admin'
+
+    const allowed = accessRules?.[page.to] || []
+    if (!allowed.includes(profile.role)) return false
+
+    // Bus Calculator for sales/back_office: only show if their vertical includes Bus
+    if (page.to === '/bus-calculator' &&
+        (profile.role === 'sales' || profile.role === 'back_office')) {
+      return !!profile.vertical?.toLowerCase().includes('bus')
     }
+
     return true
   })
 
@@ -61,11 +50,19 @@ export default function Sidebar() {
       </div>
 
       <nav className="sidebar-nav">
-        {filtered.map(item => (
+        <NavLink
+          to="/"
+          end
+          className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
+        >
+          <span className="sidebar-icon">⊞</span>
+          Dashboard
+        </NavLink>
+
+        {navItems.map(item => (
           <NavLink
             key={item.to}
             to={item.to}
-            end={item.to === '/'}
             className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
           >
             <span className="sidebar-icon">{item.icon}</span>
