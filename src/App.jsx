@@ -11,6 +11,7 @@ import Employees from './pages/Employees'
 import Quotation from './pages/Quotation'
 import MyQuotations from './pages/MyQuotations'
 import QuotationLog from './pages/QuotationLog'
+import BusCalculator from './pages/BusCalculator'
 
 // Placeholder for pages not yet built
 const Soon = ({ name }) => (
@@ -66,7 +67,7 @@ export default function App() {
           path="/bus-calculator"
           element={
             <ProtectedRoute allowedRoles={['sales', 'back_office', 'admin']}>
-              <Soon name="Bus Price Calculator" />
+              <BusCalculator />
             </ProtectedRoute>
           }
         />
