@@ -824,4 +824,3 @@ VALUES
   ('CHU2820RMC0006', 'ASHOK LEYLAND UE2820 6x4 RMC - 5050 MM WB chassis fitted with ''H'' Series (BS VI) diesel engine,6 speed gearbox, factory built day cabin (AC)', 'RMC / Boom Pump', 'Transit Mixer / Boom Pump / RMC Chassis', '3 nos. 295/95D20 + 8 nos. 295/95D20', 3998356, 18, 'Sep2025', '2025-09-01');
 
 -- 815 rows inserted
-Generated 815 vehicle rows.
