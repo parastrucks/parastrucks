@@ -21,7 +21,25 @@
       "mcp__claude_ai_Supabase__list_migrations",
       "Bash(dir \"D:\\\\PTB\\\\Sales\")",
       "Bash(npm run:*)",
-      "Bash(gh repo:*)"
+      "Bash(gh repo:*)",
+      "Bash(find /d/PTB/Website/portal_phase1a_setup/portal -type f -name *seed* -o -name *vehicle* -o -name *catalog*)",
+      "Bash(find /d/PTB/Website/portal_phase1a_setup/portal -maxdepth 2 -type f \\\\\\(-name *data* -o -name *mock* \\\\\\))",
+      "Bash(grep -r \"INSERT INTO.*vehicle_catalog\\\\|seed\\\\|sample.*vehicle\" /d/PTB/Website/portal_phase1a_setup/portal --include=*.sql --include=*.js --include=*.json)",
+      "Bash(python3:*)",
+      "Bash(mv:*)",
+      "Bash(echo \"Exit: $?\")",
+      "Bash(npx supabase:*)",
+      "Bash(npx vercel:*)",
+      "Bash(rm:*)",
+      "Bash(curl:*)",
+      "Bash(claude doctor:*)",
+      "Bash(identify \"D:/PTB/Website/portal_phase1a_setup/portal/public/al-stamp.png\")",
+      "mcp__dfce7dec-e0a2-4afc-9db0-362f4cd2df62__get_project",
+      "mcp__dfce7dec-e0a2-4afc-9db0-362f4cd2df62__list_tables",
+      "mcp__dfce7dec-e0a2-4afc-9db0-362f4cd2df62__list_migrations",
+      "mcp__dfce7dec-e0a2-4afc-9db0-362f4cd2df62__execute_sql",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(gh pr:*)"
     ]
   }
 }
