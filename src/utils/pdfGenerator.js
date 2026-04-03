@@ -337,13 +337,10 @@ export async function generateQuotationPDF(data) {
   doc.setTextColor(...GRAY_DARK)
   doc.text('For ' + entity.full_name, rx, sigY, { align: 'right' })
 
-  // Stamp image (al-stamp.png if available, else AL logo as fallback)
+  // Stamp image — 33×22mm
   const stamp = await fetchPng('/al-stamp.png')
-  const stampImg = stamp || alLogo
-  if (stampImg) {
-    const stampW = 22
-    const stampH = Math.round(stampW * (stamp ? 1 : 40 / 188))
-    doc.addImage(stampImg, 'PNG', rx - stampW, sigY + 3, stampW, stampH)
+  if (stamp) {
+    doc.addImage(stamp, 'PNG', rx - 33, sigY + 3, 33, 22)
   }
 
   const sigLineY = sigY + 26
