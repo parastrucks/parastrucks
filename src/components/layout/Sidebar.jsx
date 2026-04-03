@@ -1,7 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 
-// All pages that can appear in the sidebar (order = display order)
 const ALL_PAGES = [
   { to: '/quotation',      icon: '📄', label: 'New Quotation'   },
   { to: '/my-quotations',  icon: '🗂', label: 'My Quotations'   },
@@ -13,25 +12,11 @@ const ALL_PAGES = [
 ]
 
 export default function Sidebar() {
-  const { profile, signOut, accessRules } = useAuth()
+  const { profile, signOut, canAccess } = useAuth()
   const navigate = useNavigate()
   if (!profile) return null
 
-  const navItems = ALL_PAGES.filter(page => {
-    // /access-rules is always admin-only regardless of DB rules
-    if (page.to === '/access-rules') return profile.role === 'admin'
-
-    const allowed = accessRules?.[page.to] || []
-    if (!allowed.includes(profile.role)) return false
-
-    // Bus Calculator for sales/back_office: only show if their vertical includes Bus
-    if (page.to === '/bus-calculator' &&
-        (profile.role === 'sales' || profile.role === 'back_office')) {
-      return !!profile.vertical?.toLowerCase().includes('bus')
-    }
-
-    return true
-  })
+  const navItems = ALL_PAGES.filter(page => canAccess(page.to))
 
   async function handleSignOut() {
     await signOut()
@@ -50,11 +35,7 @@ export default function Sidebar() {
       </div>
 
       <nav className="sidebar-nav">
-        <NavLink
-          to="/"
-          end
-          className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
-        >
+        <NavLink to="/" end className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}>
           <span className="sidebar-icon">⊞</span>
           Dashboard
         </NavLink>

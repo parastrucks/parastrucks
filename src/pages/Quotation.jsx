@@ -198,21 +198,42 @@ export default function Quotation() {
     if (!customer.name.trim()) { setError('Customer name is required.'); return }
     if (lineItems.length === 0) { setError('Add at least one vehicle.'); return }
 
-    const entity = profile?.entity || 'PTB'
+    // Determine entity code for quotation numbering:
+    // Prefer operating_unit → location → entity mapping, fall back to profile.entity
+    let entityCode = profile?.entity || 'PTB'
+    let entityData = null
 
     setSaving(true)
     try {
-      // Get next quotation number (atomic RPC)
-      const { data: qNum, error: rpcErr } = await supabase.rpc('next_quotation_number', { p_entity: entity })
-      if (rpcErr) throw rpcErr
+      // Try to get entity details from operating_units (brand + location specific)
+      if (profile?.brand && profile?.location) {
+        const { data: ou } = await supabase
+          .from('operating_units')
+          .select('entity_code, full_name, address, gstin, bank_name, bank_account, bank_ifsc')
+          .eq('brand', profile.brand)
+          .eq('location', profile.location)
+          .eq('is_active', true)
+          .single()
+        if (ou) {
+          entityCode = ou.entity_code || entityCode
+          entityData = { full_name: ou.full_name, address: ou.address, gstin: ou.gstin, bank_name: ou.bank_name, bank_account: ou.bank_account, bank_ifsc: ou.bank_ifsc }
+        }
+      }
 
-      // Fetch entity details for PDF
-      const { data: entityData, error: eErr } = await supabase
-        .from('entities')
-        .select('full_name, address, gstin, bank_name, bank_account, bank_ifsc')
-        .eq('code', entity)
-        .single()
-      if (eErr) throw eErr
+      // Fall back to entities table if operating_unit not found
+      if (!entityData) {
+        const { data: ent, error: eErr } = await supabase
+          .from('entities')
+          .select('full_name, address, gstin, bank_name, bank_account, bank_ifsc')
+          .eq('code', entityCode)
+          .single()
+        if (eErr) throw eErr
+        entityData = ent
+      }
+
+      // Get next quotation number (atomic RPC)
+      const { data: qNum, error: rpcErr } = await supabase.rpc('next_quotation_number', { p_entity: entityCode })
+      if (rpcErr) throw rpcErr
 
       const rtoVal = parseInt(rtoTax, 10) || null
       const insVal = parseInt(insurance, 10) || null
@@ -220,7 +241,7 @@ export default function Quotation() {
       // Insert quotation
       const { error: insertErr } = await supabase.from('quotations').insert({
         quotation_number: qNum,
-        entity,
+        entity: entityCode,
         created_by: profile.id,
         valid_until: validUntil,
         customer_name: customer.name.trim(),

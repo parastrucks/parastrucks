@@ -6,12 +6,12 @@ const ALL_TOOLS = [
   { to: '/my-quotations',  icon: '🗂', title: 'My Quotations',       desc: 'View and re-download past quotations' },
   { to: '/quotation-log',  icon: '📊', title: 'Quotation Log',       desc: 'View all quotations across the organisation' },
   { to: '/employees',      icon: '👥', title: 'Employee Management', desc: 'Create, edit, and manage team accounts' },
-  { to: '/access-rules',   icon: '🔐', title: 'Access Rules',        desc: 'Configure which roles access which tools' },
-  { to: '/catalog',        icon: '🚛', title: 'Vehicle Catalog',     desc: 'Manage the AL vehicle price catalog' },
+  { to: '/access-rules',   icon: '🔐', title: 'Access Rules',        desc: 'Configure roles, brands, and tool access' },
+  { to: '/catalog',        icon: '🚛', title: 'Vehicle Catalog',     desc: 'Manage the vehicle price catalog' },
   { to: '/bus-calculator', icon: '🚌', title: 'Bus Calculator',      desc: 'Build a bus price estimate step by step' },
 ]
 
-const ROLE_LABEL = {
+const PERMISSION_LABEL = {
   admin:       'Admin',
   hr:          'HR',
   back_office: 'Back Office',
@@ -26,34 +26,20 @@ function greeting() {
 }
 
 export default function Dashboard() {
-  const { profile, accessRules } = useAuth()
+  const { profile, canAccess } = useAuth()
   if (!profile) return null
 
-  const tools = ALL_TOOLS.filter(tool => {
-    // /access-rules is always admin-only
-    if (tool.to === '/access-rules') return profile.role === 'admin'
-
-    const allowed = accessRules?.[tool.to] || []
-    if (!allowed.includes(profile.role)) return false
-
-    // Bus Calculator for sales/back_office: only show if vertical includes Bus
-    if (tool.to === '/bus-calculator' &&
-        (profile.role === 'sales' || profile.role === 'back_office')) {
-      return !!profile.vertical?.toLowerCase().includes('bus')
-    }
-
-    return true
-  })
+  const tools = ALL_TOOLS.filter(t => canAccess(t.to))
 
   return (
     <div>
       <div className="page-header">
         <h1>{greeting()}, {profile.full_name.split(' ')[0]} 👋</h1>
         <p>
-          {ROLE_LABEL[profile.role]}
+          {PERMISSION_LABEL[profile.role]}
           {profile.department ? ` · ${profile.department}` : ''}
+          {profile.brand      ? ` · ${profile.brand.toUpperCase()}` : ''}
           {profile.location   ? ` · ${profile.location}` : ''}
-          {profile.entity     ? ` · ${profile.entity}` : ''}
         </p>
       </div>
 

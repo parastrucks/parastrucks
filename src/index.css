@@ -1095,4 +1095,47 @@ tbody tr:hover td { background: var(--gray-50); }
   letter-spacing: .4px;
 }
 .ar-inactive-row { opacity: 0.5; }
+
+/* Rule table values */
+.ar-chip { display: inline-block; padding: 2px 8px; background: var(--blue-light); color: var(--blue); border-radius: 4px; font-size: 12px; font-weight: 500; }
+.ar-any  { color: var(--gray-300); font-size: 12px; font-style: italic; }
+
+/* Add rule form */
+.ar-add-form {
+  background: var(--blue-lighter);
+  border: 1px solid var(--blue-light);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+  margin-bottom: 20px;
+}
+.ar-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 0 16px;
+}
+
+/* Config sub-tabs */
+.ar-cfg-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.ar-cfg-tab {
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--gray-500);
+  background: var(--gray-100);
+  border-radius: var(--radius-xs);
+  border: none;
+  cursor: pointer;
+  transition: all var(--t);
+}
+.ar-cfg-tab:hover  { background: var(--gray-200); color: var(--gray-800); }
+.ar-cfg-tab.active { background: var(--blue); color: #fff; }
+
+/* Reference table section */
+.ar-ref-table { max-width: 700px; }
+.ar-ref-title  { font-size: 14px; font-weight: 600; color: var(--gray-800); margin-bottom: 10px; }
 .bc-breakdown-body  { margin-top: 4px; animation: slideUp .12s ease; }

@@ -1,24 +1,27 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase, supabaseAdmin } from '../lib/supabase'
 
-const ROLES = ['sales', 'back_office', 'hr', 'admin']
-const ROLE_LABEL = { admin: 'Admin', hr: 'HR', back_office: 'Back Office', sales: 'Sales' }
-const ROLE_BADGE = { admin: 'badge-red', hr: 'badge-amber', back_office: 'badge-blue', sales: 'badge-green' }
+// Permission levels are fixed system concepts
+const PERMISSION_LEVELS = ['sales', 'back_office', 'hr', 'admin']
+const PERMISSION_LABEL  = { admin: 'Admin', hr: 'HR', back_office: 'Back Office', sales: 'Sales' }
+const PERMISSION_BADGE  = { admin: 'badge-red', hr: 'badge-amber', back_office: 'badge-blue', sales: 'badge-green' }
 
-const DEPARTMENTS = ['Sales', 'Service', 'Spare Parts', 'Admin', 'HR', 'Accounts']
-const VERTICALS   = ['Haulage', 'Tipper', 'ICV', 'Bus', 'Tractor', 'Construction Equipment']
-const ENTITIES    = ['PTB', 'PT']
+// Kept for backward compat in column header
+const ROLE_LABEL = PERMISSION_LABEL
+const ROLE_BADGE = PERMISSION_BADGE
+
+const ENTITIES = ['PTB', 'PT']
 
 const EMPTY_FORM = {
   full_name: '', username: '', email: '', password: '',
-  role: 'sales', entity: 'PTB', location: '',
+  role: 'sales', entity: 'PTB', brand: '', location: '',
   department: '', vertical: '', designation: '',
   is_active: true,
 }
 
 /* ── helpers ── */
 function Badge({ role }) {
-  return <span className={`badge ${ROLE_BADGE[role] || 'badge-gray'}`}>{ROLE_LABEL[role] || role}</span>
+  return <span className={`badge ${PERMISSION_BADGE[role] || 'badge-gray'}`}>{PERMISSION_LABEL[role] || role}</span>
 }
 function StatusBadge({ active }) {
   return <span className={`badge ${active ? 'badge-green' : 'badge-gray'}`}>{active ? 'Active' : 'Inactive'}</span>
@@ -31,9 +34,15 @@ export default function Employees() {
   const [employees, setEmployees]   = useState([])
   const [loading, setLoading]       = useState(true)
   const [search, setSearch]         = useState('')
-  const [filterRole, setFilterRole] = useState('')
+  const [filterRole, setFilterRole]     = useState('')
   const [filterEntity, setFilterEntity] = useState('')
   const [filterStatus, setFilterStatus] = useState('active')
+
+  // Reference data (loaded from DB)
+  const [refBrands,      setRefBrands]      = useState([])
+  const [refLocations,   setRefLocations]   = useState([])
+  const [refDepartments, setRefDepartments] = useState([])
+  const [refRoles,       setRefRoles]       = useState([])
 
   // Modal state
   const [modal, setModal]   = useState(null) // 'add' | 'edit' | 'password' | 'confirm'
@@ -61,7 +70,21 @@ export default function Employees() {
     setLoading(false)
   }, [])
 
-  useEffect(() => { fetchEmployees() }, [fetchEmployees])
+  useEffect(() => {
+    fetchEmployees()
+    // Load reference tables
+    Promise.all([
+      supabase.from('brands').select('code,name').eq('is_active', true).order('name'),
+      supabase.from('locations').select('name').eq('is_active', true).order('name'),
+      supabase.from('departments').select('name').eq('is_active', true).order('name'),
+      supabase.from('roles').select('name,label').eq('is_active', true).order('label'),
+    ]).then(([b, l, d, r]) => {
+      setRefBrands(b.data || [])
+      setRefLocations(l.data || [])
+      setRefDepartments(d.data || [])
+      setRefRoles(r.data || [])
+    })
+  }, [fetchEmployees])
 
   /* ── filtered list ── */
   const filtered = employees.filter(e => {
@@ -103,6 +126,7 @@ export default function Employees() {
       password:    '',
       role:        emp.role        || 'sales',
       entity:      emp.entity      || 'PTB',
+      brand:       emp.brand       || '',
       location:    emp.location    || '',
       department:  emp.department  || '',
       vertical:    emp.vertical    || '',
@@ -177,9 +201,10 @@ export default function Employees() {
       full_name:   form.full_name.trim(),
       role:        form.role,
       entity:      form.entity,
-      location:    form.location.trim() || null,
-      department:  form.department || null,
-      vertical:    form.vertical   || null,
+      brand:       form.brand       || null,
+      location:    form.location    || null,
+      department:  form.department  || null,
+      vertical:    form.vertical    || null,
       designation: form.designation.trim() || null,
       is_active:   true,
     })
@@ -207,10 +232,11 @@ export default function Employees() {
         username:    form.username.trim(),
         role:        form.role,
         entity:      form.entity,
-        location:    form.location.trim()   || null,
-        department:  form.department        || null,
-        vertical:    form.vertical          || null,
-        designation: form.designation.trim()|| null,
+        brand:       form.brand       || null,
+        location:    form.location    || null,
+        department:  form.department  || null,
+        vertical:    form.vertical    || null,
+        designation: form.designation.trim() || null,
       })
       .eq('id', selected.id)
 
@@ -321,8 +347,8 @@ export default function Employees() {
         />
         <select className="form-select" style={{ maxWidth: 150 }}
           value={filterRole} onChange={e => setFilterRole(e.target.value)}>
-          <option value="">All Roles</option>
-          {ROLES.map(r => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
+          <option value="">All Levels</option>
+          {PERMISSION_LEVELS.map(r => <option key={r} value={r}>{PERMISSION_LABEL[r]}</option>)}
         </select>
         <select className="form-select" style={{ maxWidth: 130 }}
           value={filterEntity} onChange={e => setFilterEntity(e.target.value)}>
@@ -425,9 +451,9 @@ export default function Employees() {
                     <input className="form-input" type="password" placeholder="Min. 8 characters" {...F('password')} />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Role *</label>
+                    <label className="form-label">Permission Level *</label>
                     <select className="form-select" {...F('role')}>
-                      {ROLES.map(r => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
+                      {PERMISSION_LEVELS.map(r => <option key={r} value={r}>{PERMISSION_LABEL[r]}</option>)}
                     </select>
                   </div>
                   <div className="form-group">
@@ -437,8 +463,18 @@ export default function Employees() {
                     </select>
                   </div>
                   <div className="form-group">
+                    <label className="form-label">Brand</label>
+                    <select className="form-select" {...F('brand')}>
+                      <option value="">— Select —</option>
+                      {refBrands.map(b => <option key={b.code} value={b.code}>{b.name}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group">
                     <label className="form-label">Location</label>
-                    <input className="form-input" placeholder="Ahmedabad" {...F('location')} />
+                    <select className="form-select" {...F('location')}>
+                      <option value="">— Select —</option>
+                      {refLocations.map(l => <option key={l.name} value={l.name}>{l.name}</option>)}
+                    </select>
                   </div>
                   <div className="form-group">
                     <label className="form-label">Designation</label>
@@ -448,14 +484,14 @@ export default function Employees() {
                     <label className="form-label">Department</label>
                     <select className="form-select" {...F('department')}>
                       <option value="">— Select —</option>
-                      {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
+                      {refDepartments.map(d => <option key={d.name} value={d.name}>{d.name}</option>)}
                     </select>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Vertical</label>
+                    <label className="form-label">Role</label>
                     <select className="form-select" {...F('vertical')}>
                       <option value="">— Select —</option>
-                      {VERTICALS.map(v => <option key={v} value={v}>{v}</option>)}
+                      {refRoles.map(r => <option key={r.name} value={r.name}>{r.label}</option>)}
                     </select>
                   </div>
                 </div>
@@ -493,9 +529,9 @@ export default function Employees() {
                     <input className="form-input" {...F('username')} />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Role *</label>
+                    <label className="form-label">Permission Level *</label>
                     <select className="form-select" {...F('role')}>
-                      {ROLES.map(r => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
+                      {PERMISSION_LEVELS.map(r => <option key={r} value={r}>{PERMISSION_LABEL[r]}</option>)}
                     </select>
                   </div>
                   <div className="form-group">
@@ -505,8 +541,18 @@ export default function Employees() {
                     </select>
                   </div>
                   <div className="form-group">
+                    <label className="form-label">Brand</label>
+                    <select className="form-select" {...F('brand')}>
+                      <option value="">— Select —</option>
+                      {refBrands.map(b => <option key={b.code} value={b.code}>{b.name}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group">
                     <label className="form-label">Location</label>
-                    <input className="form-input" {...F('location')} />
+                    <select className="form-select" {...F('location')}>
+                      <option value="">— Select —</option>
+                      {refLocations.map(l => <option key={l.name} value={l.name}>{l.name}</option>)}
+                    </select>
                   </div>
                   <div className="form-group">
                     <label className="form-label">Designation</label>
@@ -516,14 +562,14 @@ export default function Employees() {
                     <label className="form-label">Department</label>
                     <select className="form-select" {...F('department')}>
                       <option value="">— Select —</option>
-                      {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
+                      {refDepartments.map(d => <option key={d.name} value={d.name}>{d.name}</option>)}
                     </select>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Vertical</label>
+                    <label className="form-label">Role</label>
                     <select className="form-select" {...F('vertical')}>
                       <option value="">— Select —</option>
-                      {VERTICALS.map(v => <option key={v} value={v}>{v}</option>)}
+                      {refRoles.map(r => <option key={r.name} value={r.name}>{r.label}</option>)}
                     </select>
                   </div>
                 </div>
