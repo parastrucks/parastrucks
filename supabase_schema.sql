@@ -67,11 +67,9 @@ CREATE TABLE public.vehicle_catalog (
   id              SERIAL PRIMARY KEY,
   cbn             TEXT UNIQUE NOT NULL,
   description     TEXT NOT NULL,
-  segment         TEXT NOT NULL,  -- 'Buses', 'ICV Trucks', 'Long Haul', 'Tippers', 'Tractors'
-  sub_category    TEXT,           -- GVW-based: '10T–12T', 'Up to 25T', 'City Bus', etc.
-  tyres           TEXT,
-  base_price      INTEGER NOT NULL,  -- AL to Dealer price
-  dealer_markup   INTEGER NOT NULL,
+  segment         TEXT NOT NULL,  -- 'ICV Truck', 'MBP Truck', 'Bus – ICV', 'Bus – MCV', 'Tipper', 'RMC / Boom Pump'
+  sub_category    TEXT,           -- Product line: 'Boss 11T', 'Haulage – 19T', 'Cheetah', etc.
+  tyres           TEXT,           -- NULL when tyre info is embedded in description
   mrp_incl_gst    INTEGER NOT NULL,
   gst_rate        DECIMAL NOT NULL DEFAULT 18,
   price_circular  TEXT,
