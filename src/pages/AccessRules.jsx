@@ -529,7 +529,7 @@ function ConfigTab() {
     <div>
       <p className="ar-section-desc">Manage reference data used across the portal. Deactivating an item hides it from dropdowns but does not remove existing data.</p>
       <div className="ar-cfg-tabs">
-        {[['brands','Brands'],['roles','Roles'],['locations','Locations'],['departments','Departments']].map(([k,l]) => (
+        {[['brands','Brands'],['roles','Roles'],['locations','Locations'],['departments','Departments'],['ou','Operating Units']].map(([k,l]) => (
           <button key={k} className={`ar-cfg-tab ${cfgTab===k?'active':''}`} onClick={() => setCfgTab(k)}>{l}</button>
         ))}
       </div>
@@ -577,6 +577,205 @@ function ConfigTab() {
           onAdd={addDept}
           onToggle={toggleDept}
         />
+      )}
+      {cfgTab === 'ou' && (
+        <OperatingUnits brands={brands} locations={locations} />
+      )}
+    </div>
+  )
+}
+
+/* ══════════════════════════════════════════════════════════════
+   OPERATING UNITS (sub-component used inside ConfigTab)
+══════════════════════════════════════════════════════════════ */
+const OU_EMPTY = { brand: '', location: '', entity_code: '', full_name: '', address: '', gstin: '', bank_account: '', bank_name: '', bank_ifsc: '' }
+
+function OperatingUnits({ brands, locations }) {
+  const [units,   setUnits]   = useState([])
+  const [loading, setLoading] = useState(true)
+  const [modal,   setModal]   = useState(null)   // null | 'add' | 'edit'
+  const [form,    setForm]    = useState(OU_EMPTY)
+  const [saving,  setSaving]  = useState(false)
+  const [error,   setError]   = useState('')
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    const { data } = await supabase.from('operating_units').select('*').order('brand').order('location')
+    setUnits(data || [])
+    setLoading(false)
+  }, [])
+
+  useEffect(() => { load() }, [load])
+
+  function openAdd() {
+    setForm(OU_EMPTY); setError(''); setModal('add')
+  }
+  function openEdit(ou) {
+    setForm({ brand: ou.brand, location: ou.location, entity_code: ou.entity_code || '', full_name: ou.full_name || '', address: ou.address || '', gstin: ou.gstin || '', bank_account: ou.bank_account || '', bank_name: ou.bank_name || '', bank_ifsc: ou.bank_ifsc || '' })
+    setError(''); setModal('edit')
+  }
+  function closeModal() { setModal(null); setError('') }
+
+  const F = field => ({ value: form[field], onChange: e => setForm(f => ({ ...f, [field]: e.target.value })) })
+
+  async function handleSave(e) {
+    e.preventDefault()
+    if (!form.brand || !form.location) { setError('Brand and Location are required.'); return }
+    setSaving(true); setError('')
+
+    const payload = {
+      brand:        form.brand,
+      location:     form.location,
+      entity_code:  form.entity_code  || null,
+      full_name:    form.full_name    || null,
+      address:      form.address      || null,
+      gstin:        form.gstin        || null,
+      bank_account: form.bank_account || null,
+      bank_name:    form.bank_name    || null,
+      bank_ifsc:    form.bank_ifsc    || null,
+    }
+
+    let err
+    if (modal === 'add') {
+      ;({ error: err } = await supabaseAdmin.from('operating_units').insert(payload))
+    } else {
+      ;({ error: err } = await supabaseAdmin.from('operating_units').update(payload).eq('brand', form.brand).eq('location', form.location))
+    }
+
+    setSaving(false)
+    if (err) { setError(err.message); return }
+    closeModal(); await load()
+  }
+
+  async function toggleActive(ou) {
+    await supabaseAdmin.from('operating_units').update({ is_active: !ou.is_active }).eq('id', ou.id)
+    await load()
+  }
+
+  const brandName = code => brands.find(b => b.code === code)?.name || code
+
+  return (
+    <div>
+      <div className="flex-between mb-24" style={{ flexWrap: 'wrap', gap: 12 }}>
+        <p className="ar-section-desc" style={{ margin: 0 }}>
+          Each operating unit defines entity details (letterhead, bank, GSTIN) used in quotation PDFs for a specific brand + location combination.
+        </p>
+        <button className="btn btn-primary btn-sm" onClick={openAdd}>+ Add Operating Unit</button>
+      </div>
+
+      {loading ? (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: 32 }}><div className="spinner" /></div>
+      ) : (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Brand</th>
+                <th>Location</th>
+                <th>Entity Code</th>
+                <th>Company Name</th>
+                <th>GSTIN</th>
+                <th>Bank</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {units.length === 0 && (
+                <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--gray-400)', padding: 32 }}>No operating units defined.</td></tr>
+              )}
+              {units.map(ou => (
+                <tr key={ou.id}>
+                  <td><span className="ar-chip">{brandName(ou.brand)}</span></td>
+                  <td style={{ fontWeight: 600 }}>{ou.location}</td>
+                  <td style={{ fontSize: 12, color: 'var(--gray-500)' }}>{ou.entity_code || '—'}</td>
+                  <td style={{ fontSize: 13 }}>{ou.full_name || <span style={{ color: 'var(--gray-300)' }}>Not set</span>}</td>
+                  <td style={{ fontSize: 12, fontFamily: 'monospace' }}>{ou.gstin || '—'}</td>
+                  <td style={{ fontSize: 12 }}>{ou.bank_name ? ou.bank_name.slice(0, 24) + (ou.bank_name.length > 24 ? '…' : '') : <span style={{ color: 'var(--gray-300)' }}>Not set</span>}</td>
+                  <td><span className={`badge ${ou.is_active ? 'badge-green' : 'badge-gray'}`}>{ou.is_active ? 'Active' : 'Inactive'}</span></td>
+                  <td>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button className="btn btn-secondary btn-sm" onClick={() => openEdit(ou)}>Edit</button>
+                      <button className="btn btn-secondary btn-sm" onClick={() => toggleActive(ou)}>{ou.is_active ? 'Deactivate' : 'Activate'}</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {modal && (
+        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && closeModal()}>
+          <div className="modal" style={{ maxWidth: 520 }}>
+            <div className="modal-header">
+              <h2>{modal === 'add' ? 'Add Operating Unit' : `Edit — ${form.brand.toUpperCase()} · ${form.location}`}</h2>
+              <button className="modal-close" onClick={closeModal}>×</button>
+            </div>
+            <div className="modal-body">
+              {error && <div className="alert alert-error" style={{ marginBottom: 12 }}><span>⚠</span><span>{error}</span></div>}
+              <form onSubmit={handleSave} noValidate>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
+                  <div className="form-group">
+                    <label className="form-label">Brand *</label>
+                    <select className="form-select" {...F('brand')} disabled={modal === 'edit'}>
+                      <option value="">— Select —</option>
+                      {brands.map(b => <option key={b.code} value={b.code}>{b.name}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Location *</label>
+                    <select className="form-select" {...F('location')} disabled={modal === 'edit'}>
+                      <option value="">— Select —</option>
+                      {locations.map(l => <option key={l.name} value={l.name}>{l.name}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Entity Code</label>
+                    <select className="form-select" {...F('entity_code')}>
+                      <option value="">— Select —</option>
+                      <option value="PTB">PTB — Gujarat</option>
+                      <option value="PT">PT — Haryana</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Company Full Name</label>
+                    <input className="form-input" placeholder="PARAS TRUCKS AND BUSES" {...F('full_name')} />
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Address</label>
+                  <input className="form-input" placeholder="Survey No. …" {...F('address')} />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
+                  <div className="form-group">
+                    <label className="form-label">GSTIN</label>
+                    <input className="form-input" placeholder="24ABCDE1234F1Z5" {...F('gstin')} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Bank Account No.</label>
+                    <input className="form-input" placeholder="50200012345678" {...F('bank_account')} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Bank Name</label>
+                    <input className="form-input" placeholder="Punjab National Bank" {...F('bank_name')} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">IFSC Code</label>
+                    <input className="form-input" placeholder="PUNB0123456" {...F('bank_ifsc')} />
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+                  <button type="submit" className="btn btn-primary" disabled={saving}>
+                    {saving ? <span className="spinner spinner-sm" /> : modal === 'add' ? 'Add Unit' : 'Save Changes'}
+                  </button>
+                  <button type="button" className="btn btn-secondary" onClick={closeModal}>Cancel</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
