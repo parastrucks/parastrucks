@@ -194,8 +194,8 @@ export default function Employees() {
       return
     }
 
-    // 2. Insert profile row
-    const { error: profileErr } = await supabase.from('users').insert({
+    // 2. Insert profile row (use service role to bypass RLS)
+    const { error: profileErr } = await supabaseAdmin.from('users').insert({
       id:          authData.user.id,
       username:    form.username.trim(),
       full_name:   form.full_name.trim(),
