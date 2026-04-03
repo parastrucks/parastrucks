@@ -15,6 +15,11 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 // Uses the service role key which bypasses RLS — never expose this to end users
 export const supabaseAdmin = supabaseServiceKey
   ? createClient(supabaseUrl, supabaseServiceKey, {
-      auth: { autoRefreshToken: false, persistSession: false }
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+        detectSessionInUrl: false,
+        storageKey: 'sb-admin-token',
+      }
     })
   : null
