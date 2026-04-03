@@ -39,7 +39,8 @@
       "mcp__dfce7dec-e0a2-4afc-9db0-362f4cd2df62__list_migrations",
       "mcp__dfce7dec-e0a2-4afc-9db0-362f4cd2df62__execute_sql",
       "mcp__Claude_Preview__preview_start",
-      "Bash(gh pr:*)"
+      "Bash(gh pr:*)",
+      "mcp__dfce7dec-e0a2-4afc-9db0-362f4cd2df62__get_logs"
     ]
   }
 }
