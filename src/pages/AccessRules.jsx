@@ -62,9 +62,15 @@ function RulesTab({ accessRules, refreshAccessRules }) {
 
   const loadRules = useCallback(async () => {
     setLoading(true)
-    const { data } = await supabase.from('access_rules').select('*').order('route').order('id')
-    setRules(data || [])
-    setLoading(false)
+    try {
+      const { data, error: err } = await supabase.from('access_rules').select('*').order('route').order('id')
+      if (err) setError(err.message)
+      else setRules(data || [])
+    } catch (e) {
+      setError('Failed to load rules: ' + e.message)
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => { loadRules() }, [loadRules])
@@ -272,7 +278,7 @@ function UserPermissionsTab() {
     if (changes.department !== undefined) update.department = changes.department || null
     if (changes.vertical   !== undefined) update.vertical   = changes.vertical   || null
 
-    const { error: err } = await supabase.from('users').update(update).eq('id', user.id)
+    const { error: err } = await supabaseAdmin.from('users').update(update).eq('id', user.id)
     setSaving(null)
     if (err) { setError(err.message); return }
     setSuccess(`${user.full_name} updated.`)
