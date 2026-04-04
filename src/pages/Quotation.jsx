@@ -278,6 +278,7 @@ export default function Quotation() {
           hypothecation: customer.hypothecation,
         },
         entity: entityData,
+        entityCode,
         lineItems,
         tcsRate,
         tcsAmount,

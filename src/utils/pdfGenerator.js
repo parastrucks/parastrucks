@@ -79,11 +79,11 @@ const TERMS = [
   'Optional accessories, Insurance, Registration, Taxes, Octroi, other levies etc. will be charged extra as applicable.',
   'Prices are for current specifications and are subject to change without notice.',
   'Prices and additional charges as above will have to be paid completely, to conclude the sales.',
-  'Payments for all the above items will be by demand drafts, RTGS favouring to PARAS TRUCKS AND BUSES.',
+  // Term 5 — payment line differs by entity (set dynamically below)
   'Delivery will be effected after two days of completion of finance documentation, submission of PDCs, approval & disbursement of loans etc.',
   'Acceptance of advance/deposit by seller is merely an indication of intention of sell and does not result into a contract of sale.',
   'All disputes arising between the parties hereto shall be referred to arbitration according to the arbitration laws of the country.',
-  'Only the court of Ahmedabad shall have jurisdiction in any proceedings relating to this contract.',
+  // Term 9 — jurisdiction differs by entity (set dynamically below)
   'The company shall not be liable due to any prevention, hindrance, or delay in manufacture or delivery of vehicles due to shortage of material, strike, riot, civil commotion, accident, machinery breakdown, government policies, act of God or nature, and all events beyond the control of the company.',
   'The seller shall have a general lien on goods for all moneys due to seller from buyer on account of this or other transaction.',
   'Taxes and duties will be applicable as per regulations on the date of supply.',
@@ -93,10 +93,12 @@ const TERMS = [
 export async function generateQuotationPDF(data) {
   const {
     quotationNumber, date, validUntil,
-    customer, entity,
+    customer, entity, entityCode,
     lineItems, tcsRate, tcsAmount, rtoTax, insurance, grandTotal,
     preparedBy,
   } = data
+
+  const isPT = entityCode === 'PT'
 
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   let y = MARGIN
@@ -311,11 +313,22 @@ export async function generateQuotationPDF(data) {
     ? Math.ceil((new Date(validUntil) - new Date(date)) / (1000 * 60 * 60 * 24))
     : null
 
+  // Build entity-specific terms
+  const entityTerms = [...TERMS]
+  // Term index 4 (5th term) — payment favouring name
+  entityTerms[4] = isPT
+    ? 'Payments for all the above items will be by demand drafts, RTGS favouring to PARAS TRUCKS.'
+    : 'Payments for all the above items will be by demand drafts, RTGS favouring to PARAS TRUCKS AND BUSES.'
+  // Term index 8 (9th term) — jurisdiction
+  entityTerms[8] = isPT
+    ? 'Only the court of Hisar shall have jurisdiction in any proceedings relating to this contract.'
+    : 'Only the court of Ahmedabad shall have jurisdiction in any proceedings relating to this contract.'
+
   const allTerms = [
     validityDays != null
       ? `This quotation is valid for ${validityDays} day${validityDays !== 1 ? 's' : ''} from the date of issue (until ${fmtDate(validUntil)}).`
       : null,
-    ...TERMS,
+    ...entityTerms,
   ].filter(Boolean)
 
   allTerms.forEach((term, i) => {
@@ -337,8 +350,8 @@ export async function generateQuotationPDF(data) {
   doc.setTextColor(...GRAY_DARK)
   doc.text('For ' + entity.full_name, rx, sigY, { align: 'right' })
 
-  // Stamp image — 33×22mm
-  const stamp = await fetchPng('/al-stamp.png')
+  // Stamp image — 33×22mm (entity-specific)
+  const stamp = await fetchPng(isPT ? '/pt-stamp.png' : '/al-stamp.png')
   if (stamp) {
     doc.addImage(stamp, 'PNG', rx - 33, sigY + 3, 33, 22)
   }
