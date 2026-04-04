@@ -64,35 +64,42 @@ export default function Quotation() {
 
   // Load catalog on mount
   useEffect(() => {
+    let cancelled = false
     async function load() {
       setCatalogLoading(true)
-      const { data, error: err } = await supabase
-        .from('vehicle_catalog')
-        .select('id, cbn, description, sub_category, segment, tyres, mrp_incl_gst')
-        .eq('is_active', true)
-        .order('segment')
-        .order('sub_category')
-        .order('description')
-      if (err) {
-        console.error('Catalog load error:', err)
-        setCatalogLoading(false)
-        return
+      try {
+        const { data, error: err } = await supabase
+          .from('vehicle_catalog')
+          .select('id, cbn, description, sub_category, segment, tyres, mrp_incl_gst')
+          .eq('is_active', true)
+          .order('segment')
+          .order('sub_category')
+          .order('description')
+        if (cancelled) return
+        if (err) {
+          console.error('Catalog load error:', err)
+          return
+        }
+        setCatalog(data || [])
+        setFuseInst(
+          new Fuse(data || [], {
+            keys: [
+              { name: 'sub_category', weight: 3 },
+              { name: 'cbn', weight: 2 },
+              { name: 'description', weight: 1 },
+            ],
+            threshold: 0.35,
+            minMatchCharLength: 2,
+          })
+        )
+      } catch (e) {
+        if (!cancelled) console.error('Catalog load exception:', e)
+      } finally {
+        if (!cancelled) setCatalogLoading(false)
       }
-      setCatalog(data || [])
-      setFuseInst(
-        new Fuse(data || [], {
-          keys: [
-            { name: 'sub_category', weight: 3 },
-            { name: 'cbn', weight: 2 },
-            { name: 'description', weight: 1 },
-          ],
-          threshold: 0.35,
-          minMatchCharLength: 2,
-        })
-      )
-      setCatalogLoading(false)
     }
     load()
+    return () => { cancelled = true }
   }, [])
 
   // Close dropdown on outside click

@@ -71,6 +71,7 @@ export default function Employees() {
   }, [])
 
   useEffect(() => {
+    let cancelled = false
     fetchEmployees()
     // Load reference tables
     Promise.all([
@@ -79,11 +80,13 @@ export default function Employees() {
       supabase.from('departments').select('name').eq('is_active', true).order('name'),
       supabase.from('roles').select('name,label').eq('is_active', true).order('label'),
     ]).then(([b, l, d, r]) => {
+      if (cancelled) return
       setRefBrands(b.data || [])
       setRefLocations(l.data || [])
       setRefDepartments(d.data || [])
       setRefRoles(r.data || [])
     })
+    return () => { cancelled = true }
   }, [fetchEmployees])
 
   /* ── filtered list ── */
