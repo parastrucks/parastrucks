@@ -24,7 +24,7 @@ export default function MyQuotations() {
       setLoading(true)
       const { data, error: err } = await supabase
         .from('quotations')
-        .select('id, quotation_number, created_at, valid_until, customer_name, customer_mobile, line_items, tcs_rate, tcs_amount, rto_tax, insurance, grand_total, entity')
+        .select('id, quotation_number, created_at, valid_until, customer_name, customer_address, customer_mobile, customer_gstin, hypothecation, line_items, tcs_rate, tcs_amount, rto_tax, insurance, grand_total, entity')
         .eq('created_by', profile.id)
         .order('created_at', { ascending: false })
       if (err) {
@@ -54,12 +54,13 @@ export default function MyQuotations() {
         validUntil: q.valid_until,
         customer: {
           name: q.customer_name,
-          address: null,
+          address: q.customer_address,
           mobile: q.customer_mobile,
-          gstin: null,
-          hypothecation: null,
+          gstin: q.customer_gstin,
+          hypothecation: q.hypothecation,
         },
         entity: entityData,
+        entityCode: q.entity,
         lineItems: q.line_items,
         tcsRate: q.tcs_rate,
         tcsAmount: q.tcs_amount,
