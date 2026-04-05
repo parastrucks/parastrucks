@@ -62,12 +62,17 @@ export default function Employees() {
   /* ── fetch employees ── */
   const fetchEmployees = useCallback(async () => {
     setLoading(true)
-    const { data, error } = await supabase
-      .from('users')
-      .select('*')
-      .order('full_name')
-    if (!error) setEmployees(data || [])
-    setLoading(false)
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .order('full_name')
+      if (!error) setEmployees(data || [])
+    } catch (e) {
+      console.error('fetchEmployees error:', e)
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => {
