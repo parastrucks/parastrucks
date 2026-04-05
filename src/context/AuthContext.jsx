@@ -3,18 +3,19 @@ import { supabase } from '../lib/supabase'
 
 const AuthContext = createContext(null)
 
-// How long (ms) to wait for any Supabase auth/data call before giving up
-// and sending the user back to /login rather than hanging forever.
-const AUTH_TIMEOUT_MS = 10000
-
-// Returns a promise that rejects after AUTH_TIMEOUT_MS
-function withTimeout(promise) {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('auth_timeout')), AUTH_TIMEOUT_MS)
-    ),
-  ])
+// Retry a promise up to `attempts` times, waiting `delayMs` between tries.
+async function withRetry(fn, attempts = 3, delayMs = 2000) {
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn()
+    } catch (e) {
+      if (i < attempts - 1) {
+        await new Promise(r => setTimeout(r, delayMs))
+      } else {
+        throw e
+      }
+    }
+  }
 }
 
 // Checks whether a user profile satisfies an access rule row.
@@ -68,15 +69,19 @@ export function AuthProvider({ children }) {
       setSession(session)
       if (session) {
         try {
-          const [p, rules] = await withTimeout(
+          // Retry up to 3 times on transient network errors.
+          // Never clear the session here — only Supabase decides when a session expires.
+          const [p, rules] = await withRetry(() =>
             Promise.all([fetchProfile(session.user.id), fetchAccessRules()])
           )
           if (!mounted) return
           setProfile(p)
           setAccessRules(rules)
         } catch (e) {
-          console.error('Auth state change error/timeout:', e)
-          if (mounted) { setSession(null); setAccessRules([]) }
+          // All retries exhausted — let the user stay logged in but with
+          // empty access rules so they at least reach the dashboard.
+          console.error('Profile/rules fetch failed after retries:', e)
+          if (mounted) setAccessRules([])
         }
       } else {
         setProfile(null)
