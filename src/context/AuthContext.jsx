@@ -59,36 +59,10 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     let mounted = true
 
-    async function initAuth() {
-      try {
-        // getSession() may make a network call to refresh an expired token —
-        // wrap it in a timeout so a hanging request never locks the app.
-        const { data: { session } } = await withTimeout(supabase.auth.getSession())
-        if (!mounted) return
-
-        setSession(session)
-
-        if (session) {
-          const [p, rules] = await withTimeout(
-            Promise.all([fetchProfile(session.user.id), fetchAccessRules()])
-          )
-          if (!mounted) return
-          setProfile(p)
-          setAccessRules(rules)
-        } else {
-          setAccessRules([])
-        }
-      } catch (e) {
-        if (!mounted) return
-        console.error('Auth init error/timeout:', e)
-        // Drop session so the app redirects to /login rather than hanging.
-        setSession(null)
-        setAccessRules([])
-      }
-    }
-
-    initAuth()
-
+    // Supabase v2 always fires INITIAL_SESSION on mount, so we use
+    // onAuthStateChange as the single source of truth for all auth state
+    // (including the first load). This avoids running fetchProfile +
+    // fetchAccessRules twice on startup, which was causing the timeout.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (!mounted) return
       setSession(session)
