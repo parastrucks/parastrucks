@@ -12,9 +12,9 @@ const SEGMENTS = [
 // Maps users.vertical → allowed segments (null = all)
 const VERTICAL_SEGMENTS = {
   bus:       ['Bus – ICV', 'Bus – MCV'],
-  tipper:    ['Tipper'],
+  tipper:    ['Tipper', 'RMC / Boom Pump'],
   icv:       ['ICV Truck'],
-  long_haul: ['MBP Truck', 'RMC / Boom Pump'],
+  long_haul: ['MBP Truck'],
   ce:        [],
 }
 
