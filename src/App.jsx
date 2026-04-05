@@ -13,6 +13,7 @@ import MyQuotations from './pages/MyQuotations'
 import QuotationLog from './pages/QuotationLog'
 import BusCalculator from './pages/BusCalculator'
 import AccessRules from './pages/AccessRules'
+import Catalog from './pages/Catalog'
 
 // Placeholder for pages not yet built
 const Soon = ({ name }) => (
@@ -53,7 +54,7 @@ export default function App() {
         <Route path="/bus-calculator" element={<ProtectedRoute><BusCalculator /></ProtectedRoute>} />
         <Route path="/employees"      element={<ProtectedRoute><Employees /></ProtectedRoute>} />
         <Route path="/quotation-log"  element={<ProtectedRoute><QuotationLog /></ProtectedRoute>} />
-        <Route path="/catalog"        element={<ProtectedRoute><Soon name="Vehicle Catalog" /></ProtectedRoute>} />
+        <Route path="/catalog"        element={<ProtectedRoute><Catalog /></ProtectedRoute>} />
 
         {/* Access rules — always admin-only (hardcoded safety net) */}
         <Route
