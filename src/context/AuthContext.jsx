@@ -3,6 +3,20 @@ import { supabase } from '../lib/supabase'
 
 const AuthContext = createContext(null)
 
+// How long (ms) to wait for any Supabase auth/data call before giving up
+// and sending the user back to /login rather than hanging forever.
+const AUTH_TIMEOUT_MS = 10000
+
+// Returns a promise that rejects after AUTH_TIMEOUT_MS
+function withTimeout(promise) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('auth_timeout')), AUTH_TIMEOUT_MS)
+    ),
+  ])
+}
+
 // Checks whether a user profile satisfies an access rule row.
 // permission_level → profile.role (admin/hr/sales/back_office)
 // role             → profile.vertical (bus/tipper/icv/long_haul/ce)
@@ -43,30 +57,63 @@ export function AuthProvider({ children }) {
   }
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      setSession(session)
-      if (session) {
-        const [p, rules] = await Promise.all([fetchProfile(session.user.id), fetchAccessRules()])
-        setProfile(p)
-        setAccessRules(rules)
-      } else {
+    let mounted = true
+
+    async function initAuth() {
+      try {
+        // getSession() may make a network call to refresh an expired token —
+        // wrap it in a timeout so a hanging request never locks the app.
+        const { data: { session } } = await withTimeout(supabase.auth.getSession())
+        if (!mounted) return
+
+        setSession(session)
+
+        if (session) {
+          const [p, rules] = await withTimeout(
+            Promise.all([fetchProfile(session.user.id), fetchAccessRules()])
+          )
+          if (!mounted) return
+          setProfile(p)
+          setAccessRules(rules)
+        } else {
+          setAccessRules([])
+        }
+      } catch (e) {
+        if (!mounted) return
+        console.error('Auth init error/timeout:', e)
+        // Drop session so the app redirects to /login rather than hanging.
+        setSession(null)
         setAccessRules([])
       }
-    })
+    }
+
+    initAuth()
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (!mounted) return
       setSession(session)
       if (session) {
-        const [p, rules] = await Promise.all([fetchProfile(session.user.id), fetchAccessRules()])
-        setProfile(p)
-        setAccessRules(rules)
+        try {
+          const [p, rules] = await withTimeout(
+            Promise.all([fetchProfile(session.user.id), fetchAccessRules()])
+          )
+          if (!mounted) return
+          setProfile(p)
+          setAccessRules(rules)
+        } catch (e) {
+          console.error('Auth state change error/timeout:', e)
+          if (mounted) { setSession(null); setAccessRules([]) }
+        }
       } else {
         setProfile(null)
         setAccessRules([])
       }
     })
 
-    return () => subscription.unsubscribe()
+    return () => {
+      mounted = false
+      subscription.unsubscribe()
+    }
   }, [])
 
   async function signIn(email, password) {

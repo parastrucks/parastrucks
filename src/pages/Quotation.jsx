@@ -35,6 +35,7 @@ export default function Quotation() {
   const [catalog, setCatalog] = useState([])
   const [fuseInst, setFuseInst] = useState(null)
   const [catalogLoading, setCatalogLoading] = useState(true)
+  const [catalogError, setCatalogError] = useState(false)
 
   // Search state
   const [segment, setSegment] = useState('All Segments')
@@ -67,19 +68,23 @@ export default function Quotation() {
     let cancelled = false
     async function load() {
       setCatalogLoading(true)
+      setCatalogError(false)
       try {
-        const { data, error: err } = await supabase
+        const query = supabase
           .from('vehicle_catalog')
           .select('id, cbn, description, sub_category, segment, tyres, mrp_incl_gst')
           .eq('is_active', true)
           .order('segment')
           .order('sub_category')
           .order('description')
+
+        const { data, error: err } = await Promise.race([
+          query,
+          new Promise((_, reject) => setTimeout(() => reject(new Error('catalog_timeout')), 15000)),
+        ])
+
         if (cancelled) return
-        if (err) {
-          console.error('Catalog load error:', err)
-          return
-        }
+        if (err) { console.error('Catalog load error:', err); setCatalogError(true); return }
         setCatalog(data || [])
         setFuseInst(
           new Fuse(data || [], {
@@ -93,7 +98,7 @@ export default function Quotation() {
           })
         )
       } catch (e) {
-        if (!cancelled) console.error('Catalog load exception:', e)
+        if (!cancelled) { console.error('Catalog load exception:', e); setCatalogError(true) }
       } finally {
         if (!cancelled) setCatalogLoading(false)
       }
@@ -397,6 +402,18 @@ export default function Quotation() {
                 {catalogLoading && (
                   <span style={{ marginLeft: 10, verticalAlign: 'middle' }}>
                     <span className="spinner spinner-sm" style={{ display: 'inline-block' }} />
+                  </span>
+                )}
+                {catalogError && (
+                  <span style={{ marginLeft: 10, fontSize: 13, color: 'var(--red)', fontWeight: 400 }}>
+                    Failed to load —{' '}
+                    <button
+                      type="button"
+                      onClick={() => window.location.reload()}
+                      style={{ color: 'var(--blue)', fontWeight: 600, fontSize: 13, textDecoration: 'underline' }}
+                    >
+                      Retry
+                    </button>
                   </span>
                 )}
               </div>
