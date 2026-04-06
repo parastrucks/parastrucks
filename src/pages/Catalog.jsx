@@ -751,6 +751,7 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
   const [form,         setForm]         = useState(mode === 'edit' ? { ...subSeg } : EMPTY_SUBSEG)
   const [brochureFile, setBrochureFile] = useState(null)
   const [saving,       setSaving]       = useState(false)
+  const [uploadPct,    setUploadPct]    = useState(null) // null = not uploading
   const [error,        setError]        = useState('')
   const fileRef = useRef()
 
@@ -770,9 +771,17 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
       // Use service-role client so the upload bypasses storage RLS entirely.
       // Fall back to anon client if service key is not configured.
       const storageClient = supabaseAdmin || supabase
+      setUploadPct(0)
       const { error: upErr } = await storageClient.storage
         .from('brochures')
-        .upload(path, brochureFile, { upsert: true, contentType: 'application/pdf' })
+        .upload(path, brochureFile, {
+          upsert: true,
+          contentType: 'application/pdf',
+          onUploadProgress: ({ loaded, total }) => {
+            setUploadPct(total ? Math.round((loaded / total) * 100) : null)
+          },
+        })
+      setUploadPct(null)
       if (upErr) { setError('Brochure upload failed: ' + upErr.message); setSaving(false); return }
       brochure_url      = path
       brochure_filename = brochureFile.name
@@ -880,6 +889,17 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
             />
             <label htmlFor="ss-active" style={{ fontSize: 14, cursor: 'pointer' }}>Active</label>
           </div>
+
+          {uploadPct !== null && (
+            <div className="form-group">
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 4 }}>
+                Uploading brochure… {uploadPct}%
+              </div>
+              <div style={{ height: 6, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${uploadPct}%`, background: 'var(--accent)', transition: 'width 0.2s ease' }} />
+              </div>
+            </div>
+          )}
 
           <div className="flex gap-8 mt-16">
             <button className="btn btn-secondary" onClick={onClose}>Cancel</button>

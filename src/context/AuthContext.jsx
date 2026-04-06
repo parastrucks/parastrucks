@@ -3,14 +3,6 @@ import { supabase } from '../lib/supabase'
 
 const AuthContext = createContext(null)
 
-// Reject after `ms` milliseconds — used to make hung fetches fail so withRetry can retry them.
-function withTimeout(fn, ms = 8000) {
-  return Promise.race([
-    fn(),
-    new Promise((_, reject) => setTimeout(() => reject(new Error('Request timed out')), ms)),
-  ])
-}
-
 // Retry a promise up to `attempts` times, waiting `delayMs` between tries.
 async function withRetry(fn, attempts = 3, delayMs = 2000) {
   for (let i = 0; i < attempts; i++) {
@@ -45,11 +37,14 @@ export function AuthProvider({ children }) {
   const [accessRules, setAccessRules] = useState(null)      // null = still loading
 
   async function fetchProfile(userId) {
+    // maybeSingle() returns null (not a 406 error) when 0 rows match.
+    // This avoids a timing issue where the JWT isn't yet attached to the
+    // first PostgREST request immediately after signInWithPassword.
     const { data, error } = await supabase
       .from('users')
       .select('*')
       .eq('id', userId)
-      .single()
+      .maybeSingle()
     if (error) { console.error('Profile fetch error:', error); return null }
     return data
   }
@@ -80,7 +75,7 @@ export function AuthProvider({ children }) {
           // Retry up to 3 times on transient network errors.
           // Never clear the session here — only Supabase decides when a session expires.
           const [p, rules] = await withRetry(() =>
-            withTimeout(() => Promise.all([fetchProfile(session.user.id), fetchAccessRules()]))
+            Promise.all([fetchProfile(session.user.id), fetchAccessRules()])
           )
           if (!mounted) return
           setProfile(p)
@@ -106,7 +101,12 @@ export function AuthProvider({ children }) {
   async function signIn(email, password) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw error
-    const p = await fetchProfile(data.user.id)
+    // Retry profile fetch up to 3 times — the JWT may not be attached to the
+    // first PostgREST request immediately after signInWithPassword returns.
+    const p = await withRetry(() => fetchProfile(data.user.id).then(r => {
+      if (!r) throw new Error('no_profile')
+      return r
+    })).catch(() => null)
     if (!p) throw new Error('User profile not found. Contact HR.')
     if (!p.is_active) throw new Error('Your account has been deactivated. Contact HR.')
     setProfile(p)
