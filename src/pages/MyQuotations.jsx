@@ -36,7 +36,7 @@ export default function MyQuotations() {
       setLoading(false)
     }
     if (profile?.id) load()
-  }, [profile])
+  }, [profile?.id])
 
   async function handleRedownload(q) {
     setDownloading(q.id)
