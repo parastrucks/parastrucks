@@ -1,34 +1,7 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 
 const AuthContext = createContext(null)
-
-// Race a promise against a timer. 30 s is generous enough that browser
-// background-tab throttling (≥60 s intervals) won't trigger it on a healthy
-// but paused request, while still breaking truly hung connections.
-function withTimeout(fn, ms = 30000) {
-  return Promise.race([
-    fn(),
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Request timed out')), ms)
-    ),
-  ])
-}
-
-// Retry a promise up to `attempts` times, waiting `delayMs` between tries.
-async function withRetry(fn, attempts = 3, delayMs = 2000) {
-  for (let i = 0; i < attempts; i++) {
-    try {
-      return await fn()
-    } catch (e) {
-      if (i < attempts - 1) {
-        await new Promise(r => setTimeout(r, delayMs))
-      } else {
-        throw e
-      }
-    }
-  }
-}
 
 // Checks whether a user profile satisfies an access rule row.
 // permission_level → profile.role (admin/hr/sales/back_office)
@@ -44,103 +17,156 @@ function ruleMatches(rule, profile) {
 }
 
 export function AuthProvider({ children }) {
-  const [session, setSession]         = useState(undefined) // undefined = still loading
-  const [profile, setProfile]         = useState(null)
-  const [accessRules, setAccessRules] = useState(null)      // null = still loading
+  // Explicit phase replaces the confusing (session === undefined) loading sentinel.
+  // 'initializing'  — waiting for INITIAL_SESSION from Supabase
+  // 'loading-data'  — session found, fetching profile + rules
+  // 'ready'         — profile and rules loaded, app can render
+  // 'unauthenticated' — no valid session
+  const [phase,        setPhase]        = useState('initializing')
+  const [session,      setSession]      = useState(null)
+  const [profile,      setProfile]      = useState(null)
+  const [accessRules,  setAccessRules]  = useState([]) // never null
 
-  async function fetchProfile(userId) {
-    // maybeSingle() returns null (not a 406 error) when 0 rows match.
-    // This avoids a timing issue where the JWT isn't yet attached to the
-    // first PostgREST request immediately after signInWithPassword.
-    const { data, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', userId)
-      .maybeSingle()
-    if (error) { console.error('Profile fetch error:', error); return null }
-    return data
+  // dataLoadRef holds the promise from loadUserData so signIn() can await it
+  // and ensure profile is populated before Login.jsx navigates.
+  const dataLoadRef = useRef(null)
+  const mountedRef  = useRef(true)
+
+  // Fetches profile + access rules in one parallel call.
+  // No timeout or retry wrappers — Supabase JS v2 has its own internal fetch
+  // timeout (~8 s). Adding another layer on top created the 96-second worst-case
+  // and the background-tab throttling false-positive that caused logouts.
+  // On failure: degrade gracefully (empty rules) and move to ready phase.
+  async function loadUserData(userId) {
+    setPhase('loading-data')
+    try {
+      const [{ data: p }, { data: rules }] = await Promise.all([
+        supabase.from('users').select('*').eq('id', userId).maybeSingle(),
+        supabase.from('access_rules').select('*'),
+      ])
+      if (!mountedRef.current) return
+      setProfile(p ?? null)
+      setAccessRules(rules ?? [])
+    } catch (e) {
+      console.error('loadUserData error:', e)
+      if (!mountedRef.current) return
+      setAccessRules([])
+    }
+    if (mountedRef.current) setPhase('ready')
   }
 
-  async function fetchAccessRules() {
-    const { data, error } = await supabase.from('access_rules').select('*')
-    if (error) { console.error('Access rules fetch error:', error); return [] }
-    return data || []
-  }
-
-  async function refreshAccessRules() {
-    const rules = await fetchAccessRules()
-    setAccessRules(rules)
-  }
-
+  // ── Main auth effect ───────────────────────────────────────────────────────
   useEffect(() => {
-    let mounted = true
+    mountedRef.current = true
 
-    // Supabase v2 always fires INITIAL_SESSION on mount, so we use
-    // onAuthStateChange as the single source of truth for all auth state
-    // (including the first load). This avoids running fetchProfile +
-    // fetchAccessRules twice on startup, which was causing the timeout.
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (!mounted) return
-      setSession(session)
-      if (session) {
-        try {
-          // Retry up to 3 times on transient network errors.
-          // Never clear the session here — only Supabase decides when a session expires.
-          const [p, rules] = await withRetry(() =>
-            withTimeout(() => Promise.all([fetchProfile(session.user.id), fetchAccessRules()]))
-          )
-          if (!mounted) return
-          setProfile(p)
-          setAccessRules(rules)
-        } catch (e) {
-          // All retries exhausted — let the user stay logged in but with
-          // empty access rules so they at least reach the dashboard.
-          console.error('Profile/rules fetch failed after retries:', e)
-          if (mounted) setAccessRules([])
-        }
-      } else {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      if (!mountedRef.current) return
+
+      // TOKEN_REFRESHED: only update the token — do NOT refetch profile/rules.
+      // Profile data doesn't change when the token refreshes. Refetching creates
+      // a new profile object reference which triggers page useEffect re-runs and
+      // loading spinners (the root cause of most reported UX issues).
+      if (_event === 'TOKEN_REFRESHED') {
+        setSession(newSession)
+        return
+      }
+
+      if (_event === 'SIGNED_OUT') {
+        setSession(null)
         setProfile(null)
         setAccessRules([])
+        setPhase('unauthenticated')
+        return
+      }
+
+      // INITIAL_SESSION or SIGNED_IN
+      if (newSession) {
+        setSession(newSession)
+        const promise = loadUserData(newSession.user.id)
+        dataLoadRef.current = promise
+      } else {
+        // INITIAL_SESSION with no session = not logged in
+        setSession(null)
+        setPhase('unauthenticated')
       }
     })
 
     return () => {
-      mounted = false
+      mountedRef.current = false
       subscription.unsubscribe()
     }
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Visibility handler ─────────────────────────────────────────────────────
+  // When the user returns to a backgrounded tab, validate the session.
+  // Browsers throttle auto-refresh timers in inactive tabs, so the access token
+  // may have expired without a TOKEN_REFRESHED event firing. Detect this here
+  // and redirect to /login cleanly rather than letting the first API call fail.
+  useEffect(() => {
+    async function onVisible() {
+      if (document.visibilityState !== 'visible' || phase !== 'ready') return
+      const { data: { session: current } } = await supabase.auth.getSession()
+      if (!current && mountedRef.current) {
+        setSession(null)
+        setProfile(null)
+        setAccessRules([])
+        setPhase('unauthenticated')
+      }
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [phase])
+
+  // ── Public API ─────────────────────────────────────────────────────────────
+
+  async function refreshAccessRules() {
+    const { data } = await supabase.from('access_rules').select('*')
+    if (mountedRef.current) setAccessRules(data ?? [])
+  }
 
   async function signIn(email, password) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw error
-    // Retry profile fetch up to 3 times — the JWT may not be attached to the
-    // first PostgREST request immediately after signInWithPassword returns.
-    const p = await withRetry(() => fetchProfile(data.user.id).then(r => {
-      if (!r) throw new Error('no_profile')
-      return r
-    })).catch(() => null)
-    if (!p) throw new Error('User profile not found. Contact HR.')
-    if (!p.is_active) throw new Error('Your account has been deactivated. Contact HR.')
-    setProfile(p)
-    return p
+
+    // Lightweight validation — just check the user row exists and is active.
+    // The full profile load is handled by the SIGNED_IN onAuthStateChange event.
+    const { data: check } = await supabase
+      .from('users')
+      .select('is_active')
+      .eq('id', data.user.id)
+      .maybeSingle()
+
+    if (!check) {
+      supabase.auth.signOut().catch(() => {})
+      throw new Error('User profile not found. Contact HR.')
+    }
+    if (!check.is_active) {
+      supabase.auth.signOut().catch(() => {})
+      throw new Error('Your account has been deactivated. Contact HR.')
+    }
+
+    // Yield one microtask to ensure the SIGNED_IN handler has fired and stored
+    // the loadUserData promise in dataLoadRef, then await it so that profile is
+    // populated before Login.jsx calls navigate('/').
+    await Promise.resolve()
+    if (dataLoadRef.current) await dataLoadRef.current
   }
 
-  async function signOut() {
-    // Fire the network call but don't await it — if Supabase is unreachable
-    // (the very reason the user is clicking this button), the await would hang
-    // and make the button appear broken. Local state is cleared immediately so
-    // the UI redirects to /login regardless of network state.
+  function signOut() {
+    // Fire-and-forget — don't await. If Supabase is unreachable (the exact
+    // scenario the escape hatch is designed for), awaiting would hang and make
+    // the button appear broken. State is cleared synchronously so the UI
+    // redirects to /login regardless of network state.
     supabase.auth.signOut().catch(() => {})
     setSession(null)
     setProfile(null)
     setAccessRules([])
+    setPhase('unauthenticated')
   }
 
-  // Returns true if the current user can access the given route.
-  // /access-rules is always hardcoded admin-only as a safety net.
   function canAccess(route) {
     if (route === '/access-rules') return profile?.role === 'admin'
-    if (!accessRules || !profile) return false
+    if (!profile) return false
     return accessRules.some(rule => rule.route === route && ruleMatches(rule, profile))
   }
 
@@ -150,7 +176,7 @@ export function AuthProvider({ children }) {
     accessRules,
     refreshAccessRules,
     canAccess,
-    loading: session === undefined || (session !== null && accessRules === null),
+    loading: phase === 'initializing' || phase === 'loading-data',
     signIn,
     signOut,
     isAdmin:      profile?.role === 'admin',

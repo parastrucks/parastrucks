@@ -34,7 +34,7 @@ export default function App() {
   // sessionStorage and profile/rules fetches keep timing out).
   useEffect(() => {
     if (!loading) { setShowEscape(false); return }
-    const t = setTimeout(() => setShowEscape(true), 15000)
+    const t = setTimeout(() => setShowEscape(true), 10000)
     return () => clearTimeout(t)
   }, [loading])
 
