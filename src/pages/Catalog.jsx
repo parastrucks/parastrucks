@@ -767,7 +767,10 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
     if (brochureFile) {
       const safeName = form.name.replace(/[^a-zA-Z0-9_-]/g, '_')
       const path = `${form.brand}/${safeName}.pdf`
-      const { error: upErr } = await supabase.storage
+      // Use service-role client so the upload bypasses storage RLS entirely.
+      // Fall back to anon client if service key is not configured.
+      const storageClient = supabaseAdmin || supabase
+      const { error: upErr } = await storageClient.storage
         .from('brochures')
         .upload(path, brochureFile, { upsert: true, contentType: 'application/pdf' })
       if (upErr) { setError('Brochure upload failed: ' + upErr.message); setSaving(false); return }

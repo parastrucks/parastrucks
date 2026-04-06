@@ -1,4 +1,5 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
 import { useAuth } from './context/AuthContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import AppLayout from './components/layout/AppLayout'
@@ -25,12 +26,35 @@ const Soon = ({ name }) => (
 )
 
 export default function App() {
-  const { session, loading } = useAuth()
+  const { session, loading, signOut } = useAuth()
+  const [showEscape, setShowEscape] = useState(false)
+
+  // If loading takes more than 15 s, show a sign-out escape hatch so the user
+  // isn't permanently stuck (can happen when the session is stale but still in
+  // sessionStorage and profile/rules fetches keep timing out).
+  useEffect(() => {
+    if (!loading) { setShowEscape(false); return }
+    const t = setTimeout(() => setShowEscape(true), 15000)
+    return () => clearTimeout(t)
+  }, [loading])
 
   if (loading) {
     return (
-      <div className="full-center">
+      <div className="full-center" style={{ flexDirection: 'column', gap: 16 }}>
         <div className="spinner" />
+        {showEscape && (
+          <div style={{ textAlign: 'center' }}>
+            <p style={{ color: 'var(--text-secondary)', fontSize: 14, marginBottom: 8 }}>
+              Taking too long?
+            </p>
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => signOut()}
+            >
+              Sign out and try again
+            </button>
+          </div>
+        )}
       </div>
     )
   }
