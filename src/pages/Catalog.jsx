@@ -878,6 +878,18 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
                 {brochureFile ? `📎 ${brochureFile.name}` : '+ Upload PDF'}
               </button>
             )}
+            {/* Progress bar appears directly below the file button so the user
+                can see upload status right next to the file they selected */}
+            {uploadPct !== null && (
+              <div style={{ marginTop: 10 }}>
+                <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 4 }}>
+                  Uploading… {uploadPct}%
+                </div>
+                <div style={{ height: 6, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${uploadPct}%`, background: 'var(--accent)', transition: 'width 0.2s ease' }} />
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="form-group flex gap-8" style={{ alignItems: 'center' }}>
@@ -890,23 +902,14 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
             <label htmlFor="ss-active" style={{ fontSize: 14, cursor: 'pointer' }}>Active</label>
           </div>
 
-          {uploadPct !== null && (
-            <div className="form-group">
-              <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 4 }}>
-                Uploading brochure… {uploadPct}%
-              </div>
-              <div style={{ height: 6, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${uploadPct}%`, background: 'var(--accent)', transition: 'width 0.2s ease' }} />
-              </div>
-            </div>
-          )}
-
           <div className="flex gap-8 mt-16">
-            <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+            <button className="btn btn-secondary" disabled={saving} onClick={onClose}>Cancel</button>
             <button className="btn btn-primary" disabled={saving} onClick={save}>
-              {saving
-                ? <span className="spinner-sm" />
-                : mode === 'add' ? 'Add Sub-Segment' : 'Save Changes'}
+              {uploadPct !== null
+                ? `Uploading… ${uploadPct}%`
+                : saving
+                  ? 'Saving…'
+                  : mode === 'add' ? 'Add Sub-Segment' : 'Save Changes'}
             </button>
           </div>
         </div>
