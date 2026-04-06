@@ -39,7 +39,16 @@
       "mcp__dfce7dec-e0a2-4afc-9db0-362f4cd2df62__list_migrations",
       "mcp__dfce7dec-e0a2-4afc-9db0-362f4cd2df62__execute_sql",
       "mcp__Claude_Preview__preview_start",
-      "Bash(gh pr:*)"
+      "Bash(gh pr:*)",
+      "mcp__dfce7dec-e0a2-4afc-9db0-362f4cd2df62__apply_migration",
+      "Bash(grep -l \"h4>Quick Links</div>\" D:PTBWebsiteparastrucks*.html)",
+      "Bash(for f:*)",
+      "Bash(do)",
+      "Bash(sed -i 's|<h4>Quick Links</div>|<h4>Quick Links</h4>|g; s|<h4>Our Brands</div>|<h4>Our Brands</h4>|g; s|<h4>Contact</div>|<h4>Contact</h4>|g' \"$f\")",
+      "Bash(done)",
+      "Bash(git -C \"D:/PTB/Website/parastrucks\" status)",
+      "Bash(git -C \"D:/PTB/Website\" status)",
+      "Bash(gh api:*)"
     ]
   }
 }
