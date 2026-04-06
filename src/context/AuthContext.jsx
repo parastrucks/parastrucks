@@ -3,6 +3,18 @@ import { supabase } from '../lib/supabase'
 
 const AuthContext = createContext(null)
 
+// Race a promise against a timer. 30 s is generous enough that browser
+// background-tab throttling (≥60 s intervals) won't trigger it on a healthy
+// but paused request, while still breaking truly hung connections.
+function withTimeout(fn, ms = 30000) {
+  return Promise.race([
+    fn(),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Request timed out')), ms)
+    ),
+  ])
+}
+
 // Retry a promise up to `attempts` times, waiting `delayMs` between tries.
 async function withRetry(fn, attempts = 3, delayMs = 2000) {
   for (let i = 0; i < attempts; i++) {
@@ -75,7 +87,7 @@ export function AuthProvider({ children }) {
           // Retry up to 3 times on transient network errors.
           // Never clear the session here — only Supabase decides when a session expires.
           const [p, rules] = await withRetry(() =>
-            Promise.all([fetchProfile(session.user.id), fetchAccessRules()])
+            withTimeout(() => Promise.all([fetchProfile(session.user.id), fetchAccessRules()]))
           )
           if (!mounted) return
           setProfile(p)
@@ -114,7 +126,11 @@ export function AuthProvider({ children }) {
   }
 
   async function signOut() {
-    await supabase.auth.signOut()
+    // Fire the network call but don't await it — if Supabase is unreachable
+    // (the very reason the user is clicking this button), the await would hang
+    // and make the button appear broken. Local state is cleared immediately so
+    // the UI redirects to /login regardless of network state.
+    supabase.auth.signOut().catch(() => {})
     setSession(null)
     setProfile(null)
     setAccessRules([])
