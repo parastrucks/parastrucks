@@ -902,6 +902,17 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
             <label htmlFor="ss-active" style={{ fontSize: 14, cursor: 'pointer' }}>Active</label>
           </div>
 
+          {uploadPct !== null && (
+            <div className="form-group">
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 4 }}>
+                Uploading brochure… {uploadPct}%
+              </div>
+              <div style={{ height: 6, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${uploadPct}%`, background: 'var(--accent)', transition: 'width 0.2s ease' }} />
+              </div>
+            </div>
+          )}
+
           <div className="flex gap-8 mt-16">
             <button className="btn btn-secondary" disabled={saving} onClick={onClose}>Cancel</button>
             <button className="btn btn-primary" disabled={saving} onClick={save}>
