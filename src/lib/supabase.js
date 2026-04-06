@@ -9,7 +9,14 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 // Regular client — used for all normal operations (RLS applies)
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+// sessionStorage: session lives only for the tab lifetime (close tab = logged out,
+// new tab = fresh login). This prevents unexpected cross-tab persistence.
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    storage: window.sessionStorage,
+    storageKey: 'sb-session',
+  }
+})
 
 // Admin client — used only for HR operations (create/delete auth users, reset passwords)
 // Uses the service role key which bypasses RLS — never expose this to end users
