@@ -3,14 +3,6 @@ import { supabase } from '../lib/supabase'
 
 const AuthContext = createContext(null)
 
-// Reject after `ms` milliseconds — used to make hung fetches fail so withRetry can retry them.
-function withTimeout(fn, ms = 8000) {
-  return Promise.race([
-    fn(),
-    new Promise((_, reject) => setTimeout(() => reject(new Error('Request timed out')), ms)),
-  ])
-}
-
 // Retry a promise up to `attempts` times, waiting `delayMs` between tries.
 async function withRetry(fn, attempts = 3, delayMs = 2000) {
   for (let i = 0; i < attempts; i++) {
@@ -80,7 +72,7 @@ export function AuthProvider({ children }) {
           // Retry up to 3 times on transient network errors.
           // Never clear the session here — only Supabase decides when a session expires.
           const [p, rules] = await withRetry(() =>
-            withTimeout(() => Promise.all([fetchProfile(session.user.id), fetchAccessRules()]))
+            Promise.all([fetchProfile(session.user.id), fetchAccessRules()])
           )
           if (!mounted) return
           setProfile(p)
