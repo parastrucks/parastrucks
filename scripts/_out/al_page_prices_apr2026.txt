@@ -1,0 +1,17 @@
+Featured model avg prices — Apr 2026 (for ashok-leyland.html)
+Format: Avg. ₹XX.XL
+
+Ecomet 1615 (ICV 16T): Avg. ₹26.3L
+3520 8x2 LA (MBP 35T): Avg. ₹42.8L
+2825 6x4 Tipper: NOT FOUND — check sub_cat manually
+Viking 12M AC (Bus MCV): Avg. ₹39.5L
+Boss 1415 (ICV 14T): Avg. ₹25.0L
+Tractor 5525 (MBP): Avg. ₹42.7L
+
+Sub-categories available in new price list:
+  ICV Truck: Boss 11T, Boss 12T, Boss 14T, Boss 16T, Boss 18T, Boss 19T, Ecomet 11T (Diesel), Ecomet 12T (Diesel), Ecomet 13T (Diesel), Ecomet 14T (Diesel), Ecomet 16T (Diesel), Ecomet 18T (Diesel), Ecomet 19T (Diesel), Ecomet CNG, Partner Super
+  MBP Truck: Haulage – 19T, Haulage – CNG 19T, Haulage – MAV 26T, Haulage – MAV 28T, Haulage – MAV 31T, Haulage – MAV 35T, Haulage – MAV 42T, Haulage – MAV 45T (Air Susp), Haulage – MAV 46T (Air Susp), Haulage – MAV 48T, Haulage – MAV 49T (Air Susp), Haulage – Other, Tractor
+  Bus – MCV: 12M Coach, Cheetah, Garud 13.5M, Garud 15M, Viking
+  Bus – ICV: Lynx Smart, Lynx Strong, Oyster (Lynx – Built), Oyster Wide (Lynx Strong – Built), Sunshine (School Chassis), Sunshine Li (School Bus – Built)
+  Tipper: 10x4 Tipper – 48T GVW, 4x2 Tipper – 19T GVW, 6x4 Tipper – 25-28T GVW, 8x4 Tipper – 35T GVW
+  RMC / Boom Pump: Transit Mixer / Boom Pump / RMC Chassis
