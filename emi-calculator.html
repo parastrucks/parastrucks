@@ -314,115 +314,77 @@ function toggleMobileNav() { document.getElementById('mobileNav').classList.togg
 function setLang(lang){localStorage.setItem('ptb-lang',lang);document.querySelectorAll('.lang-btn').forEach(function(b){b.classList.remove('active');if((lang==='en'&&b.textContent.trim()==='EN')||(lang==='hi'&&b.textContent.trim()!=='EN'))b.classList.add('active')});document.querySelectorAll('[data-lang-'+lang+']').forEach(function(el){var v=el.getAttribute('data-lang-'+lang);if(el.tagName==='INPUT'||el.tagName==='TEXTAREA')el.placeholder=v;else el.innerHTML=v});document.documentElement.lang=lang==='hi'?'hi':'en'}
 (function(){var s=localStorage.getItem('ptb-lang');if(s&&s==='hi')setLang('hi')}())
 
-/* ============ VEHICLE DATA (Sep 2025 price circulars, 18% GST) ============ */
+/* ============ VEHICLE DATA (Apr 2026 price circulars, 18% GST) ============ */
 var alVehicles = [
   /* ===== BUSES — ICV first (by model, increasing chassis length), then MCV ===== */
   /* Sunshine */
-  {s:"Buses",m:"Sunshine School Chassis",p:2131000},
-  {s:"Buses",m:"Sunshine Li School Bus",p:3102000},
+  {s:"Buses",m:"Sunshine School Chassis",p:2075000},
+  {s:"Buses",m:"Sunshine Li School Bus",p:3125000},
   /* Lynx Smart */
-  {s:"Buses",m:"Lynx Smart NAC Chassis",p:2226000},
+  {s:"Buses",m:"Lynx Smart NAC Chassis",p:2140000},
   {s:"Buses",m:"Lynx Smart AC Chassis",p:2515000},
-  {s:"Buses",m:"Lynx Smart CNG NAC",p:2457000},
+  {s:"Buses",m:"Lynx Smart CNG NAC",p:2380000},
   {s:"Buses",m:"Lynx Smart CNG AC",p:2880000},
-  {s:"Buses",m:"Lynx Smart AC Air Sus",p:2762000},
   /* Lynx Strong */
-  {s:"Buses",m:"Lynx Strong NAC Chassis",p:2725000},
-  {s:"Buses",m:"Lynx Strong AC Chassis",p:2816000},
-  {s:"Buses",m:"Lynx Strong CNG NAC",p:3419000},
+  {s:"Buses",m:"Lynx Strong NAC Chassis",p:2585000},
+  {s:"Buses",m:"Lynx Strong AC Chassis",p:2870000},
+  {s:"Buses",m:"Lynx Strong CNG NAC",p:3315000},
   /* Oyster */
-  {s:"Buses",m:"Oyster Staff Bus NAC",p:3383000},
-  {s:"Buses",m:"Oyster Staff Bus AC",p:4103000},
-  {s:"Buses",m:"Oyster School Bus NAC",p:3617000},
-  {s:"Buses",m:"Oyster School Bus AC",p:4464000},
-  {s:"Buses",m:"Oyster CNG Staff NAC",p:3893000},
-  {s:"Buses",m:"Oyster CNG Staff AC",p:4547000},
-  {s:"Buses",m:"Oyster CNG School NAC",p:3953000},
-  {s:"Buses",m:"Oyster CNG School AC",p:5021000},
-  {s:"Buses",m:"Oyster Wide Staff NAC",p:4008000},
-  {s:"Buses",m:"Oyster Wide Staff CNG",p:4133000},
-  /* MCV — Cheetah, Viking, 12M, 13.5M */
-  {s:"Buses",m:"Cheetah Chassis",p:3145000},
-  {s:"Buses",m:"Viking NAC Chassis",p:3294000},
-  {s:"Buses",m:"Viking AC Chassis",p:3559000},
-  {s:"Buses",m:"Viking CNG NA Chassis",p:3522000},
-  {s:"Buses",m:"Viking CNG TC Chassis",p:3666000},
-  {s:"Buses",m:"12M AC Chassis",p:3827000},
-  {s:"Buses",m:"12M 250HP Chassis",p:4279000},
-  {s:"Buses",m:"Garud 13.5M Chassis",p:4424000},
-  /* ===== HAULAGE — 1920 4x2 first, then MAV by GVW, then Tractors by GVW ===== */
-  /* 1920 4x2 */
-  {s:"Haulage",m:"1920 4x2 Haulage",p:2780000},
-  {s:"Haulage",m:"1920 4x2 Cab Chassis",p:2859000},
-  {s:"Haulage",m:"1920 CNG Haulage",p:3124000},
-  /* MAV — increasing GVW */
-  {s:"Haulage",m:"2620 6x2 Haulage",p:3439000},
-  {s:"Haulage",m:"2820 6x4 Haulage",p:3479000},
-  {s:"Haulage",m:"2822 CNG 6x4 Haulage",p:3835000},
-  {s:"Haulage",m:"2825 6x4 9-Speed",p:4088000},
-  {s:"Haulage",m:"3120 6x4 Haulage",p:3832000},
-  {s:"Haulage",m:"3520 8x2 LA Haulage",p:4281000},
-  {s:"Haulage",m:"3520 8x2 TS Haulage",p:4221000},
-  {s:"Haulage",m:"3522 CNG 8x2 Haulage",p:4492000},
-  {s:"Haulage",m:"4120 10x2 Haulage",p:4321000},
-  {s:"Haulage",m:"4220 10x2 Haulage",p:4551000},
-  {s:"Haulage",m:"4225 10x2 Haulage",p:4625000},
-  {s:"Haulage",m:"4825 12x2 Haulage",p:5024000},
-  /* Tractors — increasing GVW */
-  {s:"Haulage",m:"Tractor 4020",p:3430000},
-  {s:"Haulage",m:"Tractor 4620",p:3491000},
-  {s:"Haulage",m:"Tractor 5525 4x2",p:3980000},
-  {s:"Haulage",m:"Tractor 5525 6x4",p:4416000},
-  /* ===== ICV TRUCKS — increasing GVW ===== */
-  /* 9T GVW */
-  {s:"ICV Trucks",m:"Partner Super 914",p:1912000},
-  /* 10T GVW */
-  {s:"ICV Trucks",m:"Partner Super 1014",p:2013000},
-  {s:"ICV Trucks",m:"Ecomet 1015",p:2136000},
-  /* 11T GVW */
-  {s:"ICV Trucks",m:"Partner Super 1114",p:2057000},
-  {s:"ICV Trucks",m:"Boss 1115",p:2145000},
-  {s:"ICV Trucks",m:"Ecomet 1110 CNG",p:2227000},
-  /* 12T GVW */
-  {s:"ICV Trucks",m:"Ecomet 1215",p:2329000},
-  {s:"ICV Trucks",m:"Boss 1215",p:2384000},
-  /* 13T GVW */
-  {s:"ICV Trucks",m:"Ecomet 1315 Tipper",p:2337000},
-  /* 14T GVW */
-  {s:"ICV Trucks",m:"Ecomet 1415 Haulage",p:2424000},
-  {s:"ICV Trucks",m:"Ecomet 1415 Tipper",p:2678000},
-  {s:"ICV Trucks",m:"Ecomet 1415 CNG",p:2597000},
-  {s:"ICV Trucks",m:"Boss 1415",p:2449000},
-  /* 16T GVW */
-  {s:"ICV Trucks",m:"Ecomet 1615 Haulage",p:2619000},
-  {s:"ICV Trucks",m:"Ecomet 1615 Tipper",p:2851000},
-  {s:"ICV Trucks",m:"Ecomet 1615 CNG",p:2817000},
-  {s:"ICV Trucks",m:"Boss 1615",p:2678000},
-  /* 18T GVW */
-  {s:"ICV Trucks",m:"Ecomet 1815",p:2759000},
-  {s:"ICV Trucks",m:"Boss 1815",p:2773000},
-  /* 19T GVW */
-  {s:"ICV Trucks",m:"Ecomet 1915",p:2792000},
-  {s:"ICV Trucks",m:"Ecomet 1915 CNG",p:2892000},
-  {s:"ICV Trucks",m:"Boss 1915",p:2802000},
-  /* ===== TIPPERS — RMC first (increasing capacity), Tippers (increasing GVW), Boom Pumps last ===== */
-  /* RMC */
-  {s:"Tippers",m:"6x4 RMC Chassis",p:3995000},
-  {s:"Tippers",m:"6x4 RMC",p:5256000},
-  {s:"Tippers",m:"8x4 RMC",p:4808000},
-  /* Tippers — increasing GVW */
-  {s:"Tippers",m:"1920/1925 4x2 Tipper",p:3390000},
-  {s:"Tippers",m:"2820 6x4 Tipper",p:4363000},
-  {s:"Tippers",m:"2825 6x4 Tipper",p:4861000},
-  {s:"Tippers",m:"2832 6x4 Tipper",p:5365000},
-  {s:"Tippers",m:"3520 8x2 Tipper",p:4301000},
-  {s:"Tippers",m:"3525 8x4 Tipper",p:5548000},
-  {s:"Tippers",m:"3532 8x4 Tipper",p:6530000},
-  {s:"Tippers",m:"4220/4225 10x2 Tipper",p:5011000},
-  {s:"Tippers",m:"4825 10x2 Tipper",p:5679000},
-  {s:"Tippers",m:"4825 10x4 Tipper",p:5851000},
-  /* Boom Pumps */
-  {s:"Tippers",m:"6x4 Boom Pump",p:4355000}
+  {s:"Buses",m:"Oyster Staff Bus NAC",p:3325000},
+  {s:"Buses",m:"Oyster Staff Bus AC",p:4080000},
+  {s:"Buses",m:"Oyster School Bus NAC",p:3490000},
+  {s:"Buses",m:"Oyster School Bus AC",p:4425000},
+  {s:"Buses",m:"Oyster CNG Staff NAC",p:3845000},
+  {s:"Buses",m:"Oyster CNG Staff AC",p:4630000},
+  {s:"Buses",m:"Oyster CNG School NAC",p:3725000},
+  {s:"Buses",m:"Oyster CNG School AC",p:5070000},
+  {s:"Buses",m:"Oyster Wide Staff NAC",p:3690000},
+  {s:"Buses",m:"Oyster Wide Staff CNG",p:4445000},
+  /* MCV — Cheetah, Viking, 12M, 13.5M, 15M */
+  {s:"Buses",m:"Cheetah Chassis",p:3165000},
+  {s:"Buses",m:"Viking NAC Chassis",p:3220000},
+  {s:"Buses",m:"Viking AC Chassis",p:3380000},
+  {s:"Buses",m:"Viking CNG NAC Chassis",p:3515000},
+  {s:"Buses",m:"Viking CNG TC Chassis",p:3740000},
+  {s:"Buses",m:"12M AC Chassis",p:3525000},
+  {s:"Buses",m:"12M 250HP Chassis",p:4365000},
+  {s:"Buses",m:"Garud 13.5M Chassis",p:4270000},
+  {s:"Buses",m:"Garud 15M Chassis",p:6350000},
+  /* ===== HAULAGE — 19T first, then MAV by GVW, then Tractors ===== */
+  {s:"Haulage",m:"Haulage 19T",p:2645000},
+  {s:"Haulage",m:"Haulage 19T CNG",p:3035000},
+  {s:"Haulage",m:"Haulage MAV 26T",p:3390000},
+  {s:"Haulage",m:"Haulage MAV 28T",p:3400000},
+  {s:"Haulage",m:"Haulage MAV 31T",p:3770000},
+  {s:"Haulage",m:"Haulage MAV 35T",p:4125000},
+  {s:"Haulage",m:"Haulage MAV 42T",p:4275000},
+  {s:"Haulage",m:"Haulage MAV 45T (Air Sus)",p:4510000},
+  {s:"Haulage",m:"Haulage MAV 46T (Air Sus)",p:4780000},
+  {s:"Haulage",m:"Haulage MAV 48T",p:4935000},
+  {s:"Haulage",m:"Haulage MAV 49T (Air Sus)",p:5175000},
+  {s:"Haulage",m:"Tractor",p:3310000},
+  /* ===== ICV TRUCKS — by GVW ===== */
+  {s:"ICV Trucks",m:"Partner Super",p:1840000},
+  {s:"ICV Trucks",m:"Ecomet 11T",p:2040000},
+  {s:"ICV Trucks",m:"Boss 11T",p:2110000},
+  {s:"ICV Trucks",m:"Ecomet 12T",p:2225000},
+  {s:"ICV Trucks",m:"Boss 12T",p:2290000},
+  {s:"ICV Trucks",m:"Ecomet 13T",p:2295000},
+  {s:"ICV Trucks",m:"Ecomet 14T",p:2365000},
+  {s:"ICV Trucks",m:"Boss 14T",p:2390000},
+  {s:"ICV Trucks",m:"Ecomet CNG",p:2100000},
+  {s:"ICV Trucks",m:"Ecomet 16T",p:2525000},
+  {s:"ICV Trucks",m:"Boss 16T",p:2550000},
+  {s:"ICV Trucks",m:"Ecomet 18T",p:2665000},
+  {s:"ICV Trucks",m:"Boss 18T",p:2690000},
+  {s:"ICV Trucks",m:"Ecomet 19T",p:2725000},
+  {s:"ICV Trucks",m:"Boss 19T",p:2735000},
+  /* ===== TIPPERS & RMC ===== */
+  {s:"Tippers",m:"4x2 Tipper 19T",p:3130000},
+  {s:"Tippers",m:"6x4 Tipper 25-28T",p:4580000},
+  {s:"Tippers",m:"8x4 Tipper 35T",p:5400000},
+  {s:"Tippers",m:"10x4 Tipper 48T",p:5445000},
+  {s:"Tippers",m:"Transit Mixer / RMC / Boom Pump",p:4265000}
 ];
 
 /* ============ POPULATE SEGMENTS ============ */
