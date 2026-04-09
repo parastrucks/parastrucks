@@ -1,19 +1,12 @@
 // TIV Forecast — reusable segment × month forecast table
+// forecastMonths items have { label, month_num, horizon } — use fm.label, NOT fm.month
 import { SEGMENTS } from '../constants'
-
-// pct: number → "+12.3%" or "—"
-function fmtPct(val) {
-  if (val === null || val === undefined || isNaN(val)) return '—'
-  const p = (val * 100).toFixed(1)
-  return val >= 0 ? `+${p}%` : `${p}%`
-}
 
 function fmtSharePct(val) {
   if (val === null || val === undefined || isNaN(val)) return '—'
   return `${(val * 100).toFixed(1)}%`
 }
 
-// Color based on error magnitude (for accuracy tracker reuse)
 export function errorColor(absErr) {
   if (absErr <= 0.15) return 'var(--green)'
   if (absErr <= 0.25) return 'var(--amber)'
@@ -27,57 +20,61 @@ export default function ForecastTable({ title, subtitle, forecastMonths = [], by
     <div style={{ marginBottom: 28 }}>
       <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>{title}</div>
       {subtitle && <div style={{ fontSize: 13, color: 'var(--gray-400)', marginBottom: 10 }}>{subtitle}</div>}
-      <div className="table-wrap">
-        <table>
+      <div style={{ width: '100%' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr>
-              <th>Segment</th>
+              <th style={{ textAlign: 'left', padding: '8px 10px', borderBottom: '2px solid var(--gray-200)', fontSize: 13 }}>Segment</th>
               {forecastMonths.map(fm => (
-                <th key={fm.month} colSpan={judgmentRows[fm.month] ? 2 : 1} style={{ textAlign: 'center' }}>
-                  {fm.month}
+                <th key={fm.label} colSpan={judgmentRows[fm.label] ? 2 : 1}
+                  style={{ textAlign: 'center', padding: '8px 10px', borderBottom: '2px solid var(--gray-200)', fontSize: 13 }}>
+                  {fm.label}
                   {showShare && <div style={{ fontSize: 11, fontWeight: 400, color: 'var(--gray-400)' }}>Fcst · Share</div>}
                 </th>
               ))}
             </tr>
-            {forecastMonths.some(fm => judgmentRows[fm.month]) && (
+            {forecastMonths.some(fm => judgmentRows[fm.label]) && (
               <tr style={{ background: 'var(--gray-50)', fontSize: 11 }}>
                 <th></th>
-                {forecastMonths.map(fm => (
-                  judgmentRows[fm.month]
-                    ? <><th key={`${fm.month}-m`} style={{ textAlign: 'center', fontWeight: 500 }}>Model</th>
-                       <th key={`${fm.month}-j`} style={{ textAlign: 'center', fontWeight: 500, color: 'var(--amber)' }}>Judg</th></>
-                    : <th key={fm.month}></th>
-                ))}
+                {forecastMonths.map(fm =>
+                  judgmentRows[fm.label]
+                    ? (
+                      <>
+                        <th key={`${fm.label}-m`} style={{ textAlign: 'center', fontWeight: 500, padding: '4px 8px' }}>Model</th>
+                        <th key={`${fm.label}-j`} style={{ textAlign: 'center', fontWeight: 500, color: 'var(--amber)', padding: '4px 8px' }}>Judg</th>
+                      </>
+                    )
+                    : <th key={fm.label}></th>
+                )}
               </tr>
             )}
           </thead>
           <tbody>
             {SEGMENTS.map(seg => (
-              <tr key={seg}>
-                <td style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{seg}</td>
+              <tr key={seg} style={{ borderBottom: '1px solid var(--gray-100)' }}>
+                <td style={{ fontWeight: 600, whiteSpace: 'nowrap', padding: '7px 10px', fontSize: 13 }}>{seg}</td>
                 {forecastMonths.map(fm => {
-                  const row = bySegment[seg]?.find(r => r.month === fm.month)
-                  const val = row ? row[Object.keys(row).find(k => k !== 'month' && k !== 'month_num' && k !== 'horizon' && k !== 'alShare' && k !== 'ptbShare' && k !== 'hwForecast' && k !== 'smlyForecast' && !['al','ptb'].includes(k) && (title.includes('TIV') ? k === 'tiv' : title.includes('AL') ? k === 'al' : k === 'ptb'))] : null
-                  // Determine the right key based on table type
+                  const row = bySegment[seg]?.find(r => r.month === fm.label)
                   let dispVal = null
                   if (row) {
-                    if (title.toLowerCase().includes('tiv') || title.includes('Layer 1')) dispVal = row.tiv
-                    else if (title.toLowerCase().includes('al') || title.includes('Layer 2')) dispVal = row.al
+                    if (title.includes('Layer 1') || title.toLowerCase().includes('tiv')) dispVal = row.tiv
+                    else if (title.includes('Layer 2') || title.toLowerCase().includes('al ')) dispVal = row.al
                     else dispVal = row.ptb
                   }
                   const share = showShare && row ? row[shareKey] : null
-                  const jRow = judgmentRows[fm.month]
-                  const jVal = jRow ? jRow[seg] : null
-                  if (judgmentRows[fm.month]) {
+                  const jRow  = judgmentRows[fm.label]
+                  const jVal  = jRow ? jRow[seg] : null
+
+                  if (jRow) {
                     return (
                       <>
-                        <td key={`${fm.month}-m`} style={{ textAlign: 'right' }}>{dispVal ?? '—'}</td>
-                        <td key={`${fm.month}-j`} style={{ textAlign: 'right', color: 'var(--amber)' }}>{jVal ?? '—'}</td>
+                        <td key={`${fm.label}-m`} style={{ textAlign: 'right', padding: '7px 10px', fontSize: 13 }}>{dispVal ?? '—'}</td>
+                        <td key={`${fm.label}-j`} style={{ textAlign: 'right', padding: '7px 10px', fontSize: 13, color: 'var(--amber)' }}>{jVal ?? '—'}</td>
                       </>
                     )
                   }
                   return (
-                    <td key={fm.month} style={{ textAlign: 'right' }}>
+                    <td key={fm.label} style={{ textAlign: 'right', padding: '7px 10px', fontSize: 13 }}>
                       <span style={{ fontWeight: 600 }}>{dispVal ?? '—'}</span>
                       {showShare && share !== null && (
                         <span style={{ fontSize: 11, color: 'var(--gray-400)', marginLeft: 4 }}>
@@ -91,18 +88,18 @@ export default function ForecastTable({ title, subtitle, forecastMonths = [], by
             ))}
             {/* Total row */}
             <tr style={{ borderTop: '2px solid var(--gray-200)', fontWeight: 700 }}>
-              <td>Total</td>
+              <td style={{ padding: '7px 10px', fontSize: 13 }}>Total</td>
               {forecastMonths.map(fm => {
                 let total = 0
                 for (const seg of SEGMENTS) {
-                  const row = bySegment[seg]?.find(r => r.month === fm.month)
+                  const row = bySegment[seg]?.find(r => r.month === fm.label)
                   if (row) {
-                    if (title.toLowerCase().includes('tiv') || title.includes('Layer 1')) total += row.tiv || 0
-                    else if (title.toLowerCase().includes('al') || title.includes('Layer 2')) total += row.al || 0
+                    if (title.includes('Layer 1') || title.toLowerCase().includes('tiv')) total += row.tiv || 0
+                    else if (title.includes('Layer 2') || title.toLowerCase().includes('al ')) total += row.al || 0
                     else total += row.ptb || 0
                   }
                 }
-                return <td key={fm.month} style={{ textAlign: 'right' }}>{total || '—'}</td>
+                return <td key={fm.label} style={{ textAlign: 'right', padding: '7px 10px', fontSize: 13 }}>{total || '—'}</td>
               })}
             </tr>
           </tbody>

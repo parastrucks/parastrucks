@@ -6,10 +6,10 @@ function buildJudgmentRows(judgmentData, forecastMonths, valueKey) {
   const rows = {}
   if (!judgmentData?.length) return rows
   for (const fm of forecastMonths) {
-    const jRow = judgmentData.find(r => r.month_label === fm.month)
+    const jRow = judgmentData.find(r => r.month_label === fm.label)
     if (jRow) {
       // Convert to { [segName]: value } using the standard column mapping
-      rows[fm.month] = {
+      rows[fm.label] = {
         'Bus PVT':   jRow.bus_pvt,
         'Haulage':   jRow.haulage,
         'MAV':       jRow.mav,

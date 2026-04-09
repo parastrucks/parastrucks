@@ -1,7 +1,10 @@
 // TIV Forecast — Trigger Controls Tab
+import { useState } from 'react'
 import { TRIGGER_DEFS } from '../lib/triggerDefs'
 
 export default function TriggerControlsTab({ triggerState, onTriggerChange }) {
+  const [draggingId, setDraggingId] = useState(null)
+
   function handleToggle(id) {
     const current = triggerState[id] || {}
     onTriggerChange(id, { ...current, on: !current.on })
@@ -38,8 +41,9 @@ export default function TriggerControlsTab({ triggerState, onTriggerChange }) {
       <div style={{ display: 'grid', gap: 12 }}>
         {TRIGGER_DEFS.map(def => {
           const state = triggerState[def.id] || { on: false, severity: def.defaultSev, direction: 'dampen' }
-          const isOn = !!state.on
-          const sev  = state.severity ?? def.defaultSev
+          const isOn  = !!state.on
+          const sev   = state.severity ?? def.defaultSev
+          const isDragging = draggingId === def.id
 
           return (
             <div
@@ -70,7 +74,17 @@ export default function TriggerControlsTab({ triggerState, onTriggerChange }) {
                       {isOn ? 'ON' : 'OFF'}
                     </span>
                     {isOn && (
-                      <span className="badge badge-amber" style={{ fontSize: 11 }}>
+                      <span
+                        className="badge badge-amber"
+                        style={{
+                          fontSize: isDragging ? 13 : 11,
+                          fontWeight: isDragging ? 800 : 600,
+                          background: isDragging ? 'var(--amber)' : undefined,
+                          color: isDragging ? '#fff' : undefined,
+                          transition: 'all 0.1s',
+                          padding: isDragging ? '3px 9px' : undefined,
+                        }}
+                      >
                         {sev}%{def.type === 'both' ? ` · ${state.direction}` : ''}
                       </span>
                     )}
@@ -80,8 +94,20 @@ export default function TriggerControlsTab({ triggerState, onTriggerChange }) {
                   {isOn && (
                     <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                       {/* Severity slider */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 180 }}>
-                        <span style={{ fontSize: 12, color: 'var(--gray-500)', whiteSpace: 'nowrap' }}>
+                      <div style={{
+                        display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 180,
+                        background: isDragging ? 'var(--blue-light)' : 'transparent',
+                        borderRadius: 6,
+                        padding: isDragging ? '6px 10px' : '0',
+                        transition: 'all 0.15s',
+                      }}>
+                        <span style={{
+                          fontSize: 12,
+                          color: isDragging ? 'var(--blue)' : 'var(--gray-500)',
+                          whiteSpace: 'nowrap',
+                          fontWeight: isDragging ? 700 : 400,
+                          transition: 'all 0.1s',
+                        }}>
                           Severity: {sev}%
                         </span>
                         <input
@@ -91,6 +117,10 @@ export default function TriggerControlsTab({ triggerState, onTriggerChange }) {
                           step={1}
                           value={sev}
                           onChange={e => handleSeverity(def.id, e.target.value)}
+                          onMouseDown={() => setDraggingId(def.id)}
+                          onMouseUp={() => setDraggingId(null)}
+                          onTouchStart={() => setDraggingId(def.id)}
+                          onTouchEnd={() => setDraggingId(null)}
                           className="tiv-slider"
                           style={{ flex: 1 }}
                         />
