@@ -15,10 +15,10 @@ import SegmentAnalysisTab from '../components/SegmentAnalysisTab'
 import AccuracyTrackerTab from '../components/AccuracyTrackerTab'
 
 const TABS = [
-  { id: 'forecast',  label: 'Forecast Output' },
-  { id: 'triggers',  label: 'Trigger Controls' },
-  { id: 'segments',  label: 'Segment Analysis' },
-  { id: 'accuracy',  label: 'Accuracy Tracker' },
+  { id: 'forecast',  label: 'Forecast' },
+  { id: 'triggers',  label: 'Triggers' },
+  { id: 'segments',  label: 'Segments' },
+  { id: 'accuracy',  label: 'Accuracy' },
 ]
 
 const DEBOUNCE_MS = 400
