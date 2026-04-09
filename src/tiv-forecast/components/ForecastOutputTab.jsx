@@ -49,17 +49,20 @@ export default function ForecastOutputTab({ forecastResult, judgmentTiv, judgmen
 
   return (
     <div>
-      {/* Active trigger context banner */}
+      {/* Active trigger context banner — single line, truncated */}
       {activeTriggers.length > 0 && (
         <div style={{
           background: 'var(--amber-light, #FFF8E1)',
           border: '1px solid var(--amber, #F59E0B)',
           borderRadius: 6,
-          padding: '10px 14px',
-          marginBottom: 16,
+          padding: '7px 12px',
+          marginBottom: 12,
           fontSize: 13,
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
         }}>
-          <strong>Active adjustments:</strong>{' '}
+          <strong>Active:</strong>{' '}
           {activeTriggers.map(t => t.name).join(' · ')}
         </div>
       )}
@@ -94,6 +97,7 @@ export default function ForecastOutputTab({ forecastResult, judgmentTiv, judgmen
         <ForecastTable
           title="Layer 1 — TIV Forecast (Total Industry Volume)"
           subtitle="All brands combined in PTB territory"
+          showTitle={false}
           forecastMonths={forecastMonths}
           bySegment={bySegment}
           judgmentRows={jTivRows}
@@ -103,6 +107,7 @@ export default function ForecastOutputTab({ forecastResult, judgmentTiv, judgmen
         <ForecastTable
           title="Layer 2 — AL Forecast (Ashok Leyland volume)"
           subtitle="AL = PTB + LM · Share = recent 6-month avg of AL/TIV"
+          showTitle={false}
           forecastMonths={forecastMonths}
           bySegment={bySegment}
           showShare
@@ -114,6 +119,7 @@ export default function ForecastOutputTab({ forecastResult, judgmentTiv, judgmen
         <ForecastTable
           title="Layer 3 — PTB Sales Forecast"
           subtitle="PTB share of AL · Hard cap at 75% (LM must survive)"
+          showTitle={false}
           forecastMonths={forecastMonths}
           bySegment={bySegment}
           showShare

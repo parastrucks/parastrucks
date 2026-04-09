@@ -11,7 +11,7 @@ import {
 
 export default function UploadPanel({ onUploadComplete }) {
   const { profile, isAdmin } = useAuth()
-  const [collapsed, setCollapsed]     = useState(false)
+  const [collapsed, setCollapsed]     = useState(true)
   const [file, setFile]               = useState(null)
   const [preview, setPreview]         = useState(null)  // { monthsLoaded, lastDataMonth }
   const [uploading, setUploading]     = useState(false)
@@ -103,6 +103,7 @@ export default function UploadPanel({ onUploadComplete }) {
       setSuccessMsg(`Upload complete — ${parsed.summary.monthsLoaded} months loaded. Last data: ${parsed.summary.lastDataMonth}`)
       setFile(null)
       setPreview(null)
+      setCollapsed(true)  // auto-collapse after upload
 
       // Reload history if visible
       const hist = await fetchUploadHistory()

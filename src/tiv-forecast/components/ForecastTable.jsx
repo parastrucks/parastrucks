@@ -13,13 +13,13 @@ export function errorColor(absErr) {
   return 'var(--red)'
 }
 
-export default function ForecastTable({ title, subtitle, forecastMonths = [], bySegment = {}, showShare, shareKey, judgmentRows = {} }) {
+export default function ForecastTable({ title, subtitle, showTitle = true, forecastMonths = [], bySegment = {}, showShare, shareKey, judgmentRows = {} }) {
   if (!forecastMonths.length) return null
 
   return (
-    <div style={{ marginBottom: 28 }}>
-      <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>{title}</div>
-      {subtitle && <div style={{ fontSize: 13, color: 'var(--gray-400)', marginBottom: 10 }}>{subtitle}</div>}
+    <div style={{ marginBottom: 16 }}>
+      {showTitle && <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>{title}</div>}
+      {showTitle && subtitle && <div style={{ fontSize: 13, color: 'var(--gray-400)', marginBottom: 8 }}>{subtitle}</div>}
       <div style={{ width: '100%' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>

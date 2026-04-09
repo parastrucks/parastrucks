@@ -183,6 +183,7 @@ export default function TivForecastPage() {
         <AccuracyTrackerTab
           tivActuals={tivActuals}
           judgmentTiv={judgmentTiv}
+          modelParams={modelParams}
         />
       )}
     </div>

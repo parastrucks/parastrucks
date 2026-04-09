@@ -21,10 +21,10 @@ export default function SegmentAnalysisTab({ tivActuals, alActuals, ptbActuals, 
     if (!forecastResult) return historicalChartData
     const base = [...historicalChartData]
     for (const fm of forecastResult.forecastMonths) {
-      const segRow = forecastResult.bySegment[activeSeg]?.find(r => r.month === fm.month)
+      const segRow = forecastResult.bySegment[activeSeg]?.find(r => r.month === fm.label)
       if (segRow) {
         base.push({
-          month:    fm.month,
+          month:    fm.label,
           TIV:      null,
           PTB:      null,
           'TIV Fcst': segRow.tiv,
@@ -53,9 +53,9 @@ export default function SegmentAnalysisTab({ tivActuals, alActuals, ptbActuals, 
   const stackedData = useMemo(() => {
     if (!forecastResult) return []
     return forecastResult.forecastMonths.map(fm => {
-      const row = { month: fm.month }
+      const row = { month: fm.label }
       for (const seg of SEGMENTS) {
-        const r = forecastResult.bySegment[seg]?.find(s => s.month === fm.month)
+        const r = forecastResult.bySegment[seg]?.find(s => s.month === fm.label)
         row[seg] = r?.tiv || 0
       }
       return row
