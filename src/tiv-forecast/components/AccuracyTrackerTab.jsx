@@ -96,7 +96,12 @@ export default function AccuracyTrackerTab({ tivActuals, judgmentTiv, modelParam
 
   const months = useMemo(() => {
     const set = new Set([...Object.keys(jLookup), ...Object.keys(mdlLookup)])
-    return [...set].sort()
+    // Sort chronologically using parseMonthLabel's month_index
+    return [...set].sort((a, b) => {
+      const ai = (()=>{ const m=a.match(/^([A-Za-z]{3})-(\d{2})$/); if(!m) return 0; const mn={Jan:1,Feb:2,Mar:3,Apr:4,May:5,Jun:6,Jul:7,Aug:8,Sep:9,Oct:10,Nov:11,Dec:12}; return (parseInt(m[2])+2000)*12+mn[m[1]]; })()
+      const bi = (()=>{ const m=b.match(/^([A-Za-z]{3})-(\d{2})$/); if(!m) return 0; const mn={Jan:1,Feb:2,Mar:3,Apr:4,May:5,Jun:6,Jul:7,Aug:8,Sep:9,Oct:10,Nov:11,Dec:12}; return (parseInt(m[2])+2000)*12+mn[m[1]]; })()
+      return ai - bi
+    })
   }, [jLookup, mdlLookup])
 
   // MAPE chart data

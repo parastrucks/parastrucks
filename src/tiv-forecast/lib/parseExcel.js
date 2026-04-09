@@ -6,6 +6,15 @@ import { SEGMENTS, SEG_COL, RAW_SEGMENT_ROWS, RAW_COLS_PER_MONTH, RAW_COL_OFFSET
 // Convert "Apr-22" → { year: 2022, month_num: 4, month_index: 0 }
 // Apr-22 is index 0 (fiscal year start)
 const MONTH_ABBR = { Jan:1, Feb:2, Mar:3, Apr:4, May:5, Jun:6, Jul:7, Aug:8, Sep:9, Oct:10, Nov:11, Dec:12 }
+const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+
+// Excel date serial → "Apr-22" string
+// Excel epoch = Dec 30, 1899; JS epoch = Jan 1, 1970 → offset 25569 days
+function excelSerialToLabel(serial) {
+  if (typeof serial !== 'number' || serial < 38000) return null  // < year 2004, not a valid data month
+  const d = new Date(Math.round((serial - 25569) * 86400 * 1000))
+  return `${MONTH_NAMES[d.getUTCMonth()]}-${String(d.getUTCFullYear()).slice(-2)}`
+}
 
 export function parseMonthLabel(label) {
   if (!label || typeof label !== 'string') return null
@@ -159,13 +168,18 @@ function parseRawDataSheet(ws) {
 
   // Scan row 0 for every cell that looks like a month label (e.g. "Apr-22")
   // Merged cells: only the first cell of a merge carries the value, rest are ''
+  // Cells may be text ("Apr-22") OR Excel date serials (44652) — handle both
   const monthRow = rows[0]
   const months = []
   for (let col = 0; col < monthRow.length; col++) {
-    const val = String(monthRow[col]).trim()
-    if (val && parseMonthLabel(val)) {
-      months.push({ label: val, startCol: col, ...parseMonthLabel(val) })
-    }
+    const raw = monthRow[col]
+    // Try numeric serial first, then string parse
+    const label = (typeof raw === 'number')
+      ? excelSerialToLabel(raw)
+      : String(raw).trim()
+    if (!label) continue
+    const meta = parseMonthLabel(label)
+    if (meta) months.push({ label, startCol: col, ...meta })
   }
 
   if (months.length === 0) return { alActuals: [], rawRows: [] }

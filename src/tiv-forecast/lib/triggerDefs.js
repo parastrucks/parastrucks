@@ -18,9 +18,9 @@ export const TRIGGER_DEFS = [
   {
     id: 'ais153',
     name: 'AIS 153 Bus Recovery',
-    desc: 'Body builder licence approvals boost MDV Bus through Q1-Q2 FY27, 30% spillover to ICV Trucks',
-    affected: ['Bus PVT', 'ICV Trucks'],
-    segWeight: { 'Bus PVT': 1.0, 'ICV Trucks': 0.3 },
+    desc: 'Body builder licence approvals boost MDV Bus through Q1-Q2 FY27, 30% spillover to ICV Buses',
+    affected: ['Bus PVT'],
+    segWeight: { 'Bus PVT': 1.3 },
     months: [4, 5, 6, 7, 8, 9],
     type: 'boost',
     defaultSev: 20,
