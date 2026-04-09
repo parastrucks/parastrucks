@@ -21,6 +21,8 @@ function fmtPct(val) {
   return `${(val * 100).toFixed(1)}%`
 }
 
+const ALL_COLS = [...SEGMENTS, 'Total']
+
 function buildJudgmentBacktest(tivActuals, judgmentTiv) {
   if (!judgmentTiv?.length || !tivActuals?.length) return {}
   const actualMap = {}
@@ -36,6 +38,10 @@ function buildJudgmentBacktest(tivActuals, judgmentTiv) {
       const aVal = Number(aRow[col])
       lookup[jRow.month_label][seg] = { jVal, aVal, ae: absErr(jVal, aVal) }
     }
+    // Total TIV
+    const jTot = SEGMENTS.reduce((s, seg) => s + (Number(jRow[SEG_COL[seg]]) || 0), 0)
+    const aTot = SEGMENTS.reduce((s, seg) => s + (Number(aRow[SEG_COL[seg]]) || 0), 0)
+    lookup[jRow.month_label]['Total'] = { jVal: jTot, aVal: aTot, ae: absErr(jTot, aTot) }
   }
   return lookup
 }
@@ -55,17 +61,21 @@ function buildModelBacktest(tivActuals, modelBacktest) {
       const aVal = Number(aRow[col])
       lookup[mRow.month_label][seg] = { mVal, aVal, ae: absErr(mVal, aVal) }
     }
+    // Total TIV
+    const mTot = SEGMENTS.reduce((s, seg) => s + (Number(mRow[SEG_COL[seg]]) || 0), 0)
+    const aTot = SEGMENTS.reduce((s, seg) => s + (Number(aRow[SEG_COL[seg]]) || 0), 0)
+    lookup[mRow.month_label]['Total'] = { mVal: mTot, aVal: aTot, ae: absErr(mTot, aTot) }
   }
   return lookup
 }
 
 function computeMAPE(lookup) {
   const mape = {}
-  for (const seg of SEGMENTS) {
+  for (const col of ALL_COLS) {
     const vals = Object.values(lookup)
-      .map(m => m[seg]?.ae)
+      .map(m => m[col]?.ae)
       .filter(v => v !== null && v !== undefined)
-    mape[seg] = vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length * 100 : null
+    mape[col] = vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length * 100 : null
   }
   return mape
 }
@@ -195,6 +205,19 @@ export default function AccuracyTrackerTab({ tivActuals, judgmentTiv, modelParam
                     {seg}
                   </th>
                 ))}
+                {/* Total TIV column header */}
+                <th
+                  colSpan={segCols}
+                  style={{
+                    textAlign: 'center',
+                    padding: '6px 4px',
+                    minWidth: hasBoth ? 120 : 80,
+                    borderLeft: '2px solid var(--gray-300)',
+                    fontWeight: 700,
+                  }}
+                >
+                  Total TIV
+                </th>
               </tr>
 
               {/* Row 2: MDL | JDG sub-headers (only when both sources present) */}
@@ -230,6 +253,9 @@ export default function AccuracyTrackerTab({ tivActuals, judgmentTiv, modelParam
                       </th>
                     </>
                   ))}
+                  {/* Total sub-headers */}
+                  <th style={{ textAlign: 'center', fontWeight: 600, fontSize: 11, color: 'var(--blue)', padding: '3px 6px', borderLeft: '2px solid var(--gray-300)' }}>MDL</th>
+                  <th style={{ textAlign: 'center', fontWeight: 600, fontSize: 11, color: '#F59E0B', padding: '3px 6px' }}>JDG</th>
                 </tr>
               )}
             </thead>
@@ -261,6 +287,19 @@ export default function AccuracyTrackerTab({ tivActuals, judgmentTiv, modelParam
                       />
                     )
                   })}
+                  {/* Total TIV cells */}
+                  {hasBoth ? (
+                    <>
+                      <ErrCell key={`${month}-total-m`} ae={mdlLookup[month]?.['Total']?.ae ?? null} style={{ borderLeft: '2px solid var(--gray-300)' }} />
+                      <ErrCell key={`${month}-total-j`} ae={jLookup[month]?.['Total']?.ae ?? null} />
+                    </>
+                  ) : (
+                    <ErrCell
+                      key={`${month}-total`}
+                      ae={(hasMdl ? mdlLookup : jLookup)[month]?.['Total']?.ae ?? null}
+                      style={{ borderLeft: '2px solid var(--gray-300)' }}
+                    />
+                  )}
                 </tr>
               ))}
 
@@ -287,6 +326,19 @@ export default function AccuracyTrackerTab({ tivActuals, judgmentTiv, modelParam
                     />
                   )
                 })}
+                {/* Total TIV MAPE */}
+                {hasBoth ? (
+                  <>
+                    <ErrCell key="mape-total-m" ae={mdlMape['Total'] !== null ? mdlMape['Total'] / 100 : null} style={{ borderLeft: '2px solid var(--gray-300)' }} />
+                    <ErrCell key="mape-total-j" ae={jMape['Total'] !== null ? jMape['Total'] / 100 : null} />
+                  </>
+                ) : (
+                  <ErrCell
+                    key="mape-total"
+                    ae={(hasMdl ? mdlMape : jMape)['Total'] !== null ? (hasMdl ? mdlMape : jMape)['Total'] / 100 : null}
+                    style={{ borderLeft: '2px solid var(--gray-300)' }}
+                  />
+                )}
               </tr>
             </tbody>
           </table>

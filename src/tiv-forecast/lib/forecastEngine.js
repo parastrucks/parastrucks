@@ -44,11 +44,12 @@ function applyTriggers(base, segment, monthNum, triggerState) {
       continue
     }
 
-    // Type 3: Weighted segment boost (AIS 153)
-    if (def.segWeight) {
-      const w = def.segWeight[segment]
-      if (w !== undefined && def.months?.includes(monthNum)) {
-        f *= (1 + w * sev / 100)
+    // Type 3: Sinusoidal annual cycle (AIS 153)
+    // sin(2π × (monthNum − sineZeroMonth) / 12): +1 at peak, −1 at trough
+    if (def.type === 'sine') {
+      if ((!def.months || def.months.includes(monthNum)) && def.affected.includes(segment)) {
+        const sineVal = Math.sin(2 * Math.PI * (monthNum - (def.sineZeroMonth ?? 3)) / 12)
+        f *= (1 + sineVal * sev / 100)
       }
       continue
     }

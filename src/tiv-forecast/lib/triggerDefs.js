@@ -18,11 +18,11 @@ export const TRIGGER_DEFS = [
   {
     id: 'ais153',
     name: 'AIS 153 Bus Recovery',
-    desc: 'Body builder licence approvals boost MDV Bus through Q1-Q2 FY27, 30% spillover to ICV Buses',
+    desc: 'Body builder licence approvals — sinusoidal recovery. Trough Dec-25, zero crossing Mar-26 (ascending), peak Jun-26.',
     affected: ['Bus PVT'],
-    segWeight: { 'Bus PVT': 1.3 },
-    months: [4, 5, 6, 7, 8, 9],
-    type: 'boost',
+    type: 'sine',
+    sineZeroMonth: 3,   // ascending zero crossing at March
+    months: [7, 8, 9, 10, 11, 12, 1, 2, 3, 4, 5, 6],  // Jul-25 → Jun-26
     defaultSev: 20,
     max: 50,
   },
