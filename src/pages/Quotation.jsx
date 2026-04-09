@@ -4,7 +4,16 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { generateQuotationPDF } from '../utils/pdfGenerator'
 
-const SEGMENTS = ['All Segments', 'ICV Trucks', 'Long Haul', 'Tippers', 'Tractors', 'Buses']
+const SEGMENTS = ['All Segments', 'ICV Trucks', 'MBP Trucks', 'Tippers', 'Buses', 'RMC / Boom Pump']
+
+// Maps each UI segment label to a DB segment filter predicate
+const SEGMENT_FILTER = {
+  'ICV Trucks':      v => v.segment === 'ICV Truck',
+  'MBP Trucks':      v => v.segment === 'MBP Truck',
+  'Tippers':         v => v.segment === 'Tipper',
+  'Buses':           v => v.segment === 'Bus – ICV' || v.segment === 'Bus – MCV',
+  'RMC / Boom Pump': v => v.segment === 'RMC / Boom Pump',
+}
 const DEFAULT_TCS = 1
 
 function calcItem(item) {
@@ -121,7 +130,8 @@ export default function Quotation() {
   const runSearch = useCallback(
     (q, seg) => {
       if (!q.trim()) { setResults([]); setShowDropdown(false); return }
-      let pool = seg === 'All Segments' ? catalog : catalog.filter(v => v.segment === seg)
+      const segPred = SEGMENT_FILTER[seg]
+      let pool = segPred ? catalog.filter(segPred) : catalog
       let found
       if (!fuseInst || seg !== 'All Segments') {
         const tmpFuse = new Fuse(pool, {
