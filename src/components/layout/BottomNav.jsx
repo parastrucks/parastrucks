@@ -11,7 +11,7 @@ const ROLE_TABS = {
   back_office: [
     { to: '/',               icon: '⊞', label: 'Home' },
     { to: '/quotation',      icon: '📄', label: 'Quote' },
-    { to: '/my-quotations',  icon: '🗂', label: 'History' },
+    { to: '/tiv-forecast',   icon: '📈', label: 'TIV' },
     { to: '/profile',        icon: '👤', label: 'Profile' },
   ],
   hr: [
@@ -22,7 +22,7 @@ const ROLE_TABS = {
   admin: [
     { to: '/',               icon: '⊞', label: 'Home' },
     { to: '/quotation',      icon: '📄', label: 'Quote' },
-    { to: '/quotation-log',  icon: '📊', label: 'Log' },
+    { to: '/tiv-forecast',   icon: '📈', label: 'TIV' },
     { to: '/employees',      icon: '👥', label: 'Team' },
     { to: '/profile',        icon: '👤', label: 'Profile' },
   ],

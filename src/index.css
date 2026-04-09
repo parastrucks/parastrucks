@@ -1170,6 +1170,33 @@ tbody tr:hover td { background: var(--gray-50); }
 .vc-tab:hover  { color: var(--gray-800); }
 .vc-tab.active { color: var(--blue); border-bottom-color: var(--blue); }
 
+/* ── TIV Forecast ── */
+.tiv-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  background: var(--gray-200);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+.tiv-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--blue);
+  cursor: pointer;
+}
+.tiv-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--blue);
+  cursor: pointer;
+  border: none;
+}
+
 /* ── Controls row (search + filters) ── */
 .vc-controls {
   display: flex;
