@@ -28,6 +28,7 @@ export default function Profile() {
 
   const fields = [
     { label: 'Full Name',    value: profile.full_name },
+    { label: 'Email',        value: profile.email },
     { label: 'Role',         value: ROLE_LABEL[profile.role] || profile.role },
     { label: 'Entity',       value: profile.entity },
     { label: 'Location',     value: profile.location },

@@ -13,7 +13,7 @@ const ROLE_BADGE = PERMISSION_BADGE
 const ENTITIES = ['PTB', 'PT']
 
 const EMPTY_FORM = {
-  full_name: '', username: '', email: '', password: '',
+  full_name: '', email: '', password: '',
   role: 'sales', entity: 'PTB', brand: '', location: '',
   department: '', vertical: '', designation: '',
   is_active: true,
@@ -99,7 +99,7 @@ export default function Employees() {
     const q = search.toLowerCase()
     const matchSearch = !q ||
       e.full_name?.toLowerCase().includes(q) ||
-      e.username?.toLowerCase().includes(q) ||
+      e.email?.toLowerCase().includes(q) ||
       e.location?.toLowerCase().includes(q)
     const matchRole   = !filterRole   || e.role === filterRole
     const matchEntity = !filterEntity || e.entity === filterEntity
@@ -129,8 +129,7 @@ export default function Employees() {
     setSelected(emp)
     setForm({
       full_name:   emp.full_name   || '',
-      username:    emp.username    || '',
-      email:       '',  // not editable here
+      email:       emp.email       || '',
       password:    '',
       role:        emp.role        || 'sales',
       entity:      emp.entity      || 'PTB',
@@ -176,7 +175,6 @@ export default function Employees() {
   async function handleCreate(e) {
     e.preventDefault()
     if (!form.full_name.trim()) { setError('Full name is required.'); return }
-    if (!form.username.trim())  { setError('Username is required.'); return }
     if (!form.email.trim())     { setError('Email is required.'); return }
     if (form.password.length < 8) { setError('Password must be at least 8 characters.'); return }
 
@@ -205,8 +203,9 @@ export default function Employees() {
     // 2. Insert profile row (use service role to bypass RLS)
     const { error: profileErr } = await supabaseAdmin.from('users').insert({
       id:          authData.user.id,
-      username:    form.username.trim(),
+      username:    form.email.trim(),
       full_name:   form.full_name.trim(),
+      email:       form.email.trim(),
       role:        form.role,
       entity:      form.entity,
       brand:       form.brand       || null,
@@ -229,7 +228,6 @@ export default function Employees() {
   async function handleUpdate(e) {
     e.preventDefault()
     if (!form.full_name.trim()) { setError('Full name is required.'); return }
-    if (!form.username.trim())  { setError('Username is required.'); return }
 
     setSaving(true); setError('')
 
@@ -237,7 +235,6 @@ export default function Employees() {
       .from('users')
       .update({
         full_name:   form.full_name.trim(),
-        username:    form.username.trim(),
         role:        form.role,
         entity:      form.entity,
         brand:       form.brand       || null,
@@ -349,7 +346,7 @@ export default function Employees() {
         <input
           className="form-input"
           style={{ maxWidth: 240, marginBottom: 0 }}
-          placeholder="Search name or username…"
+          placeholder="Search name or email…"
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
@@ -388,7 +385,7 @@ export default function Employees() {
             <thead>
               <tr>
                 <th>Name</th>
-                <th>Username</th>
+                <th>Email</th>
                 <th>Role</th>
                 <th>Entity</th>
                 <th>Location</th>
@@ -401,7 +398,7 @@ export default function Employees() {
               {filtered.map(emp => (
                 <tr key={emp.id}>
                   <td style={{ fontWeight: 600, color: 'var(--gray-900)' }}>{emp.full_name}</td>
-                  <td style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--gray-500)' }}>{emp.username}</td>
+                  <td style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--gray-500)' }}>{emp.email}</td>
                   <td><Badge role={emp.role} /></td>
                   <td><span className="badge badge-blue">{emp.entity}</span></td>
                   <td>{emp.location || '—'}</td>
@@ -445,10 +442,6 @@ export default function Employees() {
                   <div className="form-group">
                     <label className="form-label">Full Name *</label>
                     <input className="form-input" placeholder="Ramesh Kumar" {...F('full_name')} />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Username *</label>
-                    <input className="form-input" placeholder="ramesh.ahm" {...F('username')} />
                   </div>
                   <div className="form-group">
                     <label className="form-label">Email *</label>
@@ -533,8 +526,8 @@ export default function Employees() {
                     <input className="form-input" {...F('full_name')} />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Username *</label>
-                    <input className="form-input" {...F('username')} />
+                    <label className="form-label">Email</label>
+                    <input className="form-input" value={selected?.email || ''} disabled style={{ opacity: 0.6 }} />
                   </div>
                   <div className="form-group">
                     <label className="form-label">Permission Level *</label>

@@ -14,7 +14,7 @@ export default function Login() {
 
   async function handleSubmit(e) {
     e.preventDefault()
-    if (!email || !password) { setError('Please enter your username and password.'); return }
+    if (!email || !password) { setError('Please enter your email and password.'); return }
     setLoading(true)
     setError('')
     try {
@@ -47,15 +47,15 @@ export default function Login() {
 
         <form onSubmit={handleSubmit} noValidate>
           <div className="form-group">
-            <label className="form-label" htmlFor="email">Username / Email</label>
+            <label className="form-label" htmlFor="email">Email</label>
             <input
               id="email"
-              type="text"
+              type="email"
               className={`form-input ${error ? 'error' : ''}`}
-              placeholder="e.g. ramesh.ahm@parastrucks.in"
+              placeholder="e.g. ramesh@parastrucks.in"
               value={email}
               onChange={e => { setEmail(e.target.value); setError('') }}
-              autoComplete="username"
+              autoComplete="email"
               autoFocus
             />
           </div>

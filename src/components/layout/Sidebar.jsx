@@ -9,6 +9,7 @@ const ALL_PAGES = [
   { to: '/access-rules',   icon: '🔐', label: 'Access Rules'    },
   { to: '/catalog',        icon: '🚛', label: 'Vehicle Catalog' },
   { to: '/bus-calculator', icon: '🚌', label: 'Bus Calculator'  },
+  { to: '/tiv-forecast',  icon: '📈', label: 'TIV Forecast'    },
 ]
 
 export default function Sidebar() {

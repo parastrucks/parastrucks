@@ -15,6 +15,7 @@ import QuotationLog from './pages/QuotationLog'
 import BusCalculator from './pages/BusCalculator'
 import AccessRules from './pages/AccessRules'
 import Catalog from './pages/Catalog'
+import TivForecastPage from './tiv-forecast/pages/TivForecastPage'
 
 // Placeholder for pages not yet built
 const Soon = ({ name }) => (
@@ -79,6 +80,7 @@ export default function App() {
         <Route path="/employees"      element={<ProtectedRoute><Employees /></ProtectedRoute>} />
         <Route path="/quotation-log"  element={<ProtectedRoute><QuotationLog /></ProtectedRoute>} />
         <Route path="/catalog"        element={<ProtectedRoute><Catalog /></ProtectedRoute>} />
+        <Route path="/tiv-forecast"   element={<ProtectedRoute><TivForecastPage /></ProtectedRoute>} />
 
         {/* Access rules — always admin-only (hardcoded safety net) */}
         <Route
