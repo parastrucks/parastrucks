@@ -150,24 +150,36 @@ function parseJudgmentPtbSheet(ws) {
 }
 
 // ── Sheet 6: Raw Data ────────────────────────────────────────────────
-// Wide pivot: row 0 = month headers (merged, every RAW_COLS_PER_MONTH cols starting at col 2)
-// row 1 = column labels repeating per month
+// Wide pivot: row 0 = month headers (merged cells), row 1 = column sub-labels
 // segment total rows at indices in RAW_SEGMENT_ROWS
+// NOTE: scan ALL columns in row 0 for month labels — don't rely on fixed stride
 function parseRawDataSheet(ws) {
   const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: true })
   if (rows.length < 2) return { alActuals: [], rawRows: [] }
 
-  // Extract month labels from row 0 starting at col 2
+  // Scan row 0 for every cell that looks like a month label (e.g. "Apr-22")
+  // Merged cells: only the first cell of a merge carries the value, rest are ''
   const monthRow = rows[0]
   const months = []
-  for (let col = 2; col < monthRow.length; col += RAW_COLS_PER_MONTH) {
+  for (let col = 0; col < monthRow.length; col++) {
     const val = String(monthRow[col]).trim()
     if (val && parseMonthLabel(val)) {
       months.push({ label: val, startCol: col, ...parseMonthLabel(val) })
     }
   }
 
-  // AL actuals: read the AL column (offset 0) at each segment total row for each month
+  if (months.length === 0) return { alActuals: [], rawRows: [] }
+
+  // Detect the AL column offset by scanning row 1 sub-headers near the first month block
+  const subHeaderRow = rows[1] || []
+  let alOffset = RAW_COL_OFFSET.AL  // default from constants
+  const firstStart = months[0].startCol
+  for (let c = firstStart; c < firstStart + 15 && c < subHeaderRow.length; c++) {
+    const h = String(subHeaderRow[c] || '').trim().toUpperCase()
+    if (h === 'AL') { alOffset = c - firstStart; break }
+  }
+
+  // AL actuals: read the AL column at each segment total row for each month
   const alActuals = months.map(m => {
     const row = {
       month_label: m.label,
@@ -176,12 +188,12 @@ function parseRawDataSheet(ws) {
     for (const seg of SEGMENTS) {
       const segRowIdx = RAW_SEGMENT_ROWS[seg]
       const segRow = rows[segRowIdx] || []
-      row[SEG_COL[seg]] = Number(segRow[m.startCol + RAW_COL_OFFSET.AL]) || 0
+      row[SEG_COL[seg]] = Number(segRow[m.startCol + alOffset]) || 0
     }
     return row
   })
 
-  // Raw JSONB data: for each month, capture all segment rows
+  // Raw JSONB data: for each month, capture all segment rows using detected offsets
   const rawRows = months.map(m => {
     const data = {}
     for (const [segName, segRowIdx] of Object.entries(RAW_SEGMENT_ROWS)) {

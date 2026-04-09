@@ -1,5 +1,5 @@
 // TIV Forecast — Accuracy Tracker Tab
-// Pivot: rows = months, columns = segment × (MDL err%, JDG err%)
+// Pivot: rows = months, columns = segment × (MDL | JDG) as separate <td> columns
 import { useMemo } from 'react'
 import { SEGMENTS, SEG_COL, AL_TOLERANCE } from '../constants'
 import SegmentChart from './SegmentChart'
@@ -17,11 +17,10 @@ function errColor(ae) {
 }
 
 function fmtPct(val) {
-  if (val === null || isNaN(val)) return '—'
+  if (val === null || val === undefined || isNaN(val)) return '—'
   return `${(val * 100).toFixed(1)}%`
 }
 
-// Build backtest rows for judgment vs actual
 function buildJudgmentBacktest(tivActuals, judgmentTiv) {
   if (!judgmentTiv?.length || !tivActuals?.length) return {}
   const actualMap = {}
@@ -41,7 +40,6 @@ function buildJudgmentBacktest(tivActuals, judgmentTiv) {
   return lookup
 }
 
-// Build model backtest lookup from stored model_backtest
 function buildModelBacktest(tivActuals, modelBacktest) {
   if (!modelBacktest?.length || !tivActuals?.length) return {}
   const actualMap = {}
@@ -72,25 +70,36 @@ function computeMAPE(lookup) {
   return mape
 }
 
+// Cell styles
+const cellBase = { textAlign: 'center', padding: '5px 6px', fontSize: 12 }
+
+function ErrCell({ ae, style = {} }) {
+  return (
+    <td style={{ ...cellBase, fontWeight: 700, color: errColor(ae ?? null), ...style }}>
+      {fmtPct(ae ?? null)}
+    </td>
+  )
+}
+
 export default function AccuracyTrackerTab({ tivActuals, judgmentTiv, modelParams }) {
   const modelBacktest = modelParams?.model_backtest || []
 
-  const jLookup  = useMemo(() => buildJudgmentBacktest(tivActuals, judgmentTiv), [tivActuals, judgmentTiv])
-  const mdlLookup = useMemo(() => buildModelBacktest(tivActuals, modelBacktest), [tivActuals, modelBacktest])
+  const jLookup   = useMemo(() => buildJudgmentBacktest(tivActuals, judgmentTiv), [tivActuals, judgmentTiv])
+  const mdlLookup  = useMemo(() => buildModelBacktest(tivActuals, modelBacktest), [tivActuals, modelBacktest])
 
-  const jMape   = useMemo(() => computeMAPE(jLookup),   [jLookup])
-  const mdlMape = useMemo(() => computeMAPE(mdlLookup), [mdlLookup])
+  const jMape    = useMemo(() => computeMAPE(jLookup),   [jLookup])
+  const mdlMape  = useMemo(() => computeMAPE(mdlLookup), [mdlLookup])
 
   const hasJdg = Object.keys(jLookup).length > 0
   const hasMdl = Object.keys(mdlLookup).length > 0
+  const hasBoth = hasJdg && hasMdl
 
-  // All months across both sources, sorted
   const months = useMemo(() => {
     const set = new Set([...Object.keys(jLookup), ...Object.keys(mdlLookup)])
     return [...set].sort()
   }, [jLookup, mdlLookup])
 
-  // MAPE chart data — prefer judgment if available, fallback to model
+  // MAPE chart data
   const mapeChartData = SEGMENTS
     .map(seg => ({
       segment: seg,
@@ -111,6 +120,9 @@ export default function AccuracyTrackerTab({ tivActuals, judgmentTiv, modelParam
     )
   }
 
+  // Column count per segment: 2 if both MDL+JDG, else 1
+  const segCols = hasBoth ? 2 : 1
+
   return (
     <div>
       {/* MAPE bar chart */}
@@ -126,7 +138,7 @@ export default function AccuracyTrackerTab({ tivActuals, judgmentTiv, modelParam
             xKey="segment"
             series={[
               ...(hasMdl ? [{ key: 'Model MAPE',    name: 'Model MAPE %',    color: 'var(--blue)' }] : []),
-              ...(hasJdg ? [{ key: 'Judgment MAPE', name: 'Judgment MAPE %', color: 'var(--amber)' }] : []),
+              ...(hasJdg ? [{ key: 'Judgment MAPE', name: 'Judgment MAPE %', color: '#F59E0B' }] : []),
             ]}
             referenceLines={[{ value: 15, color: 'var(--green)', label: '15% AL tolerance' }]}
             height={200}
@@ -136,101 +148,140 @@ export default function AccuracyTrackerTab({ tivActuals, judgmentTiv, modelParam
 
       {/* Pivot table */}
       <div className="card">
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 10, flexWrap: 'wrap' }}>
+        {/* Legend */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10, flexWrap: 'wrap', fontSize: 12 }}>
           <div style={{ fontWeight: 700, fontSize: 14 }}>
             {months[0]} — {months[months.length - 1]}
           </div>
-          <div style={{ fontSize: 12, color: 'var(--gray-400)' }}>
+          <div style={{ color: 'var(--gray-500)' }}>
             {hasMdl && <span style={{ color: 'var(--blue)', fontWeight: 600 }}>● Model</span>}
-            {hasMdl && hasJdg && ' · '}
+            {hasBoth && <span style={{ color: 'var(--gray-300)' }}> · </span>}
             {hasJdg && <span style={{ color: '#F59E0B', fontWeight: 600 }}>● Judgment</span>}
-            &nbsp;&nbsp;
-            <span style={{ color: 'var(--green)', fontWeight: 600 }}>●</span> ≤15%
-            {' · '}<span style={{ color: '#F59E0B', fontWeight: 600 }}>●</span> ≤25%
-            {' · '}<span style={{ color: 'var(--red)', fontWeight: 600 }}>●</span> &gt;25%
+          </div>
+          <div style={{ color: 'var(--gray-500)' }}>
+            <span style={{ color: 'var(--green)', fontWeight: 600 }}>● ≤15%</span>
+            {' · '}
+            <span style={{ color: '#F59E0B', fontWeight: 600 }}>● ≤25%</span>
+            {' · '}
+            <span style={{ color: 'var(--red)', fontWeight: 600 }}>● &gt;25%</span>
           </div>
         </div>
 
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+          <table style={{ borderCollapse: 'collapse', fontSize: 12, minWidth: '100%' }}>
             <thead>
-              <tr style={{ borderBottom: '2px solid var(--gray-200)' }}>
-                <th style={{ textAlign: 'left', padding: '5px 8px', width: 60 }}>Month</th>
+              {/* Row 1: Month + segment group headers */}
+              <tr style={{ borderBottom: hasBoth ? '1px solid var(--gray-200)' : '2px solid var(--gray-200)' }}>
+                <th style={{ textAlign: 'left', padding: '6px 8px', whiteSpace: 'nowrap', minWidth: 64, borderBottom: hasBoth ? 'none' : undefined }}>
+                  Month
+                </th>
                 {SEGMENTS.map(seg => (
-                  <th key={seg} style={{ textAlign: 'center', padding: '5px 4px', minWidth: hasMdl && hasJdg ? 110 : 80 }}>
+                  <th
+                    key={seg}
+                    colSpan={segCols}
+                    style={{
+                      textAlign: 'center',
+                      padding: '6px 4px',
+                      minWidth: hasBoth ? 120 : 80,
+                      borderLeft: '1px solid var(--gray-100)',
+                      fontWeight: 700,
+                    }}
+                  >
                     {seg}
                   </th>
                 ))}
               </tr>
-              {hasMdl && hasJdg && (
-                <tr style={{ borderBottom: '1px solid var(--gray-100)', fontSize: 11, color: 'var(--gray-400)' }}>
-                  <th></th>
+
+              {/* Row 2: MDL | JDG sub-headers (only when both sources present) */}
+              {hasBoth && (
+                <tr style={{ borderBottom: '2px solid var(--gray-200)', background: 'var(--gray-50)' }}>
+                  <th style={{ padding: '3px 8px' }} />
                   {SEGMENTS.map(seg => (
-                    <th key={seg} style={{ textAlign: 'center', fontWeight: 400, padding: '2px 4px' }}>
-                      <span style={{ color: 'var(--blue)' }}>MDL</span>
-                      {' · '}
-                      <span style={{ color: '#F59E0B' }}>JDG</span>
-                    </th>
+                    <>
+                      <th
+                        key={`${seg}-mdl`}
+                        style={{
+                          textAlign: 'center',
+                          fontWeight: 600,
+                          fontSize: 11,
+                          color: 'var(--blue)',
+                          padding: '3px 6px',
+                          borderLeft: '1px solid var(--gray-100)',
+                        }}
+                      >
+                        MDL
+                      </th>
+                      <th
+                        key={`${seg}-jdg`}
+                        style={{
+                          textAlign: 'center',
+                          fontWeight: 600,
+                          fontSize: 11,
+                          color: '#F59E0B',
+                          padding: '3px 6px',
+                        }}
+                      >
+                        JDG
+                      </th>
+                    </>
                   ))}
                 </tr>
               )}
             </thead>
+
             <tbody>
               {months.map(month => (
                 <tr key={month} style={{ borderBottom: '1px solid var(--gray-100)' }}>
-                  <td style={{ fontWeight: 600, padding: '6px 8px', whiteSpace: 'nowrap', fontSize: 11 }}>
+                  <td style={{ fontWeight: 600, padding: '5px 8px', whiteSpace: 'nowrap', fontSize: 11 }}>
                     {month}
                   </td>
                   {SEGMENTS.map(seg => {
                     const mCell = mdlLookup[month]?.[seg]
                     const jCell = jLookup[month]?.[seg]
-                    if (!mCell && !jCell) return <td key={seg} style={{ textAlign: 'center', color: 'var(--gray-300)', padding: '6px 4px' }}>—</td>
 
+                    if (hasBoth) {
+                      return (
+                        <>
+                          <ErrCell key={`${month}-${seg}-m`} ae={mCell?.ae ?? null} style={{ borderLeft: '1px solid var(--gray-100)' }} />
+                          <ErrCell key={`${month}-${seg}-j`} ae={jCell?.ae ?? null} />
+                        </>
+                      )
+                    }
+                    const cell = mCell ?? jCell
                     return (
-                      <td key={seg} style={{ textAlign: 'center', padding: '4px 4px' }}>
-                        {hasMdl && hasJdg ? (
-                          <div style={{ display: 'flex', justifyContent: 'center', gap: 6 }}>
-                            <span style={{ fontWeight: 700, color: errColor(mCell?.ae ?? null), fontSize: 12 }}>
-                              {fmtPct(mCell?.ae ?? null)}
-                            </span>
-                            <span style={{ color: 'var(--gray-200)' }}>·</span>
-                            <span style={{ fontWeight: 700, color: errColor(jCell?.ae ?? null), fontSize: 12 }}>
-                              {fmtPct(jCell?.ae ?? null)}
-                            </span>
-                          </div>
-                        ) : (
-                          <span style={{ fontWeight: 700, color: errColor((mCell ?? jCell)?.ae ?? null), fontSize: 12 }}>
-                            {fmtPct((mCell ?? jCell)?.ae ?? null)}
-                          </span>
-                        )}
-                      </td>
+                      <ErrCell
+                        key={`${month}-${seg}`}
+                        ae={cell?.ae ?? null}
+                        style={{ borderLeft: '1px solid var(--gray-100)' }}
+                      />
                     )
                   })}
                 </tr>
               ))}
 
-              {/* MAPE row */}
+              {/* MAPE summary row */}
               <tr style={{ borderTop: '2px solid var(--gray-200)', background: 'var(--gray-50)' }}>
-                <td style={{ fontWeight: 700, padding: '6px 8px', fontSize: 11 }}>MAPE</td>
-                {SEGMENTS.map(seg => (
-                  <td key={seg} style={{ textAlign: 'center', padding: '6px 4px' }}>
-                    {hasMdl && hasJdg ? (
-                      <div style={{ display: 'flex', justifyContent: 'center', gap: 6 }}>
-                        <span style={{ fontWeight: 700, color: errColor(mdlMape[seg] !== null ? mdlMape[seg] / 100 : null), fontSize: 12 }}>
-                          {mdlMape[seg] !== null ? `${mdlMape[seg].toFixed(1)}%` : '—'}
-                        </span>
-                        <span style={{ color: 'var(--gray-200)' }}>·</span>
-                        <span style={{ fontWeight: 700, color: errColor(jMape[seg] !== null ? jMape[seg] / 100 : null), fontSize: 12 }}>
-                          {jMape[seg] !== null ? `${jMape[seg].toFixed(1)}%` : '—'}
-                        </span>
-                      </div>
-                    ) : (
-                      <span style={{ fontWeight: 700, color: errColor((hasMdl ? mdlMape : jMape)[seg] !== null ? (hasMdl ? mdlMape : jMape)[seg] / 100 : null), fontSize: 12 }}>
-                        {(hasMdl ? mdlMape : jMape)[seg] !== null ? `${(hasMdl ? mdlMape : jMape)[seg].toFixed(1)}%` : '—'}
-                      </span>
-                    )}
-                  </td>
-                ))}
+                <td style={{ fontWeight: 700, padding: '5px 8px', fontSize: 11 }}>MAPE</td>
+                {SEGMENTS.map(seg => {
+                  const mdlAe = mdlMape[seg] !== null ? mdlMape[seg] / 100 : null
+                  const jdgAe = jMape[seg]   !== null ? jMape[seg]   / 100 : null
+
+                  if (hasBoth) {
+                    return (
+                      <>
+                        <ErrCell key={`mape-${seg}-m`} ae={mdlAe} style={{ borderLeft: '1px solid var(--gray-100)' }} />
+                        <ErrCell key={`mape-${seg}-j`} ae={jdgAe} />
+                      </>
+                    )
+                  }
+                  return (
+                    <ErrCell
+                      key={`mape-${seg}`}
+                      ae={hasMdl ? mdlAe : jdgAe}
+                      style={{ borderLeft: '1px solid var(--gray-100)' }}
+                    />
+                  )
+                })}
               </tr>
             </tbody>
           </table>
