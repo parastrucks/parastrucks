@@ -11,13 +11,27 @@ import {
 
 export default function UploadPanel({ onUploadComplete }) {
   const { profile, isAdmin } = useAuth()
-  const [collapsed, setCollapsed]   = useState(false)
-  const [file, setFile]             = useState(null)
-  const [preview, setPreview]       = useState(null)  // { monthsLoaded, lastDataMonth }
-  const [uploading, setUploading]   = useState(false)
-  const [parseError, setParseError] = useState('')
-  const [successMsg, setSuccessMsg] = useState('')
-  const [history, setHistory]       = useState(null)  // null = not loaded yet
+  const [collapsed, setCollapsed]     = useState(true)
+  const [file, setFile]               = useState(null)
+  const [preview, setPreview]         = useState(null)  // { monthsLoaded, lastDataMonth }
+  const [uploading, setUploading]     = useState(false)
+  const [progress, setProgress]       = useState(null)  // { pct: 0-100, step: 'label' }
+  const [parseError, setParseError]   = useState('')
+  const [successMsg, setSuccessMsg]   = useState('')
+  const [history, setHistory]         = useState(null)  // null = not loaded yet
+  const [showHistory, setShowHistory] = useState(false)
+
+  const UPLOAD_STEPS = [
+    { pct: 10, label: 'Parsing file…' },
+    { pct: 25, label: 'Uploading TIV actuals…' },
+    { pct: 37, label: 'Uploading PTB actuals…' },
+    { pct: 50, label: 'Uploading AL actuals…' },
+    { pct: 62, label: 'Uploading judgment forecasts…' },
+    { pct: 75, label: 'Uploading raw data…' },
+    { pct: 88, label: 'Retraining model…' },
+    { pct: 95, label: 'Saving upload record…' },
+    { pct: 100, label: 'Done!' },
+  ]
 
   if (!isAdmin) return null
 
@@ -45,29 +59,38 @@ export default function UploadPanel({ onUploadComplete }) {
   const handleUpload = useCallback(async () => {
     if (!file || !preview) return
     setUploading(true)
+    setProgress({ pct: 0, label: 'Starting…' })
     setParseError('')
     setSuccessMsg('')
 
+    const step = (s) => setProgress(UPLOAD_STEPS[s])
+
     try {
-      // Re-parse (file reader is async; we store result in state but re-parse for reliability)
+      step(0)  // 10% — parsing
       const buf = await file.arrayBuffer()
       const parsed = parseExcelFile(buf)
 
-      // Upsert all six data tables
-      await Promise.all([
-        upsertTivActuals(parsed.tivActuals),
-        upsertPtbActuals(parsed.ptbActuals),
-        upsertJudgmentTiv(parsed.judgmentTiv),
-        upsertJudgmentPtb(parsed.judgmentPtb),
-        upsertAlActuals(parsed.alActuals),
-        upsertRawData(parsed.rawRows),
-      ])
+      step(1)  // 25% — TIV actuals
+      await upsertTivActuals(parsed.tivActuals)
 
-      // Retrain model on updated data
+      step(2)  // 37% — PTB actuals
+      await upsertPtbActuals(parsed.ptbActuals)
+
+      step(3)  // 50% — AL actuals
+      await upsertAlActuals(parsed.alActuals)
+
+      step(4)  // 62% — judgment forecasts
+      await upsertJudgmentTiv(parsed.judgmentTiv)
+      await upsertJudgmentPtb(parsed.judgmentPtb)
+
+      step(5)  // 75% — raw data
+      await upsertRawData(parsed.rawRows)
+
+      step(6)  // 88% — retrain
       const params = retrainModel(parsed.tivActuals, parsed.ptbActuals, parsed.alActuals)
       await insertModelParams(params)
 
-      // Record upload history
+      step(7)  // 95% — upload record
       await insertUploadHistory({
         userId:         profile.id,
         uploaderName:   profile.full_name,
@@ -76,30 +99,36 @@ export default function UploadPanel({ onUploadComplete }) {
         lastDataMonth:  parsed.summary.lastDataMonth,
       })
 
+      step(8)  // 100% — done
       setSuccessMsg(`Upload complete — ${parsed.summary.monthsLoaded} months loaded. Last data: ${parsed.summary.lastDataMonth}`)
       setFile(null)
       setPreview(null)
+      setCollapsed(true)  // auto-collapse after upload
 
-      // Reload history
+      // Reload history if visible
       const hist = await fetchUploadHistory()
       setHistory(hist)
+      if (showHistory) setShowHistory(true)  // keeps it open and shows refreshed data
 
-      // Notify parent to refresh forecast
       if (onUploadComplete) onUploadComplete(params)
 
     } catch (err) {
       setParseError(`Upload failed: ${err.message}`)
     } finally {
       setUploading(false)
+      setTimeout(() => setProgress(null), 1200)
     }
-  }, [file, preview, profile, onUploadComplete])
+  }, [file, preview, profile, onUploadComplete, showHistory])
 
-  async function loadHistory() {
-    if (history !== null) return
-    try {
-      const hist = await fetchUploadHistory()
-      setHistory(hist)
-    } catch { /* silent */ }
+  async function toggleHistory() {
+    const next = !showHistory
+    setShowHistory(next)
+    if (next && history === null) {
+      try {
+        const hist = await fetchUploadHistory()
+        setHistory(hist)
+      } catch { /* silent */ }
+    }
   }
 
   return (
@@ -107,7 +136,7 @@ export default function UploadPanel({ onUploadComplete }) {
       <div
         className="flex-between"
         style={{ cursor: 'pointer', userSelect: 'none' }}
-        onClick={() => { setCollapsed(c => !c); loadHistory() }}
+        onClick={() => setCollapsed(c => !c)}
       >
         <div>
           <div style={{ fontWeight: 700, fontSize: 15 }}>Data Upload</div>
@@ -160,48 +189,75 @@ export default function UploadPanel({ onUploadComplete }) {
               onClick={handleUpload}
               disabled={uploading}
             >
-              {uploading ? <><span className="spinner spinner-sm" /> Uploading…</> : 'Upload & Retrain'}
+              {uploading ? 'Uploading…' : 'Upload & Retrain'}
             </button>
           )}
 
-          {/* Upload history */}
-          {history !== null && (
-            <div style={{ marginTop: 20 }}>
-              <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8, color: 'var(--gray-600)' }}>
-                Upload History
+          {/* Progress bar */}
+          {progress && (
+            <div style={{ marginTop: 14 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--gray-500)', marginBottom: 5 }}>
+                <span>{progress.label}</span>
+                <span style={{ fontWeight: 700 }}>{progress.pct}%</span>
               </div>
-              {history.length === 0 ? (
-                <div style={{ fontSize: 13, color: 'var(--gray-400)' }}>No uploads yet.</div>
-              ) : (
-                <div className="table-wrap">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Date</th>
-                        <th>Uploaded By</th>
-                        <th>File</th>
-                        <th>Months</th>
-                        <th>Last Month</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {history.map(h => (
-                        <tr key={h.id}>
-                          <td style={{ whiteSpace: 'nowrap' }}>
-                            {new Date(h.uploaded_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-                          </td>
-                          <td>{h.uploader_name || '—'}</td>
-                          <td style={{ fontSize: 12, fontFamily: 'monospace', color: 'var(--gray-500)' }}>{h.file_name}</td>
-                          <td style={{ textAlign: 'center' }}>{h.months_loaded ?? '—'}</td>
-                          <td>{h.last_data_month || '—'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+              <div style={{ height: 6, background: 'var(--gray-100)', borderRadius: 99, overflow: 'hidden' }}>
+                <div style={{
+                  height: '100%',
+                  width: `${progress.pct}%`,
+                  background: progress.pct === 100 ? 'var(--green)' : 'var(--blue)',
+                  borderRadius: 99,
+                  transition: 'width 0.35s ease',
+                }} />
+              </div>
             </div>
           )}
+
+          {/* Upload history toggle */}
+          <div style={{ marginTop: 16, borderTop: '1px solid var(--gray-100)', paddingTop: 12 }}>
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={toggleHistory}
+            >
+              {showHistory ? '▴ Hide Upload History' : '▾ Upload History'}
+            </button>
+
+            {showHistory && (
+              <div style={{ marginTop: 12 }}>
+                {history === null ? (
+                  <div style={{ fontSize: 13, color: 'var(--gray-400)' }}>Loading…</div>
+                ) : history.length === 0 ? (
+                  <div style={{ fontSize: 13, color: 'var(--gray-400)' }}>No uploads yet.</div>
+                ) : (
+                  <div className="table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Date</th>
+                          <th>Uploaded By</th>
+                          <th>File</th>
+                          <th>Months</th>
+                          <th>Last Month</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {history.map(h => (
+                          <tr key={h.id}>
+                            <td style={{ whiteSpace: 'nowrap' }}>
+                              {new Date(h.uploaded_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                            </td>
+                            <td>{h.uploader_name || '—'}</td>
+                            <td style={{ fontSize: 12, fontFamily: 'monospace', color: 'var(--gray-500)' }}>{h.file_name}</td>
+                            <td style={{ textAlign: 'center' }}>{h.months_loaded ?? '—'}</td>
+                            <td>{h.last_data_month || '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

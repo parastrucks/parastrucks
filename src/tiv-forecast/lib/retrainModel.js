@@ -7,8 +7,9 @@ import {
   YOY_CAP, SHARE_LOOKBACK_MONTHS,
 } from '../constants'
 
+const BACKTEST_MONTHS = 12  // how many historical months to store as model backtest
+
 // ── PPP outlier cleaning (Bus PVT only) ──────────────────────────────
-// Dec 2023 – Aug 2024: replace with same-calendar-month averages from outside window
 function cleanBusPVT(data, monthsMeta) {
   const cleaned = [...data]
   for (let i = PPP_START_IDX; i <= PPP_END_IDX && i < data.length; i++) {
@@ -28,54 +29,66 @@ function cleanBusPVT(data, monthsMeta) {
 // ── Seasonal indices (multiplicative, normalized to avg = 1.0) ───────
 function computeSeasonalIndices(data, monthsMeta) {
   const n = data.length
-  const ma = new Array(n).fill(null)
-  for (let i = 6; i < n - 6; i++) {
-    const window = data.slice(i - 6, i + 6)
-    ma[i] = window.reduce((a, b) => a + b, 0) / 12
+  const windowSize = 12
+  const centeredMA = new Array(n).fill(null)
+  for (let i = Math.floor(windowSize / 2); i < n - Math.floor(windowSize / 2); i++) {
+    let sum = 0
+    for (let j = i - 6; j < i + 6; j++) sum += data[j]
+    centeredMA[i] = sum / windowSize
   }
-  const ratios = {}
-  for (let m = 1; m <= 12; m++) ratios[m] = []
+  const rawSI = {}
   for (let i = 0; i < n; i++) {
-    if (ma[i] && ma[i] > 0) {
-      ratios[monthsMeta[i].month_num].push(data[i] / ma[i])
-    }
+    if (centeredMA[i] === null || centeredMA[i] === 0) continue
+    const m = monthsMeta[i].month_num
+    if (!rawSI[m]) rawSI[m] = []
+    rawSI[m].push(data[i] / centeredMA[i])
   }
-  const indices = {}
+  const si = {}
+  let siSum = 0
   for (let m = 1; m <= 12; m++) {
-    indices[m] = ratios[m].length > 0
-      ? ratios[m].reduce((a, b) => a + b, 0) / ratios[m].length
-      : 1.0
+    const vals = rawSI[m] || []
+    si[m] = vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : 1.0
+    siSum += si[m]
   }
-  const avg = Object.values(indices).reduce((a, b) => a + b, 0) / 12
-  for (let m = 1; m <= 12; m++) indices[m] = parseFloat((indices[m] / avg).toFixed(4))
-  return indices
+  const scaleFactor = 12 / siSum
+  for (let m = 1; m <= 12; m++) si[m] *= scaleFactor
+  return si
 }
 
-// ── Holt's linear trend on deseasonalized series ─────────────────────
+// ── Holt linear trend — returns terminal state + full level/trend arrays ──
 function holtLinear(data) {
   const n = data.length
-  if (n === 0) return { level: 0, trend: 0 }
-  const level = new Array(n).fill(0)
-  const trend = new Array(n).fill(0)
-  level[0] = data[0]
-  trend[0] = n > 1 ? (data[Math.min(11, n - 1)] - data[0]) / Math.min(11, n - 1) : 0
+  if (n === 0) return { level: 0, trend: 0, levelArr: [], trendArr: [] }
+  const levelArr = new Array(n).fill(0)
+  const trendArr = new Array(n).fill(0)
+  levelArr[0] = data[0]
+  trendArr[0] = n > 1 ? (data[Math.min(11, n - 1)] - data[0]) / Math.min(11, n - 1) : 0
   for (let t = 1; t < n; t++) {
-    level[t] = HW_ALPHA * data[t] + (1 - HW_ALPHA) * (level[t - 1] + trend[t - 1])
-    trend[t] = HW_BETA  * (level[t] - level[t - 1]) + (1 - HW_BETA) * trend[t - 1]
+    levelArr[t] = HW_ALPHA * data[t] + (1 - HW_ALPHA) * (levelArr[t - 1] + trendArr[t - 1])
+    trendArr[t] = HW_BETA  * (levelArr[t] - levelArr[t - 1]) + (1 - HW_BETA) * trendArr[t - 1]
   }
-  return { level: level[n - 1], trend: trend[n - 1] }
+  return { level: levelArr[n - 1], trend: trendArr[n - 1], levelArr, trendArr }
 }
 
+// ── Train HW for one segment — also returns per-month fitted values ──
 function trainHoltForSegment(rawData, seasonalIndices, monthsMeta) {
   const deseasonalized = rawData.map((v, i) => {
     const si = seasonalIndices[monthsMeta[i].month_num]
     return si > 0 ? v / si : v
   })
-  return holtLinear(deseasonalized)
+  const { level, trend, levelArr, trendArr } = holtLinear(deseasonalized)
+
+  // 1-step-ahead fitted: (L[t-1] + T[t-1]) × SI[month]
+  const fitted = rawData.map((v, t) => {
+    if (t === 0) return Math.round(v)
+    const si = seasonalIndices[monthsMeta[t].month_num] || 1
+    return Math.max(0, Math.round((levelArr[t - 1] + trendArr[t - 1]) * si))
+  })
+
+  return { level, trend, fitted }
 }
 
 // ── SMLY values for forecast horizon months ──────────────────────────
-// Given last data month index, compute SMLY for the next 3 forecast months
 function computeSMLY(data, monthsMeta, lastIdx) {
   const smly = {}
   for (let h = 1; h <= 3; h++) {
@@ -93,30 +106,22 @@ function computeSMLY(data, monthsMeta, lastIdx) {
 }
 
 // ── YoY growth capped at ±15% ────────────────────────────────────────
-// FY runs Apr–Mar. Use FY-to-date comparison.
 function computeYoYCapped(data, monthsMeta) {
   const n = data.length
   if (n < 13) return 0
-  // Find current and last FY ranges using Apr as start (month_num 4)
-  // Use all completed months in current fiscal year vs same months last year
   const lastMonth = monthsMeta[n - 1]
   const lastFYAprilIdx = (() => {
-    // Walk back to find the most recent April
     for (let i = n - 1; i >= 0; i--) {
       if (monthsMeta[i].month_num === 4) return i
     }
     return -1
   })()
   if (lastFYAprilIdx === -1) return 0
-
   let fy26Sum = 0, fy25Sum = 0, count = 0
   for (let i = lastFYAprilIdx; i < n; i++) {
     fy26Sum += data[i]
     const prevYearIdx = i - 12
-    if (prevYearIdx >= 0) {
-      fy25Sum += data[prevYearIdx]
-      count++
-    }
+    if (prevYearIdx >= 0) { fy25Sum += data[prevYearIdx]; count++ }
   }
   if (fy25Sum === 0 || count === 0) return 0
   const raw = fy26Sum / fy25Sum - 1
@@ -124,18 +129,13 @@ function computeYoYCapped(data, monthsMeta) {
 }
 
 // ── Market share averages (recent N months) ──────────────────────────
-// Returns { [segment]: averageShare } for recent SHARE_LOOKBACK_MONTHS
 function computeRecentShares(numeratorActuals, denominatorActuals) {
-  // Both arrays must be aligned by month_index
   const denomMap = {}
-  for (const row of denominatorActuals) {
-    denomMap[row.month_index] = row
-  }
+  for (const row of denominatorActuals) denomMap[row.month_index] = row
   const shares = {}
   for (const seg of SEGMENTS) {
     const col = SEG_COL[seg]
     const recent = []
-    // Take the last SHARE_LOOKBACK_MONTHS months where both num and denom exist
     const sorted = [...numeratorActuals].sort((a, b) => b.month_index - a.month_index)
     for (const numRow of sorted) {
       const denomRow = denomMap[numRow.month_index]
@@ -154,7 +154,6 @@ function computeRecentShares(numeratorActuals, denominatorActuals) {
 export function retrainModel(tivActuals, ptbActuals, alActuals) {
   if (!tivActuals.length) throw new Error('No TIV data to retrain on')
 
-  // Sort by month_index ascending
   const tiv = [...tivActuals].sort((a, b) => a.month_index - b.month_index)
   const ptb = [...ptbActuals].sort((a, b) => a.month_index - b.month_index)
   const al  = [...alActuals ].sort((a, b) => a.month_index - b.month_index)
@@ -167,23 +166,37 @@ export function retrainModel(tivActuals, ptbActuals, alActuals) {
   const hwParams = {}
   const smly = {}
   const yoyCapped = {}
+  const segFitted = {}  // per-segment array of in-sample fitted values
 
   for (const seg of SEGMENTS) {
     const col = SEG_COL[seg]
     let rawData = tiv.map(r => Number(r[col]) || 0)
-
-    // Apply PPP cleaning for Bus PVT
     if (seg === 'Bus PVT') rawData = cleanBusPVT(rawData, monthsMeta)
 
     seasonalIndices[seg] = computeSeasonalIndices(rawData, monthsMeta)
-    hwParams[seg] = trainHoltForSegment(rawData, seasonalIndices[seg], monthsMeta)
+    const hwResult = trainHoltForSegment(rawData, seasonalIndices[seg], monthsMeta)
+    hwParams[seg] = { level: hwResult.level, trend: hwResult.trend }
+    segFitted[seg] = hwResult.fitted
     smly[seg] = computeSMLY(rawData, monthsMeta, lastIdx)
     yoyCapped[seg] = computeYoYCapped(rawData, monthsMeta)
   }
 
-  // Market shares: AL share of TIV, PTB share of AL
-  const alShareRecent = computeRecentShares(al, tiv)
+  // Market shares
+  const alShareRecent  = computeRecentShares(al, tiv)
   const ptbShareRecent = computeRecentShares(ptb, al)
+
+  // ── Model backtest: last BACKTEST_MONTHS of in-sample fitted values ──
+  // Stored as array of { month_label, [seg_col]: fitted_value }
+  // Used in Accuracy Tracker to compare model error vs judgment error
+  const backtestStart = Math.max(1, n - BACKTEST_MONTHS)
+  const modelBacktest = []
+  for (let i = backtestStart; i < n; i++) {
+    const record = { month_label: tiv[i].month_label }
+    for (const seg of SEGMENTS) {
+      record[SEG_COL[seg]] = segFitted[seg][i]
+    }
+    modelBacktest.push(record)
+  }
 
   return {
     last_data_month:  tiv[lastIdx].month_label,
@@ -194,5 +207,6 @@ export function retrainModel(tivActuals, ptbActuals, alActuals) {
     yoy_capped:       yoyCapped,
     al_share_recent:  alShareRecent,
     ptb_share_recent: ptbShareRecent,
+    model_backtest:   modelBacktest,
   }
 }
