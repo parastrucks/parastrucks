@@ -178,13 +178,6 @@ function parseJudgmentPtbSheet(ws) {
 // NOTE: scan ALL columns in row 0 for month labels — don't rely on fixed stride
 function parseRawDataSheet(ws) {
   const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: true })
-
-  // DEBUG: log first 3 rows to see actual sheet structure
-  console.log('[parseRawDataSheet] total rows:', rows.length)
-  console.log('[parseRawDataSheet] row0 (first 20 cells):', (rows[0] || []).slice(0, 20))
-  console.log('[parseRawDataSheet] row1 (first 20 cells):', (rows[1] || []).slice(0, 20))
-  console.log('[parseRawDataSheet] row2 (first 20 cells):', (rows[2] || []).slice(0, 20))
-
   if (rows.length < 2) return { alActuals: [], rawRows: [] }
 
   // Scan rows 0-3 for month labels — robust to variable header structure
@@ -203,13 +196,10 @@ function parseRawDataSheet(ws) {
     if (found.length > months.length) { months = found; monthRowIdx = r }
   }
 
-  console.log('[parseRawDataSheet] months found:', months.length, 'in row', monthRowIdx, months.slice(0, 3).map(m => m.label))
-
   if (months.length === 0) return { alActuals: [], rawRows: [] }
 
   // Detect the AL column offset by scanning the row after months for sub-headers
   const subHeaderRow = rows[monthRowIdx + 1] || []
-  console.log('[parseRawDataSheet] subheader row', monthRowIdx + 1, '(first 20):', subHeaderRow.slice(0, 20))
   let alOffset = RAW_COL_OFFSET.AL  // default from constants
   const firstStart = months[0].startCol
   for (let c = firstStart; c < firstStart + 15 && c < subHeaderRow.length; c++) {
