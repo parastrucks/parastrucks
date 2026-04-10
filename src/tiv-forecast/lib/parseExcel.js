@@ -7,6 +7,7 @@ import { SEGMENTS, SEG_COL, RAW_SEGMENT_ROWS, RAW_COLS_PER_MONTH, RAW_COL_OFFSET
 // Apr-22 is index 0 (fiscal year start)
 const MONTH_ABBR = { Jan:1, Feb:2, Mar:3, Apr:4, May:5, Jun:6, Jul:7, Aug:8, Sep:9, Oct:10, Nov:11, Dec:12 }
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+const MONTH_FULL  = { January:1, February:2, March:3, April:4, May:5, June:6, July:7, August:8, September:9, October:10, November:11, December:12 }
 
 // Excel date serial → "Apr-22" string
 // Excel epoch = Dec 30, 1899; JS epoch = Jan 1, 1970 → offset 25569 days
@@ -18,17 +19,30 @@ function excelSerialToLabel(serial) {
 
 export function parseMonthLabel(label) {
   if (!label || typeof label !== 'string') return null
-  const m = label.trim().match(/^([A-Za-z]{3})-(\d{2})$/)
-  if (!m) return null
-  const monthNum = MONTH_ABBR[m[1]]
-  if (!monthNum) return null
-  const year = parseInt(m[2]) + 2000
-  // month_index: Apr-22=0, May-22=1, ..., Mar-23=11, Apr-23=12, ...
-  // base: Apr-22 → April 2022
+  const s = label.trim()
+  let monthNum, year
+
+  // Format 1: "Apr-22"
+  const m1 = s.match(/^([A-Za-z]{3})-(\d{2})$/)
+  if (m1) {
+    monthNum = MONTH_ABBR[m1[1]]
+    if (!monthNum) return null
+    year = parseInt(m1[2]) + 2000
+  } else {
+    // Format 2: "April 2022" or "April-2022"
+    const m2 = s.match(/^([A-Za-z]+)[- ](\d{4})$/)
+    if (!m2) return null
+    monthNum = MONTH_FULL[m2[1]]
+    if (!monthNum) return null
+    year = parseInt(m2[2])
+  }
+
   const baseYear = 2022
   const baseMonth = 4
   const monthIndex = (year - baseYear) * 12 + (monthNum - baseMonth)
-  return { year, month_num: monthNum, month_index: monthIndex }
+  // Return canonical MMM-YY label regardless of input format
+  const canonicalLabel = `${MONTH_NAMES[monthNum - 1]}-${String(year).slice(-2)}`
+  return { year, month_num: monthNum, month_index: monthIndex, canonicalLabel }
 }
 
 // ── Sheet 2: Segment wise data - TIV ────────────────────────────────
@@ -164,28 +178,38 @@ function parseJudgmentPtbSheet(ws) {
 // NOTE: scan ALL columns in row 0 for month labels — don't rely on fixed stride
 function parseRawDataSheet(ws) {
   const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: true })
+
+  // DEBUG: log first 3 rows to see actual sheet structure
+  console.log('[parseRawDataSheet] total rows:', rows.length)
+  console.log('[parseRawDataSheet] row0 (first 20 cells):', (rows[0] || []).slice(0, 20))
+  console.log('[parseRawDataSheet] row1 (first 20 cells):', (rows[1] || []).slice(0, 20))
+  console.log('[parseRawDataSheet] row2 (first 20 cells):', (rows[2] || []).slice(0, 20))
+
   if (rows.length < 2) return { alActuals: [], rawRows: [] }
 
-  // Scan row 0 for every cell that looks like a month label (e.g. "Apr-22")
-  // Merged cells: only the first cell of a merge carries the value, rest are ''
+  // Scan rows 0-3 for month labels — robust to variable header structure
   // Cells may be text ("Apr-22") OR Excel date serials (44652) — handle both
-  const monthRow = rows[0]
-  const months = []
-  for (let col = 0; col < monthRow.length; col++) {
-    const raw = monthRow[col]
-    // Try numeric serial first, then string parse
-    const label = (typeof raw === 'number')
-      ? excelSerialToLabel(raw)
-      : String(raw).trim()
-    if (!label) continue
-    const meta = parseMonthLabel(label)
-    if (meta) months.push({ label, startCol: col, ...meta })
+  let months = []
+  let monthRowIdx = -1
+  for (let r = 0; r <= Math.min(4, rows.length - 1); r++) {
+    const found = []
+    for (let col = 0; col < rows[r].length; col++) {
+      const raw = rows[r][col]
+      const label = (typeof raw === 'number') ? excelSerialToLabel(raw) : String(raw).trim()
+      if (!label) continue
+      const meta = parseMonthLabel(label)
+      if (meta) found.push({ label: meta.canonicalLabel || label, startCol: col, ...meta })
+    }
+    if (found.length > months.length) { months = found; monthRowIdx = r }
   }
+
+  console.log('[parseRawDataSheet] months found:', months.length, 'in row', monthRowIdx, months.slice(0, 3).map(m => m.label))
 
   if (months.length === 0) return { alActuals: [], rawRows: [] }
 
-  // Detect the AL column offset by scanning row 1 sub-headers near the first month block
-  const subHeaderRow = rows[1] || []
+  // Detect the AL column offset by scanning the row after months for sub-headers
+  const subHeaderRow = rows[monthRowIdx + 1] || []
+  console.log('[parseRawDataSheet] subheader row', monthRowIdx + 1, '(first 20):', subHeaderRow.slice(0, 20))
   let alOffset = RAW_COL_OFFSET.AL  // default from constants
   const firstStart = months[0].startCol
   for (let c = firstStart; c < firstStart + 15 && c < subHeaderRow.length; c++) {
