@@ -15,10 +15,10 @@ import SegmentAnalysisTab from '../components/SegmentAnalysisTab'
 import AccuracyTrackerTab from '../components/AccuracyTrackerTab'
 
 const TABS = [
-  { id: 'forecast',  label: 'Forecast Output' },
-  { id: 'triggers',  label: 'Trigger Controls' },
-  { id: 'segments',  label: 'Segment Analysis' },
-  { id: 'accuracy',  label: 'Accuracy Tracker' },
+  { id: 'forecast',  label: 'Forecast' },
+  { id: 'triggers',  label: 'Triggers' },
+  { id: 'segments',  label: 'Segments' },
+  { id: 'accuracy',  label: 'Accuracy' },
 ]
 
 const DEBOUNCE_MS = 400
@@ -143,13 +143,25 @@ export default function TivForecastPage() {
         </div>
       )}
 
-      {/* Tab bar — reuse .vc-tabs pattern */}
-      <div className="vc-tabs mb-16">
+      {/* Tab bar — custom flex (no overflow-x to avoid browser scroll arrows) */}
+      <div style={{ display: 'flex', gap: 0, marginBottom: 16, borderBottom: '2px solid var(--gray-200)' }}>
         {TABS.map(tab => (
           <button
             key={tab.id}
-            className={`vc-tab${activeTab === tab.id ? ' active' : ''}`}
             onClick={() => setActiveTab(tab.id)}
+            style={{
+              padding: '8px 20px',
+              fontSize: 14,
+              fontWeight: activeTab === tab.id ? 700 : 400,
+              color: activeTab === tab.id ? 'var(--blue)' : 'var(--gray-500)',
+              background: 'none',
+              border: 'none',
+              borderBottom: activeTab === tab.id ? '2px solid var(--blue)' : '2px solid transparent',
+              marginBottom: -2,
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              transition: 'color 0.15s',
+            }}
           >
             {tab.label}
           </button>
@@ -183,6 +195,7 @@ export default function TivForecastPage() {
         <AccuracyTrackerTab
           tivActuals={tivActuals}
           judgmentTiv={judgmentTiv}
+          modelParams={modelParams}
         />
       )}
     </div>

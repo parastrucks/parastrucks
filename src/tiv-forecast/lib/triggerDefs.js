@@ -18,9 +18,8 @@ export const TRIGGER_DEFS = [
   {
     id: 'ais153',
     name: 'AIS 153 Bus Recovery',
-    desc: 'Body builder licence approvals boost MDV Bus through Q1-Q2 FY27, 30% spillover to ICV Trucks',
-    affected: ['Bus PVT', 'ICV Trucks'],
-    segWeight: { 'Bus PVT': 1.0, 'ICV Trucks': 0.3 },
+    desc: 'Body builder licence approvals expected to boost Bus PVT through Q1-Q2 FY27. Affects Bus PVT only (ICV buses fall under Bus PVT in AL taxonomy, NOT ICV Trucks). ⚠ DEFAULT OFF — retroactive backtest Sep-25 to Mar-26 showed this hurt Bus PVT MAPE. Calibration unverified; investigate before enabling.',
+    affected: ['Bus PVT'],
     months: [4, 5, 6, 7, 8, 9],
     type: 'boost',
     defaultSev: 20,
@@ -83,7 +82,7 @@ export const TRIGGER_DEFS = [
 ]
 
 // Triggers that should be ON by default when no saved state exists
-export const DEFAULT_ON_TRIGGERS = ['fyPush', 'ais153', 'fuelCrisis']
+export const DEFAULT_ON_TRIGGERS = ['fyPush', 'fuelCrisis']
 
 // Build initial trigger state from defaults
 export function buildDefaultTriggerState() {

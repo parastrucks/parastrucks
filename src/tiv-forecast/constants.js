@@ -78,3 +78,50 @@ export const RAW_COLS_PER_MONTH = 11  // 10 data cols + 1 spacer
 
 // Recent N months for market share averages
 export const SHARE_LOOKBACK_MONTHS = 6
+
+// ── v2.1 Champion model ──────────────────────────────────────────────
+
+// Per-segment champion method after 8-month walk-forward backtest (Aug-25 to Mar-26)
+// M1=SMLY×(1+yoy_sum)  M2=SMLY×(1+yoy_median)  M4=Theta  M3_CAL=CalNorm+HW
+// Do NOT auto-update on retrain — re-run trial framework after Jun-26 forward validation
+export const CHAMPION = {
+  'Bus PVT':   'M1',
+  'Haulage':   'M2',
+  'MAV':       'M1',
+  'Tractor':   'M4',
+  'Tipper':    'M3_CAL',
+  'ICV Trucks':'M2',
+}
+
+// SES smoothing parameter for Theta method (M4)
+export const THETA_ALPHA = 0.3
+
+// Tipper calendar normalization: weekly booking intensity (must sum to 100)
+// Week 1 (days 1-7) = 10%, Week 2 (8-14) = 20%, Week 3 (15-21) = 30%, Week 4 (22-end) = 40%
+export const WEEK_INTENSITY = { 1: 10, 2: 20, 3: 30, 4: 40 }
+
+// PTB closed days: Sundays (computed) + these public holidays (YYYY-MM-DD)
+// Fixed: Republic Day Jan 26, Independence Day Aug 15, Gandhi Jayanti Oct 2
+// Variable: Holi (1 day), Diwali block (5 days from Diwali day)
+// Note: Jan 1 and Dec 25 are NOT PTB holidays; Uttarayan (Jan 14-15) included for Gujarat
+export const HOLIDAYS = new Set([
+  // Republic Day
+  '2022-01-26','2023-01-26','2024-01-26','2025-01-26','2026-01-26','2027-01-26',
+  // Uttarayan (Makar Sankranti) — Jan 14-15
+  '2022-01-14','2022-01-15','2023-01-14','2023-01-15',
+  '2024-01-14','2024-01-15','2025-01-14','2025-01-15',
+  '2026-01-14','2026-01-15','2027-01-14','2027-01-15',
+  // Holi (1 day)
+  '2022-03-18','2023-03-08','2024-03-25','2025-03-14','2026-03-03','2027-03-22',
+  // Independence Day
+  '2022-08-15','2023-08-15','2024-08-15','2025-08-15','2026-08-15','2027-08-15',
+  // Gandhi Jayanti
+  '2022-10-02','2023-10-02','2024-10-02','2025-10-02','2026-10-02','2027-10-02',
+  // Diwali block (5 working days starting Diwali)
+  '2022-10-24','2022-10-25','2022-10-26','2022-10-27','2022-10-28',
+  '2023-11-12','2023-11-13','2023-11-14','2023-11-15','2023-11-16',
+  '2024-11-01','2024-11-02','2024-11-03','2024-11-04','2024-11-05',
+  '2025-10-20','2025-10-21','2025-10-22','2025-10-23','2025-10-24',
+  '2026-11-08','2026-11-09','2026-11-10','2026-11-11','2026-11-12',
+  '2027-10-29','2027-10-30','2027-10-31','2027-11-01','2027-11-02',
+])

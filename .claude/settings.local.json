@@ -48,7 +48,8 @@
       "Bash(done)",
       "Bash(git -C \"D:/PTB/Website/parastrucks\" status)",
       "Bash(git -C \"D:/PTB/Website\" status)",
-      "Bash(gh api:*)"
+      "Bash(gh api:*)",
+      "mcp__dfce7dec-e0a2-4afc-9db0-362f4cd2df62__list_projects"
     ]
   }
 }
