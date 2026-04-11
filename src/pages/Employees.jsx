@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
-import { supabase, supabaseAdmin } from '../lib/supabase'
+import { supabase } from '../lib/supabase'
+import { callEdge } from '../lib/api'
 
 // Permission levels are fixed system concepts
 const PERMISSION_LEVELS = ['sales', 'back_office', 'hr', 'admin']
@@ -180,48 +181,28 @@ export default function Employees() {
 
     setSaving(true); setError('')
 
-    if (!supabaseAdmin) {
+    try {
+      // Edge Function creates the auth user + profile row atomically.
+      await callEdge('admin-users', 'create', {
+        full_name:   form.full_name.trim(),
+        email:       form.email.trim(),
+        password:    form.password,
+        role:        form.role,
+        entity:      form.entity,
+        brand:       form.brand      || null,
+        location:    form.location   || null,
+        department:  form.department || null,
+        vertical:    form.vertical   || null,
+        designation: form.designation.trim() || null,
+      })
       setSaving(false)
-      setError('Admin client not configured. Add VITE_SUPABASE_SERVICE_KEY to your .env file.')
-      return
-    }
-
-    // 1. Create auth user
-    const { data: authData, error: authErr } = await supabaseAdmin.auth.admin.createUser({
-      email: form.email.trim(),
-      password: form.password,
-      email_confirm: true,
-    })
-
-    if (authErr) {
-      // Fallback: use regular signUp if admin API not available
+      setSuccess(`${form.full_name} has been added successfully.`)
+      await fetchEmployees()
+      setTimeout(closeModal, 1500)
+    } catch (e) {
       setSaving(false)
-      setError(authErr.message)
-      return
+      setError(e.message)
     }
-
-    // 2. Insert profile row (use service role to bypass RLS)
-    const { error: profileErr } = await supabaseAdmin.from('users').insert({
-      id:          authData.user.id,
-      username:    form.email.trim(),
-      full_name:   form.full_name.trim(),
-      email:       form.email.trim(),
-      role:        form.role,
-      entity:      form.entity,
-      brand:       form.brand       || null,
-      location:    form.location    || null,
-      department:  form.department  || null,
-      vertical:    form.vertical    || null,
-      designation: form.designation.trim() || null,
-      is_active:   true,
-    })
-
-    setSaving(false)
-    if (profileErr) { setError(profileErr.message); return }
-
-    setSuccess(`${form.full_name} has been added successfully.`)
-    await fetchEmployees()
-    setTimeout(closeModal, 1500)
   }
 
   /* ── UPDATE employee ── */
@@ -231,26 +212,28 @@ export default function Employees() {
 
     setSaving(true); setError('')
 
-    const { error: err } = await supabase
-      .from('users')
-      .update({
-        full_name:   form.full_name.trim(),
-        role:        form.role,
-        entity:      form.entity,
-        brand:       form.brand       || null,
-        location:    form.location    || null,
-        department:  form.department  || null,
-        vertical:    form.vertical    || null,
-        designation: form.designation.trim() || null,
+    try {
+      await callEdge('admin-users', 'updateProfile', {
+        id: selected.id,
+        update: {
+          full_name:   form.full_name.trim(),
+          role:        form.role,
+          entity:      form.entity,
+          brand:       form.brand       || null,
+          location:    form.location    || null,
+          department:  form.department  || null,
+          vertical:    form.vertical    || null,
+          designation: form.designation.trim() || null,
+        },
       })
-      .eq('id', selected.id)
-
-    setSaving(false)
-    if (err) { setError(err.message); return }
-
-    setSuccess('Employee updated successfully.')
-    await fetchEmployees()
-    setTimeout(closeModal, 1200)
+      setSaving(false)
+      setSuccess('Employee updated successfully.')
+      await fetchEmployees()
+      setTimeout(closeModal, 1200)
+    } catch (err) {
+      setSaving(false)
+      setError(err.message)
+    }
   }
 
   /* ── RESET PASSWORD ── */
@@ -261,16 +244,18 @@ export default function Employees() {
 
     setSaving(true); setError('')
 
-    if (!supabaseAdmin) { setError('Admin client not configured.'); setSaving(false); return }
-    const { error: err } = await supabaseAdmin.auth.admin.updateUserById(selected.id, {
-      password: newPassword
-    })
-
-    setSaving(false)
-    if (err) { setError(err.message); return }
-
-    setSuccess(`Password updated for ${selected.full_name}.`)
-    setTimeout(closeModal, 1500)
+    try {
+      await callEdge('admin-users', 'resetPassword', {
+        id: selected.id,
+        password: newPassword,
+      })
+      setSaving(false)
+      setSuccess(`Password updated for ${selected.full_name}.`)
+      setTimeout(closeModal, 1500)
+    } catch (err) {
+      setSaving(false)
+      setError(err.message)
+    }
   }
 
   /* ── DEACTIVATE / ACTIVATE ── */
@@ -279,16 +264,18 @@ export default function Employees() {
     const newStatus = !emp.is_active
     setSaving(true)
 
-    const { error: err } = await supabase
-      .from('users')
-      .update({ is_active: newStatus })
-      .eq('id', emp.id)
-
-    setSaving(false)
-    if (err) { setError(err.message); return }
-
-    await fetchEmployees()
-    closeModal()
+    try {
+      await callEdge('admin-users', 'setActive', {
+        id: emp.id,
+        is_active: newStatus,
+      })
+      setSaving(false)
+      await fetchEmployees()
+      closeModal()
+    } catch (err) {
+      setSaving(false)
+      setError(err.message)
+    }
   }
 
   /* ── DELETE (permanent) ── */
@@ -296,15 +283,16 @@ export default function Employees() {
     const emp = confirmAction.employee
     setSaving(true)
 
-    // Delete from auth (cascades to users table via FK)
-    if (!supabaseAdmin) { setError('Admin client not configured.'); setSaving(false); return }
-    const { error: err } = await supabaseAdmin.auth.admin.deleteUser(emp.id)
-
-    setSaving(false)
-    if (err) { setError(err.message); return }
-
-    await fetchEmployees()
-    closeModal()
+    try {
+      // Delete from auth (cascades to users table via FK)
+      await callEdge('admin-users', 'delete', { id: emp.id })
+      setSaving(false)
+      await fetchEmployees()
+      closeModal()
+    } catch (err) {
+      setSaving(false)
+      setError(err.message)
+    }
   }
 
   /* ══ RENDER ══════════════════════════════════════════════════ */

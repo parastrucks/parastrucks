@@ -1,5 +1,9 @@
 // TIV Forecast — Supabase CRUD helpers
-import { supabase, supabaseAdmin } from '../../lib/supabase'
+// Reads go through the regular supabase (anon) client; RLS protects the tables.
+// Writes go through the admin-tiv Edge Function so the service role key never
+// ships to the browser.
+import { supabase } from '../../lib/supabase'
+import { callEdge } from '../../lib/api'
 
 // ── Fetch helpers ────────────────────────────────────────────────────
 
@@ -106,72 +110,48 @@ export async function saveTriggerStateRow(userId, triggerId, { on, severity, dir
   if (error) throw error
 }
 
-// ── Upload helpers (admin-only, uses supabaseAdmin) ──────────────────
+// ── Upload helpers (route through admin-tiv Edge Function) ───────────
 
 export async function upsertTivActuals(rows) {
   if (!rows.length) return
-  const { error } = await (supabaseAdmin || supabase)
-    .from('tiv_forecast_tiv_actuals')
-    .upsert(rows, { onConflict: 'month_label' })
-  if (error) throw error
+  await callEdge('admin-tiv', 'upsertRows', { table: 'tiv_forecast_tiv_actuals', rows })
 }
 
 export async function upsertPtbActuals(rows) {
   if (!rows.length) return
-  const { error } = await (supabaseAdmin || supabase)
-    .from('tiv_forecast_ptb_actuals')
-    .upsert(rows, { onConflict: 'month_label' })
-  if (error) throw error
+  await callEdge('admin-tiv', 'upsertRows', { table: 'tiv_forecast_ptb_actuals', rows })
 }
 
 export async function upsertAlActuals(rows) {
   if (!rows.length) return
-  const { error } = await (supabaseAdmin || supabase)
-    .from('tiv_forecast_al_actuals')
-    .upsert(rows, { onConflict: 'month_label' })
-  if (error) throw error
+  await callEdge('admin-tiv', 'upsertRows', { table: 'tiv_forecast_al_actuals', rows })
 }
 
 export async function upsertJudgmentTiv(rows) {
   if (!rows.length) return
-  const { error } = await (supabaseAdmin || supabase)
-    .from('tiv_forecast_judgment_tiv')
-    .upsert(rows, { onConflict: 'month_label' })
-  if (error) throw error
+  await callEdge('admin-tiv', 'upsertRows', { table: 'tiv_forecast_judgment_tiv', rows })
 }
 
 export async function upsertJudgmentPtb(rows) {
   if (!rows.length) return
-  const { error } = await (supabaseAdmin || supabase)
-    .from('tiv_forecast_judgment_ptb')
-    .upsert(rows, { onConflict: 'month_label' })
-  if (error) throw error
+  await callEdge('admin-tiv', 'upsertRows', { table: 'tiv_forecast_judgment_ptb', rows })
 }
 
 export async function upsertRawData(rows) {
   if (!rows.length) return
-  const { error } = await (supabaseAdmin || supabase)
-    .from('tiv_forecast_raw_data')
-    .upsert(rows, { onConflict: 'month_label' })
-  if (error) throw error
+  await callEdge('admin-tiv', 'upsertRows', { table: 'tiv_forecast_raw_data', rows })
 }
 
 export async function insertModelParams(params) {
-  const { error } = await (supabaseAdmin || supabase)
-    .from('tiv_forecast_model_params')
-    .insert(params)
-  if (error) throw error
+  await callEdge('admin-tiv', 'insertModelParams', { params })
 }
 
 export async function insertUploadHistory({ userId, uploaderName, fileName, monthsLoaded, lastDataMonth }) {
-  const { error } = await (supabaseAdmin || supabase)
-    .from('tiv_forecast_upload_history')
-    .insert({
-      uploaded_by:     userId,
-      uploader_name:   uploaderName,
-      file_name:       fileName,
-      months_loaded:   monthsLoaded,
-      last_data_month: lastDataMonth,
-    })
-  if (error) throw error
+  // userId is ignored — the Edge Function sets uploaded_by from the verified JWT.
+  await callEdge('admin-tiv', 'insertUploadHistory', {
+    uploader_name:   uploaderName,
+    file_name:       fileName,
+    months_loaded:   monthsLoaded,
+    last_data_month: lastDataMonth,
+  })
 }
