@@ -11,6 +11,7 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2"
+import { rateLimit } from "../_shared/rateLimit.ts"
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -102,6 +103,13 @@ Deno.serve(async (req: Request) => {
   const auth = await verify(req, ["admin", "back_office"])
   if ("err" in auth) return auth.err
   const { caller, admin } = auth
+
+  // Per-user rate limit: 60 req/min/bucket. Runs after verify() so
+  // unauthenticated hits can't pollute the rate_limits table.
+  const rl = await rateLimit(admin, caller.id, "admin-tiv")
+  if (!rl.allowed) {
+    return json({ ok: false, error: "rate_limited", retry_after_s: rl.retry_after_s }, 429)
+  }
 
   try {
     switch (action) {
