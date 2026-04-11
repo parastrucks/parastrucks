@@ -49,7 +49,11 @@
       "Bash(git -C \"D:/PTB/Website/parastrucks\" status)",
       "Bash(git -C \"D:/PTB/Website\" status)",
       "Bash(gh api:*)",
-      "mcp__dfce7dec-e0a2-4afc-9db0-362f4cd2df62__list_projects"
+      "mcp__dfce7dec-e0a2-4afc-9db0-362f4cd2df62__list_projects",
+      "Bash(git add:*)",
+      "Bash(git commit -m ':*)",
+      "Bash(git push:*)",
+      "mcp__dfce7dec-e0a2-4afc-9db0-362f4cd2df62__deploy_edge_function"
     ]
   }
 }
