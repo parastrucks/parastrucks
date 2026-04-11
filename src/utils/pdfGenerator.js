@@ -27,17 +27,25 @@ function fmtDate(iso) {
   return new Date(iso).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
-async function fetchPng(url) {
+const safe = (v, fallback = '—') => (v == null || v === '' ? fallback : String(v))
+
+// Module-level so repeat PDF exports in the same session skip refetching assets.
+const imageCache = new Map()
+
+async function loadImageAsDataURI(path) {
+  if (imageCache.has(path)) return imageCache.get(path)
   try {
-    const res = await fetch(url)
+    const res = await fetch(path)
     if (!res.ok) return null
     const blob = await res.blob()
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = () => resolve(reader.result)
-      reader.onerror = reject
-      reader.readAsDataURL(blob)
+    const dataUri = await new Promise((resolve, reject) => {
+      const r = new FileReader()
+      r.onload = () => resolve(r.result)
+      r.onerror = () => reject(r.error)
+      r.readAsDataURL(blob)
     })
+    imageCache.set(path, dataUri)
+    return dataUri
   } catch {
     return null
   }
@@ -98,6 +106,10 @@ export async function generateQuotationPDF(data) {
     preparedBy,
   } = data
 
+  if (!entity) throw new Error('Cannot generate PDF: entity is missing')
+  if (!customer?.name) throw new Error('Cannot generate PDF: customer name is missing')
+  if (!lineItems || lineItems.length === 0) throw new Error('Cannot generate PDF: at least one line item is required')
+
   const isPT = entityCode === 'PT'
 
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
@@ -105,7 +117,7 @@ export async function generateQuotationPDF(data) {
 
   // ── LOGOS ────────────────────────────────────────────────────
   const [parasLogo, alLogo] = await Promise.all([
-    fetchPng('/paras-logo.png'),
+    loadImageAsDataURI('/paras-logo.png'),
     getALLogo(),
   ])
 
@@ -131,7 +143,7 @@ export async function generateQuotationPDF(data) {
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(7.5)
   doc.setTextColor(...GRAY_DARK)
-  const addrLines = doc.splitTextToSize('Main Office : ' + entity.address, CONTENT_W)
+  const addrLines = doc.splitTextToSize('Main Office : ' + safe(entity.address), CONTENT_W)
   doc.text(addrLines, MARGIN, y)
   y += addrLines.length * 4 + 2
 
@@ -288,16 +300,16 @@ export async function generateQuotationPDF(data) {
   doc.setFontSize(8)
   doc.setTextColor(...GRAY_DARK)
   doc.text(
-    'Note : Please issue DD / Cheque / RTGS in Favour of ' + entity.full_name,
+    'Note : Please issue DD / Cheque / RTGS in Favour of ' + safe(entity.full_name),
     MARGIN, y
   )
   y += 5
 
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(7.5)
-  doc.text('Account No. :- ' + entity.bank_account, MARGIN, y); y += 4
-  doc.text('Bank Name :- ' + entity.bank_name, MARGIN, y);       y += 4
-  doc.text('RTGS/NEFT/IFSC Code : ' + entity.bank_ifsc, MARGIN, y); y += 7
+  doc.text('Account No. :- ' + safe(entity.bank_account), MARGIN, y); y += 4
+  doc.text('Bank Name :- ' + safe(entity.bank_name), MARGIN, y);       y += 4
+  doc.text('RTGS/NEFT/IFSC Code : ' + safe(entity.bank_ifsc), MARGIN, y); y += 7
 
   // ── TERMS & CONDITIONS ───────────────────────────────────────
   doc.setFont('helvetica', 'bold')
@@ -348,10 +360,10 @@ export async function generateQuotationPDF(data) {
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(8.5)
   doc.setTextColor(...GRAY_DARK)
-  doc.text('For ' + entity.full_name, rx, sigY, { align: 'right' })
+  doc.text('For ' + safe(entity.full_name), rx, sigY, { align: 'right' })
 
   // Stamp image — 33×22mm (entity-specific)
-  const stamp = await fetchPng(isPT ? '/pt-stamp.png' : '/al-stamp.png')
+  const stamp = await loadImageAsDataURI(isPT ? '/pt-stamp.png' : '/al-stamp.png')
   if (stamp) {
     doc.addImage(stamp, 'PNG', rx - 33, sigY + 3, 33, 22)
   }
@@ -372,7 +384,7 @@ export async function generateQuotationPDF(data) {
 
   // GSTN bottom left
   doc.setFontSize(7)
-  doc.text('GSTN:- ' + entity.gstin, MARGIN, sigLineY + 12)
+  doc.text('GSTN:- ' + safe(entity.gstin), MARGIN, sigLineY + 12)
 
   doc.save('Quotation_' + quotationNumber.replace(/\//g, '-') + '.pdf')
 }
