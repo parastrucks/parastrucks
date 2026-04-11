@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
-import { supabase, supabaseAdmin } from '../lib/supabase'
+import { supabase } from '../lib/supabase'
+import { callEdge } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
 
 const PERMISSION_LEVELS = ['admin', 'hr', 'back_office', 'sales']
@@ -78,32 +79,37 @@ function RulesTab({ accessRules, refreshAccessRules }) {
   async function handleAdd(e) {
     e.preventDefault()
     if (!form.route) { setError('Route is required.'); return }
-    if (!supabaseAdmin) { setError('Service key not configured.'); return }
     setError('')
 
-    const payload = {
-      route:            form.route,
-      permission_level: form.permission_level || null,
-      brand:            form.brand            || null,
-      location:         form.location         || null,
-      department:       form.department       || null,
-      role:             form.role             || null,
+    try {
+      await callEdge('admin-access-rules', 'createRule', {
+        route:            form.route,
+        permission_level: form.permission_level || null,
+        brand:            form.brand            || null,
+        location:         form.location         || null,
+        department:       form.department       || null,
+        role:             form.role             || null,
+      })
+      setShowAdd(false)
+      setForm({ route: '', permission_level: '', brand: '', location: '', department: '', role: '' })
+      await loadRules()
+      await refreshAccessRules()
+    } catch (err) {
+      setError(err.message)
     }
-    const { error: err } = await supabaseAdmin.from('access_rules').insert(payload)
-    if (err) { setError(err.message); return }
-    setShowAdd(false)
-    setForm({ route: '', permission_level: '', brand: '', location: '', department: '', role: '' })
-    await loadRules()
-    await refreshAccessRules()
   }
 
   async function handleDelete(id) {
-    if (!supabaseAdmin) { setError('Service key not configured.'); return }
     setDeleting(id)
-    await supabaseAdmin.from('access_rules').delete().eq('id', id)
-    setDeleting(null)
-    await loadRules()
-    await refreshAccessRules()
+    try {
+      await callEdge('admin-access-rules', 'deleteRule', { id })
+      await loadRules()
+      await refreshAccessRules()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setDeleting(null)
+    }
   }
 
   const F = field => ({
@@ -278,9 +284,14 @@ function UserPermissionsTab() {
     if (changes.department !== undefined) update.department = changes.department || null
     if (changes.vertical   !== undefined) update.vertical   = changes.vertical   || null
 
-    const { error: err } = await supabaseAdmin.from('users').update(update).eq('id', user.id)
+    try {
+      await callEdge('admin-access-rules', 'updateUserPermissions', { id: user.id, update })
+    } catch (err) {
+      setSaving(null)
+      setError(err.message)
+      return
+    }
     setSaving(null)
-    if (err) { setError(err.message); return }
     setSuccess(`${user.full_name} updated.`)
     setPending(p => { const n = { ...p }; delete n[user.id]; return n })
     await loadUsers()
@@ -481,53 +492,57 @@ function ConfigTab() {
 
   useEffect(() => { load() }, [load])
 
-  if (!supabaseAdmin) {
-    return (
-      <div className="alert alert-error"><span>⚠</span>
-        <span>Service key not configured. Add VITE_SUPABASE_SERVICE_KEY to your .env file to manage reference data.</span>
-      </div>
-    )
-  }
-
   async function addBrand(code, name) {
     if (!name) return 'Display name is required.'
-    const { error } = await supabaseAdmin.from('brands').insert({ code, name })
-    if (error) return error.message
+    try {
+      await callEdge('admin-access-rules', 'addBrand', { code, name })
+    } catch (e) { return e.message }
     await load(); return null
   }
   async function toggleBrand(code, active) {
-    await supabaseAdmin.from('brands').update({ is_active: active }).eq('code', code)
+    try {
+      await callEdge('admin-access-rules', 'toggleBrand', { code, is_active: active })
+    } catch (e) { /* surfaced via RefTable next refresh */ }
     await load()
   }
 
   async function addRole(name, label) {
     if (!label) return 'Label is required.'
-    const { error } = await supabaseAdmin.from('roles').insert({ name, label })
-    if (error) return error.message
+    try {
+      await callEdge('admin-access-rules', 'addRole', { name, label })
+    } catch (e) { return e.message }
     await load(); return null
   }
   async function toggleRole(name, active) {
-    await supabaseAdmin.from('roles').update({ is_active: active }).eq('name', name)
+    try {
+      await callEdge('admin-access-rules', 'toggleRole', { name, is_active: active })
+    } catch (e) { /* surfaced via RefTable next refresh */ }
     await load()
   }
 
   async function addLocation(name) {
-    const { error } = await supabaseAdmin.from('locations').insert({ name, state: '', entity: 'PT' })
-    if (error) return error.message
+    try {
+      await callEdge('admin-access-rules', 'addLocation', { name, state: '', entity: 'PT' })
+    } catch (e) { return e.message }
     await load(); return null
   }
   async function toggleLocation(name, active) {
-    await supabaseAdmin.from('locations').update({ is_active: active }).eq('name', name)
+    try {
+      await callEdge('admin-access-rules', 'toggleLocation', { name, is_active: active })
+    } catch (e) { /* surfaced via RefTable next refresh */ }
     await load()
   }
 
   async function addDept(name) {
-    const { error } = await supabaseAdmin.from('departments').insert({ name })
-    if (error) return error.message
+    try {
+      await callEdge('admin-access-rules', 'addDepartment', { name })
+    } catch (e) { return e.message }
     await load(); return null
   }
   async function toggleDept(name, active) {
-    await supabaseAdmin.from('departments').update({ is_active: active }).eq('name', name)
+    try {
+      await callEdge('admin-access-rules', 'toggleDepartment', { name, is_active: active })
+    } catch (e) { /* surfaced via RefTable next refresh */ }
     await load()
   }
 
@@ -641,20 +656,26 @@ function OperatingUnits({ brands, locations }) {
       bank_ifsc:    form.bank_ifsc    || null,
     }
 
-    let err
-    if (modal === 'add') {
-      ;({ error: err } = await supabaseAdmin.from('operating_units').insert(payload))
-    } else {
-      ;({ error: err } = await supabaseAdmin.from('operating_units').update(payload).eq('brand', form.brand).eq('location', form.location))
+    try {
+      if (modal === 'add') {
+        await callEdge('admin-access-rules', 'createOperatingUnit', payload)
+      } else {
+        await callEdge('admin-access-rules', 'updateOperatingUnit', payload)
+      }
+    } catch (e) {
+      setSaving(false)
+      setError(e.message)
+      return
     }
 
     setSaving(false)
-    if (err) { setError(err.message); return }
     closeModal(); await load()
   }
 
   async function toggleActive(ou) {
-    await supabaseAdmin.from('operating_units').update({ is_active: !ou.is_active }).eq('id', ou.id)
+    try {
+      await callEdge('admin-access-rules', 'toggleOperatingUnit', { id: ou.id, is_active: !ou.is_active })
+    } catch (e) { /* surfaced via load() */ }
     await load()
   }
 

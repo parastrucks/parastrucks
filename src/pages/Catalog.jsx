@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import * as XLSX from 'xlsx'
-import { supabase, supabaseAdmin } from '../lib/supabase'
+import { supabase } from '../lib/supabase'
+import { callEdge } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
 
 /* ── CONSTANTS ───────────────────────────────────────────────── */
@@ -168,10 +169,14 @@ function VehiclesTab({ vehicles, subSegs, loading, onRefresh }) {
 
   async function toggleActive(v) {
     setSaving(true)
-    await supabaseAdmin
-      .from('vehicle_catalog')
-      .update({ is_active: !v.is_active })
-      .eq('id', v.id)
+    try {
+      await callEdge('admin-catalog', 'toggleVehicleActive', {
+        id: v.id,
+        is_active: !v.is_active,
+      })
+    } catch (e) {
+      console.error('toggleActive failed:', e.message)
+    }
     setSaving(false)
     setConfirming(null)
     onRefresh()
@@ -428,14 +433,18 @@ function VehicleModal({ mode, vehicle, subSegs, onClose, onSaved }) {
       is_active:      form.is_active,
     }
 
-    let err
-    if (mode === 'add') {
-      ;({ error: err } = await supabaseAdmin.from('vehicle_catalog').insert(payload))
-    } else {
-      ;({ error: err } = await supabaseAdmin.from('vehicle_catalog').update(payload).eq('id', vehicle.id))
+    try {
+      if (mode === 'add') {
+        await callEdge('admin-catalog', 'createVehicle', payload)
+      } else {
+        await callEdge('admin-catalog', 'updateVehicle', { id: vehicle.id, update: payload })
+      }
+    } catch (e) {
+      setSaving(false)
+      setError(e.message)
+      return
     }
     setSaving(false)
-    if (err) { setError(err.message); return }
     onSaved()
   }
 
@@ -768,21 +777,25 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
     if (brochureFile) {
       const safeName = form.name.replace(/[^a-zA-Z0-9_-]/g, '_')
       const path = `${form.brand}/${safeName}.pdf`
-      // Use service-role client so the upload bypasses storage RLS entirely.
-      // Fall back to anon client if service key is not configured.
-      const storageClient = supabaseAdmin || supabase
       setUploadPct(0)
-      const { error: upErr } = await storageClient.storage
-        .from('brochures')
-        .upload(path, brochureFile, {
-          upsert: true,
-          contentType: 'application/pdf',
-          onUploadProgress: ({ loaded, total }) => {
-            setUploadPct(total ? Math.round((loaded / total) * 100) : null)
-          },
-        })
-      setUploadPct(null)
-      if (upErr) { setError('Brochure upload failed: ' + upErr.message); setSaving(false); return }
+      try {
+        // Ask the Edge Function for a one-shot signed upload URL.
+        // The file uploads directly to storage — never passes through the function.
+        const { token } = await callEdge('admin-catalog', 'signBrochureUpload', { path })
+        const { error: upErr } = await supabase.storage
+          .from('brochures')
+          .uploadToSignedUrl(path, token, brochureFile, {
+            upsert: true,
+            contentType: 'application/pdf',
+          })
+        setUploadPct(null)
+        if (upErr) { setError('Brochure upload failed: ' + upErr.message); setSaving(false); return }
+      } catch (e) {
+        setUploadPct(null)
+        setError('Brochure upload failed: ' + e.message)
+        setSaving(false)
+        return
+      }
       brochure_url      = path
       brochure_filename = brochureFile.name
     }
@@ -1078,11 +1091,14 @@ function ImportTab({ subSegs, onRefresh }) {
       price_circular: priceCircular || null,
       effective_date: effectiveDate || null,
     }))
-    const { error: err } = await supabaseAdmin
-      .from('vehicle_catalog')
-      .upsert(payload, { onConflict: 'cbn', ignoreDuplicates: false })
+    try {
+      await callEdge('admin-catalog', 'bulkUpsertVehicles', { rows: payload })
+    } catch (e) {
+      setImporting(false)
+      setError('Import failed: ' + e.message)
+      return
+    }
     setImporting(false)
-    if (err) { setError('Import failed: ' + err.message); return }
     setResult({ updated: preview.updated, newRows: preview.newRows })
     setPreview(null)
     setFile(null)
