@@ -20,9 +20,15 @@ export async function callEdge(fn, action, payload = {}) {
   const { data: { session } } = await supabase.auth.getSession()
   if (!session) throw new Error('Not signed in')
 
-  // supabase-js invoke() attaches the anon key + Authorization header automatically.
+  // Explicitly pass the session access token. supabase-js v2 auto-attaches
+  // on an auth-state-change listener, but with our sessionStorage + custom
+  // storageKey setup the FunctionsClient sometimes falls back to the anon
+  // key, which the EF then rejects as "Invalid token".
   const { data, error } = await supabase.functions.invoke(fn, {
     body: { action, payload },
+    headers: {
+      Authorization: `Bearer ${session.access_token}`,
+    },
   })
 
   // Network / non-2xx error
