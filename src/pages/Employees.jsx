@@ -66,7 +66,7 @@ export default function Employees() {
     try {
       const { data, error } = await supabase
         .from('users')
-        .select('*')
+        .select('id, full_name, email, role, entity, brand, location, department, vertical, designation, is_active')
         .order('full_name')
       if (!error) setEmployees(data || [])
     } catch (e) {

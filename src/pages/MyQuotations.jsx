@@ -16,7 +16,7 @@ export default function MyQuotations() {
   const { profile } = useAuth()
   const [quotations, setQuotations] = useState([])
   const [loading, setLoading] = useState(true)
-  const [downloading, setDownloading] = useState(null) // quotation id being downloaded
+  const [downloadingId, setDownloadingId] = useState(null) // quotation id being downloaded
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -39,7 +39,7 @@ export default function MyQuotations() {
   }, [profile?.id])
 
   async function handleRedownload(q) {
-    setDownloading(q.id)
+    setDownloadingId(q.id)
     try {
       const { data: entityData, error: eErr } = await supabase
         .from('entities')
@@ -74,7 +74,7 @@ export default function MyQuotations() {
       setError('Failed to generate PDF.')
       setTimeout(() => setError(''), 4000)
     } finally {
-      setDownloading(null)
+      setDownloadingId(null)
     }
   }
 
@@ -138,9 +138,9 @@ export default function MyQuotations() {
                     <button
                       className="btn btn-secondary btn-sm"
                       onClick={() => handleRedownload(q)}
-                      disabled={downloading === q.id}
+                      disabled={downloadingId === q.id}
                     >
-                      {downloading === q.id
+                      {downloadingId === q.id
                         ? <><span className="spinner spinner-sm" /> Generating…</>
                         : '↓ PDF'}
                     </button>
