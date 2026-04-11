@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
-import { supabase } from '../lib/supabase'
+import { supabase, REMEMBER_KEY } from '../lib/supabase'
+import { callEdgePublic } from '../lib/api'
 
 const AuthContext = createContext(null)
 
@@ -135,32 +136,110 @@ export function AuthProvider({ children }) {
     if (mountedRef.current) setAccessRules(data ?? [])
   }
 
-  async function signIn(email, password) {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) throw error
+  // Phase 5 U8 — login goes through the verify-login Edge Function instead of
+  // supabase.auth.signInWithPassword directly. The EF enforces:
+  //   • email-keyed lockout (5 fails in 15 min → 15 min lockout)
+  //   • optional Cloudflare Turnstile CAPTCHA
+  // and hands back access_token + refresh_token which we install via
+  // setSession(). That fires SIGNED_IN → the onAuthStateChange handler above
+  // runs loadUserData as normal. The is-active / profile-exists checks live
+  // here because the EF can't run them without coupling itself to the users
+  // table's RLS surface.
+  //
+  // On error, we throw a SignInError — a plain Error subclass that carries
+  // structured `code` + `retry_after_s` + `fails_remaining` so Login.jsx can
+  // render the right message without string-matching.
+  async function signIn(email, password, { rememberMe = false, turnstileToken } = {}) {
+    // Set the remember-me flag BEFORE any supabase write so the storage
+    // adapter picks the right bucket for the session that's about to land.
+    if (rememberMe) localStorage.setItem(REMEMBER_KEY, '1')
+    else            localStorage.removeItem(REMEMBER_KEY)
 
-    // Lightweight validation — just check the user row exists and is active.
-    // The full profile load is handled by the SIGNED_IN onAuthStateChange event.
-    const { data: check } = await supabase
-      .from('users')
-      .select('is_active')
-      .eq('id', data.user.id)
-      .maybeSingle()
-
-    if (!check) {
-      supabase.auth.signOut().catch(() => {})
-      throw new Error('User profile not found. Contact HR.')
+    let resp
+    try {
+      resp = await callEdgePublic('verify-login', {
+        email,
+        password,
+        turnstile_token: turnstileToken,
+      })
+    } catch (e) {
+      const err = new Error(e?.message || 'Network error. Check your connection and try again.')
+      err.code = 'network'
+      throw err
     }
-    if (!check.is_active) {
-      supabase.auth.signOut().catch(() => {})
-      throw new Error('Your account has been deactivated. Contact HR.')
+
+    if (!resp.ok) {
+      const body = resp.body || {}
+      const err = new Error(signInErrorMessage(body.error))
+      err.code = body.error || 'unknown'
+      if (body.retry_after_s != null) err.retryAfter = body.retry_after_s
+      if (body.fails_remaining != null) err.failsRemaining = body.fails_remaining
+      throw err
     }
 
-    // Yield one microtask to ensure the SIGNED_IN handler has fired and stored
-    // the loadUserData promise in dataLoadRef, then await it so that profile is
+    const { access_token, refresh_token } = resp.body
+    if (!access_token || !refresh_token) {
+      const err = new Error('Unexpected login response. Contact HR.')
+      err.code = 'bad_response'
+      throw err
+    }
+
+    // Install the session client-side. This fires SIGNED_IN which triggers
+    // loadUserData via the onAuthStateChange handler above.
+    const { error: setErr } = await supabase.auth.setSession({ access_token, refresh_token })
+    if (setErr) {
+      const err = new Error(setErr.message || 'Failed to start session.')
+      err.code = 'session_install'
+      throw err
+    }
+
+    // is-active / profile-exists check. Runs after setSession so RLS sees the
+    // caller's JWT. If either fails, we sign out and surface a specific error.
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      const { data: check } = await supabase
+        .from('users')
+        .select('is_active')
+        .eq('id', user.id)
+        .maybeSingle()
+
+      if (!check) {
+        supabase.auth.signOut().catch(() => {})
+        const err = new Error('User profile not found. Contact HR.')
+        err.code = 'no_profile'
+        throw err
+      }
+      if (!check.is_active) {
+        supabase.auth.signOut().catch(() => {})
+        const err = new Error('Your account has been deactivated. Contact HR.')
+        err.code = 'inactive'
+        throw err
+      }
+    }
+
+    // Yield one microtask so the SIGNED_IN handler above has already stored
+    // the loadUserData promise in dataLoadRef, then await it so profile is
     // populated before Login.jsx calls navigate('/').
     await Promise.resolve()
     if (dataLoadRef.current) await dataLoadRef.current
+  }
+
+  // Map EF error codes to user-visible strings. Kept as a bare function
+  // (not a hook / context value) so it's easy to tweak.
+  function signInErrorMessage(code) {
+    switch (code) {
+      case 'locked':
+        return 'Too many failed attempts. Try again later.'
+      case 'invalid_credentials':
+        return 'Incorrect email or password.'
+      case 'captcha_required':
+      case 'captcha_failed':
+        return 'Please complete the CAPTCHA and try again.'
+      case 'email and password required':
+        return 'Please enter your email and password.'
+      default:
+        return 'Sign in failed. Please try again.'
+    }
   }
 
   function signOut() {
@@ -169,6 +248,9 @@ export function AuthProvider({ children }) {
     // the button appear broken. State is cleared synchronously so the UI
     // redirects to /login regardless of network state.
     supabase.auth.signOut().catch(() => {})
+    // Clear the remember-me flag so the next login defaults back to session
+    // storage. The user has to re-tick the checkbox to opt back in.
+    localStorage.removeItem(REMEMBER_KEY)
     setSession(null)
     setProfile(null)
     setAccessRules([])

@@ -54,3 +54,34 @@ export async function callEdge(fn, action, payload = {}) {
   if (body && body.error) throw new Error(body.error)
   return body
 }
+
+/**
+ * Invoke an Edge Function that does NOT require the caller to be signed in.
+ * Used by the login flow (verify-login) — there's no user session yet.
+ * Returns the raw parsed body so the caller can inspect structured fields like
+ * `error`, `fails_remaining`, `retry_after_s` without having them swallowed
+ * by an Error throw.
+ *
+ * Throws only on network failure or non-JSON response. HTTP 4xx/5xx returns
+ * the parsed body so the caller can branch on body.error.
+ */
+export async function callEdgePublic(fn, payload = {}) {
+  let resp
+  try {
+    resp = await fetch(`${SUPABASE_URL}/functions/v1/${fn}`, {
+      method: 'POST',
+      headers: {
+        'apikey': ANON_KEY,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    })
+  } catch (e) {
+    throw new Error(e?.message || 'Network error')
+  }
+
+  let body = null
+  try { body = await resp.json() } catch { /* non-JSON body */ }
+
+  return { ok: resp.ok, status: resp.status, body: body ?? {} }
+}
