@@ -11,39 +11,79 @@ function fmtDate(iso) {
   return new Date(iso).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
+const PAGE_SIZE = 25
+
 export default function QuotationLog() {
   const [quotations, setQuotations] = useState([])
   const [loading, setLoading] = useState(true)
-  const [downloading, setDownloading] = useState(null)
+  const [downloadingId, setDownloadingId] = useState(null)
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [page, setPage] = useState(0)
+  const [totalCount, setTotalCount] = useState(0)
 
   useEffect(() => {
+    const t = setTimeout(() => {
+      setDebouncedSearch(search.trim())
+      setPage(0)
+    }, 150)
+    return () => clearTimeout(t)
+  }, [search])
+
+  useEffect(() => {
+    let cancelled = false
     async function load() {
       setLoading(true)
-      const { data, error: err } = await supabase
-        .from('quotations')
-        .select(`
-          id, quotation_number, created_at, valid_until,
-          customer_name, customer_address, customer_mobile, customer_gstin, hypothecation,
-          line_items, tcs_rate, tcs_amount, rto_tax, insurance, grand_total, entity,
-          users:created_by ( full_name, role )
-        `)
-        .order('created_at', { ascending: false })
-      if (err) {
-        setError('Failed to load quotations.')
-        setLoading(false)
-        return
+      try {
+        let query = supabase
+          .from('quotations')
+          .select(`
+            id, quotation_number, created_at, valid_until,
+            customer_name, customer_address, customer_mobile, customer_gstin, hypothecation,
+            line_items, tcs_rate, tcs_amount, rto_tax, insurance, grand_total, entity,
+            users:created_by ( full_name, role )
+          `, { count: 'exact' })
+          .order('created_at', { ascending: false })
+          .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1)
+
+        if (debouncedSearch) {
+          query = query.or(
+            `quotation_number.ilike.%${debouncedSearch}%,customer_name.ilike.%${debouncedSearch}%`
+          )
+        }
+
+        const { data, count, error: err } = await query
+        if (cancelled) return
+        if (err) {
+          setError('Failed to load quotations.')
+          setQuotations([])
+          setTotalCount(0)
+          return
+        }
+        setQuotations(data || [])
+        setTotalCount(count || 0)
+        setError('')
+      } catch (e) {
+        if (!cancelled) {
+          console.error(e)
+          setError('Failed to load quotations.')
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
       }
-      setQuotations(data || [])
-      setLoading(false)
     }
     load()
-  }, [])
+    return () => { cancelled = true }
+  }, [page, debouncedSearch])
 
   async function handleRedownload(q) {
-    setDownloading(q.id)
+    if (!q.customer_name || !(q.line_items || []).length) {
+      alert('Cannot re-download this quotation — customer or line items are missing.')
+      return
+    }
     try {
+      setDownloadingId(q.id)
       const { data: entityData, error: eErr } = await supabase
         .from('entities')
         .select('full_name, address, gstin, bank_name, bank_account, bank_ifsc')
@@ -77,20 +117,16 @@ export default function QuotationLog() {
       setError('Failed to generate PDF.')
       setTimeout(() => setError(''), 4000)
     } finally {
-      setDownloading(null)
+      setDownloadingId(null)
     }
   }
 
-  const filtered = search.trim()
-    ? quotations.filter(q =>
-        q.quotation_number?.toLowerCase().includes(search.toLowerCase()) ||
-        q.customer_name?.toLowerCase().includes(search.toLowerCase()) ||
-        q.users?.full_name?.toLowerCase().includes(search.toLowerCase())
-      )
-    : quotations
-
   const vehicleCount = (q) =>
     (q.line_items || []).reduce((s, i) => s + (i.qty || 1), 0)
+
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
+  const hasPrev = page > 0
+  const hasNext = (page + 1) * PAGE_SIZE < totalCount
 
   return (
     <div>
@@ -102,7 +138,7 @@ export default function QuotationLog() {
         <input
           className="form-input"
           style={{ maxWidth: 260 }}
-          placeholder="Search customer, number, or user…"
+          placeholder="Search quotation no. or customer…"
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
@@ -118,17 +154,17 @@ export default function QuotationLog() {
         <div className="full-center" style={{ height: 240 }}>
           <span className="spinner" />
         </div>
-      ) : filtered.length === 0 ? (
+      ) : quotations.length === 0 ? (
         <div className="empty-state">
           <div className="empty-state-icon">📋</div>
-          <h3>{search ? 'No results found' : 'No quotations yet'}</h3>
-          <p>{search ? 'Try a different search term.' : 'Quotations created by the team will appear here.'}</p>
+          <h3>{debouncedSearch ? 'No results found' : 'No quotations yet'}</h3>
+          <p>{debouncedSearch ? 'Try a different search term.' : 'Quotations created by the team will appear here.'}</p>
         </div>
       ) : (
         <>
           <div style={{ marginBottom: 10, fontSize: 13, color: 'var(--gray-500)' }}>
-            {filtered.length} quotation{filtered.length !== 1 ? 's' : ''}
-            {search && ` matching "${search}"`}
+            {totalCount} quotation{totalCount !== 1 ? 's' : ''}
+            {debouncedSearch && ` matching "${debouncedSearch}"`}
           </div>
           <div className="table-wrap">
             <table>
@@ -145,7 +181,7 @@ export default function QuotationLog() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(q => (
+                {quotations.map(q => (
                   <tr key={q.id}>
                     <td><span className="q-number">{q.quotation_number}</span></td>
                     <td>{fmtDate(q.created_at)}</td>
@@ -174,9 +210,9 @@ export default function QuotationLog() {
                       <button
                         className="btn btn-secondary btn-sm"
                         onClick={() => handleRedownload(q)}
-                        disabled={downloading === q.id}
+                        disabled={downloadingId === q.id}
                       >
-                        {downloading === q.id
+                        {downloadingId === q.id
                           ? <><span className="spinner spinner-sm" /> Generating…</>
                           : '↓ PDF'}
                       </button>
@@ -185,6 +221,33 @@ export default function QuotationLog() {
                 ))}
               </tbody>
             </table>
+          </div>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              gap: 12,
+              marginTop: 16,
+            }}
+          >
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => setPage(p => Math.max(0, p - 1))}
+              disabled={!hasPrev}
+            >
+              ← Previous
+            </button>
+            <span style={{ fontSize: 13, color: 'var(--gray-500)' }}>
+              Page {page + 1} of {totalPages}
+            </span>
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => setPage(p => p + 1)}
+              disabled={!hasNext}
+            >
+              Next →
+            </button>
           </div>
         </>
       )}
