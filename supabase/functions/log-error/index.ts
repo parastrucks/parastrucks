@@ -3,9 +3,12 @@
 // Called from ErrorBoundary, window.onerror, and onunhandledrejection.
 //
 // Auth: JWT required (any authenticated user can log their own errors).
-// No rate limiting at function level — a cheap insert per error is fine.
-// The error_log table has strict RLS: insert-only for authenticated,
-// select-only for admin. The user_id is always set server-side from the JWT.
+//
+// Rate limit: 120 req/min/user — higher than admin functions so a transient
+// burst of client errors doesn't get dropped, but still bounded so a stuck
+// client can't hammer the error_log table. The error_log table has strict RLS:
+// insert-only for authenticated, select-only for admin. The user_id is always
+// set server-side from the JWT.
 //
 // IMPORTANT: this function must be deployed with verify_jwt: false.
 // The gateway-level verify_jwt check rejects user JWTs in this project
@@ -13,6 +16,7 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 import { createClient } from "npm:@supabase/supabase-js@2"
+import { rateLimit } from "../_shared/rateLimit.ts"
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -54,6 +58,18 @@ Deno.serve(async (req: Request) => {
   const { data: u, error: uErr } = await userClient.auth.getUser(jwt)
   if (uErr || !u?.user) return json({ error: "Invalid token" }, 401)
 
+  // Service-role client used for both rate-limit and error insert
+  const admin = createClient(url, service, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  })
+
+  // Rate limit: 120 req/min per user. Runs after JWT verification so
+  // unauthenticated hits can't pollute the rate_limits table.
+  const rl = await rateLimit(admin, u.user.id, "log-error", 120, 60)
+  if (!rl.allowed) {
+    return json({ ok: false, error: "rate_limited", retry_after_s: rl.retry_after_s }, 429)
+  }
+
   let body: Record<string, unknown> = {}
   try {
     body = await req.json()
@@ -69,11 +85,6 @@ Deno.serve(async (req: Request) => {
     : null
 
   if (!message) return json({ error: "message required" }, 400)
-
-  // Write via service-role client so RLS doesn't trip on the insert
-  const admin = createClient(url, service, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  })
 
   const { error } = await admin.from("error_log").insert({
     user_id: u.user.id,
