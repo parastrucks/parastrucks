@@ -6,6 +6,10 @@
 // No rate limiting at function level — a cheap insert per error is fine.
 // The error_log table has strict RLS: insert-only for authenticated,
 // select-only for admin. The user_id is always set server-side from the JWT.
+//
+// IMPORTANT: this function must be deployed with verify_jwt: false.
+// The gateway-level verify_jwt check rejects user JWTs in this project
+// (kid/JWKS mismatch). getUser() inline below does the real validation.
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 import { createClient } from "npm:@supabase/supabase-js@2"
