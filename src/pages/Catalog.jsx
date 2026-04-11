@@ -52,7 +52,7 @@ function AdminCatalog() {
     try {
       const { data, error } = await supabase
         .from('vehicle_catalog')
-        .select('*')
+        .select('id, cbn, description, brand, segment, sub_category, tyres, mrp_incl_gst, gst_rate, price_circular, effective_date, is_active')
         .order('segment')
         .order('sub_category')
         .order('cbn')
@@ -130,22 +130,29 @@ function AdminCatalog() {
 
 /* ── VEHICLES TAB ────────────────────────────────────────────── */
 function VehiclesTab({ vehicles, subSegs, loading, onRefresh }) {
-  const [search,       setSearch]       = useState('')
-  const [filterSeg,    setFilterSeg]    = useState('')
-  const [filterStatus, setFilterStatus] = useState('active')
-  const [page,         setPage]         = useState(1)
-  const [modal,        setModal]        = useState(null)  // 'add'|'edit'
-  const [selected,     setSelected]     = useState(null)
-  const [confirming,   setConfirming]   = useState(null)
-  const [saving,       setSaving]       = useState(false)
+  const [searchInput,     setSearchInput]     = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [filterSeg,       setFilterSeg]       = useState('')
+  const [filterStatus,    setFilterStatus]    = useState('active')
+  const [page,            setPage]            = useState(1)
+  const [modal,           setModal]           = useState(null)  // 'add'|'edit'
+  const [selected,        setSelected]        = useState(null)
+  const [confirming,      setConfirming]      = useState(null)
+  const [saving,          setSaving]          = useState(false)
+
+  // Local 150 ms debounce so fast typists don't re-filter on every keystroke.
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchInput), 150)
+    return () => clearTimeout(t)
+  }, [searchInput])
 
   const filtered = useMemo(() => {
     let list = vehicles
     if (filterStatus === 'active')   list = list.filter(v => v.is_active)
     if (filterStatus === 'inactive') list = list.filter(v => !v.is_active)
     if (filterSeg)                   list = list.filter(v => v.segment === filterSeg)
-    if (search.trim()) {
-      const s = search.trim().toLowerCase()
+    if (debouncedSearch.trim()) {
+      const s = debouncedSearch.trim().toLowerCase()
       const mrpNum = s.replace(/[₹,\s]/g, '')
       list = list.filter(v =>
         v.cbn.toLowerCase().includes(s) ||
@@ -155,7 +162,7 @@ function VehiclesTab({ vehicles, subSegs, loading, onRefresh }) {
       )
     }
     return list
-  }, [vehicles, search, filterSeg, filterStatus])
+  }, [vehicles, debouncedSearch, filterSeg, filterStatus])
 
   const paged = useMemo(() => {
     const start = (page - 1) * PER_PAGE
@@ -165,7 +172,7 @@ function VehiclesTab({ vehicles, subSegs, loading, onRefresh }) {
   const totalPages = Math.ceil(filtered.length / PER_PAGE)
 
   // Reset to page 1 when filters change
-  useEffect(() => { setPage(1) }, [search, filterSeg, filterStatus])
+  useEffect(() => { setPage(1) }, [debouncedSearch, filterSeg, filterStatus])
 
   async function toggleActive(v) {
     setSaving(true)
@@ -189,8 +196,8 @@ function VehiclesTab({ vehicles, subSegs, loading, onRefresh }) {
         <input
           className="form-input vc-search"
           placeholder="Search CBN, description, sub-segment or MRP…"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
+          value={searchInput}
+          onChange={e => setSearchInput(e.target.value)}
         />
         <div className="vc-filters">
           <select className="form-select" value={filterSeg} onChange={e => setFilterSeg(e.target.value)}>
@@ -213,8 +220,8 @@ function VehiclesTab({ vehicles, subSegs, loading, onRefresh }) {
 
       <div className="vc-stats-row">
         <span>{filtered.length} of {vehicles.length} vehicles</span>
-        {search && (
-          <button className="btn btn-ghost btn-sm" onClick={() => setSearch('')}>
+        {searchInput && (
+          <button className="btn btn-ghost btn-sm" onClick={() => setSearchInput('')}>
             Clear search
           </button>
         )}
@@ -766,6 +773,45 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
 
   function set(field, value) { setForm(f => ({ ...f, [field]: value })); setError('') }
 
+  // Validate brochure file: ≤10 MB + magic-byte %PDF- header.
+  // Runs before the Edge Function signed-URL round-trip to reject bad files early.
+  async function handleBrochureSelect(e) {
+    const f = e.target.files[0] || null
+    if (!f) { setBrochureFile(null); return }
+
+    if (f.size > 10 * 1024 * 1024) {
+      setError('Brochure must be 10 MB or smaller')
+      if (fileRef.current) fileRef.current.value = ''
+      return
+    }
+
+    try {
+      const header = await new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => {
+          const bytes = new Uint8Array(reader.result)
+          let s = ''
+          for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i])
+          resolve(s)
+        }
+        reader.onerror = () => reject(reader.error)
+        reader.readAsArrayBuffer(f.slice(0, 5))
+      })
+      if (!header.startsWith('%PDF-')) {
+        setError('File is not a valid PDF')
+        if (fileRef.current) fileRef.current.value = ''
+        return
+      }
+    } catch {
+      setError('Could not read file')
+      if (fileRef.current) fileRef.current.value = ''
+      return
+    }
+
+    setError('')
+    setBrochureFile(f)
+  }
+
   async function save() {
     if (!form.name.trim()) { setError('Name is required'); return }
     if (!form.segment)     { setError('Segment is required'); return }
@@ -877,7 +923,7 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
               type="file"
               accept="application/pdf"
               style={{ display: 'none' }}
-              onChange={e => setBrochureFile(e.target.files[0] || null)}
+              onChange={handleBrochureSelect}
             />
             {form.brochure_url && !brochureFile ? (
               <div className="vc-current-brochure">
