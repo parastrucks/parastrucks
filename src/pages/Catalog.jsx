@@ -381,7 +381,7 @@ function VehiclesTab({ vehicles, subSegs, loading, onRefresh }) {
                   onClick={() => toggleActive(confirming)}
                 >
                   {saving
-                    ? <span className="spinner-sm" />
+                    ? <span className="spinner spinner-sm" />
                     : confirming.is_active ? 'Deactivate' : 'Activate'}
                 </button>
               </div>
@@ -601,7 +601,7 @@ function VehicleModal({ mode, vehicle, subSegs, onClose, onSaved }) {
             <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
             <button className="btn btn-primary" disabled={saving} onClick={save}>
               {saving
-                ? <span className="spinner-sm" />
+                ? <span className="spinner spinner-sm" />
                 : mode === 'add' ? 'Add Vehicle' : 'Save Changes'}
             </button>
           </div>
@@ -1010,7 +1010,7 @@ function BrochureDownload({ path, filename }) {
 
   return (
     <button className="btn btn-ghost btn-sm" onClick={download} disabled={loading}>
-      {loading ? <span className="spinner-sm" /> : `📎 ${filename || 'Download'}`}
+      {loading ? <span className="spinner spinner-sm" /> : `📎 ${filename || 'Download'}`}
     </button>
   )
 }
@@ -1270,7 +1270,7 @@ function ImportTab({ subSegs, onRefresh }) {
 
             <button className="btn btn-primary" disabled={importing} onClick={runImport}>
               {importing
-                ? <><span className="spinner-sm" /> Importing…</>
+                ? <><span className="spinner spinner-sm" /> Importing…</>
                 : `Import ${preview.rows.length} vehicles`}
             </button>
           </>
