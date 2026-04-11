@@ -53,7 +53,9 @@
       "Bash(git add:*)",
       "Bash(git commit -m ':*)",
       "Bash(git push:*)",
-      "mcp__dfce7dec-e0a2-4afc-9db0-362f4cd2df62__deploy_edge_function"
+      "mcp__dfce7dec-e0a2-4afc-9db0-362f4cd2df62__deploy_edge_function",
+      "mcp__dfce7dec-e0a2-4afc-9db0-362f4cd2df62__get_logs",
+      "mcp__dfce7dec-e0a2-4afc-9db0-362f4cd2df62__get_edge_function"
     ]
   }
 }
