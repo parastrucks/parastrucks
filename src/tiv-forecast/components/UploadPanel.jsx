@@ -37,23 +37,50 @@ export default function UploadPanel({ onUploadComplete }) {
 
   function handleFileChange(e) {
     const f = e.target.files[0]
-    setFile(f)
     setParseError('')
     setSuccessMsg('')
     setPreview(null)
-    if (!f) return
+    if (!f) { setFile(null); return }
 
-    const reader = new FileReader()
-    reader.onload = (evt) => {
-      try {
-        const parsed = parseExcelFile(evt.target.result)
-        setPreview(parsed.summary)
-      } catch (err) {
-        setParseError(`Parse error: ${err.message}`)
-        setFile(null)
-      }
+    if (f.size > 5 * 1024 * 1024) {
+      setParseError('File must be 5 MB or smaller')
+      setFile(null)
+      e.target.value = ''
+      return
     }
-    reader.readAsArrayBuffer(f)
+
+    // .xlsx is a ZIP container, so the first 4 bytes must be PK\x03\x04
+    const headerReader = new FileReader()
+    headerReader.onload = () => {
+      const bytes = new Uint8Array(headerReader.result)
+      const isZip = bytes.length >= 4
+        && bytes[0] === 0x50 && bytes[1] === 0x4B
+        && bytes[2] === 0x03 && bytes[3] === 0x04
+      if (!isZip) {
+        setParseError('File is not a valid .xlsx workbook')
+        setFile(null)
+        e.target.value = ''
+        return
+      }
+
+      setFile(f)
+      const reader = new FileReader()
+      reader.onload = (evt) => {
+        try {
+          const parsed = parseExcelFile(evt.target.result)
+          setPreview(parsed.summary)
+        } catch (err) {
+          setParseError(`Parse error: ${err.message}`)
+          setFile(null)
+        }
+      }
+      reader.readAsArrayBuffer(f)
+    }
+    headerReader.onerror = () => {
+      setParseError('Could not read file')
+      setFile(null)
+    }
+    headerReader.readAsArrayBuffer(f.slice(0, 4))
   }
 
   const handleUpload = useCallback(async () => {
