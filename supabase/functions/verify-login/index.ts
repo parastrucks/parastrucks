@@ -70,107 +70,137 @@ async function verifyTurnstile(token: string | undefined): Promise<boolean> {
 }
 
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: CORS })
-  if (req.method !== "POST") return json({ error: "Method not allowed" }, 405)
+  // Stage marker — incremented through the handler so that if we hit the
+  // top-level catch we know exactly where the crash happened. Surfaced in the
+  // 500 response body so the browser devtools Network tab shows it.
+  let stage = "enter"
 
-  const url = Deno.env.get("SUPABASE_URL")!
-  const anon = Deno.env.get("SUPABASE_ANON_KEY")!
-  const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-
-  let body: Record<string, unknown> = {}
   try {
-    body = await req.json()
-  } catch {
-    return json({ error: "Invalid JSON" }, 400)
-  }
+    if (req.method === "OPTIONS") return new Response(null, { headers: CORS })
+    if (req.method !== "POST") return json({ error: "Method not allowed" }, 405)
 
-  const email = typeof body.email === "string" ? body.email.trim() : ""
-  const password = typeof body.password === "string" ? body.password : ""
-  const turnstileToken = typeof body.turnstile_token === "string"
-    ? body.turnstile_token
-    : undefined
+    stage = "read-env"
+    const url = Deno.env.get("SUPABASE_URL")!
+    const anon = Deno.env.get("SUPABASE_ANON_KEY")!
+    const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
 
-  if (!email || !password) {
-    return json({ error: "email and password required" }, 400)
-  }
-
-  // Service-role client for lockout bookkeeping.
-  const admin = createClient(url, service, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  })
-
-  // 1. Check lockout BEFORE touching passwords or CAPTCHA. If locked, the
-  //    attacker gets no signal about whether the password is right — we just
-  //    say "come back later". This is read-only, no counter increment.
-  const { data: checkData, error: checkErr } = await admin.rpc("auth_attempt_check", {
-    p_email: email,
-  })
-  if (!checkErr && Array.isArray(checkData) && checkData.length > 0) {
-    const row = checkData[0] as { locked: boolean; retry_after_s: number | null }
-    if (row.locked) {
-      return json({
-        error: "locked",
-        retry_after_s: row.retry_after_s ?? 0,
-      }, 429)
+    stage = "parse-body"
+    let body: Record<string, unknown> = {}
+    try {
+      body = await req.json()
+    } catch {
+      return json({ error: "Invalid JSON" }, 400)
     }
-  }
-  // If checkErr — fail open and continue. A broken lockout must not deny
-  // legit users; the password check below still runs.
 
-  // 2. CAPTCHA verification. Failures here do NOT hit auth_attempt_record —
-  //    they're not password failures.
-  const captchaOk = await verifyTurnstile(turnstileToken)
-  if (!captchaOk) {
-    return json({ error: "captcha_failed" }, 403)
-  }
+    const email = typeof body.email === "string" ? body.email.trim() : ""
+    const password = typeof body.password === "string" ? body.password : ""
+    const turnstileToken = typeof body.turnstile_token === "string"
+      ? body.turnstile_token
+      : undefined
 
-  // 3. Password grant via anon client (same endpoint the browser would hit).
-  //    persistSession:false so we don't try to write to Deno storage.
-  const anonClient = createClient(url, anon, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  })
+    if (!email || !password) {
+      return json({ error: "email and password required" }, 400)
+    }
 
-  const { data: signInData, error: signInErr } = await anonClient.auth
-    .signInWithPassword({ email, password })
-
-  if (signInErr || !signInData?.session) {
-    // 4a. Failure path — record against the lockout table.
-    const { data: recData } = await admin.rpc("auth_attempt_record", {
-      p_email: email,
-      p_success: false,
+    stage = "create-admin"
+    // Service-role client for lockout bookkeeping.
+    const admin = createClient(url, service, {
+      auth: { persistSession: false, autoRefreshToken: false },
     })
-    const row = Array.isArray(recData) && recData.length > 0
-      ? recData[0] as { locked: boolean; retry_after_s: number | null; fails_remaining: number | null }
-      : null
 
-    // If that increment pushed us over the edge, surface a locked response.
-    if (row?.locked) {
-      return json({
-        error: "locked",
-        retry_after_s: row.retry_after_s ?? 0,
-      }, 429)
+    stage = "lockout-check"
+    // 1. Check lockout BEFORE touching passwords or CAPTCHA. If locked, the
+    //    attacker gets no signal about whether the password is right — we just
+    //    say "come back later". This is read-only, no counter increment.
+    const { data: checkData, error: checkErr } = await admin.rpc("auth_attempt_check", {
+      p_email: email,
+    })
+    if (!checkErr && Array.isArray(checkData) && checkData.length > 0) {
+      const row = checkData[0] as { locked: boolean; retry_after_s: number | null }
+      if (row.locked) {
+        return json({
+          error: "locked",
+          retry_after_s: row.retry_after_s ?? 0,
+        }, 429)
+      }
+    }
+    // If checkErr — fail open and continue. A broken lockout must not deny
+    // legit users; the password check below still runs.
+
+    stage = "captcha"
+    // 2. CAPTCHA verification. Failures here do NOT hit auth_attempt_record —
+    //    they're not password failures.
+    const captchaOk = await verifyTurnstile(turnstileToken)
+    if (!captchaOk) {
+      return json({ error: "captcha_failed" }, 403)
     }
 
+    stage = "signin"
+    // 3. Password grant via anon client (same endpoint the browser would hit).
+    //    persistSession:false so we don't try to write to Deno storage.
+    const anonClient = createClient(url, anon, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    })
+
+    const { data: signInData, error: signInErr } = await anonClient.auth
+      .signInWithPassword({ email, password })
+
+    if (signInErr || !signInData?.session) {
+      stage = "signin-failed"
+      // 4a. Failure path — record against the lockout table.
+      const { data: recData } = await admin.rpc("auth_attempt_record", {
+        p_email: email,
+        p_success: false,
+      })
+      const row = Array.isArray(recData) && recData.length > 0
+        ? recData[0] as { locked: boolean; retry_after_s: number | null; fails_remaining: number | null }
+        : null
+
+      // If that increment pushed us over the edge, surface a locked response.
+      if (row?.locked) {
+        return json({
+          error: "locked",
+          retry_after_s: row.retry_after_s ?? 0,
+        }, 429)
+      }
+
+      return json({
+        error: "invalid_credentials",
+        fails_remaining: row?.fails_remaining ?? null,
+      }, 401)
+    }
+
+    stage = "signin-success-cleanup"
+    // 4b. Success — clear the lockout row for this email.
+    try {
+      await admin.rpc("auth_attempt_record", {
+        p_email: email,
+        p_success: true,
+      })
+    } catch (cleanupErr) {
+      // If the cleanup call fails, the login still succeeds. Stale lockout
+      // rows auto-expire when the 15-min window rolls over on the next failure.
+      console.error("verify-login cleanup rpc failed:", cleanupErr)
+    }
+
+    stage = "build-response"
+    const s = signInData.session
     return json({
-      error: "invalid_credentials",
-      fails_remaining: row?.fails_remaining ?? null,
-    }, 401)
+      ok: true,
+      access_token: s.access_token,
+      refresh_token: s.refresh_token,
+      expires_at: s.expires_at ?? null,
+    })
+  } catch (e) {
+    // Any unhandled crash surfaces here. Log to stderr AND include the message
+    // + stage in the response body so diagnosis is possible from the browser.
+    const msg = (e as Error)?.message || String(e)
+    const stack = (e as Error)?.stack || null
+    console.error(`verify-login crashed at stage=${stage}:`, msg, stack)
+    return json({
+      error: "internal_error",
+      stage,
+      debug: msg,
+    }, 500)
   }
-
-  // 4b. Success — clear the lockout row for this email.
-  await admin.rpc("auth_attempt_record", {
-    p_email: email,
-    p_success: true,
-  }).catch(() => {
-    // If the cleanup call fails, the login still succeeds. Stale lockout
-    // rows auto-expire when the 15-min window rolls over on the next failure.
-  })
-
-  const s = signInData.session
-  return json({
-    ok: true,
-    access_token: s.access_token,
-    refresh_token: s.refresh_token,
-    expires_at: s.expires_at ?? null,
-  })
 })

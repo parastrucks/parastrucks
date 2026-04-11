@@ -17,6 +17,31 @@ function ruleMatches(rule, profile) {
   )
 }
 
+// Shallow-equal check for access rule arrays. Used by the visibility handler
+// to avoid replacing `accessRules` state with a byte-identical array, which
+// would otherwise rebuild the AuthContext value on every tab focus and
+// cascade re-renders through every page that subscribes to useAuth().
+// Compares the 6 fields that ruleMatches() reads — if none of them changed,
+// the effective rule is the same and we can skip the setState entirely.
+function accessRulesEqual(a, b) {
+  if (a === b) return true
+  if (!a || !b || a.length !== b.length) return false
+  const byId = new Map(a.map(r => [r.id, r]))
+  for (const rb of b) {
+    const ra = byId.get(rb.id)
+    if (!ra) return false
+    if (
+      ra.route            !== rb.route            ||
+      ra.permission_level !== rb.permission_level ||
+      ra.brand            !== rb.brand            ||
+      ra.location         !== rb.location         ||
+      ra.department       !== rb.department       ||
+      ra.role             !== rb.role
+    ) return false
+  }
+  return true
+}
+
 export function AuthProvider({ children }) {
   // Explicit phase replaces the confusing (session === undefined) loading sentinel.
   // 'initializing'  — waiting for INITIAL_SESSION from Supabase
@@ -120,7 +145,14 @@ export function AuthProvider({ children }) {
       }
       const { data: rules } = await supabase.from('access_rules').select('*')
       if (cancelled || !mountedRef.current) return
-      setAccessRules(rules ?? [])
+      // Only replace state if the rules *actually* changed. Otherwise every
+      // tab focus would create a new array reference, rebuild the context
+      // value, and cascade re-renders through every useAuth() consumer —
+      // which in turn re-runs their data-loading effects and re-fetches.
+      // Use a functional setter so we compare against the freshest state
+      // without needing `accessRules` in this effect's deps (which would
+      // re-subscribe the visibility listener on every rule change).
+      setAccessRules(prev => accessRulesEqual(prev, rules ?? []) ? prev : (rules ?? []))
     }
     document.addEventListener('visibilitychange', onVisible)
     return () => {
