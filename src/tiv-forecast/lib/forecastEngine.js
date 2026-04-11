@@ -1,13 +1,12 @@
-// TIV Forecast — core forecast engine (migration spec Section 5.5-5.6 + Section 6)
+// TIV Forecast — core forecast engine (spec v2.1: champion dispatch)
 import {
   SEGMENTS,
   HW_DAMPENING_PHI,
-  BLEND_SMLY_WEIGHT,
-  BLEND_HW_WEIGHT,
   AL_SHARE_MIN,
   AL_SHARE_MAX,
   PTB_SHARE_CAP,
   FORECAST_HORIZON_LENGTH,
+  CHAMPION,
 } from '../constants'
 import { TRIGGER_DEFS } from './triggerDefs'
 
@@ -44,11 +43,11 @@ function applyTriggers(base, segment, monthNum, triggerState) {
       continue
     }
 
-    // Type 3: Weighted segment boost (AIS 153)
-    if (def.segWeight) {
-      const w = def.segWeight[segment]
-      if (w !== undefined && def.months?.includes(monthNum)) {
-        f *= (1 + w * sev / 100)
+    // Type 3: Sinusoidal annual cycle (kept for potential future triggers)
+    if (def.type === 'sine') {
+      if ((!def.months || def.months.includes(monthNum)) && def.affected.includes(segment)) {
+        const sineVal = Math.sin(2 * Math.PI * (monthNum - (def.sineZeroMonth ?? 3)) / 12)
+        f *= (1 + sineVal * sev / 100)
       }
       continue
     }
@@ -68,12 +67,11 @@ function applyTriggers(base, segment, monthNum, triggerState) {
 }
 
 // ── Compute forecast month metadata ─────────────────────────────────
-// Given last data month label (e.g. "Mar-26"), compute the next 3 months
 function computeForecastMonths(lastDataMonth) {
   const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
   const m = lastDataMonth?.match(/^([A-Za-z]{3})-(\d{2})$/)
   if (!m) return []
-  let monthIdx = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].indexOf(m[1])
+  let monthIdx = MONTH_ABBR.indexOf(m[1])
   let year = parseInt(m[2]) + 2000
   const result = []
   for (let h = 1; h <= FORECAST_HORIZON_LENGTH; h++) {
@@ -88,64 +86,85 @@ function computeForecastMonths(lastDataMonth) {
   return result
 }
 
+// ── Champion baseline forecast dispatcher ────────────────────────────
+// Dispatches to the per-segment method that minimised MAPE in backtest.
+// Falls back gracefully if v2.1 params not yet present (old DB rows).
+function baseForecast(segment, monthNum, horizon, targetLabel, params) {
+  const method  = (params.champion || CHAMPION)[segment] || 'M1'
+  const smlyMap = params.smly[segment] || {}
+  const smlyVal = smlyMap[monthNum] || 0
+
+  if (method === 'M1') {
+    const yoy = params.yoy_sum?.[segment] ?? params.yoy_capped?.[segment] ?? 0
+    return smlyVal * (1 + yoy)
+  }
+
+  if (method === 'M2') {
+    const yoy = params.yoy_median?.[segment] ?? params.yoy_capped?.[segment] ?? 0
+    return smlyVal * (1 + yoy)
+  }
+
+  if (method === 'M4') {
+    // 60% SMLY-sum + 40% Theta (linear extrapolation + SES blend in deseasonalized space)
+    const yoy    = params.yoy_sum?.[segment] ?? params.yoy_capped?.[segment] ?? 0
+    const smlyFc = smlyVal * (1 + yoy)
+    const tp     = params.theta_params?.[segment]
+    if (!tp) return smlyFc
+    const f0          = tp.intercept + tp.slope * (tp.n + horizon - 1)
+    const thetaDeseas = (f0 + tp.ses) / 2
+    const si          = (params.seasonal_indices[segment] || {})[monthNum] || 1
+    return 0.6 * smlyFc + 0.4 * thetaDeseas * si
+  }
+
+  if (method === 'M3_CAL') {
+    // Tipper: HW+SMLY in capacity-normalized space, then × (cap/100) to denormalize
+    const yoy        = params.yoy_sum?.['Tipper'] ?? params.yoy_capped?.['Tipper'] ?? 0
+    const normSmly   = (params.tipper_norm_smly || {})[monthNum] || 0
+    const normHW     = params.tipper_norm_hw
+    if (!normHW) return smlyVal  // fallback: old DB row without cal-norm data
+    const si         = (params.tipper_norm_si || {})[monthNum] || 1
+    const hwNorm     = (normHW.level + normHW.trend * dampedTrendSum(horizon)) * si
+    const blendedNorm = 0.6 * (normSmly * (1 + yoy)) + 0.4 * hwNorm
+    const cap        = (params.cap_scores || {})[targetLabel] || 87
+    return blendedNorm * cap / 100
+  }
+
+  // Default fallback: M1
+  const yoy = params.yoy_sum?.[segment] ?? params.yoy_capped?.[segment] ?? 0
+  return smlyVal * (1 + yoy)
+}
+
 // ── Main forecast engine ─────────────────────────────────────────────
-// Returns { forecastMonths, bySegment: { [seg]: [{ month, tiv, al, ptb, ... }] } }
 export function runForecast(modelParams, triggerState) {
   if (!modelParams) return null
 
-  const { last_data_month, seasonal_indices, hw_params, smly, yoy_capped, al_share_recent, ptb_share_recent } = modelParams
-  const forecastMonths = computeForecastMonths(last_data_month)
-
-  // results[seg][h-1] = { month, month_num, tiv, al, ptb, alShare, ptbShare }
+  const forecastMonths = computeForecastMonths(modelParams.last_data_month)
   const bySegment = {}
 
   for (const seg of SEGMENTS) {
     bySegment[seg] = []
-    const si = seasonal_indices[seg] || {}
-    const hw = hw_params[seg] || { level: 0, trend: 0 }
-    const segSmly = smly[seg] || {}
-    const yoy = yoy_capped[seg] || 0
-    const alShare = Math.min(AL_SHARE_MAX, Math.max(AL_SHARE_MIN, al_share_recent[seg] || 0.5))
-    const ptbShare = Math.min(PTB_SHARE_CAP, ptb_share_recent[seg] || 0.5)
+    const alShare  = Math.min(AL_SHARE_MAX, Math.max(AL_SHARE_MIN, modelParams.al_share_recent[seg] || 0.5))
+    const ptbShare = Math.min(PTB_SHARE_CAP, modelParams.ptb_share_recent[seg] || 0.5)
 
     for (const fm of forecastMonths) {
-      const m = fm.month_num
-      const h = fm.horizon
-
-      // Method 1: Dampened Holt-Winters
-      const siVal = si[m] || 1.0
-      const hwForecast = (hw.level + hw.trend * dampedTrendSum(h)) * siVal
-
-      // Method 2: SMLY × (1 + capped YoY)
-      const smlyBase = segSmly[m] || 0
-      const smlyForecast = smlyBase * (1 + yoy)
-
-      // Blended baseline
-      const baseline = BLEND_SMLY_WEIGHT * smlyForecast + BLEND_HW_WEIGHT * hwForecast
-
-      // Apply triggers
-      const tivForecast = Math.max(0, Math.round(applyTriggers(baseline, seg, m, triggerState)))
-
-      // Three-layer cascade
+      const baseline    = baseForecast(seg, fm.month_num, fm.horizon, fm.label, modelParams)
+      const tivForecast = Math.max(0, Math.round(applyTriggers(baseline, seg, fm.month_num, triggerState)))
       const alForecast  = Math.round(tivForecast * alShare)
       const ptbForecast = Math.round(alForecast  * ptbShare)
 
       bySegment[seg].push({
         month:     fm.label,
-        month_num: m,
-        horizon:   h,
+        month_num: fm.month_num,
+        horizon:   fm.horizon,
         tiv:       tivForecast,
         al:        alForecast,
         ptb:       ptbForecast,
         alShare,
         ptbShare,
-        hwForecast:   Math.round(hwForecast),
-        smlyForecast: Math.round(smlyForecast),
       })
     }
   }
 
-  // Aggregate totals per forecast month
   const totals = forecastMonths.map((fm, idx) => {
     let tiv = 0, al = 0, ptb = 0
     for (const seg of SEGMENTS) {
