@@ -5,10 +5,14 @@ import ProtectedRoute from './components/ProtectedRoute'
 import AppLayout from './components/layout/AppLayout'
 import ErrorBoundary from './components/ErrorBoundary'
 
-// Pages — lazy-loaded so each route ships its own chunk and a broken page
+// Landing pages — eagerly imported so there's no lazy-chunk waterfall on
+// the first screen users see after login. The bundle cost is small and the
+// perceived-load win is large (saved ~1–2 s on Dashboard first paint).
+import Login from './pages/Login'
+import Dashboard from './pages/Dashboard'
+
+// Heavier routes stay lazy — each ships its own chunk and a broken page
 // doesn't take down the whole bundle.
-const Login            = lazy(() => import('./pages/Login'))
-const Dashboard        = lazy(() => import('./pages/Dashboard'))
 const Profile          = lazy(() => import('./pages/Profile'))
 const Employees        = lazy(() => import('./pages/Employees'))
 const Quotation        = lazy(() => import('./pages/Quotation'))
