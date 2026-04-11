@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import Fuse from 'fuse.js'
 import { supabase } from '../lib/supabase'
+import { useDebounce } from '../lib/useDebounce'
 import { useAuth } from '../context/AuthContext'
 import { generateQuotationPDF } from '../utils/pdfGenerator'
 
@@ -39,6 +40,7 @@ function fmtINR(n) {
 export default function Quotation() {
   const { profile, isAdmin, isBackOffice } = useAuth()
   const canEditPrice = isAdmin || isBackOffice
+  const canEditDescription = isAdmin || isBackOffice
 
   // Catalog state
   const [catalog, setCatalog] = useState([])
@@ -49,6 +51,7 @@ export default function Quotation() {
   // Search state
   const [segment, setSegment] = useState('All Segments')
   const [query, setQuery] = useState('')
+  const debouncedQuery = useDebounce(query, 150)
   const [results, setResults] = useState([])
   const [showDropdown, setShowDropdown] = useState(false)
   const searchRef = useRef(null)
@@ -153,16 +156,16 @@ export default function Quotation() {
     [catalog, fuseInst]
   )
 
+  useEffect(() => {
+    runSearch(debouncedQuery, segment)
+  }, [debouncedQuery, segment, runSearch])
+
   function handleQueryChange(e) {
-    const v = e.target.value
-    setQuery(v)
-    runSearch(v, segment)
+    setQuery(e.target.value)
   }
 
   function handleSegmentChange(e) {
-    const seg = e.target.value
-    setSegment(seg)
-    runSearch(query, seg)
+    setSegment(e.target.value)
   }
 
   function addVehicle(vehicle) {
@@ -176,6 +179,7 @@ export default function Quotation() {
     const newItem = calcItem({
       cbn: vehicle.cbn,
       description: vehicle.description,
+      original_description: vehicle.description,
       tyres: vehicle.tyres,
       qty: 1,
       mrp: vehicle.mrp_incl_gst,
@@ -199,10 +203,24 @@ export default function Quotation() {
       const item = { ...copy[idx] }
       if (field === 'qty') {
         item.qty = Math.max(1, parseInt(raw, 10) || 1)
+        copy[idx] = calcItem(item)
       } else if (field === 'mrp') {
         item.mrp = parseInt(raw, 10) || 0
+        copy[idx] = calcItem(item)
+      } else if (field === 'description') {
+        item.description = raw
+        copy[idx] = item
       }
-      copy[idx] = calcItem(item)
+      return copy
+    })
+  }
+
+  function resetDescription(idx) {
+    setLineItems(prev => {
+      const copy = [...prev]
+      const item = { ...copy[idx] }
+      item.description = item.original_description || item.description
+      copy[idx] = item
       return copy
     })
   }
@@ -219,6 +237,11 @@ export default function Quotation() {
 
     if (!customer.name.trim()) { setError('Customer name is required.'); return }
     if (lineItems.length === 0) { setError('Add at least one vehicle.'); return }
+    const emptyDescIdx = lineItems.findIndex(li => !String(li.description || '').trim())
+    if (emptyDescIdx !== -1) {
+      setError(`Vehicle #${emptyDescIdx + 1} description cannot be empty.`)
+      return
+    }
 
     // Determine entity code for quotation numbering:
     // Prefer operating_unit → location → entity mapping, fall back to profile.entity
@@ -493,11 +516,51 @@ export default function Quotation() {
                         </td>
                       </tr>
                     ) : (
-                      lineItems.map((item, idx) => (
+                      lineItems.map((item, idx) => {
+                        const isEdited =
+                          item.original_description != null &&
+                          item.description !== item.original_description
+                        return (
                         <tr key={`${item.cbn}-${idx}`}>
                           <td className="td-vehicle">
-                            <strong>{item.description}</strong>
+                            {canEditDescription ? (
+                              <textarea
+                                className="form-input"
+                                value={item.description || ''}
+                                rows={2}
+                                placeholder="Edit description for this quotation only…"
+                                onChange={e => updateItem(idx, 'description', e.target.value)}
+                                onInput={e => {
+                                  e.currentTarget.style.height = 'auto'
+                                  e.currentTarget.style.height = e.currentTarget.scrollHeight + 'px'
+                                }}
+                                style={{
+                                  width: '100%',
+                                  minHeight: 44,
+                                  resize: 'vertical',
+                                  fontWeight: 600,
+                                  fontSize: 13.5,
+                                  lineHeight: 1.35,
+                                  padding: '6px 8px',
+                                }}
+                              />
+                            ) : (
+                              <strong>{item.description}</strong>
+                            )}
                             <span>{item.cbn}</span>
+                            {isEdited && (
+                              <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                <span className="badge badge-amber">edited</span>
+                                <button
+                                  type="button"
+                                  className="btn btn-sm"
+                                  onClick={() => resetDescription(idx)}
+                                  title="Revert to the current catalog description"
+                                >
+                                  Reset to catalog
+                                </button>
+                              </div>
+                            )}
                           </td>
                           <td style={{ fontSize: 12, color: 'var(--gray-500)' }}>{item.tyres || '—'}</td>
                           <td className="td-qty">
@@ -537,7 +600,8 @@ export default function Quotation() {
                             </button>
                           </td>
                         </tr>
-                      ))
+                      )
+                      })
                     )}
                   </tbody>
                 </table>
