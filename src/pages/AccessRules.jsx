@@ -809,6 +809,117 @@ function OperatingUnits({ brands, locations }) {
 }
 
 /* ══════════════════════════════════════════════════════════════
+   TAB 4 — ERROR LOG VIEWER (admin-only, gated at route level)
+══════════════════════════════════════════════════════════════ */
+function ErrorsTab() {
+  const [rows,    setRows]    = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error,   setError]   = useState('')
+  const [selected, setSelected] = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      setLoading(true)
+      setError('')
+      try {
+        const { data, error: err } = await supabase
+          .from('error_log')
+          .select('id, created_at, user_id, url, message, stack, context, user:users(full_name, email)')
+          .order('created_at', { ascending: false })
+          .limit(100)
+        if (cancelled) return
+        if (err) setError(err.message)
+        else setRows(data || [])
+      } catch (e) {
+        if (!cancelled) setError('Failed to load errors: ' + e.message)
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [])
+
+  const truncate = (s, n = 120) => (s && s.length > n ? s.slice(0, n) + '…' : s || '')
+  const userLabel = r => r.user?.full_name || r.user?.email || '—'
+
+  return (
+    <div>
+      <p className="ar-section-desc">
+        Most recent 100 client-side errors reported via the <code>log-error</code> edge function. Click a row to see the full stack trace and context.
+      </p>
+
+      {error && <div className="alert alert-error" style={{ marginBottom: 16 }}><span>⚠</span><span>{error}</span></div>}
+
+      {loading ? (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}><div className="spinner" /></div>
+      ) : (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>When</th>
+                <th>User</th>
+                <th>URL</th>
+                <th>Message</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.length === 0 ? (
+                <tr><td colSpan={4} style={{ textAlign: 'center', color: 'var(--gray-400)', padding: 32 }}>No errors logged.</td></tr>
+              ) : rows.map(r => (
+                <tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => setSelected(r)}>
+                  <td style={{ fontSize: 12, whiteSpace: 'nowrap' }}>{new Date(r.created_at).toLocaleString()}</td>
+                  <td style={{ fontSize: 13 }}>{userLabel(r)}</td>
+                  <td style={{ fontSize: 12, fontFamily: 'monospace' }} title={r.url || ''}>{truncate(r.url, 48)}</td>
+                  <td style={{ fontSize: 13 }} title={r.message || ''}>{truncate(r.message, 120)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {selected && (
+        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setSelected(null)}>
+          <div className="modal" style={{ maxWidth: 720 }}>
+            <div className="modal-header">
+              <h2>Error Detail</h2>
+              <button className="modal-close" onClick={() => setSelected(null)}>×</button>
+            </div>
+            <div className="modal-body">
+              <div style={{ fontSize: 12, color: 'var(--gray-500)', marginBottom: 12 }}>
+                {new Date(selected.created_at).toLocaleString()} · {userLabel(selected)}
+                {selected.url && <> · <code>{selected.url}</code></>}
+              </div>
+              <div className="form-group">
+                <label className="form-label">Message</label>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>{selected.message || '—'}</div>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Stack</label>
+                <pre style={{ background: 'var(--gray-50)', padding: 12, borderRadius: 4, fontSize: 11, overflow: 'auto', maxHeight: 280, whiteSpace: 'pre-wrap' }}>
+                  {selected.stack || '(no stack captured)'}
+                </pre>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Context</label>
+                <pre style={{ background: 'var(--gray-50)', padding: 12, borderRadius: 4, fontSize: 11, overflow: 'auto', maxHeight: 200, whiteSpace: 'pre-wrap' }}>
+                  {selected.context ? JSON.stringify(selected.context, null, 2) : '(none)'}
+                </pre>
+              </div>
+              <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+                <button type="button" className="btn btn-secondary" onClick={() => setSelected(null)}>Close</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ══════════════════════════════════════════════════════════════
    MAIN PAGE
 ══════════════════════════════════════════════════════════════ */
 export default function AccessRules() {
@@ -823,7 +934,7 @@ export default function AccessRules() {
       </div>
 
       <div className="ar-tabs">
-        {[['rules','Access Rules'],['users','User Permissions'],['config','Configuration']].map(([k,l]) => (
+        {[['rules','Access Rules'],['users','User Permissions'],['config','Configuration'],['errors','Errors']].map(([k,l]) => (
           <button key={k} className={`ar-tab ${tab===k?'active':''}`} onClick={() => setTab(k)}>{l}</button>
         ))}
       </div>
@@ -832,6 +943,7 @@ export default function AccessRules() {
         {tab === 'rules'  && <RulesTab accessRules={accessRules} refreshAccessRules={refreshAccessRules} />}
         {tab === 'users'  && <UserPermissionsTab />}
         {tab === 'config' && <ConfigTab />}
+        {tab === 'errors' && <ErrorsTab />}
       </div>
     </div>
   )
