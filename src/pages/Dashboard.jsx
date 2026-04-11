@@ -35,7 +35,7 @@ export default function Dashboard() {
   return (
     <div>
       <div className="page-header">
-        <h1>{greeting()}, {profile.full_name.split(' ')[0]} 👋</h1>
+        <h1>{greeting()}, {profile?.full_name?.split(' ')?.[0] || 'there'} 👋</h1>
         <p>
           {PERMISSION_LABEL[profile.role]}
           {profile.department ? ` · ${profile.department}` : ''}
