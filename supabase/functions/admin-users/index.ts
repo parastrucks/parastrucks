@@ -4,6 +4,11 @@
 //
 // Auth: JWT required. Caller must be `hr` or `admin` (admin-only for delete).
 // Never exposes the service role key to the browser.
+//
+// IMPORTANT: this function must be deployed with verify_jwt: false.
+// The gateway-level verify_jwt check rejects user JWTs in this project
+// (kid/JWKS mismatch). The verify() below does stricter validation
+// (getUser + is_active + role whitelist) so nothing is lost.
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2"
