@@ -98,23 +98,34 @@ export function AuthProvider({ children }) {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Visibility handler ─────────────────────────────────────────────────────
-  // When the user returns to a backgrounded tab, validate the session.
-  // Browsers throttle auto-refresh timers in inactive tabs, so the access token
-  // may have expired without a TOKEN_REFRESHED event firing. Detect this here
-  // and redirect to /login cleanly rather than letting the first API call fail.
+  // When the user returns to a backgrounded tab, validate the session and
+  // refresh access_rules. Browsers throttle auto-refresh timers in inactive
+  // tabs, so the access token may have expired without a TOKEN_REFRESHED event
+  // firing. Detect this here and redirect to /login cleanly rather than
+  // letting the first API call fail. Also re-pull access_rules so admin
+  // changes made in another tab/session take effect on tab re-focus.
   useEffect(() => {
+    let cancelled = false
     async function onVisible() {
       if (document.visibilityState !== 'visible' || phase !== 'ready') return
       const { data: { session: current } } = await supabase.auth.getSession()
-      if (!current && mountedRef.current) {
+      if (cancelled || !mountedRef.current) return
+      if (!current) {
         setSession(null)
         setProfile(null)
         setAccessRules([])
         setPhase('unauthenticated')
+        return
       }
+      const { data: rules } = await supabase.from('access_rules').select('*')
+      if (cancelled || !mountedRef.current) return
+      setAccessRules(rules ?? [])
     }
     document.addEventListener('visibilitychange', onVisible)
-    return () => document.removeEventListener('visibilitychange', onVisible)
+    return () => {
+      cancelled = true
+      document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [phase])
 
   // ── Public API ─────────────────────────────────────────────────────────────
