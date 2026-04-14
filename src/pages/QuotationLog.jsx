@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
+import { useToast } from '../context/ToastContext'
 import { generateQuotationPDF } from '../utils/pdfGenerator'
+import Skeleton from '../components/Skeleton'
 
 function fmtINR(n) {
   if (!n && n !== 0) return '—'
@@ -17,7 +19,7 @@ export default function QuotationLog() {
   const [quotations, setQuotations] = useState([])
   const [loading, setLoading] = useState(true)
   const [downloadingId, setDownloadingId] = useState(null)
-  const [error, setError] = useState('')
+  const toast = useToast()
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [page, setPage] = useState(0)
@@ -56,18 +58,17 @@ export default function QuotationLog() {
         const { data, count, error: err } = await query
         if (cancelled) return
         if (err) {
-          setError('Failed to load quotations.')
+          toast.error('Failed to load quotations.')
           setQuotations([])
           setTotalCount(0)
           return
         }
         setQuotations(data || [])
         setTotalCount(count || 0)
-        setError('')
       } catch (e) {
         if (!cancelled) {
           console.error(e)
-          setError('Failed to load quotations.')
+          toast.error('Failed to load quotations.')
         }
       } finally {
         if (!cancelled) setLoading(false)
@@ -79,7 +80,7 @@ export default function QuotationLog() {
 
   async function handleRedownload(q) {
     if (!q.customer_name || !(q.line_items || []).length) {
-      alert('Cannot re-download this quotation — customer or line items are missing.')
+      toast.error('Cannot re-download — customer or line items are missing.')
       return
     }
     try {
@@ -114,8 +115,7 @@ export default function QuotationLog() {
       })
     } catch (err) {
       console.error(err)
-      setError('Failed to generate PDF.')
-      setTimeout(() => setError(''), 4000)
+      toast.error('Failed to generate PDF.')
     } finally {
       setDownloadingId(null)
     }
@@ -139,20 +139,15 @@ export default function QuotationLog() {
           className="form-input"
           style={{ maxWidth: 260 }}
           placeholder="Search quotation no. or customer…"
+          aria-label="Search quotations"
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
       </div>
 
-      {error && (
-        <div className="alert alert-error" role="alert">
-          <span>⚠</span> {error}
-        </div>
-      )}
-
       {loading ? (
-        <div className="full-center" style={{ height: 240 }}>
-          <span className="spinner" />
+        <div style={{ padding: '8px 0' }}>
+          <Skeleton variant="row" count={6} />
         </div>
       ) : quotations.length === 0 ? (
         <div className="empty-state">

@@ -1,27 +1,29 @@
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { useToast } from '../context/ToastContext'
 import { supabase } from '../lib/supabase'
+import useAsyncAction from '../hooks/useAsyncAction'
 
 const ROLE_LABEL = { admin: 'Admin', hr: 'HR', back_office: 'Back Office', sales: 'Sales' }
 
 export default function Profile() {
   const { profile, signOut } = useAuth()
+  const toast = useToast()
+  const { run, loading: pwLoading, error: pwError, setError: setPwError, clearError } = useAsyncAction()
   const [changingPw, setChangingPw] = useState(false)
   const [newPw, setNewPw] = useState('')
   const [confirmPw, setConfirmPw] = useState('')
-  const [pwLoading, setPwLoading] = useState(false)
-  const [pwMsg, setPwMsg] = useState(null)
 
   async function handleChangePw(e) {
     e.preventDefault()
-    if (newPw.length < 8) { setPwMsg({ type: 'error', text: 'Password must be at least 8 characters.' }); return }
-    if (newPw !== confirmPw) { setPwMsg({ type: 'error', text: 'Passwords do not match.' }); return }
-    setPwLoading(true); setPwMsg(null)
-    const { error } = await supabase.auth.updateUser({ password: newPw })
-    setPwLoading(false)
-    if (error) { setPwMsg({ type: 'error', text: error.message }); return }
-    setPwMsg({ type: 'success', text: 'Password updated successfully.' })
-    setNewPw(''); setConfirmPw(''); setChangingPw(false)
+    if (newPw.length < 8) { setPwError('Password must be at least 8 characters.'); return }
+    if (newPw !== confirmPw) { setPwError('Passwords do not match.'); return }
+    await run(async () => {
+      const { error } = await supabase.auth.updateUser({ password: newPw })
+      if (error) throw error
+      toast.success('Password updated successfully.')
+      setNewPw(''); setConfirmPw(''); setChangingPw(false)
+    }).catch(() => {})
   }
 
   if (!profile) return null
@@ -82,13 +84,14 @@ export default function Profile() {
           )}
         </div>
 
-        {pwMsg && <div className={`alert alert-${pwMsg.type}`}><span>{pwMsg.text}</span></div>}
+        {pwError && <div className="alert alert-error"><span>⚠</span><span>{pwError}</span></div>}
 
         {changingPw && (
           <form onSubmit={handleChangePw}>
             <div className="form-group">
-              <label className="form-label">New Password</label>
+              <label className="form-label" htmlFor="profile-new-pw">New Password</label>
               <input
+                id="profile-new-pw"
                 type="password"
                 className="form-input"
                 placeholder="Minimum 8 characters"
@@ -98,8 +101,9 @@ export default function Profile() {
               />
             </div>
             <div className="form-group">
-              <label className="form-label">Confirm Password</label>
+              <label className="form-label" htmlFor="profile-confirm-pw">Confirm Password</label>
               <input
+                id="profile-confirm-pw"
                 type="password"
                 className="form-input"
                 placeholder="Re-enter new password"
@@ -111,7 +115,7 @@ export default function Profile() {
               <button type="submit" className="btn btn-primary" disabled={pwLoading}>
                 {pwLoading ? <span className="spinner spinner-sm" /> : 'Update Password'}
               </button>
-              <button type="button" className="btn btn-secondary" onClick={() => { setChangingPw(false); setPwMsg(null); }}>
+              <button type="button" className="btn btn-secondary" onClick={() => { setChangingPw(false); clearError(); }}>
                 Cancel
               </button>
             </div>

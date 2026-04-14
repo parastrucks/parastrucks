@@ -3,6 +3,9 @@ import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
 import { callEdge } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
+import { useToast } from '../context/ToastContext'
+import Skeleton from '../components/Skeleton'
+import useFocusTrap from '../hooks/useFocusTrap'
 
 /* ── CONSTANTS ───────────────────────────────────────────────── */
 const SEGMENTS = [
@@ -130,6 +133,7 @@ function AdminCatalog() {
 
 /* ── VEHICLES TAB ────────────────────────────────────────────── */
 function VehiclesTab({ vehicles, subSegs, loading, onRefresh }) {
+  const toast = useToast()
   const [searchInput,     setSearchInput]     = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [filterSeg,       setFilterSeg]       = useState('')
@@ -139,6 +143,7 @@ function VehiclesTab({ vehicles, subSegs, loading, onRefresh }) {
   const [selected,        setSelected]        = useState(null)
   const [confirming,      setConfirming]      = useState(null)
   const [saving,          setSaving]          = useState(false)
+  const confirmTrapRef = useFocusTrap(!!confirming, () => setConfirming(null))
 
   // Local 150 ms debounce so fast typists don't re-filter on every keystroke.
   useEffect(() => {
@@ -182,7 +187,7 @@ function VehiclesTab({ vehicles, subSegs, loading, onRefresh }) {
         is_active: !v.is_active,
       })
     } catch (e) {
-      console.error('toggleActive failed:', e.message)
+      toast.error('Toggle failed: ' + e.message)
     }
     setSaving(false)
     setConfirming(null)
@@ -228,9 +233,7 @@ function VehiclesTab({ vehicles, subSegs, loading, onRefresh }) {
       </div>
 
       {loading ? (
-        <div className="full-center" style={{ minHeight: 200 }}>
-          <div className="spinner" />
-        </div>
+        <Skeleton variant="row" count={4} />
       ) : filtered.length === 0 ? (
         <div className="empty-state">
           <div className="empty-state-icon">🚛</div>
@@ -360,7 +363,7 @@ function VehiclesTab({ vehicles, subSegs, loading, onRefresh }) {
       {/* Confirm deactivate / activate */}
       {confirming && (
         <div className="modal-overlay">
-          <div className="modal" style={{ maxWidth: 400 }}>
+          <div className="modal" ref={confirmTrapRef} tabIndex={-1} style={{ maxWidth: 400 }}>
             <div className="modal-header">
               <h2>{confirming.is_active ? 'Deactivate' : 'Activate'} Vehicle</h2>
               <button className="modal-close" onClick={() => setConfirming(null)}>×</button>
@@ -401,6 +404,8 @@ const EMPTY_VEHICLE = {
 }
 
 function VehicleModal({ mode, vehicle, subSegs, onClose, onSaved }) {
+  const toast = useToast()
+  const trapRef = useFocusTrap(true, onClose)
   const [form,   setForm]   = useState(
     mode === 'edit'
       ? { ...vehicle, mrp_incl_gst: vehicle.mrp_incl_gst ?? '' }
@@ -448,7 +453,7 @@ function VehicleModal({ mode, vehicle, subSegs, onClose, onSaved }) {
       }
     } catch (e) {
       setSaving(false)
-      setError(e.message)
+      toast.error('Save failed: ' + e.message)
       return
     }
     setSaving(false)
@@ -457,7 +462,7 @@ function VehicleModal({ mode, vehicle, subSegs, onClose, onSaved }) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal vc-wide-modal" onClick={e => e.stopPropagation()}>
+      <div className="modal vc-wide-modal" ref={trapRef} tabIndex={-1} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <h2>{mode === 'add' ? 'Add Vehicle' : 'Edit Vehicle'}</h2>
           <button className="modal-close" onClick={onClose}>×</button>
@@ -467,8 +472,9 @@ function VehicleModal({ mode, vehicle, subSegs, onClose, onSaved }) {
 
           <div className="vc-form-grid">
             <div className="form-group">
-              <label className="form-label">CBN *</label>
+              <label className="form-label" htmlFor="vm-cbn">CBN *</label>
               <input
+                id="vm-cbn"
                 className="form-input"
                 value={form.cbn}
                 onChange={e => set('cbn', e.target.value)}
@@ -477,8 +483,9 @@ function VehicleModal({ mode, vehicle, subSegs, onClose, onSaved }) {
               />
             </div>
             <div className="form-group">
-              <label className="form-label">MRP incl. GST (₹) *</label>
+              <label className="form-label" htmlFor="vm-mrp">MRP incl. GST (₹) *</label>
               <input
+                id="vm-mrp"
                 className="form-input"
                 type="number"
                 value={form.mrp_incl_gst}
@@ -489,8 +496,9 @@ function VehicleModal({ mode, vehicle, subSegs, onClose, onSaved }) {
           </div>
 
           <div className="form-group">
-            <label className="form-label">Description *</label>
+            <label className="form-label" htmlFor="vm-desc">Description *</label>
             <textarea
+              id="vm-desc"
               className="form-input"
               rows={3}
               value={form.description}
@@ -501,16 +509,17 @@ function VehicleModal({ mode, vehicle, subSegs, onClose, onSaved }) {
 
           <div className="vc-form-grid">
             <div className="form-group">
-              <label className="form-label">Brand *</label>
-              <select className="form-select" value={form.brand} onChange={e => set('brand', e.target.value)}>
+              <label className="form-label" htmlFor="vm-brand">Brand *</label>
+              <select id="vm-brand" className="form-select" value={form.brand} onChange={e => set('brand', e.target.value)}>
                 <option value="al">Ashok Leyland</option>
                 <option value="switch">Switch Mobility</option>
                 <option value="hdh">HD Hyundai</option>
               </select>
             </div>
             <div className="form-group">
-              <label className="form-label">Segment *</label>
+              <label className="form-label" htmlFor="vm-segment">Segment *</label>
               <select
+                id="vm-segment"
                 className="form-select"
                 value={form.segment}
                 onChange={e => { set('segment', e.target.value); set('sub_category', '') }}
@@ -522,9 +531,10 @@ function VehicleModal({ mode, vehicle, subSegs, onClose, onSaved }) {
 
           <div className="vc-form-grid">
             <div className="form-group">
-              <label className="form-label">Sub-Segment</label>
+              <label className="form-label" htmlFor="vm-subseg">Sub-Segment</label>
               {subCatOptions.length > 0 ? (
                 <select
+                  id="vm-subseg"
                   className="form-select"
                   value={form.sub_category}
                   onChange={e => set('sub_category', e.target.value)}
@@ -534,6 +544,7 @@ function VehicleModal({ mode, vehicle, subSegs, onClose, onSaved }) {
                 </select>
               ) : (
                 <input
+                  id="vm-subseg"
                   className="form-input"
                   value={form.sub_category}
                   onChange={e => set('sub_category', e.target.value)}
@@ -545,8 +556,9 @@ function VehicleModal({ mode, vehicle, subSegs, onClose, onSaved }) {
 
           <div className="vc-form-grid">
             <div className="form-group">
-              <label className="form-label">Tyres</label>
+              <label className="form-label" htmlFor="vm-tyres">Tyres</label>
               <input
+                id="vm-tyres"
                 className="form-input"
                 value={form.tyres || ''}
                 onChange={e => set('tyres', e.target.value)}
@@ -554,8 +566,9 @@ function VehicleModal({ mode, vehicle, subSegs, onClose, onSaved }) {
               />
             </div>
             <div className="form-group">
-              <label className="form-label">GST Rate (%)</label>
+              <label className="form-label" htmlFor="vm-gst">GST Rate (%)</label>
               <input
+                id="vm-gst"
                 className="form-input"
                 type="number"
                 value={form.gst_rate}
@@ -566,8 +579,9 @@ function VehicleModal({ mode, vehicle, subSegs, onClose, onSaved }) {
 
           <div className="vc-form-grid">
             <div className="form-group">
-              <label className="form-label">Price Circular</label>
+              <label className="form-label" htmlFor="vm-pc">Price Circular</label>
               <input
+                id="vm-pc"
                 className="form-input"
                 value={form.price_circular || ''}
                 onChange={e => set('price_circular', e.target.value)}
@@ -575,8 +589,9 @@ function VehicleModal({ mode, vehicle, subSegs, onClose, onSaved }) {
               />
             </div>
             <div className="form-group">
-              <label className="form-label">Effective Date</label>
+              <label className="form-label" htmlFor="vm-effdate">Effective Date</label>
               <input
+                id="vm-effdate"
                 className="form-input"
                 type="date"
                 value={form.effective_date || ''}
@@ -657,9 +672,7 @@ function SubSegmentsTab({ subSegs, loading, onRefresh }) {
       </div>
 
       {loading ? (
-        <div className="full-center" style={{ minHeight: 200 }}>
-          <div className="spinner" />
-        </div>
+        <Skeleton variant="row" count={4} />
       ) : (
         <>
           {/* Desktop table */}
@@ -764,6 +777,8 @@ const EMPTY_SUBSEG = {
 }
 
 function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
+  const toast = useToast()
+  const trapRef = useFocusTrap(true, onClose)
   const [form,         setForm]         = useState(mode === 'edit' ? { ...subSeg } : EMPTY_SUBSEG)
   const [brochureFile, setBrochureFile] = useState(null)
   const [saving,       setSaving]       = useState(false)
@@ -835,10 +850,10 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
             contentType: 'application/pdf',
           })
         setUploadPct(null)
-        if (upErr) { setError('Brochure upload failed: ' + upErr.message); setSaving(false); return }
+        if (upErr) { toast.error('Brochure upload failed: ' + upErr.message); setSaving(false); return }
       } catch (e) {
         setUploadPct(null)
-        setError('Brochure upload failed: ' + e.message)
+        toast.error('Brochure upload failed: ' + e.message)
         setSaving(false)
         return
       }
@@ -863,13 +878,13 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
       ;({ error: err } = await supabase.from('sub_segments').update(payload).eq('id', subSeg.id))
     }
     setSaving(false)
-    if (err) { setError(err.message); return }
+    if (err) { toast.error('Save failed: ' + err.message); return }
     onSaved()
   }
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()}>
+      <div className="modal" ref={trapRef} tabIndex={-1} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <h2>{mode === 'add' ? 'Add Sub-Segment' : 'Edit Sub-Segment'}</h2>
           <button className="modal-close" onClick={onClose}>×</button>
@@ -878,8 +893,9 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
           {error && <div className="alert alert-error">{error}</div>}
 
           <div className="form-group">
-            <label className="form-label">Name *</label>
+            <label className="form-label" htmlFor="ssm-name">Name *</label>
             <input
+              id="ssm-name"
               className="form-input"
               value={form.name}
               onChange={e => set('name', e.target.value)}
@@ -890,14 +906,14 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
 
           <div className="vc-form-grid">
             <div className="form-group">
-              <label className="form-label">Segment *</label>
-              <select className="form-select" value={form.segment} onChange={e => set('segment', e.target.value)}>
+              <label className="form-label" htmlFor="ssm-segment">Segment *</label>
+              <select id="ssm-segment" className="form-select" value={form.segment} onChange={e => set('segment', e.target.value)}>
                 {SEGMENTS.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
             <div className="form-group">
-              <label className="form-label">Brand</label>
-              <select className="form-select" value={form.brand} onChange={e => set('brand', e.target.value)}>
+              <label className="form-label" htmlFor="ssm-brand">Brand</label>
+              <select id="ssm-brand" className="form-select" value={form.brand} onChange={e => set('brand', e.target.value)}>
                 <option value="al">Ashok Leyland</option>
                 <option value="switch">Switch Mobility</option>
                 <option value="hdh">HD Hyundai</option>
@@ -906,8 +922,9 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
           </div>
 
           <div className="form-group">
-            <label className="form-label">Description</label>
+            <label className="form-label" htmlFor="ssm-desc">Description</label>
             <textarea
+              id="ssm-desc"
               className="form-input"
               rows={2}
               value={form.description || ''}
@@ -1025,13 +1042,13 @@ function findColIdx(headers, patterns) {
 }
 
 function ImportTab({ subSegs, onRefresh }) {
+  const toast = useToast()
   const [file,          setFile]          = useState(null)
   const [preview,       setPreview]       = useState(null)
   const [brand,         setBrand]         = useState('al')
   const [priceCircular, setPriceCircular] = useState('')
   const [effectiveDate, setEffectiveDate] = useState('')
   const [importing,     setImporting]     = useState(false)
-  const [result,        setResult]        = useState(null)
   const [error,         setError]         = useState('')
   const fileRef = useRef()
 
@@ -1044,7 +1061,6 @@ function ImportTab({ subSegs, onRefresh }) {
     setFile(f)
     setPreview(null)
     setError('')
-    setResult(null)
     try {
       const buffer = await f.arrayBuffer()
       const wb = XLSX.read(new Uint8Array(buffer), { type: 'array' })
@@ -1141,11 +1157,11 @@ function ImportTab({ subSegs, onRefresh }) {
       await callEdge('admin-catalog', 'bulkUpsertVehicles', { rows: payload })
     } catch (e) {
       setImporting(false)
-      setError('Import failed: ' + e.message)
+      toast.error('Import failed: ' + e.message)
       return
     }
     setImporting(false)
-    setResult({ updated: preview.updated, newRows: preview.newRows })
+    toast.success(`Import complete — ${preview.updated} updated, ${preview.newRows} new vehicles added.`)
     setPreview(null)
     setFile(null)
     onRefresh()
@@ -1160,16 +1176,11 @@ function ImportTab({ subSegs, onRefresh }) {
           Expected columns: <strong>CBN, Description, Sub-Category, Tyres, MRP incl. 18% GST</strong>
         </p>
 
-        {result && (
-          <div className="alert alert-success">
-            Import complete — {result.updated} updated, {result.newRows} new vehicles added.
-          </div>
-        )}
         {error && <div className="alert alert-error">{error}</div>}
 
         <div className="form-group" style={{ maxWidth: 260, marginBottom: 16 }}>
-          <label className="form-label">Brand *</label>
-          <select className="form-select" value={brand} onChange={e => { setBrand(e.target.value); setPreview(null); setFile(null) }}>
+          <label className="form-label" htmlFor="imp-brand">Brand *</label>
+          <select id="imp-brand" className="form-select" value={brand} onChange={e => { setBrand(e.target.value); setPreview(null); setFile(null) }}>
             <option value="al">Ashok Leyland</option>
             <option value="switch">Switch Mobility</option>
             <option value="hdh">HD Hyundai</option>
@@ -1219,8 +1230,9 @@ function ImportTab({ subSegs, onRefresh }) {
 
             <div className="vc-form-grid mt-16">
               <div className="form-group">
-                <label className="form-label">Price Circular</label>
+                <label className="form-label" htmlFor="imp-pc">Price Circular</label>
                 <input
+                  id="imp-pc"
                   className="form-input"
                   value={priceCircular}
                   onChange={e => setPriceCircular(e.target.value)}
@@ -1228,8 +1240,9 @@ function ImportTab({ subSegs, onRefresh }) {
                 />
               </div>
               <div className="form-group">
-                <label className="form-label">Effective Date</label>
+                <label className="form-label" htmlFor="imp-effdate">Effective Date</label>
                 <input
+                  id="imp-effdate"
                   className="form-input"
                   type="date"
                   value={effectiveDate}
@@ -1418,9 +1431,7 @@ function SalesCatalog({ profile }) {
       </div>
 
       {loading ? (
-        <div className="full-center" style={{ minHeight: 200 }}>
-          <div className="spinner" />
-        </div>
+        <Skeleton variant="card" count={3} />
       ) : cards.length === 0 ? (
         <div className="empty-state">
           <div className="empty-state-icon">🚛</div>
@@ -1477,6 +1488,7 @@ function SalesCatalog({ profile }) {
 
 /* ── VEHICLE LIST MODAL (sales view) ─────────────────────────── */
 function VehicleListModal({ subSeg, onClose }) {
+  const trapRef = useFocusTrap(true, onClose)
   const [search, setSearch] = useState('')
 
   const filtered = useMemo(() => {
@@ -1492,7 +1504,7 @@ function VehicleListModal({ subSeg, onClose }) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal vc-wide-modal" onClick={e => e.stopPropagation()}>
+      <div className="modal vc-wide-modal" ref={trapRef} tabIndex={-1} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <div>
             <h2>{subSeg.name}</h2>
