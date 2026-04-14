@@ -1,6 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { callEdge } from '../lib/api'
+import { useToast } from '../context/ToastContext'
+import useAsyncAction from '../hooks/useAsyncAction'
+import useFocusTrap from '../hooks/useFocusTrap'
+import Skeleton from '../components/Skeleton'
 
 // Permission levels are fixed system concepts
 const PERMISSION_LEVELS = ['sales', 'back_office', 'hr', 'admin']
@@ -49,9 +53,9 @@ export default function Employees() {
   const [modal, setModal]   = useState(null) // 'add' | 'edit' | 'password' | 'confirm'
   const [selected, setSelected] = useState(null)
   const [form, setForm]     = useState(EMPTY_FORM)
-  const [saving, setSaving] = useState(false)
-  const [error, setError]   = useState('')
-  const [success, setSuccess] = useState('')
+  const { run: runSave, loading: saving, error, setError, clearError } = useAsyncAction()
+  const toast = useToast()
+  const trapRef = useFocusTrap(!!modal, closeModal)
 
   // Password reset state
   const [newPassword, setNewPassword]     = useState('')
@@ -161,8 +165,7 @@ export default function Employees() {
   function closeModal() {
     setModal(null)
     setSelected(null)
-    setError('')
-    setSuccess('')
+    clearError()
     setConfirmAction(null)
   }
 
@@ -179,10 +182,7 @@ export default function Employees() {
     if (!form.email.trim())     { setError('Email is required.'); return }
     if (form.password.length < 8) { setError('Password must be at least 8 characters.'); return }
 
-    setSaving(true); setError('')
-
-    try {
-      // Edge Function creates the auth user + profile row atomically.
+    await runSave(async () => {
       await callEdge('admin-users', 'create', {
         full_name:   form.full_name.trim(),
         email:       form.email.trim(),
@@ -195,14 +195,10 @@ export default function Employees() {
         vertical:    form.vertical   || null,
         designation: form.designation.trim() || null,
       })
-      setSaving(false)
-      setSuccess(`${form.full_name} has been added successfully.`)
+      toast.success(`${form.full_name} added successfully.`)
       await fetchEmployees()
-      setTimeout(closeModal, 1500)
-    } catch (e) {
-      setSaving(false)
-      setError(e.message)
-    }
+      closeModal()
+    }).catch(() => {})
   }
 
   /* ── UPDATE employee ── */
@@ -210,9 +206,7 @@ export default function Employees() {
     e.preventDefault()
     if (!form.full_name.trim()) { setError('Full name is required.'); return }
 
-    setSaving(true); setError('')
-
-    try {
+    await runSave(async () => {
       await callEdge('admin-users', 'updateProfile', {
         id: selected.id,
         update: {
@@ -226,14 +220,10 @@ export default function Employees() {
           designation: form.designation.trim() || null,
         },
       })
-      setSaving(false)
-      setSuccess('Employee updated successfully.')
+      toast.success('Employee updated.')
       await fetchEmployees()
-      setTimeout(closeModal, 1200)
-    } catch (err) {
-      setSaving(false)
-      setError(err.message)
-    }
+      closeModal()
+    }).catch(() => {})
   }
 
   /* ── RESET PASSWORD ── */
@@ -242,57 +232,42 @@ export default function Employees() {
     if (newPassword.length < 8)        { setError('Password must be at least 8 characters.'); return }
     if (newPassword !== confirmPassword){ setError('Passwords do not match.'); return }
 
-    setSaving(true); setError('')
-
-    try {
+    await runSave(async () => {
       await callEdge('admin-users', 'resetPassword', {
         id: selected.id,
         password: newPassword,
       })
-      setSaving(false)
-      setSuccess(`Password updated for ${selected.full_name}.`)
-      setTimeout(closeModal, 1500)
-    } catch (err) {
-      setSaving(false)
-      setError(err.message)
-    }
+      toast.success(`Password updated for ${selected.full_name}.`)
+      closeModal()
+    }).catch(() => {})
   }
 
   /* ── DEACTIVATE / ACTIVATE ── */
   async function handleToggleActive() {
     const emp = confirmAction.employee
     const newStatus = !emp.is_active
-    setSaving(true)
 
-    try {
+    await runSave(async () => {
       await callEdge('admin-users', 'setActive', {
         id: emp.id,
         is_active: newStatus,
       })
-      setSaving(false)
+      toast.success(`${emp.full_name} ${newStatus ? 'activated' : 'deactivated'}.`)
       await fetchEmployees()
       closeModal()
-    } catch (err) {
-      setSaving(false)
-      setError(err.message)
-    }
+    }).catch(() => {})
   }
 
   /* ── DELETE (permanent) ── */
   async function handleDelete() {
     const emp = confirmAction.employee
-    setSaving(true)
 
-    try {
-      // Delete from auth (cascades to users table via FK)
+    await runSave(async () => {
       await callEdge('admin-users', 'delete', { id: emp.id })
-      setSaving(false)
+      toast.success(`${emp.full_name} deleted.`)
       await fetchEmployees()
       closeModal()
-    } catch (err) {
-      setSaving(false)
-      setError(err.message)
-    }
+    }).catch(() => {})
   }
 
   /* ══ RENDER ══════════════════════════════════════════════════ */
@@ -358,8 +333,8 @@ export default function Employees() {
 
       {/* Table */}
       {loading ? (
-        <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>
-          <div className="spinner" />
+        <div style={{ padding: '8px 0' }}>
+          <Skeleton variant="row" count={6} />
         </div>
       ) : filtered.length === 0 ? (
         <div className="empty-state">
@@ -417,68 +392,67 @@ export default function Employees() {
       {/* ── ADD EMPLOYEE MODAL ── */}
       {modal === 'add' && (
         <div className="modal-overlay" onClick={e => e.target === e.currentTarget && closeModal()}>
-          <div className="modal">
+          <div className="modal" ref={trapRef} tabIndex={-1}>
             <div className="modal-header">
               <h2>Add Employee</h2>
               <button className="modal-close" onClick={closeModal}>×</button>
             </div>
             <div className="modal-body">
-              {error   && <div className="alert alert-error"><span>⚠</span><span>{error}</span></div>}
-              {success && <div className="alert alert-success"><span>✓</span><span>{success}</span></div>}
+              {error && <div className="alert alert-error"><span>⚠</span><span>{error}</span></div>}
               <form onSubmit={handleCreate} noValidate>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
                   <div className="form-group">
-                    <label className="form-label">Full Name *</label>
-                    <input className="form-input" placeholder="Ramesh Kumar" {...F('full_name')} />
+                    <label className="form-label" htmlFor="add-name">Full Name *</label>
+                    <input id="add-name" className="form-input" placeholder="Ramesh Kumar" {...F('full_name')} />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Email *</label>
-                    <input className="form-input" type="email" placeholder="ramesh@parastrucks.in" {...F('email')} />
+                    <label className="form-label" htmlFor="add-email">Email *</label>
+                    <input id="add-email" className="form-input" type="email" placeholder="ramesh@parastrucks.in" {...F('email')} />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Temporary Password *</label>
-                    <input className="form-input" type="password" placeholder="Min. 8 characters" {...F('password')} />
+                    <label className="form-label" htmlFor="add-pw">Temporary Password *</label>
+                    <input id="add-pw" className="form-input" type="password" placeholder="Min. 8 characters" {...F('password')} />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Permission Level *</label>
-                    <select className="form-select" {...F('role')}>
+                    <label className="form-label" htmlFor="add-level">Permission Level *</label>
+                    <select id="add-level" className="form-select" {...F('role')}>
                       {PERMISSION_LEVELS.map(r => <option key={r} value={r}>{PERMISSION_LABEL[r]}</option>)}
                     </select>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Entity *</label>
-                    <select className="form-select" {...F('entity')}>
+                    <label className="form-label" htmlFor="add-entity">Entity *</label>
+                    <select id="add-entity" className="form-select" {...F('entity')}>
                       {ENTITIES.map(e => <option key={e} value={e}>{e === 'PTB' ? 'PTB — Gujarat' : 'PT — Haryana'}</option>)}
                     </select>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Brand</label>
-                    <select className="form-select" {...F('brand')}>
+                    <label className="form-label" htmlFor="add-brand">Brand</label>
+                    <select id="add-brand" className="form-select" {...F('brand')}>
                       <option value="">— Select —</option>
                       {refBrands.map(b => <option key={b.code} value={b.code}>{b.name}</option>)}
                     </select>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Location</label>
-                    <select className="form-select" {...F('location')}>
+                    <label className="form-label" htmlFor="add-loc">Location</label>
+                    <select id="add-loc" className="form-select" {...F('location')}>
                       <option value="">— Select —</option>
                       {refLocations.map(l => <option key={l.name} value={l.name}>{l.name}</option>)}
                     </select>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Designation</label>
-                    <input className="form-input" placeholder="Executive" {...F('designation')} />
+                    <label className="form-label" htmlFor="add-desig">Designation</label>
+                    <input id="add-desig" className="form-input" placeholder="Executive" {...F('designation')} />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Department</label>
-                    <select className="form-select" {...F('department')}>
+                    <label className="form-label" htmlFor="add-dept">Department</label>
+                    <select id="add-dept" className="form-select" {...F('department')}>
                       <option value="">— Select —</option>
                       {refDepartments.map(d => <option key={d.name} value={d.name}>{d.name}</option>)}
                     </select>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Role</label>
-                    <select className="form-select" {...F('vertical')}>
+                    <label className="form-label" htmlFor="add-role">Role</label>
+                    <select id="add-role" className="form-select" {...F('vertical')}>
                       <option value="">— Select —</option>
                       {refRoles.map(r => <option key={r.name} value={r.name}>{r.label}</option>)}
                     </select>
@@ -499,64 +473,63 @@ export default function Employees() {
       {/* ── EDIT EMPLOYEE MODAL ── */}
       {modal === 'edit' && selected && (
         <div className="modal-overlay" onClick={e => e.target === e.currentTarget && closeModal()}>
-          <div className="modal">
+          <div className="modal" ref={trapRef} tabIndex={-1}>
             <div className="modal-header">
               <h2>Edit — {selected.full_name}</h2>
               <button className="modal-close" onClick={closeModal}>×</button>
             </div>
             <div className="modal-body">
-              {error   && <div className="alert alert-error"><span>⚠</span><span>{error}</span></div>}
-              {success && <div className="alert alert-success"><span>✓</span><span>{success}</span></div>}
+              {error && <div className="alert alert-error"><span>⚠</span><span>{error}</span></div>}
               <form onSubmit={handleUpdate} noValidate>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
                   <div className="form-group">
-                    <label className="form-label">Full Name *</label>
-                    <input className="form-input" {...F('full_name')} />
+                    <label className="form-label" htmlFor="edit-name">Full Name *</label>
+                    <input id="edit-name" className="form-input" {...F('full_name')} />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Email</label>
-                    <input className="form-input" value={selected?.email || ''} disabled style={{ opacity: 0.6 }} />
+                    <label className="form-label" htmlFor="edit-email">Email</label>
+                    <input id="edit-email" className="form-input" value={selected?.email || ''} disabled style={{ opacity: 0.6 }} />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Permission Level *</label>
-                    <select className="form-select" {...F('role')}>
+                    <label className="form-label" htmlFor="edit-level">Permission Level *</label>
+                    <select id="edit-level" className="form-select" {...F('role')}>
                       {PERMISSION_LEVELS.map(r => <option key={r} value={r}>{PERMISSION_LABEL[r]}</option>)}
                     </select>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Entity *</label>
-                    <select className="form-select" {...F('entity')}>
+                    <label className="form-label" htmlFor="edit-entity">Entity *</label>
+                    <select id="edit-entity" className="form-select" {...F('entity')}>
                       {ENTITIES.map(e => <option key={e} value={e}>{e === 'PTB' ? 'PTB — Gujarat' : 'PT — Haryana'}</option>)}
                     </select>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Brand</label>
-                    <select className="form-select" {...F('brand')}>
+                    <label className="form-label" htmlFor="edit-brand">Brand</label>
+                    <select id="edit-brand" className="form-select" {...F('brand')}>
                       <option value="">— Select —</option>
                       {refBrands.map(b => <option key={b.code} value={b.code}>{b.name}</option>)}
                     </select>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Location</label>
-                    <select className="form-select" {...F('location')}>
+                    <label className="form-label" htmlFor="edit-loc">Location</label>
+                    <select id="edit-loc" className="form-select" {...F('location')}>
                       <option value="">— Select —</option>
                       {refLocations.map(l => <option key={l.name} value={l.name}>{l.name}</option>)}
                     </select>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Designation</label>
-                    <input className="form-input" {...F('designation')} />
+                    <label className="form-label" htmlFor="edit-desig">Designation</label>
+                    <input id="edit-desig" className="form-input" {...F('designation')} />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Department</label>
-                    <select className="form-select" {...F('department')}>
+                    <label className="form-label" htmlFor="edit-dept">Department</label>
+                    <select id="edit-dept" className="form-select" {...F('department')}>
                       <option value="">— Select —</option>
                       {refDepartments.map(d => <option key={d.name} value={d.name}>{d.name}</option>)}
                     </select>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Role</label>
-                    <select className="form-select" {...F('vertical')}>
+                    <label className="form-label" htmlFor="edit-role">Role</label>
+                    <select id="edit-role" className="form-select" {...F('vertical')}>
                       <option value="">— Select —</option>
                       {refRoles.map(r => <option key={r.name} value={r.name}>{r.label}</option>)}
                     </select>
@@ -582,23 +555,22 @@ export default function Employees() {
       {/* ── RESET PASSWORD MODAL ── */}
       {modal === 'password' && selected && (
         <div className="modal-overlay" onClick={e => e.target === e.currentTarget && closeModal()}>
-          <div className="modal">
+          <div className="modal" ref={trapRef} tabIndex={-1}>
             <div className="modal-header">
               <h2>Reset Password — {selected.full_name}</h2>
               <button className="modal-close" onClick={closeModal}>×</button>
             </div>
             <div className="modal-body">
-              {error   && <div className="alert alert-error"><span>⚠</span><span>{error}</span></div>}
-              {success && <div className="alert alert-success"><span>✓</span><span>{success}</span></div>}
+              {error && <div className="alert alert-error"><span>⚠</span><span>{error}</span></div>}
               <form onSubmit={handleResetPassword} noValidate>
                 <div className="form-group">
-                  <label className="form-label">New Password</label>
-                  <input className="form-input" type="password" placeholder="Min. 8 characters"
+                  <label className="form-label" htmlFor="pw-new">New Password</label>
+                  <input id="pw-new" className="form-input" type="password" placeholder="Min. 8 characters"
                     value={newPassword} onChange={e => setNewPassword(e.target.value)} autoFocus />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Confirm Password</label>
-                  <input className="form-input" type="password" placeholder="Re-enter password"
+                  <label className="form-label" htmlFor="pw-confirm">Confirm Password</label>
+                  <input id="pw-confirm" className="form-input" type="password" placeholder="Re-enter password"
                     value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} />
                 </div>
                 <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
@@ -616,7 +588,7 @@ export default function Employees() {
       {/* ── CONFIRM MODAL (deactivate / activate / delete) ── */}
       {modal === 'confirm' && confirmAction && (
         <div className="modal-overlay" onClick={e => e.target === e.currentTarget && closeModal()}>
-          <div className="modal" style={{ maxWidth: 400 }}>
+          <div className="modal" ref={trapRef} tabIndex={-1} style={{ maxWidth: 400 }}>
             <div className="modal-header">
               <h2>
                 {confirmAction.type === 'deactivate' ? 'Deactivate Employee' :

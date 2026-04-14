@@ -2,6 +2,9 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { callEdge } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
+import { useToast } from '../context/ToastContext'
+import Skeleton from '../components/Skeleton'
+import useFocusTrap from '../hooks/useFocusTrap'
 
 const PERMISSION_LEVELS = ['admin', 'hr', 'back_office', 'sales']
 const PERMISSION_LABEL  = { admin: 'Admin', hr: 'HR', back_office: 'Back Office', sales: 'Sales' }
@@ -51,6 +54,7 @@ function useRefData() {
 ══════════════════════════════════════════════════════════════ */
 function RulesTab({ accessRules, refreshAccessRules }) {
   const ref = useRefData()
+  const toast = useToast()
   const [rules, setRules]   = useState([])
   const [loading, setLoading] = useState(true)
   const [showAdd, setShowAdd] = useState(false)
@@ -65,10 +69,10 @@ function RulesTab({ accessRules, refreshAccessRules }) {
     setLoading(true)
     try {
       const { data, error: err } = await supabase.from('access_rules').select('*').order('route').order('id')
-      if (err) setError(err.message)
+      if (err) toast.error(err.message)
       else setRules(data || [])
     } catch (e) {
-      setError('Failed to load rules: ' + e.message)
+      toast.error('Failed to load rules: ' + e.message)
     } finally {
       setLoading(false)
     }
@@ -106,7 +110,7 @@ function RulesTab({ accessRules, refreshAccessRules }) {
       await loadRules()
       await refreshAccessRules()
     } catch (err) {
-      setError(err.message)
+      toast.error(err.message)
     } finally {
       setDeleting(null)
     }
@@ -137,43 +141,43 @@ function RulesTab({ accessRules, refreshAccessRules }) {
           <form onSubmit={handleAdd}>
             <div className="ar-form-grid">
               <div className="form-group">
-                <label className="form-label">Route *</label>
-                <select className="form-select" {...F('route')}>
+                <label className="form-label" htmlFor="ar-route">Route *</label>
+                <select id="ar-route" className="form-select" {...F('route')}>
                   <option value="">— Select route —</option>
                   {ALL_ROUTES.map(r => <option key={r.route} value={r.route}>{r.label} ({r.route})</option>)}
                 </select>
               </div>
               <div className="form-group">
-                <label className="form-label">Permission Level</label>
-                <select className="form-select" {...F('permission_level')}>
+                <label className="form-label" htmlFor="ar-level">Permission Level</label>
+                <select id="ar-level" className="form-select" {...F('permission_level')}>
                   <option value="">Any</option>
                   {PERMISSION_LEVELS.map(p => <option key={p} value={p}>{PERMISSION_LABEL[p]}</option>)}
                 </select>
               </div>
               <div className="form-group">
-                <label className="form-label">Brand</label>
-                <select className="form-select" {...F('brand')}>
+                <label className="form-label" htmlFor="ar-brand">Brand</label>
+                <select id="ar-brand" className="form-select" {...F('brand')}>
                   <option value="">Any</option>
                   {ref.brands.map(b => <option key={b.code} value={b.code}>{b.name}</option>)}
                 </select>
               </div>
               <div className="form-group">
-                <label className="form-label">Location</label>
-                <select className="form-select" {...F('location')}>
+                <label className="form-label" htmlFor="ar-location">Location</label>
+                <select id="ar-location" className="form-select" {...F('location')}>
                   <option value="">Any</option>
                   {ref.locations.map(l => <option key={l.name} value={l.name}>{l.name}</option>)}
                 </select>
               </div>
               <div className="form-group">
-                <label className="form-label">Department</label>
-                <select className="form-select" {...F('department')}>
+                <label className="form-label" htmlFor="ar-department">Department</label>
+                <select id="ar-department" className="form-select" {...F('department')}>
                   <option value="">Any</option>
                   {ref.departments.map(d => <option key={d.name} value={d.name}>{d.name}</option>)}
                 </select>
               </div>
               <div className="form-group">
-                <label className="form-label">Role</label>
-                <select className="form-select" {...F('role')}>
+                <label className="form-label" htmlFor="ar-role">Role</label>
+                <select id="ar-role" className="form-select" {...F('role')}>
                   <option value="">Any</option>
                   {ref.roles.map(r => <option key={r.name} value={r.name}>{r.label}</option>)}
                 </select>
@@ -188,7 +192,7 @@ function RulesTab({ accessRules, refreshAccessRules }) {
       )}
 
       {loading ? (
-        <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}><div className="spinner" /></div>
+        <Skeleton variant="row" count={4} />
       ) : (
         <div className="table-wrap">
           <table>
@@ -240,12 +244,11 @@ function RulesTab({ accessRules, refreshAccessRules }) {
    TAB 2 — USER PERMISSIONS
 ══════════════════════════════════════════════════════════════ */
 function UserPermissionsTab() {
+  const toast = useToast()
   const [users, setUsers]     = useState([])
   const [loading, setLoading] = useState(true)
   const [pending, setPending] = useState({})
   const [saving, setSaving]   = useState(null)
-  const [error, setError]     = useState('')
-  const [success, setSuccess] = useState('')
   const { profile: self }     = useAuth()
   const ref = useRefData()
 
@@ -263,7 +266,6 @@ function UserPermissionsTab() {
 
   function set(userId, field, value) {
     setPending(p => ({ ...p, [userId]: { ...(p[userId] || {}), [field]: value } }))
-    setError(''); setSuccess('')
   }
 
   function isDirty(user) {
@@ -275,7 +277,7 @@ function UserPermissionsTab() {
   async function save(user) {
     const changes = pending[user.id]
     if (!changes) return
-    setSaving(user.id); setError('')
+    setSaving(user.id)
 
     const update = {}
     if (changes.role       !== undefined) update.role       = changes.role       || null
@@ -288,27 +290,24 @@ function UserPermissionsTab() {
       await callEdge('admin-access-rules', 'updateUserPermissions', { id: user.id, update })
     } catch (err) {
       setSaving(null)
-      setError(err.message)
+      toast.error(err.message)
       return
     }
     setSaving(null)
-    setSuccess(`${user.full_name} updated.`)
+    toast.success(`${user.full_name} updated.`)
     setPending(p => { const n = { ...p }; delete n[user.id]; return n })
     await loadUsers()
-    setTimeout(() => setSuccess(''), 3000)
   }
 
   function val(user, field) {
     return pending[user.id]?.[field] ?? (user[field] || '')
   }
 
-  if (loading) return <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}><div className="spinner" /></div>
+  if (loading) return <Skeleton variant="row" count={4} />
 
   return (
     <div>
       <p className="ar-section-desc">Assign brand, location, department, role and permission level to each user. Changes to permission level take effect on their next login.</p>
-      {error   && <div className="alert alert-error"   style={{ marginBottom: 16 }}><span>⚠</span><span>{error}</span></div>}
-      {success && <div className="alert alert-success" style={{ marginBottom: 16 }}><span>✓</span><span>{success}</span></div>}
       <div className="table-wrap">
         <table>
           <thead>
@@ -451,14 +450,14 @@ function RefTable({ title, items, onAdd, onToggle, addPlaceholder, nameKey = 'na
       </div>
       <form onSubmit={handleAdd} style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
         <div className="form-group" style={{ marginBottom: 0, flex: 1, minWidth: 140 }}>
-          <label className="form-label">{nameKey === 'code' ? 'Code' : 'Name'}</label>
-          <input className="form-input" placeholder={addPlaceholder}
+          <label className="form-label" htmlFor={`ar-ref-${title.toLowerCase()}-name`}>{nameKey === 'code' ? 'Code' : 'Name'}</label>
+          <input id={`ar-ref-${title.toLowerCase()}-name`} className="form-input" placeholder={addPlaceholder}
             value={newName} onChange={e => setNewName(e.target.value)} />
         </div>
         {labelKey && (
           <div className="form-group" style={{ marginBottom: 0, flex: 1, minWidth: 140 }}>
-            <label className="form-label">Label (display name)</label>
-            <input className="form-input" placeholder="e.g. Long Haul"
+            <label className="form-label" htmlFor={`ar-ref-${title.toLowerCase()}-label`}>Label (display name)</label>
+            <input id={`ar-ref-${title.toLowerCase()}-label`} className="form-input" placeholder="e.g. Long Haul"
               value={newLabel} onChange={e => setNewLabel(e.target.value)} />
           </div>
         )}
@@ -618,6 +617,7 @@ function OperatingUnits({ brands, locations }) {
   const [form,    setForm]    = useState(OU_EMPTY)
   const [saving,  setSaving]  = useState(false)
   const [error,   setError]   = useState('')
+  const trapRef = useFocusTrap(!!modal, closeModal)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -691,7 +691,7 @@ function OperatingUnits({ brands, locations }) {
       </div>
 
       {loading ? (
-        <div style={{ display: 'flex', justifyContent: 'center', padding: 32 }}><div className="spinner" /></div>
+        <Skeleton variant="row" count={4} />
       ) : (
         <div className="table-wrap">
           <table>
@@ -735,7 +735,7 @@ function OperatingUnits({ brands, locations }) {
 
       {modal && (
         <div className="modal-overlay" onClick={e => e.target === e.currentTarget && closeModal()}>
-          <div className="modal" style={{ maxWidth: 520 }}>
+          <div className="modal" ref={trapRef} tabIndex={-1} style={{ maxWidth: 520 }}>
             <div className="modal-header">
               <h2>{modal === 'add' ? 'Add Operating Unit' : `Edit — ${form.brand.toUpperCase()} · ${form.location}`}</h2>
               <button className="modal-close" onClick={closeModal}>×</button>
@@ -745,52 +745,52 @@ function OperatingUnits({ brands, locations }) {
               <form onSubmit={handleSave} noValidate>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
                   <div className="form-group">
-                    <label className="form-label">Brand *</label>
-                    <select className="form-select" {...F('brand')} disabled={modal === 'edit'}>
+                    <label className="form-label" htmlFor="ou-brand">Brand *</label>
+                    <select id="ou-brand" className="form-select" {...F('brand')} disabled={modal === 'edit'}>
                       <option value="">— Select —</option>
                       {brands.map(b => <option key={b.code} value={b.code}>{b.name}</option>)}
                     </select>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Location *</label>
-                    <select className="form-select" {...F('location')} disabled={modal === 'edit'}>
+                    <label className="form-label" htmlFor="ou-location">Location *</label>
+                    <select id="ou-location" className="form-select" {...F('location')} disabled={modal === 'edit'}>
                       <option value="">— Select —</option>
                       {locations.map(l => <option key={l.name} value={l.name}>{l.name}</option>)}
                     </select>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Entity Code</label>
-                    <select className="form-select" {...F('entity_code')}>
+                    <label className="form-label" htmlFor="ou-entity-code">Entity Code</label>
+                    <select id="ou-entity-code" className="form-select" {...F('entity_code')}>
                       <option value="">— Select —</option>
                       <option value="PTB">PTB — Gujarat</option>
                       <option value="PT">PT — Haryana</option>
                     </select>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Company Full Name</label>
-                    <input className="form-input" placeholder="PARAS TRUCKS AND BUSES" {...F('full_name')} />
+                    <label className="form-label" htmlFor="ou-full-name">Company Full Name</label>
+                    <input id="ou-full-name" className="form-input" placeholder="PARAS TRUCKS AND BUSES" {...F('full_name')} />
                   </div>
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Address</label>
-                  <input className="form-input" placeholder="Survey No. …" {...F('address')} />
+                  <label className="form-label" htmlFor="ou-address">Address</label>
+                  <input id="ou-address" className="form-input" placeholder="Survey No. …" {...F('address')} />
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
                   <div className="form-group">
-                    <label className="form-label">GSTIN</label>
-                    <input className="form-input" placeholder="24ABCDE1234F1Z5" {...F('gstin')} />
+                    <label className="form-label" htmlFor="ou-gstin">GSTIN</label>
+                    <input id="ou-gstin" className="form-input" placeholder="24ABCDE1234F1Z5" {...F('gstin')} />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Bank Account No.</label>
-                    <input className="form-input" placeholder="50200012345678" {...F('bank_account')} />
+                    <label className="form-label" htmlFor="ou-bank-account">Bank Account No.</label>
+                    <input id="ou-bank-account" className="form-input" placeholder="50200012345678" {...F('bank_account')} />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Bank Name</label>
-                    <input className="form-input" placeholder="Punjab National Bank" {...F('bank_name')} />
+                    <label className="form-label" htmlFor="ou-bank-name">Bank Name</label>
+                    <input id="ou-bank-name" className="form-input" placeholder="Punjab National Bank" {...F('bank_name')} />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">IFSC Code</label>
-                    <input className="form-input" placeholder="PUNB0123456" {...F('bank_ifsc')} />
+                    <label className="form-label" htmlFor="ou-bank-ifsc">IFSC Code</label>
+                    <input id="ou-bank-ifsc" className="form-input" placeholder="PUNB0123456" {...F('bank_ifsc')} />
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
@@ -812,16 +812,17 @@ function OperatingUnits({ brands, locations }) {
    TAB 4 — ERROR LOG VIEWER (admin-only, gated at route level)
 ══════════════════════════════════════════════════════════════ */
 function ErrorsTab() {
+  const toast = useToast()
   const [rows,    setRows]    = useState([])
   const [loading, setLoading] = useState(true)
-  const [error,   setError]   = useState('')
   const [selected, setSelected] = useState(null)
+  const closeDetail = useCallback(() => setSelected(null), [])
+  const trapRef = useFocusTrap(!!selected, closeDetail)
 
   useEffect(() => {
     let cancelled = false
     ;(async () => {
       setLoading(true)
-      setError('')
       try {
         const { data, error: err } = await supabase
           .from('error_log')
@@ -829,10 +830,10 @@ function ErrorsTab() {
           .order('created_at', { ascending: false })
           .limit(100)
         if (cancelled) return
-        if (err) setError(err.message)
+        if (err) toast.error(err.message)
         else setRows(data || [])
       } catch (e) {
-        if (!cancelled) setError('Failed to load errors: ' + e.message)
+        if (!cancelled) toast.error('Failed to load errors: ' + e.message)
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -849,10 +850,8 @@ function ErrorsTab() {
         Most recent 100 client-side errors reported via the <code>log-error</code> edge function. Click a row to see the full stack trace and context.
       </p>
 
-      {error && <div className="alert alert-error" style={{ marginBottom: 16 }}><span>⚠</span><span>{error}</span></div>}
-
       {loading ? (
-        <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}><div className="spinner" /></div>
+        <Skeleton variant="row" count={4} />
       ) : (
         <div className="table-wrap">
           <table>
@@ -881,11 +880,11 @@ function ErrorsTab() {
       )}
 
       {selected && (
-        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setSelected(null)}>
-          <div className="modal" style={{ maxWidth: 720 }}>
+        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && closeDetail()}>
+          <div className="modal" ref={trapRef} tabIndex={-1} style={{ maxWidth: 720 }}>
             <div className="modal-header">
               <h2>Error Detail</h2>
-              <button className="modal-close" onClick={() => setSelected(null)}>×</button>
+              <button className="modal-close" onClick={closeDetail}>×</button>
             </div>
             <div className="modal-body">
               <div style={{ fontSize: 12, color: 'var(--gray-500)', marginBottom: 12 }}>
@@ -909,7 +908,7 @@ function ErrorsTab() {
                 </pre>
               </div>
               <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
-                <button type="button" className="btn btn-secondary" onClick={() => setSelected(null)}>Close</button>
+                <button type="button" className="btn btn-secondary" onClick={closeDetail}>Close</button>
               </div>
             </div>
           </div>

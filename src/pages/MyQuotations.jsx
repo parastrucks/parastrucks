@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import { useToast } from '../context/ToastContext'
 import { generateQuotationPDF } from '../utils/pdfGenerator'
+import Skeleton from '../components/Skeleton'
 
 function fmtINR(n) {
   if (!n && n !== 0) return '—'
@@ -16,8 +18,8 @@ export default function MyQuotations() {
   const { profile } = useAuth()
   const [quotations, setQuotations] = useState([])
   const [loading, setLoading] = useState(true)
-  const [downloadingId, setDownloadingId] = useState(null) // quotation id being downloaded
-  const [error, setError] = useState('')
+  const [downloadingId, setDownloadingId] = useState(null)
+  const toast = useToast()
 
   useEffect(() => {
     async function load() {
@@ -28,7 +30,7 @@ export default function MyQuotations() {
         .eq('created_by', profile.id)
         .order('created_at', { ascending: false })
       if (err) {
-        setError('Failed to load quotations.')
+        toast.error('Failed to load quotations.')
         setLoading(false)
         return
       }
@@ -71,8 +73,7 @@ export default function MyQuotations() {
       })
     } catch (err) {
       console.error(err)
-      setError('Failed to generate PDF.')
-      setTimeout(() => setError(''), 4000)
+      toast.error('Failed to generate PDF.')
     } finally {
       setDownloadingId(null)
     }
@@ -88,15 +89,9 @@ export default function MyQuotations() {
         <p>Your quotation history — re-download any PDF</p>
       </div>
 
-      {error && (
-        <div className="alert alert-error" role="alert">
-          <span>⚠</span> {error}
-        </div>
-      )}
-
       {loading ? (
-        <div className="full-center" style={{ height: 240 }}>
-          <span className="spinner" />
+        <div style={{ padding: '8px 0' }}>
+          <Skeleton variant="row" count={5} />
         </div>
       ) : quotations.length === 0 ? (
         <div className="empty-state">

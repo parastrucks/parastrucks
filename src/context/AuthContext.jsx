@@ -17,6 +17,26 @@ function ruleMatches(rule, profile) {
   )
 }
 
+// Shallow-equal check for user profile objects. Compares the fields that
+// AuthContext consumers actually read (role, brand, location, department,
+// vertical, is_active, full_name). Prevents re-renders when loadUserData
+// fetches the same profile row a second time.
+function profileEqual(a, b) {
+  if (a === b) return true
+  if (!a || !b) return false
+  return (
+    a.id         === b.id         &&
+    a.role       === b.role       &&
+    a.brand      === b.brand      &&
+    a.location   === b.location   &&
+    a.department === b.department &&
+    a.vertical   === b.vertical   &&
+    a.is_active  === b.is_active  &&
+    a.full_name  === b.full_name  &&
+    a.email      === b.email
+  )
+}
+
 // Shallow-equal check for access rule arrays. Used by the visibility handler
 // to avoid replacing `accessRules` state with a byte-identical array, which
 // would otherwise rebuild the AuthContext value on every tab focus and
@@ -55,8 +75,12 @@ export function AuthProvider({ children }) {
 
   // dataLoadRef holds the promise from loadUserData so signIn() can await it
   // and ensure profile is populated before Login.jsx navigates.
-  const dataLoadRef = useRef(null)
-  const mountedRef  = useRef(true)
+  const dataLoadRef  = useRef(null)
+  const mountedRef   = useRef(true)
+  // In-flight dedup: track which userId loadUserData is currently fetching for.
+  // If onAuthStateChange fires INITIAL_SESSION then SIGNED_IN for the same user,
+  // the second call returns the existing promise instead of spawning a duplicate.
+  const loadingForRef = useRef(null)
 
   // Fetches profile + access rules in one parallel call.
   // No timeout or retry wrappers — Supabase JS v2 has its own internal fetch
@@ -64,6 +88,12 @@ export function AuthProvider({ children }) {
   // and the background-tab throttling false-positive that caused logouts.
   // On failure: degrade gracefully (empty rules) and move to ready phase.
   async function loadUserData(userId) {
+    // In-flight guard — if we're already fetching for this user, return the
+    // existing promise so callers (signIn → dataLoadRef.current) still resolve.
+    if (loadingForRef.current === userId && dataLoadRef.current) {
+      return dataLoadRef.current
+    }
+    loadingForRef.current = userId
     setPhase('loading-data')
     try {
       const [{ data: p }, { data: rules }] = await Promise.all([
@@ -71,14 +101,18 @@ export function AuthProvider({ children }) {
         supabase.from('access_rules').select('*'),
       ])
       if (!mountedRef.current) return
-      setProfile(p ?? null)
-      setAccessRules(rules ?? [])
+      // Shallow-diff: only replace state when the data actually changed.
+      // Avoids new object references that would cascade re-renders through
+      // every useAuth() consumer.
+      setProfile(prev => profileEqual(prev, p ?? null) ? prev : (p ?? null))
+      setAccessRules(prev => accessRulesEqual(prev, rules ?? []) ? prev : (rules ?? []))
     } catch (e) {
       console.error('loadUserData error:', e)
       if (!mountedRef.current) return
       setAccessRules([])
     }
     if (mountedRef.current) setPhase('ready')
+    loadingForRef.current = null
   }
 
   // ── Main auth effect ───────────────────────────────────────────────────────

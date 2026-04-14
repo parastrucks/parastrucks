@@ -3,6 +3,7 @@ import Fuse from 'fuse.js'
 import { supabase } from '../lib/supabase'
 import { useDebounce } from '../lib/useDebounce'
 import { useAuth } from '../context/AuthContext'
+import { useToast } from '../context/ToastContext'
 import { generateQuotationPDF } from '../utils/pdfGenerator'
 
 const SEGMENTS = ['All Segments', 'ICV Trucks', 'MBP Trucks', 'Tippers', 'Buses', 'RMC / Boom Pump']
@@ -73,7 +74,7 @@ export default function Quotation() {
   // UI state
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
+  const toast = useToast()
 
   // Load catalog on mount
   useEffect(() => {
@@ -171,8 +172,7 @@ export default function Quotation() {
   function addVehicle(vehicle) {
     // Prevent exact duplicate CBN
     if (lineItems.some(li => li.cbn === vehicle.cbn)) {
-      setError('This vehicle is already in the quotation.')
-      setTimeout(() => setError(''), 3000)
+      toast.error('This vehicle is already in the quotation.')
       setShowDropdown(false)
       return
     }
@@ -233,7 +233,6 @@ export default function Quotation() {
   async function handleSubmit(e) {
     e.preventDefault()
     setError('')
-    setSuccess('')
 
     if (!customer.name.trim()) { setError('Customer name is required.'); return }
     if (lineItems.length === 0) { setError('Add at least one vehicle.'); return }
@@ -326,7 +325,7 @@ export default function Quotation() {
         preparedBy: profile?.full_name,
       })
 
-      setSuccess(`Quotation ${qNum} saved and PDF downloaded.`)
+      toast.success(`Quotation ${qNum} saved and PDF downloaded.`)
       // Reset form
       setLineItems([])
       setCustomer({ name: '', address: '', mobile: '', gstin: '', hypothecation: '' })
@@ -353,11 +352,6 @@ export default function Quotation() {
           <span>⚠</span> {error}
         </div>
       )}
-      {success && (
-        <div className="alert alert-success" role="alert">
-          <span>✓</span> {success}
-        </div>
-      )}
 
       <form onSubmit={handleSubmit} noValidate>
         <div className="q-layout">
@@ -369,8 +363,9 @@ export default function Quotation() {
               <div className="q-section-title">Customer Details</div>
               <div className="customer-grid">
                 <div className="form-group span-2" style={{ marginBottom: 0 }}>
-                  <label className="form-label">Customer Name *</label>
+                  <label className="form-label" htmlFor="q-cust-name">Customer Name *</label>
                   <input
+                    id="q-cust-name"
                     className="form-input"
                     value={customer.name}
                     onChange={e => setCustomer(c => ({ ...c, name: e.target.value }))}
@@ -378,8 +373,9 @@ export default function Quotation() {
                   />
                 </div>
                 <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label">Mobile</label>
+                  <label className="form-label" htmlFor="q-cust-mobile">Mobile</label>
                   <input
+                    id="q-cust-mobile"
                     className="form-input"
                     value={customer.mobile}
                     onChange={e => setCustomer(c => ({ ...c, mobile: e.target.value }))}
@@ -388,8 +384,9 @@ export default function Quotation() {
                   />
                 </div>
                 <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label">GSTIN</label>
+                  <label className="form-label" htmlFor="q-cust-gstin">GSTIN</label>
                   <input
+                    id="q-cust-gstin"
                     className="form-input"
                     value={customer.gstin}
                     onChange={e => setCustomer(c => ({ ...c, gstin: e.target.value.toUpperCase() }))}
@@ -398,8 +395,9 @@ export default function Quotation() {
                   />
                 </div>
                 <div className="form-group span-2" style={{ marginBottom: 0 }}>
-                  <label className="form-label">Address</label>
+                  <label className="form-label" htmlFor="q-cust-addr">Address</label>
                   <input
+                    id="q-cust-addr"
                     className="form-input"
                     value={customer.address}
                     onChange={e => setCustomer(c => ({ ...c, address: e.target.value }))}
@@ -407,8 +405,9 @@ export default function Quotation() {
                   />
                 </div>
                 <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label">Hypothecation</label>
+                  <label className="form-label" htmlFor="q-cust-hyp">Hypothecation</label>
                   <input
+                    id="q-cust-hyp"
                     className="form-input"
                     value={customer.hypothecation}
                     onChange={e => setCustomer(c => ({ ...c, hypothecation: e.target.value }))}
@@ -416,8 +415,9 @@ export default function Quotation() {
                   />
                 </div>
                 <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label">Valid Until</label>
+                  <label className="form-label" htmlFor="q-valid-until">Valid Until</label>
                   <input
+                    id="q-valid-until"
                     type="date"
                     className="form-input"
                     value={validUntil}
@@ -458,6 +458,7 @@ export default function Quotation() {
                     value={segment}
                     onChange={handleSegmentChange}
                     style={{ width: 160 }}
+                    aria-label="Vehicle segment filter"
                   >
                     {SEGMENTS.map(s => (
                       <option key={s} value={s}>{s}</option>
@@ -623,8 +624,9 @@ export default function Quotation() {
               <div className="q-section-title">Additional Charges</div>
               <div className="extras-grid">
                 <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label">RTO Tax (₹)</label>
+                  <label className="form-label" htmlFor="q-rto">RTO Tax (₹)</label>
                   <input
+                    id="q-rto"
                     type="number"
                     className="form-input"
                     value={rtoTax}
@@ -634,8 +636,9 @@ export default function Quotation() {
                   />
                 </div>
                 <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label">Insurance (₹)</label>
+                  <label className="form-label" htmlFor="q-insurance">Insurance (₹)</label>
                   <input
+                    id="q-insurance"
                     type="number"
                     className="form-input"
                     value={insurance}
