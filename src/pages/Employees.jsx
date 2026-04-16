@@ -15,23 +15,6 @@ const PERM_TIERS = ['gm', 'manager', 'executive']
 const PERM_LABEL = { admin: 'Admin', gm: 'GM', manager: 'Manager', executive: 'Executive' }
 const PERM_BADGE = { admin: 'badge-red', gm: 'badge-purple', manager: 'badge-blue', executive: 'badge-green' }
 
-/* Legacy `users.role` values — we still have to write these during the 6c.1
-   cutover window because Sidebar/BottomNav/Profile haven't migrated yet
-   (Phase 6c.1 surface-by-surface cleanup PRs). Derived deterministically
-   from department code so no UI choice is needed. */
-const DEPT_CODE_TO_LEGACY_ROLE = {
-  sales:       'sales',
-  back_office: 'back_office',
-  hr:          'hr',
-  // Service / Spares / Accounts / PDI get the closest legacy bucket so the
-  // NOT NULL CHECK constraint on users.role is satisfied. These users have
-  // no current legacy-reader that would notice the value.
-  service:     'back_office',
-  spares:      'back_office',
-  accounts:    'back_office',
-  pdi:         'back_office',
-}
-
 /* Department codes that trigger specialised form sections (match the
    Phase 6b plan 6b.0 tree — Sales/Service/Spares/Back Office). */
 const DEPT_SALES       = 'sales'
@@ -102,7 +85,9 @@ export default function Employees() {
   // Confirm action state
   const [confirmAction, setConfirmAction] = useState(null) // { type, employee }
 
-  /* ── fetch employees (flat view with joined ref rows) ────────────────── */
+  /* ── fetch employees ───────────────────────────────────────────────── */
+  // Phase 6c.3: legacy text columns gone from users. The UUID columns drive
+  // every render; the ref-table lookups happen against in-memory maps below.
   const fetchEmployees = useCallback(async () => {
     setLoading(true)
     try {
@@ -111,8 +96,7 @@ export default function Employees() {
         .select(`
           id, full_name, email, is_active, location,
           permission_level, entity_id, department_id, designation_id,
-          primary_outlet_id, subdept_id,
-          role, entity, brand, department, vertical, designation
+          primary_outlet_id, subdept_id
         `)
         .order('full_name')
       if (!error) setEmployees(data || [])
@@ -316,73 +300,43 @@ export default function Employees() {
   }
 
   /* ── build the EF payload from the current form state ───────────────── */
+  // Phase 6c.3: legacy text columns dropped. Only the 4-axis UUIDs + join
+  // tables are sent. `location` stays as informational free text.
   function buildCreatePayload() {
-    const dept = deptById[form.department_id]
-    const deptCode = dept?.code
-    const entityCode = entityById[form.entity_id]?.code
-    const designation = designationById[form.designation_id]
-
-    // Legacy columns — derived so the NOT-NULL + CHECK constraints stay
-    // satisfied while no reader relies on specific values. Dropped in 6c.3.
-    const legacyRole = DEPT_CODE_TO_LEGACY_ROLE[deptCode] || 'sales'
-
-    const payload = {
+    const deptCode = deptById[form.department_id]?.code
+    return {
       full_name:         form.full_name.trim(),
       email:             form.email.trim(),
       password:          form.password,
-      // New 4-axis
       permission_level:  form.permission_level,
       entity_id:         form.entity_id,
       department_id:     form.department_id,
       designation_id:    form.designation_id,
       primary_outlet_id: form.primary_outlet_id || null,
       subdept_id:        form.subdept_id || null,
-      // Join tables — only populate arrays that actually apply to this dept
-      brand_ids:          deptCode === DEPT_SALES       ? form.brand_ids
-                        : deptCode === DEPT_BACK_OFFICE ? form.brand_ids : [],
-      sales_vertical_ids: deptCode === DEPT_SALES ? form.sales_vertical_ids : [],
-      outlet_ids:         [], // Phase 6c.1 uses primary_outlet_id for Service/Spares; user_outlets reserved for future multi-outlet roles
-      // Legacy scaffolding
-      role:       legacyRole,
-      entity:     entityCode,
-      brand:      null,
-      location:   form.location || null,
-      department: dept?.name || null,
-      vertical:   null,
-      designation: designation?.name || null,
-    }
-    return payload
-  }
-
-  function buildUpdatePayload() {
-    const dept = deptById[form.department_id]
-    const deptCode = dept?.code
-    const entityCode = entityById[form.entity_id]?.code
-    const designation = designationById[form.designation_id]
-    const legacyRole = DEPT_CODE_TO_LEGACY_ROLE[deptCode] || 'sales'
-
-    return {
-      full_name:         form.full_name.trim(),
-      // New 4-axis
-      permission_level:  form.permission_level,
-      entity_id:         form.entity_id,
-      department_id:     form.department_id,
-      designation_id:    form.designation_id,
-      primary_outlet_id: form.primary_outlet_id || null,
-      subdept_id:        form.subdept_id || null,
-      // Join tables — full-replace on the EF side
+      location:          form.location || null,
       brand_ids:          deptCode === DEPT_SALES       ? form.brand_ids
                         : deptCode === DEPT_BACK_OFFICE ? form.brand_ids : [],
       sales_vertical_ids: deptCode === DEPT_SALES ? form.sales_vertical_ids : [],
       outlet_ids:         [],
-      // Legacy scaffolding
-      role:       legacyRole,
-      entity:     entityCode,
-      brand:      null,
-      location:   form.location || null,
-      department: dept?.name || null,
-      vertical:   null,
-      designation: designation?.name || null,
+    }
+  }
+
+  function buildUpdatePayload() {
+    const deptCode = deptById[form.department_id]?.code
+    return {
+      full_name:         form.full_name.trim(),
+      permission_level:  form.permission_level,
+      entity_id:         form.entity_id,
+      department_id:     form.department_id,
+      designation_id:    form.designation_id,
+      primary_outlet_id: form.primary_outlet_id || null,
+      subdept_id:        form.subdept_id || null,
+      location:          form.location || null,
+      brand_ids:          deptCode === DEPT_SALES       ? form.brand_ids
+                        : deptCode === DEPT_BACK_OFFICE ? form.brand_ids : [],
+      sales_vertical_ids: deptCode === DEPT_SALES ? form.sales_vertical_ids : [],
+      outlet_ids:         [],
     }
   }
 
@@ -557,7 +511,7 @@ export default function Employees() {
                   <tr key={emp.id}>
                     <td style={{ fontWeight: 600, color: 'var(--gray-900)' }}>{emp.full_name}</td>
                     <td style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--gray-500)' }}>{emp.email}</td>
-                    <td><span className="badge badge-blue">{ent?.code || emp.entity || '—'}</span></td>
+                    <td><span className="badge badge-blue">{ent?.code || '—'}</span></td>
                     <td>
                       <div style={{ fontSize: 13 }}>{dept?.name || '—'}</div>
                       {desig?.name && <div style={{ fontSize: 11, color: 'var(--gray-400)', marginTop: 2 }}>{desig.name}</div>}

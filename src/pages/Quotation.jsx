@@ -39,7 +39,17 @@ function fmtINR(n) {
 }
 
 export default function Quotation() {
-  const { profile, isAdmin, isBackOffice } = useAuth()
+  const { profile, isAdmin } = useAuth()
+  // Phase 6c.3: Back Office is identified by department_id → departments.code.
+  // Loaded once per mount; the lookup is cached by supabase.
+  const [isBackOffice, setIsBackOffice] = useState(false)
+  useEffect(() => {
+    let cancelled = false
+    if (!profile?.department_id) { setIsBackOffice(false); return }
+    supabase.from('departments').select('code').eq('id', profile.department_id).maybeSingle()
+      .then(({ data }) => { if (!cancelled) setIsBackOffice(data?.code === 'back_office') })
+    return () => { cancelled = true }
+  }, [profile?.department_id])
   const canEditPrice = isAdmin || isBackOffice
   const canEditDescription = isAdmin || isBackOffice
 
@@ -85,7 +95,7 @@ export default function Quotation() {
       try {
         const query = supabase
           .from('vehicle_catalog')
-          .select('id, cbn, description, sub_category, segment, tyres, mrp_incl_gst')
+          .select('id, cbn, description, sub_category, segment, tyres, mrp_incl_gst, brand_id')
           .eq('is_active', true)
           .order('segment')
           .order('sub_category')
@@ -181,6 +191,7 @@ export default function Quotation() {
       description: vehicle.description,
       original_description: vehicle.description,
       tyres: vehicle.tyres,
+      brand_id: vehicle.brand_id,
       qty: 1,
       mrp: vehicle.mrp_incl_gst,
       basic_amt: 0,
@@ -242,37 +253,41 @@ export default function Quotation() {
       return
     }
 
-    // Determine entity code for quotation numbering:
-    // Prefer operating_unit → location → entity mapping, fall back to profile.entity
-    let entityCode = profile?.entity || 'PTB'
+    // Phase 6c.3: entity code + id resolved from profile.entity_id. The
+    // per-brand-per-location operating_units lookup is deferred (plan
+    // 6b.1.1 "operating-unit lookup transition"); entities has the
+    // letterhead/bank details needed for the PDF.
+    let entityCode = 'PTB'
+    let entityId   = null
     let entityData = null
 
     setSaving(true)
     try {
-      // Try to get entity details from operating_units (brand + location specific)
-      if (profile?.brand && profile?.location) {
-        const { data: ou } = await supabase
-          .from('operating_units')
-          .select('entity_code, full_name, address, gstin, bank_name, bank_account, bank_ifsc')
-          .eq('brand', profile.brand)
-          .eq('location', profile.location)
-          .eq('is_active', true)
-          .single()
-        if (ou) {
-          entityCode = ou.entity_code || entityCode
-          entityData = { full_name: ou.full_name, address: ou.address, gstin: ou.gstin, bank_name: ou.bank_name, bank_account: ou.bank_account, bank_ifsc: ou.bank_ifsc }
-        }
-      }
+      const entityLookupId = profile?.entity_id
+      const { data: ent, error: eErr } = entityLookupId
+        ? await supabase.from('entities')
+            .select('id, code, full_name, address, gstin, bank_name, bank_account, bank_ifsc')
+            .eq('id', entityLookupId).single()
+        : await supabase.from('entities')
+            .select('id, code, full_name, address, gstin, bank_name, bank_account, bank_ifsc')
+            .eq('code', 'PTB').single()
+      if (eErr) throw eErr
+      entityId   = ent.id
+      entityCode = ent.code || entityCode
+      entityData = { full_name: ent.full_name, address: ent.address, gstin: ent.gstin, bank_name: ent.bank_name, bank_account: ent.bank_account, bank_ifsc: ent.bank_ifsc }
 
-      // Fall back to entities table if operating_unit not found
-      if (!entityData) {
-        const { data: ent, error: eErr } = await supabase
-          .from('entities')
-          .select('full_name, address, gstin, bank_name, bank_account, bank_ifsc')
-          .eq('code', entityCode)
-          .single()
-        if (eErr) throw eErr
-        entityData = ent
+      // Resolve the quotation's brand from the first line-item. All items
+      // share a brand in practice (catalog is brand-scoped), so picking
+      // index 0 is unambiguous. If the first item somehow lacks brand_id,
+      // look it up from vehicle_catalog by CBN as a fallback.
+      let quotationBrandId = lineItems[0]?.brand_id ?? null
+      if (!quotationBrandId && lineItems[0]?.cbn) {
+        const { data: v } = await supabase
+          .from('vehicle_catalog').select('brand_id').eq('cbn', lineItems[0].cbn).maybeSingle()
+        quotationBrandId = v?.brand_id ?? null
+      }
+      if (!quotationBrandId) {
+        throw new Error('Could not determine brand for this quotation — please reselect the first vehicle.')
       }
 
       // Get next quotation number (atomic RPC)
@@ -285,7 +300,8 @@ export default function Quotation() {
       // Insert quotation
       const { error: insertErr } = await supabase.from('quotations').insert({
         quotation_number: qNum,
-        entity: entityCode,
+        entity_id: entityId,
+        brand_id: quotationBrandId,
         created_by: profile.id,
         valid_until: validUntil,
         customer_name: customer.name.trim(),

@@ -3,10 +3,11 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabase'
 
-// Department-code-keyed tab bars. Admin still gets the broad tab set based
-// on permission_level, everyone else on their department. Legacy role values
-// map 1:1 to dept codes for back_office/hr/sales so pre-6c.1 users still get
-// their expected tabs without a migration touch.
+// Department-code-keyed tab bars. Admin gets the broad tab set based on
+// permission_level; everyone else on their department. Phase 6c.3: legacy
+// profile.role is gone, so unknown department codes fall back to the
+// minimal home+profile bar (safe default for dept like accounts/service/pdi
+// that don't yet have a custom tab set).
 const DEPT_TABS = {
   sales: [
     { to: '/',               icon: '⊞', label: 'Home' },
@@ -55,8 +56,7 @@ export default function BottomNav() {
   }, [profile?.department_id])
 
   if (!profile) return null
-  const key = isAdmin ? '__admin__' : (deptCode || profile.role)
-  const tabs = key === '__admin__' ? ADMIN_TABS : (DEPT_TABS[key] || FALLBACK_TABS)
+  const tabs = isAdmin ? ADMIN_TABS : (DEPT_TABS[deptCode] || FALLBACK_TABS)
 
   return (
     <nav className="bottom-nav">

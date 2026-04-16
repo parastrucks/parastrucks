@@ -63,15 +63,14 @@ export default function Profile() {
 
   if (!profile) return null
 
-  // Build the displayed field list from the new 4-axis columns first, falling
-  // back to legacy text for admins or any pre-6c.1 user whose FKs are NULL.
+  // Phase 6c.3: reads only the new 4-axis columns — legacy fallback removed.
   const fields = [
     { label: 'Full Name',        value: profile.full_name },
     { label: 'Email',            value: profile.email },
-    { label: 'Permission Level', value: PERM_LABEL[profile.permission_level] || PERM_LABEL[profile.role] || profile.permission_level || profile.role },
-    { label: 'Entity',           value: deets.entity_code || profile.entity },
-    { label: 'Department',       value: deets.dept_name || profile.department },
-    { label: 'Designation',      value: deets.designation_name || profile.designation },
+    { label: 'Permission Level', value: PERM_LABEL[profile.permission_level] || profile.permission_level },
+    { label: 'Entity',           value: deets.entity_code },
+    { label: 'Department',       value: deets.dept_name },
+    { label: 'Designation',      value: deets.designation_name },
     { label: 'Primary Outlet',   value: deets.outlet_label },
     { label: 'Sub-department',   value: deets.subdept_name },
     { label: 'Brands',           value: deets.brand_names.length ? deets.brand_names.join(', ') : null },
@@ -98,7 +97,7 @@ export default function Profile() {
           </div>
           <div>
             <div style={{ fontWeight: 700, fontSize: 17, color: 'var(--gray-900)' }}>{profile.full_name}</div>
-            <span className="badge badge-blue" style={{ marginTop: 4 }}>{PERM_LABEL[profile.permission_level] || PERM_LABEL[profile.role] || '—'}</span>
+            <span className="badge badge-blue" style={{ marginTop: 4 }}>{PERM_LABEL[profile.permission_level] || '—'}</span>
           </div>
         </div>
 

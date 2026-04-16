@@ -18,9 +18,7 @@ export default function Sidebar() {
   const { profile, signOut, canAccess } = useAuth()
   const navigate = useNavigate()
 
-  // Phase 6c.1: resolve the entity code from entity_id. Falls back to legacy
-  // profile.entity text until every user has been re-onboarded through the
-  // new Employees form.
+  // Phase 6c.3: resolve the entity code from entity_id. Legacy fallback removed.
   const [entityCode, setEntityCode] = useState(null)
   useEffect(() => {
     let cancelled = false
@@ -46,7 +44,7 @@ export default function Sidebar() {
       </div>
 
       <div className="sidebar-entity">
-        <span className="entity-badge">{entityCode || profile.entity || 'PTB'}</span>
+        <span className="entity-badge">{entityCode || '—'}</span>
         <span className="sidebar-username">{profile.full_name}</span>
       </div>
 

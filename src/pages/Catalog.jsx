@@ -33,13 +33,24 @@ function fmtMRP(n) {
 ══════════════════════════════════════════════════════════════ */
 export default function Catalog() {
   const { profile, isAdmin } = useAuth()
-  if (!profile) return null
-  // Admin + Back Office get the full CRUD view. The admin-users EF (v7)
-  // writes legacy `role` alongside the new axes for every user it creates,
-  // so checking role === 'back_office' remains correct through 6c.1. When
-  // Phase 6c.3 drops legacy role, this flips to a lookup against
-  // profile.department_id → departments.code === 'back_office'.
-  const canManage = isAdmin || profile.role === 'back_office'
+  // Phase 6c.3: Back Office is identified by department_id → departments.code.
+  // Loaded once per mount. Render a spinner until the lookup completes so we
+  // don't flash the Sales view to a BO user on first paint.
+  const [canManage, setCanManage] = useState(null) // null = loading
+  useEffect(() => {
+    let cancelled = false
+    if (!profile) return
+    if (isAdmin) { setCanManage(true); return }
+    if (!profile.department_id) { setCanManage(false); return }
+    supabase.from('departments').select('code').eq('id', profile.department_id).maybeSingle()
+      .then(({ data }) => {
+        if (cancelled) return
+        setCanManage(data?.code === 'back_office')
+      })
+    return () => { cancelled = true }
+  }, [profile?.id, profile?.department_id, isAdmin])
+
+  if (!profile || canManage === null) return <div style={{ padding: 40 }}><div className="spinner" /></div>
   return canManage ? <AdminCatalog profile={profile} /> : <SalesCatalog profile={profile} />
 }
 
