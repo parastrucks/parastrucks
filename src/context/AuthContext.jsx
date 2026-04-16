@@ -98,6 +98,13 @@ export function AuthProvider({ children }) {
   // If onAuthStateChange fires INITIAL_SESSION then SIGNED_IN for the same user,
   // the second call returns the existing promise instead of spawning a duplicate.
   const loadingForRef = useRef(null)
+  // Completed-load dedup: tracks the userId whose profile + rules are already
+  // loaded into state. When Supabase re-fires SIGNED_IN / USER_UPDATED /
+  // INITIAL_SESSION on tab return for the SAME user, we want to silently
+  // update the session reference and NOT re-flip `phase` to 'loading-data' —
+  // because that would cause ProtectedRoute to unmount children and wipe
+  // in-progress form state (e.g. a half-typed quotation). Cleared on SIGNED_OUT.
+  const loadedForRef = useRef(null)
 
   // Fetches profile + access rules in one parallel call.
   // No timeout or retry wrappers — Supabase JS v2 has its own internal fetch
@@ -123,6 +130,9 @@ export function AuthProvider({ children }) {
       // every useAuth() consumer.
       setProfile(prev => profileEqual(prev, p ?? null) ? prev : (p ?? null))
       setAccessRules(prev => accessRulesEqual(prev, rules ?? []) ? prev : (rules ?? []))
+      // Mark this user's data as loaded so later SIGNED_IN / USER_UPDATED
+      // events for the same user short-circuit instead of flipping phase.
+      loadedForRef.current = userId
     } catch (e) {
       console.error('loadUserData error:', e)
       if (!mountedRef.current) return
@@ -153,11 +163,21 @@ export function AuthProvider({ children }) {
         setProfile(null)
         setAccessRules([])
         setPhase('unauthenticated')
+        loadedForRef.current = null
         return
       }
 
-      // INITIAL_SESSION or SIGNED_IN
+      // INITIAL_SESSION / SIGNED_IN / USER_UPDATED / etc. with a session.
       if (newSession) {
+        // Already loaded for this user? Just update the session ref silently.
+        // No phase flip → no ProtectedRoute unmount → no lost form state on tab
+        // return. Supabase JS re-fires SIGNED_IN / USER_UPDATED after silent
+        // token rehydration on a backgrounded tab; treating those as fresh
+        // logins was what wiped half-typed quotations.
+        if (loadedForRef.current === newSession.user.id) {
+          setSession(newSession)
+          return
+        }
         setSession(newSession)
         const promise = loadUserData(newSession.user.id)
         dataLoadRef.current = promise
@@ -165,6 +185,7 @@ export function AuthProvider({ children }) {
         // INITIAL_SESSION with no session = not logged in
         setSession(null)
         setPhase('unauthenticated')
+        loadedForRef.current = null
       }
     })
 
@@ -338,6 +359,7 @@ export function AuthProvider({ children }) {
     setProfile(null)
     setAccessRules([])
     setPhase('unauthenticated')
+    loadedForRef.current = null
   }
 
   // Route gate:
