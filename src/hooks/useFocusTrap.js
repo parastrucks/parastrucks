@@ -10,13 +10,29 @@ const FOCUSABLE = [
  * Returns a ref to attach to the modal/dialog root element.
  *
  * Usage:
- *   const trapRef = useFocusTrap(isOpen)
+ *   const trapRef = useFocusTrap(isOpen, closeModal)
  *   <div ref={trapRef} className="modal"> ... </div>
  *
  * Also handles Escape key → calls `onEscape` if provided.
+ *
+ * NOTE on `onEscape`: we intentionally do NOT include it in the effect deps.
+ * Callers routinely pass an inline function (e.g. `() => setConfirming(null)`)
+ * or an unstable component-scoped function (e.g. `closeModal`), which changes
+ * reference on every render. If we put it in the deps, the effect re-runs
+ * every render → cleanup restores focus → body runs focusFirst → focus jumps
+ * to the modal's first focusable element (usually the × close button) on
+ * every keystroke inside a field. Classic data-loss + UX-break combo.
+ *
+ * Instead we keep `onEscape` in a ref and read from that inside the keydown
+ * handler. Effect deps stay `[active]` — runs once per open/close, nothing
+ * more.
  */
 export default function useFocusTrap(active, onEscape) {
   const ref = useRef(null)
+
+  // Latest-ref pattern — keeps the handler fresh without re-subscribing.
+  const onEscapeRef = useRef(onEscape)
+  useEffect(() => { onEscapeRef.current = onEscape }, [onEscape])
 
   useEffect(() => {
     if (!active || !ref.current) return
@@ -34,9 +50,9 @@ export default function useFocusTrap(active, onEscape) {
     requestAnimationFrame(focusFirst)
 
     function handleKeyDown(e) {
-      if (e.key === 'Escape' && onEscape) {
+      if (e.key === 'Escape' && onEscapeRef.current) {
         e.stopPropagation()
-        onEscape()
+        onEscapeRef.current()
         return
       }
 
@@ -69,7 +85,7 @@ export default function useFocusTrap(active, onEscape) {
         previouslyFocused.focus()
       }
     }
-  }, [active, onEscape])
+  }, [active])
 
   return ref
 }
