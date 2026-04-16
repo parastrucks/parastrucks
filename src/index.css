@@ -38,6 +38,44 @@
   --t: .2s cubic-bezier(.25,.46,.45,.94);
 }
 
+/* ─── CANONICAL BREAKPOINTS ─────────────────────────────────── *
+ * Three breakpoints, three jobs. When adding a new @media query,
+ * pick one of these — do not invent new values.
+ *
+ *   --bp-sm:  560px   mobile → large-mobile/small-tablet
+ *                     Use when a single-column layout gets enough
+ *                     width to promote to 2-col or to unwrap text.
+ *                     Example: .search-item grid flip (line ~615).
+ *
+ *   --bp-md:  768px   tablet / small-laptop
+ *                     Use for content-density bumps (tighter gaps,
+ *                     larger tap targets relaxed). Typical "tablet"
+ *                     threshold.
+ *
+ *   --bp-lg:  960px   tablet → desktop shell
+ *                     Use when the desktop-only affordance returns:
+ *                     sticky side rails, multi-column forms, table
+ *                     shapes that replace mobile cards.
+ *                     Example: .q-layout grid 1fr → 1fr 340px (~833),
+ *                     .line-items-desktop ↔ .line-items-cards flip.
+ *
+ * CSS custom properties are not supported inside @media queries, so
+ * the literal 560 / 768 / 960 values are inlined at use sites. Keep
+ * them synchronized with this block. Phase 6a.P2 #5.
+ *
+ * Shell threshold (LEGACY): 900px is the current "show desktop
+ * sidebar / hide BottomNav" flip (AppLayout / Sidebar / BottomNav).
+ * It predates this system and will migrate to --bp-lg (960) in a
+ * dedicated sweep to avoid regressing the 900–960 zone under a
+ * cosmetic change. Do NOT use 900px for any new rule.
+ *
+ * Other legacy values in this file (500, 600, 680, 700) are ad-hoc
+ * and should be folded into --bp-sm or --bp-md when touched:
+ *   500, 560  → --bp-sm (560)
+ *   600, 680, 700, 768 → --bp-md (768)
+ *   900, 960  → --bp-lg (960)   (900 migrates only via shell sweep)
+ * ───────────────────────────────────────────────────────────── */
+
 html { scroll-behavior: smooth; }
 body {
   font-family: var(--font);
@@ -61,7 +99,10 @@ img { max-width: 100%; display: block; }
   flex: 1;
   min-width: 0;
   padding: 28px 28px 40px;
-  padding-bottom: calc(var(--bottom-nav-h) + 16px); /* room for bottom nav on mobile */
+  /* Clear the fixed bottom nav + iOS home-bar safe area. `env()` resolves to 0
+     on browsers/devices without a safe area, so this is harmless on Android
+     and desktop. Stays in lockstep with .bottom-nav's own height+padding. */
+  padding-bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom) + 16px);
 }
 
 @media (min-width: 900px) {
@@ -178,7 +219,12 @@ img { max-width: 100%; display: block; }
   display: flex;
   position: fixed;
   bottom: 0; left: 0; right: 0;
-  height: var(--bottom-nav-h);
+  /* Grow the nav into the iOS home-bar safe area. The tap targets stay at
+     var(--bottom-nav-h); the extra space is inert background so the icons
+     never sit under the home indicator. `env()` is 0 on devices without a
+     safe area, so the nav height is unchanged on Android/desktop. */
+  height: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom);
   background: var(--white);
   border-top: 1px solid var(--gray-200);
   box-shadow: 0 -2px 12px rgba(0,0,0,.06);
@@ -405,6 +451,24 @@ img { max-width: 100%; display: block; }
 .btn-sm { padding: 7px 14px; font-size: 12px; }
 .btn-full { width: 100%; }
 
+/* ─── TOUCH TARGETS (mobile) ────────────────────────────────
+ * WCAG 2.5.5 Level AAA / Apple HIG 44pt / Android 48dp minimums.
+ * Floor interactive elements at 44px BELOW the sidebar breakpoint
+ * (where the user is almost certainly on touch). Desktop density
+ * is intentionally preserved at ≥900px — mouse users don't need
+ * the extra height and forms would feel chunky if we raised them.
+ *
+ * Using `min-height` (not padding) keeps text baselines, icon
+ * alignment, and flex/grid layouts unchanged — we only raise the
+ * box's floor. .btn-sm is NOT exempted: on mobile it expands to
+ * 44px anyway because the small visual style (12px font, tight
+ * padding) stops earning its keep once you're dragging a thumb. */
+@media (max-width: 899px) {
+  .btn,
+  .form-input,
+  .form-select { min-height: 44px; }
+}
+
 /* ─── BADGES ────────────────────────────────────────────────── */
 .badge {
   display: inline-flex;
@@ -604,42 +668,86 @@ tbody tr:hover td { background: var(--gray-50); }
   border: 1.5px solid var(--blue);
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow-md);
-  max-height: 280px;
+  /* dvh (dynamic viewport height) avoids the iOS keyboard jump that happens with vh.
+     Capped at 280px so the dropdown never exceeds its desktop size. */
+  max-height: min(280px, 60dvh);
   overflow-y: auto;
   z-index: 50;
   animation: slideUp .12s ease;
 }
+/* Desktop (≥561px): two-row grid — name on row 1, meta on row 2, price spans both
+   rows on the right (vertically centered). Gives the name the full row-1 width
+   for ellipsis before it has to compete with the price. */
 .search-item {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
+  display: grid;
+  grid-template-areas:
+    "name  price"
+    "meta  price";
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 12px;
+  row-gap: 2px;
+  align-items: center;
   padding: 10px 14px;
+  min-height: 48px; /* 44px iOS / 48dp Android touch-target guideline */
   cursor: pointer;
   border-bottom: 1px solid var(--gray-100);
   transition: background var(--t);
 }
 .search-item:last-child { border-bottom: none; }
 .search-item:hover { background: var(--blue-lighter); }
-.search-item-info { flex: 1; min-width: 0; }
 .search-item-name {
+  grid-area: name;
   font-size: 13.5px;
   font-weight: 600;
   color: var(--gray-900);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
 }
 .search-item-meta {
+  grid-area: meta;
   font-size: 11.5px;
   color: var(--gray-400);
-  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 .search-item-price {
+  grid-area: price;
+  align-self: center;
   font-size: 13px;
   font-weight: 700;
   color: var(--blue);
   white-space: nowrap;
+}
+
+/* Mobile (<560px): stacked — name on line 1 spanning full width,
+   meta + price on line 2 with price pulled right. Keeps the "scan by price"
+   pattern intact even when names are long. */
+@media (max-width: 560px) {
+  .search-item {
+    grid-template-areas:
+      "name  name"
+      "meta  price";
+    align-items: baseline;
+    column-gap: 10px;
+    row-gap: 4px;
+    padding: 12px 14px;
+  }
+  .search-item-name {
+    /* Allow long names to wrap on mobile rather than truncate — there's
+       more vertical space available than horizontal. */
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    line-height: 1.3;
+  }
+  .search-item-price {
+    font-size: 13.5px;
+    font-weight: 600; /* Softer than desktop's 700 but still clearly the price */
+  }
 }
 
 /* Line items table */
@@ -726,6 +834,180 @@ tbody tr:hover td { background: var(--gray-50); }
   padding: 28px;
   color: var(--gray-400);
   font-size: 13px;
+}
+
+/* ─── CONVENTION: RESPONSIVE TABLES (table ↔ card) ─────────────────────
+ * When a data table has more than ~3 columns it stops being usable on a
+ * phone — `overflow-x: auto` is a bad UX (users must horizontal-scroll to
+ * see the column they care about). Our convention: render the same data
+ * as a table on wide screens and as a vertical list of cards on narrow.
+ * Two sibling elements, each toggled by a single media query.
+ *
+ * The pair:
+ *   <div className="{scope}-desktop-table"> ... <table>...</table> </div>
+ *   <div className="{scope}-mobile-cards">  ... <Card/> ...            </div>
+ *
+ * Pick `{scope}` per page (e.g. `line-items-`, `vc-`). Each scope picks
+ * its own breakpoint — the threshold is whatever viewport the *table*
+ * starts falling apart at. Do NOT try to unify every page on one number:
+ *
+ *   .line-items-desktop / .line-items-cards  flip at ≥960px
+ *     └ 960 matches where the sticky price rail returns, keeping table
+ *       and rail as a locked pair. Below that, cards fill the width.
+ *
+ *   .vc-desktop-table / .vc-mobile-cards     flip at ≥700px
+ *     └ Catalog has 4–6 columns but most are narrow (CBN, segment,
+ *       MRP) so the table survives further down than line items.
+ *
+ * When adding a third responsive table: mirror this pattern with a new
+ * {scope} and pick your own breakpoint based on column count × width.
+ * Don't invent alternative class names (.tbl-wide, .responsive-table,
+ * etc.) — stick with `{scope}-desktop-table` / `{scope}-mobile-cards`
+ * so grep discovers every instance from one search. */
+
+/* Line items — responsive shape switch (Phase 6a.P0 #2). */
+.line-items-desktop { display: none; }
+.line-items-cards   { display: flex; flex-direction: column; gap: 12px; }
+
+@media (min-width: 960px) {
+  .line-items-desktop { display: block; }
+  .line-items-cards   { display: none; }
+}
+
+.line-item-card {
+  position: relative;             /* anchor for the absolute .li-card-remove */
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-sm);
+  background: var(--white);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;               /* clips the total row's rounded bottom */
+  display: flex;
+  flex-direction: column;
+}
+
+.li-card-header {
+  /* Right padding reserves space for the absolutely-positioned × in the
+     top-right corner, so long names don't slide under it. */
+  padding: 14px 52px 0 14px;
+}
+.li-card-name { min-width: 0; }
+.li-card-name strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--gray-900);
+  line-height: 1.35;
+  word-wrap: break-word;
+}
+.li-card-cbn {
+  display: block;
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: var(--gray-400);
+}
+.li-card-remove {
+  /* DOM-last so it's the last tab-stop in the card (name → MRP → Qty → ×).
+     Absolutely positioned to the top-right visually — position independent
+     of focus order is the WCAG-preferred alternative to tabindex hacks. */
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  color: var(--gray-400);
+  font-size: 22px;
+  line-height: 1;
+  padding: 0;
+  border-radius: var(--radius-xs);
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color var(--t), background var(--t);
+}
+.li-card-remove:hover {
+  color: var(--red);
+  background: var(--red-light);
+}
+
+.li-card-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 14px;
+  padding: 12px 14px 14px;
+}
+.li-card-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.li-card-field > span {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color: var(--gray-500);
+}
+.li-card-field > strong {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--gray-800);
+}
+.li-card-field > strong.muted { color: var(--gray-500); }
+.li-card-field > input {
+  padding: 10px 12px;
+  font-size: 14px;
+  border: 1.5px solid var(--gray-200);
+  border-radius: var(--radius-xs);
+  background: var(--gray-50);
+  color: var(--gray-800);
+  text-align: right;
+  transition: border-color var(--t), background var(--t);
+  min-height: 44px;
+  width: 100%;
+  box-sizing: border-box;
+}
+.li-card-field > input:focus {
+  border-color: var(--blue);
+  background: var(--white);
+  outline: none;
+}
+.li-card-field > input:read-only {
+  background: var(--gray-100);
+  color: var(--gray-500);
+  cursor: default;
+}
+
+.li-card-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 12px 14px;
+  border-top: 1.5px solid var(--blue-light);
+  background: var(--blue-lighter);
+}
+.li-card-total > span {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color: var(--gray-600);
+}
+.li-card-total > strong {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--gray-900);
+  font-variant-numeric: tabular-nums;
+}
+
+.line-items-empty-card {
+  text-align: center;
+  padding: 28px 16px;
+  color: var(--gray-400);
+  font-size: 13px;
+  background: var(--gray-50);
+  border: 1px dashed var(--gray-200);
+  border-radius: var(--radius-sm);
 }
 
 /* Quotation summary box */

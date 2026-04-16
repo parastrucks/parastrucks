@@ -95,7 +95,10 @@ const BODY_BASE = {
 }
 const BODY_RATE = { CCS:25000, CCL:35000, CCG:45000, CCC:45000, CCV:45000, CCT:45000, CCN:45000, CCF:45000 }
 const MIN_OLL   = { CCS:8, CCL:7, CCG:9, CCC:8, CCV:10, CCT:12, CCN:13, CCF:15 }
-const AC_REF    = { TM43:{ref:8,cost:275000}, NAC:{ref:7,cost:400000}, DDAC:{ref:8,cost:275000} }
+// DDAC chassis ship with only a bracket (no compressor), so the AC retrofit BOM is identical
+// to an NAC chassis (compressor + cooling unit + install). Only TM43 (factory engine-mounted
+// compressor) gets the cheaper ₹2.75L / 8m reference. DDAC is priced as NAC.
+const AC_REF    = { TM43:{ref:8,cost:275000}, NAC:{ref:7,cost:400000}, DDAC:{ref:7,cost:400000} }
 const AC_PM     = 25000
 const WIDTH     = { CCS:'88', CCL:'88', CCG:'96', CCC:'96', CCV:'96', CCT:'96', CCN:'96' }
 const CFG_SPR   = { '3x3':6, '3x2':5, '2x2':4, '2x1':3 }

@@ -3,7 +3,11 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/favicon-32x32.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- viewport-fit=cover lets the page paint into iOS notch/home-bar areas
+         so `env(safe-area-inset-*)` resolves to real device insets instead
+         of 0. The CSS that reads those insets (.bottom-nav, .app-main) keeps
+         the content clear of the home indicator. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="robots" content="noindex, nofollow" />
     <title>Paras Trucks — Team Portal</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
