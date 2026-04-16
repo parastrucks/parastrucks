@@ -38,13 +38,16 @@ export default function QuotationLog() {
     async function load() {
       setLoading(true)
       try {
+        // Phase 6c.3: quotations.entity dropped; users.role dropped.
+        // Prepared-by column now shows designation via designations FK.
         let query = supabase
           .from('quotations')
           .select(`
             id, quotation_number, created_at, valid_until,
             customer_name, customer_address, customer_mobile, customer_gstin, hypothecation,
-            line_items, tcs_rate, tcs_amount, rto_tax, insurance, grand_total, entity,
-            users:created_by ( full_name, role )
+            line_items, tcs_rate, tcs_amount, rto_tax, insurance, grand_total,
+            entity_id, entities(code),
+            users:created_by ( full_name, designations(name) )
           `, { count: 'exact' })
           .order('created_at', { ascending: false })
           .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1)
@@ -85,10 +88,11 @@ export default function QuotationLog() {
     }
     try {
       setDownloadingId(q.id)
+      const entityCode = q.entities?.code
       const { data: entityData, error: eErr } = await supabase
         .from('entities')
         .select('full_name, address, gstin, bank_name, bank_account, bank_ifsc')
-        .eq('code', q.entity)
+        .eq('id', q.entity_id)
         .single()
       if (eErr) throw eErr
 
@@ -104,7 +108,7 @@ export default function QuotationLog() {
           hypothecation: q.hypothecation,
         },
         entity: entityData,
-        entityCode: q.entity,
+        entityCode,
         lineItems: q.line_items,
         tcsRate: q.tcs_rate,
         tcsAmount: q.tcs_amount,
@@ -184,9 +188,9 @@ export default function QuotationLog() {
                       <div style={{ fontWeight: 600, color: 'var(--gray-900)', fontSize: 13 }}>
                         {q.users?.full_name || '—'}
                       </div>
-                      {q.users?.role && (
-                        <div style={{ fontSize: 11.5, color: 'var(--gray-400)', textTransform: 'capitalize' }}>
-                          {q.users.role.replace('_', ' ')}
+                      {q.users?.designations?.name && (
+                        <div style={{ fontSize: 11.5, color: 'var(--gray-400)' }}>
+                          {q.users.designations.name}
                         </div>
                       )}
                     </td>

@@ -24,9 +24,15 @@ export default function MyQuotations() {
   useEffect(() => {
     async function load() {
       setLoading(true)
+      // Phase 6c.3: quotations.entity text dropped; read entity_code via FK join.
       const { data, error: err } = await supabase
         .from('quotations')
-        .select('id, quotation_number, created_at, valid_until, customer_name, customer_address, customer_mobile, customer_gstin, hypothecation, line_items, tcs_rate, tcs_amount, rto_tax, insurance, grand_total, entity')
+        .select(`
+          id, quotation_number, created_at, valid_until,
+          customer_name, customer_address, customer_mobile, customer_gstin, hypothecation,
+          line_items, tcs_rate, tcs_amount, rto_tax, insurance, grand_total,
+          entity_id, entities(code)
+        `)
         .eq('created_by', profile.id)
         .order('created_at', { ascending: false })
       if (err) {
@@ -43,10 +49,11 @@ export default function MyQuotations() {
   async function handleRedownload(q) {
     setDownloadingId(q.id)
     try {
+      const entityCode = q.entities?.code
       const { data: entityData, error: eErr } = await supabase
         .from('entities')
         .select('full_name, address, gstin, bank_name, bank_account, bank_ifsc')
-        .eq('code', q.entity)
+        .eq('id', q.entity_id)
         .single()
       if (eErr) throw eErr
 
@@ -62,7 +69,7 @@ export default function MyQuotations() {
           hypothecation: q.hypothecation,
         },
         entity: entityData,
-        entityCode: q.entity,
+        entityCode,
         lineItems: q.line_items,
         tcsRate: q.tcs_rate,
         tcsAmount: q.tcs_amount,

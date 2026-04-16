@@ -60,19 +60,35 @@ async function verify(
     auth: { persistSession: false, autoRefreshToken: false },
   })
 
+  // Phase 6c.3: derive the legacy role token from permission_level +
+  // departments.code. Admin → 'admin'; others → department code.
   const { data: prof } = await admin
     .from("users")
-    .select("id, role, is_active, full_name")
+    .select("id, permission_level, department_id, is_active, full_name, departments(code)")
     .eq("id", u.user.id)
-    .maybeSingle()
+    .maybeSingle() as unknown as {
+      data: {
+        id: string
+        permission_level: string | null
+        department_id: string | null
+        is_active: boolean
+        full_name: string
+        departments: { code: string } | null
+      } | null
+    }
 
   if (!prof) return { err: json({ error: "Profile not found" }, 403) }
   if (!prof.is_active) return { err: json({ error: "Account inactive" }, 403) }
-  if (!allowedRoles.includes(prof.role)) {
+
+  const token =
+    prof.permission_level === "admin" ? "admin"
+    : (prof.departments?.code ?? null)
+
+  if (!token || !allowedRoles.includes(token)) {
     return { err: json({ error: "Forbidden" }, 403) }
   }
 
-  return { caller: prof as CallerProfile, admin }
+  return { caller: { id: prof.id, role: token, is_active: prof.is_active, full_name: prof.full_name }, admin }
 }
 
 // Whitelisted tables the client is allowed to target.

@@ -28,7 +28,7 @@ const json = (b: unknown, status = 200) =>
 
 type CallerProfile = {
   id: string
-  role: string
+  role: string  // derived token: 'admin' | department.code | null
   is_active: boolean
 }
 
@@ -59,19 +59,35 @@ async function verify(
     auth: { persistSession: false, autoRefreshToken: false },
   })
 
+  // Phase 6c.3: derive the legacy role token from permission_level +
+  // departments.code. Admin → 'admin'; everyone else → department code.
+  // Mirrors the SQL-side current_user_role() exactly.
   const { data: prof } = await admin
     .from("users")
-    .select("id, role, is_active")
+    .select("id, permission_level, department_id, is_active, departments(code)")
     .eq("id", u.user.id)
-    .maybeSingle()
+    .maybeSingle() as unknown as {
+      data: {
+        id: string
+        permission_level: string | null
+        department_id: string | null
+        is_active: boolean
+        departments: { code: string } | null
+      } | null
+    }
 
   if (!prof) return { err: json({ error: "Profile not found" }, 403) }
   if (!prof.is_active) return { err: json({ error: "Account inactive" }, 403) }
-  if (!allowedRoles.includes(prof.role)) {
+
+  const token =
+    prof.permission_level === "admin" ? "admin"
+    : (prof.departments?.code ?? null)
+
+  if (!token || !allowedRoles.includes(token)) {
     return { err: json({ error: "Forbidden" }, 403) }
   }
 
-  return { caller: prof as CallerProfile, admin }
+  return { caller: { id: prof.id, role: token, is_active: prof.is_active }, admin }
 }
 
 Deno.serve(async (req: Request) => {
@@ -103,23 +119,31 @@ Deno.serve(async (req: Request) => {
   try {
     switch (action) {
       // ── Access rules ──────────────────────────────────────────
+      // Phase 6c.1: writes new 4-axis columns. Legacy text columns
+      // (brand/location/department/role) are intentionally NOT written —
+      // any rule created through this path after the cutover is 4-axis
+      // only. The 61 seed rules already follow this shape.
       case "createRule": {
         const p = payload as {
           route?: string
-          permission_level?: string | null
-          brand?: string | null
-          location?: string | null
-          department?: string | null
-          role?: string | null
+          permission_level?: string
+          entity_id?: string
+          department_id?: string
+          designation_id?: string | null
         }
-        if (!p.route) return json({ error: "route is required" }, 400)
+        if (!p.route)            return json({ error: "route is required" }, 400)
+        if (!p.permission_level) return json({ error: "permission_level is required" }, 400)
+        if (!["gm", "manager", "executive"].includes(p.permission_level)) {
+          return json({ error: "permission_level must be gm, manager, or executive (admin uses hard bypass, not a rule)" }, 400)
+        }
+        if (!p.entity_id)     return json({ error: "entity_id is required" }, 400)
+        if (!p.department_id) return json({ error: "department_id is required" }, 400)
         const { error } = await admin.from("access_rules").insert({
           route: p.route,
-          permission_level: p.permission_level ?? null,
-          brand: p.brand ?? null,
-          location: p.location ?? null,
-          department: p.department ?? null,
-          role: p.role ?? null,
+          permission_level: p.permission_level,
+          entity_id: p.entity_id,
+          department_id: p.department_id,
+          designation_id: p.designation_id ?? null,
         })
         if (error) return json({ error: error.message }, 400)
         return json({ ok: true })
@@ -133,22 +157,26 @@ Deno.serve(async (req: Request) => {
         return json({ ok: true })
       }
 
-      // ── User permissions ──────────────────────────────────────
-      case "updateUserPermissions": {
-        const { id, update } = payload as {
-          id?: string
-          update?: Record<string, unknown>
+      // ── Entity GM pointers (Phase 6c.1) ───────────────────────
+      // Set gm_service_user_id / gm_spares_user_id / gm_backoffice_user_id on
+      // an entity. The UI constrains the choices to users within that
+      // entity; server accepts null to clear.
+      case "updateEntityGMs": {
+        const { entity_id, gm_service_user_id, gm_spares_user_id, gm_backoffice_user_id } = payload as {
+          entity_id?: string
+          gm_service_user_id?: string | null
+          gm_spares_user_id?: string | null
+          gm_backoffice_user_id?: string | null
         }
-        if (!id || !update) return json({ error: "Missing id or update" }, 400)
-        const allowed = ["role", "brand", "location", "department", "vertical"]
+        if (!entity_id) return json({ error: "entity_id is required" }, 400)
         const clean: Record<string, unknown> = {}
-        for (const k of allowed) {
-          if (k in update) clean[k] = update[k] ?? null
-        }
+        if ("gm_service_user_id"    in payload) clean.gm_service_user_id    = gm_service_user_id    ?? null
+        if ("gm_spares_user_id"     in payload) clean.gm_spares_user_id     = gm_spares_user_id     ?? null
+        if ("gm_backoffice_user_id" in payload) clean.gm_backoffice_user_id = gm_backoffice_user_id ?? null
         if (Object.keys(clean).length === 0) {
-          return json({ error: "No valid fields" }, 400)
+          return json({ error: "No GM fields provided" }, 400)
         }
-        const { error } = await admin.from("users").update(clean).eq("id", id)
+        const { error } = await admin.from("entities").update(clean).eq("id", entity_id)
         if (error) return json({ error: error.message }, 400)
         return json({ ok: true })
       }
@@ -177,28 +205,9 @@ Deno.serve(async (req: Request) => {
         return json({ ok: true })
       }
 
-      case "addRole": {
-        const { name, label } = payload as { name?: string; label?: string }
-        if (!name || !label) return json({ error: "name and label required" }, 400)
-        const { error } = await admin.from("roles").insert({ name, label })
-        if (error) return json({ error: error.message }, 400)
-        return json({ ok: true })
-      }
-      case "toggleRole": {
-        const { name, is_active } = payload as {
-          name?: string
-          is_active?: boolean
-        }
-        if (!name || typeof is_active !== "boolean") {
-          return json({ error: "name and is_active required" }, 400)
-        }
-        const { error } = await admin
-          .from("roles")
-          .update({ is_active })
-          .eq("name", name)
-        if (error) return json({ error: error.message }, 400)
-        return json({ ok: true })
-      }
+      // Phase 6c.3: addRole/toggleRole removed. The `roles` table encoded
+       // the old "vertical" concept, now replaced by public.sales_verticals
+      // which is brand-scoped and managed via data migration, not an EF action.
 
       case "addLocation": {
         const { name, state, entity } = payload as {

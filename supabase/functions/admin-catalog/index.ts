@@ -28,7 +28,7 @@ const json = (b: unknown, status = 200) =>
 
 type CallerProfile = {
   id: string
-  role: string
+  role: string  // derived token: 'admin' | department.code | null
   is_active: boolean
 }
 
@@ -59,19 +59,37 @@ async function verify(
     auth: { persistSession: false, autoRefreshToken: false },
   })
 
+  // Phase 6c.3: derive the legacy role token from permission_level +
+  // departments.code. Admin → 'admin'; everyone else → department code
+  // ('sales','hr','back_office','service','spares','accounts','pdi').
+  // Mirrors the SQL-side current_user_role() function exactly so an EF
+  // check accepts the same callers a matching RLS policy would.
   const { data: prof } = await admin
     .from("users")
-    .select("id, role, is_active")
+    .select("id, permission_level, department_id, is_active, departments(code)")
     .eq("id", u.user.id)
-    .maybeSingle()
+    .maybeSingle() as unknown as {
+      data: {
+        id: string
+        permission_level: string | null
+        department_id: string | null
+        is_active: boolean
+        departments: { code: string } | null
+      } | null
+    }
 
   if (!prof) return { err: json({ error: "Profile not found" }, 403) }
   if (!prof.is_active) return { err: json({ error: "Account inactive" }, 403) }
-  if (!allowedRoles.includes(prof.role)) {
+
+  const token =
+    prof.permission_level === "admin" ? "admin"
+    : (prof.departments?.code ?? null)
+
+  if (!token || !allowedRoles.includes(token)) {
     return { err: json({ error: "Forbidden" }, 403) }
   }
 
-  return { caller: prof as CallerProfile, admin }
+  return { caller: { id: prof.id, role: token, is_active: prof.is_active }, admin }
 }
 
 Deno.serve(async (req: Request) => {
