@@ -3,58 +3,71 @@ import { supabase, REMEMBER_KEY } from '../lib/supabase'
 import { callEdgePublic } from '../lib/api'
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ⚠ TERMINOLOGY — DB columns are inverted from how the product owner speaks.
-// The canonical glossary lives in memory/terminology.md. In short:
+// Phase 6c.1 cutover — route gate uses the new 4-axis schema.
 //
-//   Product-owner term   │ DB column (users)       │ DB column (access_rules)
-//   ─────────────────────┼─────────────────────────┼──────────────────────────
-//   "Permission Level"   │ users.role              │ access_rules.permission_level
-//                        │   (admin/hr/back_office │
-//                        │    /sales)              │
-//   "Role"               │ users.vertical          │ access_rules.role
-//                        │   (bus/tipper/icv/…)    │
-//   "Department"         │ users.department        │ access_rules.department
-//   "Brand"              │ users.brand             │ access_rules.brand
-//   "Location"           │ users.location          │ access_rules.location
+// Axes:   permission_level × entity_id × department_id × designation_id
+// Values: permission_level ∈ {admin, gm, manager, executive}
+//         designation_id   NULL on a rule = "any designation within this dept"
 //
-// So when you see `rule.permission_level === profile?.role` below, it is
-// intentional: `access_rules.permission_level` matches against `users.role`.
-// Phase 6b fixes this at the schema layer (rename users.role → permission_level
-// and users.vertical → role). Until then, every UI label must translate.
+// Legacy columns on both tables (users.role, users.vertical, users.brand,
+// users.location, users.department, access_rules.brand/location/department/role)
+// are still present in the DB but ruleMatches no longer reads them. They're
+// dead after the Phase 6c.1 seed migration populated the new axes on every row
+// and will be dropped in Phase 6c.3 after the verification window.
+//
+// A handful of UI callers (Sidebar entity badge, BottomNav tabs by profile.role,
+// Profile/Dashboard label lookups, Catalog admin-mode check, Quotation
+// canEditPrice) still read the legacy `profile.role` / `profile.vertical` /
+// `profile.entity` text columns. Those migrate to the new columns in the
+// subsequent 6c.1 surface-by-surface PRs (Employees rebuild, Catalog, etc.).
+// During the interim every such caller still works for the sole real user
+// (admin) — non-admin users don't exist until HR-Manager onboarding lands.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const AuthContext = createContext(null)
 
 // Checks whether a user profile satisfies an access rule row.
-// permission_level → profile.role (admin/hr/sales/back_office)
-// role             → profile.vertical (bus/tipper/icv/long_haul/ce)
+// Exact equality on the 3 NOT-NULL-from-seed axes; designation_id is
+// nullable-on-rule (NULL = "any designation"). Admin bypass lives in
+// canAccess, not here — ruleMatches never sees an admin profile in practice.
 function ruleMatches(rule, profile) {
+  if (!profile) return false
   return (
-    (rule.permission_level === null || rule.permission_level === profile?.role) &&
-    (rule.brand            === null || rule.brand            === profile?.brand) &&
-    (rule.location         === null || rule.location         === profile?.location) &&
-    (rule.department       === null || rule.department       === profile?.department) &&
-    (rule.role             === null || rule.role             === profile?.vertical)
+    rule.permission_level === profile.permission_level &&
+    rule.entity_id        === profile.entity_id &&
+    rule.department_id    === profile.department_id &&
+    (rule.designation_id === null || rule.designation_id === profile.designation_id)
   )
 }
 
 // Shallow-equal check for user profile objects. Compares the fields that
-// AuthContext consumers actually read (role, brand, location, department,
-// vertical, is_active, full_name). Prevents re-renders when loadUserData
+// AuthContext consumers actually read. Prevents re-renders when loadUserData
 // fetches the same profile row a second time.
+//
+// Covers BOTH column generations during the 6c.1 cutover window:
+//   - new axes (permission_level, entity_id, department_id, designation_id)
+//     drive ruleMatches and the forthcoming scoped RLS.
+//   - legacy text columns (role, vertical, brand, location, department, entity)
+//     are still read by Sidebar/BottomNav/Profile/Catalog/Quotation until their
+//     own cutover PRs land. Checked here to keep dedup honest across the window.
 function profileEqual(a, b) {
   if (a === b) return true
   if (!a || !b) return false
   return (
-    a.id         === b.id         &&
-    a.role       === b.role       &&
-    a.brand      === b.brand      &&
-    a.location   === b.location   &&
-    a.department === b.department &&
-    a.vertical   === b.vertical   &&
-    a.is_active  === b.is_active  &&
-    a.full_name  === b.full_name  &&
-    a.email      === b.email
+    a.id               === b.id               &&
+    a.permission_level === b.permission_level &&
+    a.entity_id        === b.entity_id        &&
+    a.department_id    === b.department_id    &&
+    a.designation_id   === b.designation_id   &&
+    a.role             === b.role             &&
+    a.vertical         === b.vertical         &&
+    a.brand            === b.brand            &&
+    a.location         === b.location         &&
+    a.department       === b.department       &&
+    a.entity           === b.entity           &&
+    a.is_active        === b.is_active        &&
+    a.full_name        === b.full_name        &&
+    a.email            === b.email
   )
 }
 
@@ -62,8 +75,9 @@ function profileEqual(a, b) {
 // to avoid replacing `accessRules` state with a byte-identical array, which
 // would otherwise rebuild the AuthContext value on every tab focus and
 // cascade re-renders through every page that subscribes to useAuth().
-// Compares the 6 fields that ruleMatches() reads — if none of them changed,
-// the effective rule is the same and we can skip the setState entirely.
+// Compares only the fields that ruleMatches() actually reads — route + the
+// 4 axes. Legacy columns on the rule row are ignored; they're dead after the
+// 6c.1 seed and will disappear in 6c.3.
 function accessRulesEqual(a, b) {
   if (a === b) return true
   if (!a || !b || a.length !== b.length) return false
@@ -74,10 +88,9 @@ function accessRulesEqual(a, b) {
     if (
       ra.route            !== rb.route            ||
       ra.permission_level !== rb.permission_level ||
-      ra.brand            !== rb.brand            ||
-      ra.location         !== rb.location         ||
-      ra.department       !== rb.department       ||
-      ra.role             !== rb.role
+      ra.entity_id        !== rb.entity_id        ||
+      ra.department_id    !== rb.department_id    ||
+      ra.designation_id   !== rb.designation_id
     ) return false
   }
   return true
@@ -344,12 +357,27 @@ export function AuthProvider({ children }) {
     setPhase('unauthenticated')
   }
 
+  // Route gate:
+  //   - No profile yet → deny (loading screen will be showing anyway)
+  //   - Admin → bypass every rule (including /access-rules itself — that's the
+  //     intentional escape hatch so a rule-editor bug can never lock the admin
+  //     out of the rule editor)
+  //   - Non-admin /access-rules → hard-deny regardless of seeded rules
+  //   - Otherwise → at least one access_rules row must match on all 4 axes
   function canAccess(route) {
-    if (route === '/access-rules') return profile?.role === 'admin'
     if (!profile) return false
+    if (profile.permission_level === 'admin') return true
+    if (route === '/access-rules') return false
     return accessRules.some(rule => rule.route === route && ruleMatches(rule, profile))
   }
 
+  // Role-identity flags. `isAdmin` follows the new column. The HR/BO/Sales
+  // flags still read the legacy text `profile.role` because their only
+  // consumers (Sidebar badge, BottomNav ROLE_TABS, Catalog admin-mode check,
+  // Quotation canEditPrice, UploadPanel gate) have not yet been cut over to
+  // the new department-id model. Those PRs migrate these flags off .role as
+  // each surface is rebuilt; until then the only real user (admin) still
+  // satisfies isAdmin via the new column and nothing else is broken.
   const value = {
     session,
     profile,
@@ -359,7 +387,7 @@ export function AuthProvider({ children }) {
     loading: phase === 'initializing' || phase === 'loading-data',
     signIn,
     signOut,
-    isAdmin:      profile?.role === 'admin',
+    isAdmin:      profile?.permission_level === 'admin',
     isHR:         profile?.role === 'hr',
     isBackOffice: profile?.role === 'back_office',
     isSales:      profile?.role === 'sales',

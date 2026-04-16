@@ -18,9 +18,11 @@ export default function ProtectedRoute({ children, allowedRoles, authOnly }) {
   // Layout-level guard — only checks authentication, not route access
   if (authOnly) return children
 
-  // Hard-coded override (used for /access-rules as a safety net)
+  // Hard-coded override (used for /access-rules as a safety net). Matches
+  // against the new permission_level column post-Phase-6c.1 cutover; admin
+  // still satisfies this but the check is now aligned with AuthContext.canAccess.
   if (allowedRoles) {
-    if (profile && !allowedRoles.includes(profile.role)) return <Navigate to="/" replace />
+    if (profile && !allowedRoles.includes(profile.permission_level)) return <Navigate to="/" replace />
     return children
   }
 
