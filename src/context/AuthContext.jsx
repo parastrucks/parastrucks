@@ -2,6 +2,27 @@ import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { supabase, REMEMBER_KEY } from '../lib/supabase'
 import { callEdgePublic } from '../lib/api'
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ⚠ TERMINOLOGY — DB columns are inverted from how the product owner speaks.
+// The canonical glossary lives in memory/terminology.md. In short:
+//
+//   Product-owner term   │ DB column (users)       │ DB column (access_rules)
+//   ─────────────────────┼─────────────────────────┼──────────────────────────
+//   "Permission Level"   │ users.role              │ access_rules.permission_level
+//                        │   (admin/hr/back_office │
+//                        │    /sales)              │
+//   "Role"               │ users.vertical          │ access_rules.role
+//                        │   (bus/tipper/icv/…)    │
+//   "Department"         │ users.department        │ access_rules.department
+//   "Brand"              │ users.brand             │ access_rules.brand
+//   "Location"           │ users.location          │ access_rules.location
+//
+// So when you see `rule.permission_level === profile?.role` below, it is
+// intentional: `access_rules.permission_level` matches against `users.role`.
+// Phase 6b fixes this at the schema layer (rename users.role → permission_level
+// and users.vertical → role). Until then, every UI label must translate.
+// ─────────────────────────────────────────────────────────────────────────────
+
 const AuthContext = createContext(null)
 
 // Checks whether a user profile satisfies an access rule row.

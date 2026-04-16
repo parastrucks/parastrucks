@@ -31,11 +31,13 @@ export default function Profile() {
   const fields = [
     { label: 'Full Name',    value: profile.full_name },
     { label: 'Email',        value: profile.email },
-    { label: 'Role',         value: ROLE_LABEL[profile.role] || profile.role },
+    // Per memory/terminology.md: UI "Permission Level" binds DB users.role;
+    // UI "Role" binds DB users.vertical. The labels below use product-owner terms.
+    { label: 'Permission Level', value: ROLE_LABEL[profile.role] || profile.role },
     { label: 'Entity',       value: profile.entity },
     { label: 'Location',     value: profile.location },
     { label: 'Department',   value: profile.department },
-    { label: 'Vertical',     value: profile.vertical },
+    { label: 'Role',         value: profile.vertical },
     { label: 'Designation',  value: profile.designation },
   ].filter(f => f.value)
 

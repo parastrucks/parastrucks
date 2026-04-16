@@ -483,10 +483,8 @@ export default function Quotation() {
                         className="search-item"
                         onMouseDown={() => addVehicle(v)}
                       >
-                        <div className="search-item-info">
-                          <div className="search-item-name">{v.sub_category || v.description}</div>
-                          <div className="search-item-meta">{v.cbn} · {v.tyres}</div>
-                        </div>
+                        <div className="search-item-name">{v.sub_category || v.description}</div>
+                        <div className="search-item-meta">{v.cbn} · {v.tyres}</div>
                         <div className="search-item-price">{fmtINR(v.mrp_incl_gst)}</div>
                       </div>
                     ))}
@@ -494,8 +492,8 @@ export default function Quotation() {
                 )}
               </div>
 
-              {/* Line items table */}
-              <div className="table-wrap">
+              {/* Line items — table at ≥960px, cards below that (Phase 6a.P0 #2). */}
+              <div className="table-wrap line-items-desktop">
                 <table className="line-items-table">
                   <thead>
                     <tr>
@@ -607,6 +605,122 @@ export default function Quotation() {
                   </tbody>
                 </table>
               </div>
+
+              {/* Mobile/tablet cards (<960px). Same data, different shape.
+                  Uses <section> with aria-label so screen readers announce the
+                  region (a plain <div> + aria-label is inert). */}
+              <section className="line-items-cards" aria-label="Line items">
+                {lineItems.length === 0 ? (
+                  <div className="line-items-empty-card">
+                    Search and add vehicles above
+                  </div>
+                ) : (
+                  lineItems.map((item, idx) => {
+                    const isEdited =
+                      item.original_description != null &&
+                      item.description !== item.original_description
+                    return (
+                      /* Remove button is the LAST DOM child so tab order flows
+                         textarea → MRP → Qty → × (matches the logical "review,
+                         then decide to delete" pattern). CSS pins it visually
+                         to the top-right corner via position:absolute. */
+                      <div key={`card-${item.cbn}-${idx}`} className="line-item-card">
+                        <div className="li-card-header">
+                          <div className="li-card-name">
+                            {canEditDescription ? (
+                              <textarea
+                                className="form-input"
+                                value={item.description || ''}
+                                rows={2}
+                                placeholder="Edit description for this quotation only…"
+                                onChange={e => updateItem(idx, 'description', e.target.value)}
+                                onInput={e => {
+                                  e.currentTarget.style.height = 'auto'
+                                  e.currentTarget.style.height = e.currentTarget.scrollHeight + 'px'
+                                }}
+                                style={{
+                                  width: '100%',
+                                  minHeight: 44,
+                                  resize: 'vertical',
+                                  fontWeight: 600,
+                                  fontSize: 14,
+                                  lineHeight: 1.35,
+                                  padding: '6px 8px',
+                                }}
+                              />
+                            ) : (
+                              <strong>{item.description}</strong>
+                            )}
+                            <span className="li-card-cbn">
+                              {item.cbn}{item.tyres ? ` · ${item.tyres}` : ''}
+                            </span>
+                            {isEdited && (
+                              <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                <span className="badge badge-amber">edited</span>
+                                <button
+                                  type="button"
+                                  className="btn btn-sm"
+                                  onClick={() => resetDescription(idx)}
+                                  title="Revert to the current catalog description"
+                                >
+                                  Reset to catalog
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="li-card-grid">
+                          <label className="li-card-field">
+                            <span>MRP (incl. GST)</span>
+                            <input
+                              type="number"
+                              inputMode="numeric"
+                              value={item.mrp}
+                              readOnly={!canEditPrice}
+                              onChange={e => canEditPrice && updateItem(idx, 'mrp', e.target.value)}
+                            />
+                          </label>
+                          <label className="li-card-field">
+                            <span>Qty</span>
+                            <input
+                              type="number"
+                              inputMode="numeric"
+                              min={1}
+                              max={99}
+                              value={item.qty}
+                              onChange={e => updateItem(idx, 'qty', e.target.value)}
+                            />
+                          </label>
+                          <div className="li-card-field">
+                            <span>Basic Amt</span>
+                            <strong>{fmtINR(item.basic_amt)}</strong>
+                          </div>
+                          <div className="li-card-field">
+                            <span>GST 18%</span>
+                            <strong className="muted">{fmtINR(item.gst_amt)}</strong>
+                          </div>
+                        </div>
+
+                        <div className="li-card-total">
+                          <span>Total</span>
+                          <strong>{fmtINR(item.total_cost)}</strong>
+                        </div>
+
+                        <button
+                          type="button"
+                          className="remove-btn li-card-remove"
+                          onClick={() => removeItem(idx)}
+                          title="Remove"
+                          aria-label="Remove line item"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    )
+                  })
+                )}
+              </section>
 
               {!canEditPrice && (
                 <p style={{ fontSize: 12, color: 'var(--gray-400)', marginTop: 8 }}>

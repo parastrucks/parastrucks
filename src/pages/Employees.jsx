@@ -349,10 +349,10 @@ export default function Employees() {
               <tr>
                 <th>Name</th>
                 <th>Email</th>
-                <th>Role</th>
+                <th>Permission Level</th>
                 <th>Entity</th>
                 <th>Location</th>
-                <th>Dept / Vertical</th>
+                <th>Dept / Role</th>
                 <th>Status</th>
                 <th>Actions</th>
               </tr>
