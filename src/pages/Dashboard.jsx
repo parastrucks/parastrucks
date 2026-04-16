@@ -12,8 +12,14 @@ const ALL_TOOLS = [
   { to: '/tiv-forecast',  icon: '📈', title: 'TIV Forecast',        desc: 'Industry volume forecasting and segment analysis' },
 ]
 
-const PERMISSION_LABEL = {
+// Phase 6c.1: prefer new permission_level values; fall back to legacy role
+// for any pre-cutover user still in the table.
+const PERM_LABEL = {
   admin:       'Admin',
+  gm:          'GM',
+  manager:     'Manager',
+  executive:   'Executive',
+  // Legacy fallbacks — dropped in 6c.3 when the old column goes.
   hr:          'HR',
   back_office: 'Back Office',
   sales:       'Sales',
@@ -31,15 +37,15 @@ export default function Dashboard() {
   if (!profile) return null
 
   const tools = ALL_TOOLS.filter(t => canAccess(t.to))
+  const tierLabel = PERM_LABEL[profile.permission_level] || PERM_LABEL[profile.role] || '—'
 
   return (
     <div>
       <div className="page-header">
         <h1>{greeting()}, {profile?.full_name?.split(' ')?.[0] || 'there'} 👋</h1>
         <p>
-          {PERMISSION_LABEL[profile.role]}
+          {tierLabel}
           {profile.department ? ` · ${profile.department}` : ''}
-          {profile.brand      ? ` · ${profile.brand.toUpperCase()}` : ''}
           {profile.location   ? ` · ${profile.location}` : ''}
         </p>
       </div>

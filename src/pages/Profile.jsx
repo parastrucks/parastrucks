@@ -1,10 +1,12 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import { supabase } from '../lib/supabase'
 import useAsyncAction from '../hooks/useAsyncAction'
 
-const ROLE_LABEL = { admin: 'Admin', hr: 'HR', back_office: 'Back Office', sales: 'Sales' }
+// Phase 6c.1: permission tiers from the new column. `admin` only appears
+// here because an admin viewing their own profile should see it correctly.
+const PERM_LABEL = { admin: 'Admin', gm: 'GM', manager: 'Manager', executive: 'Executive' }
 
 export default function Profile() {
   const { profile, signOut } = useAuth()
@@ -13,6 +15,39 @@ export default function Profile() {
   const [changingPw, setChangingPw] = useState(false)
   const [newPw, setNewPw] = useState('')
   const [confirmPw, setConfirmPw] = useState('')
+
+  // Resolve UUID references to human labels via ref-table lookups.
+  // One batched query; profile changes rarely, so effect runs on id only.
+  const [deets, setDeets] = useState({
+    entity_code: null, dept_name: null, designation_name: null,
+    brand_names: [], vertical_names: [], outlet_label: null, subdept_name: null,
+  })
+  useEffect(() => {
+    let cancelled = false
+    if (!profile) return
+    ;(async () => {
+      const [entRes, depRes, desRes, outRes, subRes, ubRes, uvRes] = await Promise.all([
+        profile.entity_id      ? supabase.from('entities')    .select('code')            .eq('id', profile.entity_id)      .maybeSingle() : Promise.resolve({ data: null }),
+        profile.department_id  ? supabase.from('departments') .select('name')            .eq('id', profile.department_id)  .maybeSingle() : Promise.resolve({ data: null }),
+        profile.designation_id ? supabase.from('designations').select('name')            .eq('id', profile.designation_id) .maybeSingle() : Promise.resolve({ data: null }),
+        profile.primary_outlet_id ? supabase.from('outlets')   .select('city,facility_type').eq('id', profile.primary_outlet_id).maybeSingle() : Promise.resolve({ data: null }),
+        profile.subdept_id        ? supabase.from('back_office_subdepts').select('name') .eq('id', profile.subdept_id)      .maybeSingle() : Promise.resolve({ data: null }),
+        supabase.from('user_brands')         .select('brands(name)').eq('user_id', profile.id),
+        supabase.from('user_sales_verticals').select('sales_verticals(name)').eq('user_id', profile.id),
+      ])
+      if (cancelled) return
+      setDeets({
+        entity_code:      entRes.data?.code ?? null,
+        dept_name:        depRes.data?.name ?? null,
+        designation_name: desRes.data?.name ?? null,
+        outlet_label:     outRes.data ? `${outRes.data.city} (${outRes.data.facility_type})` : null,
+        subdept_name:     subRes.data?.name ?? null,
+        brand_names:      (ubRes.data || []).map(r => r.brands?.name).filter(Boolean),
+        vertical_names:   (uvRes.data || []).map(r => r.sales_verticals?.name).filter(Boolean),
+      })
+    })()
+    return () => { cancelled = true }
+  }, [profile?.id, profile?.entity_id, profile?.department_id, profile?.designation_id, profile?.primary_outlet_id, profile?.subdept_id])
 
   async function handleChangePw(e) {
     e.preventDefault()
@@ -28,17 +63,20 @@ export default function Profile() {
 
   if (!profile) return null
 
+  // Build the displayed field list from the new 4-axis columns first, falling
+  // back to legacy text for admins or any pre-6c.1 user whose FKs are NULL.
   const fields = [
-    { label: 'Full Name',    value: profile.full_name },
-    { label: 'Email',        value: profile.email },
-    // Per memory/terminology.md: UI "Permission Level" binds DB users.role;
-    // UI "Role" binds DB users.vertical. The labels below use product-owner terms.
-    { label: 'Permission Level', value: ROLE_LABEL[profile.role] || profile.role },
-    { label: 'Entity',       value: profile.entity },
-    { label: 'Location',     value: profile.location },
-    { label: 'Department',   value: profile.department },
-    { label: 'Role',         value: profile.vertical },
-    { label: 'Designation',  value: profile.designation },
+    { label: 'Full Name',        value: profile.full_name },
+    { label: 'Email',            value: profile.email },
+    { label: 'Permission Level', value: PERM_LABEL[profile.permission_level] || PERM_LABEL[profile.role] || profile.permission_level || profile.role },
+    { label: 'Entity',           value: deets.entity_code || profile.entity },
+    { label: 'Department',       value: deets.dept_name || profile.department },
+    { label: 'Designation',      value: deets.designation_name || profile.designation },
+    { label: 'Primary Outlet',   value: deets.outlet_label },
+    { label: 'Sub-department',   value: deets.subdept_name },
+    { label: 'Brands',           value: deets.brand_names.length ? deets.brand_names.join(', ') : null },
+    { label: 'Sales verticals',  value: deets.vertical_names.length ? deets.vertical_names.join(', ') : null },
+    { label: 'Location',         value: profile.location },
   ].filter(f => f.value)
 
   return (
@@ -60,7 +98,7 @@ export default function Profile() {
           </div>
           <div>
             <div style={{ fontWeight: 700, fontSize: 17, color: 'var(--gray-900)' }}>{profile.full_name}</div>
-            <span className="badge badge-blue" style={{ marginTop: 4 }}>{ROLE_LABEL[profile.role]}</span>
+            <span className="badge badge-blue" style={{ marginTop: 4 }}>{PERM_LABEL[profile.permission_level] || PERM_LABEL[profile.role] || '—'}</span>
           </div>
         </div>
 

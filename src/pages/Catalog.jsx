@@ -13,14 +13,12 @@ const SEGMENTS = [
   'Bus – ICV', 'Bus – MCV', 'RMC / Boom Pump',
 ]
 
-// Maps users.vertical → allowed segments (null = all)
-const VERTICAL_SEGMENTS = {
-  bus:       ['Bus – ICV', 'Bus – MCV'],
-  tipper:    ['Tipper', 'RMC / Boom Pump'],
-  icv:       ['ICV Truck'],
-  long_haul: ['MBP Truck'],
-  ce:        [],
-}
+// Phase 6c.1: the old VERTICAL_SEGMENTS map is gone. vehicle_catalog.brand_id
+// and vehicle_catalog.sales_vertical_id (populated by the Stage 1 migration)
+// are now the source of truth; SalesCatalog queries them directly against
+// user_brands + user_sales_verticals. Rows with sales_vertical_id IS NULL
+// (e.g. HDH Excavators, anything whose vertical isn't structurally scoped)
+// remain visible to all brand-assigned users, matching the plan 6b.1.2 RLS.
 
 const PER_PAGE = 50
 
@@ -34,10 +32,15 @@ function fmtMRP(n) {
    MAIN EXPORT — routes to admin or sales view
 ══════════════════════════════════════════════════════════════ */
 export default function Catalog() {
-  const { profile } = useAuth()
+  const { profile, isAdmin } = useAuth()
   if (!profile) return null
-  const isAdmin = profile.role === 'admin' || profile.role === 'back_office'
-  return isAdmin ? <AdminCatalog profile={profile} /> : <SalesCatalog profile={profile} />
+  // Admin + Back Office get the full CRUD view. The admin-users EF (v7)
+  // writes legacy `role` alongside the new axes for every user it creates,
+  // so checking role === 'back_office' remains correct through 6c.1. When
+  // Phase 6c.3 drops legacy role, this flips to a lookup against
+  // profile.department_id → departments.code === 'back_office'.
+  const canManage = isAdmin || profile.role === 'back_office'
+  return canManage ? <AdminCatalog profile={profile} /> : <SalesCatalog profile={profile} />
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -1303,46 +1306,69 @@ function SalesCatalog({ profile }) {
   const [search,         setSearch]         = useState('')
   const [filterSeg,      setFilterSeg]      = useState('')
   const [selectedSubSeg, setSelectedSubSeg] = useState(null)
+  // Phase 6c.1 scope derived from the user's join tables instead of the
+  // legacy profile.brand + VERTICAL_SEGMENTS map. Loaded once per mount;
+  // RLS on vehicle_catalog will (once landed) enforce the same constraints
+  // server-side regardless of what the client asks for.
+  const [scope,          setScope]          = useState(null) // {brandIds, verticalIds} or null while loading
 
-  // null = all segments (GM / no vertical set), [] = none (ce brand with no vehicles)
-  const allowedSegments = useMemo(() => {
-    if (!profile.vertical) return null
-    return VERTICAL_SEGMENTS[profile.vertical] || []
-  }, [profile.vertical])
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      const [brandRes, vertRes] = await Promise.all([
+        supabase.from('user_brands').select('brand_id').eq('user_id', profile.id),
+        supabase.from('user_sales_verticals').select('vertical_id').eq('user_id', profile.id),
+      ])
+      if (cancelled) return
+      setScope({
+        brandIds:    (brandRes.data || []).map(r => r.brand_id),
+        verticalIds: (vertRes.data  || []).map(r => r.vertical_id),
+      })
+    })()
+    return () => { cancelled = true }
+  }, [profile.id])
 
   const fetchData = useCallback(async () => {
+    if (!scope) return
     setLoading(true)
     try {
-      // Return nothing if vertical is assigned but maps to zero segments
-      if (allowedSegments !== null && allowedSegments.length === 0) {
+      // Sales user with no brand assignment sees nothing. Callers should
+      // never reach this state in practice — onboarding requires ≥ 1 brand.
+      if (scope.brandIds.length === 0) {
         setVehicles([])
         setSubSegs([])
         setLoading(false)
         return
       }
 
+      // Vehicles: brand ∈ user_brands AND (sales_vertical_id IS NULL OR vertical ∈ user_sales_verticals)
+      // The .or() expresses the NULL-or-match half using PostgREST's filter syntax.
       let vQuery = supabase
         .from('vehicle_catalog')
-        .select('id, cbn, description, brand, segment, sub_category, mrp_incl_gst, tyres')
+        .select('id, cbn, description, brand, segment, sub_category, mrp_incl_gst, tyres, brand_id, sales_vertical_id')
         .eq('is_active', true)
+        .in('brand_id', scope.brandIds)
         .order('sub_category')
         .order('mrp_incl_gst')
 
-      if (profile.brand) {
-        vQuery = vQuery.eq('brand', profile.brand)
-      }
-      if (allowedSegments !== null) {
-        vQuery = vQuery.in('segment', allowedSegments)
+      if (scope.verticalIds.length > 0) {
+        vQuery = vQuery.or(
+          `sales_vertical_id.is.null,sales_vertical_id.in.(${scope.verticalIds.join(',')})`,
+        )
+      } else {
+        // No verticals assigned → only show catalog rows with no vertical constraint.
+        vQuery = vQuery.is('sales_vertical_id', null)
       }
 
-      let ssQuery = supabase
-        .from('sub_segments')
-        .select('*')
-        .eq('is_active', true)
-
-      if (profile.brand) {
-        ssQuery = ssQuery.eq('brand', profile.brand)
-      }
+      // Sub-segments: brand-scoped by the legacy `brand` text until a brand_id
+      // column is added to sub_segments. Resolve brand codes from user_brands
+      // via the brands table.
+      const { data: brandRows } = await supabase
+        .from('brands').select('code').in('id', scope.brandIds)
+      const brandCodes = (brandRows || []).map(r => r.code)
+      const ssQuery = brandCodes.length > 0
+        ? supabase.from('sub_segments').select('*').eq('is_active', true).in('brand', brandCodes)
+        : supabase.from('sub_segments').select('*').eq('is_active', true)
 
       const [{ data: vData }, { data: ssData }] = await Promise.all([vQuery, ssQuery])
       setVehicles(vData || [])
@@ -1352,7 +1378,7 @@ function SalesCatalog({ profile }) {
     } finally {
       setLoading(false)
     }
-  }, [allowedSegments, profile.brand])
+  }, [scope])
 
   useEffect(() => {
     let cancelled = false
@@ -1401,9 +1427,22 @@ function SalesCatalog({ profile }) {
     return list
   }, [cards, filterSeg, search])
 
-  const verticalLabel = profile.vertical
-    ? profile.vertical.replace('_', ' ')
-    : null
+  // Show the current user's assigned verticals as subtitle context.
+  // Lookup happens once when scope resolves — no async render.
+  const [verticalLabels, setVerticalLabels] = useState([])
+  useEffect(() => {
+    let cancelled = false
+    if (!scope || scope.verticalIds.length === 0) { setVerticalLabels([]); return }
+    supabase
+      .from('sales_verticals')
+      .select('name')
+      .in('id', scope.verticalIds)
+      .then(({ data }) => {
+        if (cancelled) return
+        setVerticalLabels((data || []).map(r => r.name))
+      })
+    return () => { cancelled = true }
+  }, [scope])
 
   return (
     <div>
@@ -1411,7 +1450,7 @@ function SalesCatalog({ profile }) {
         <h1>Vehicle Catalog</h1>
         <p>
           Browse models and download brochures
-          {verticalLabel ? ` · ${verticalLabel} range` : ''}
+          {verticalLabels.length > 0 ? ` · ${verticalLabels.join(', ')} range` : ''}
         </p>
       </div>
 

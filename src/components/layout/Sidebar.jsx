@@ -1,5 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
+import { supabase } from '../../lib/supabase'
 
 const ALL_PAGES = [
   { to: '/quotation',      icon: '📄', label: 'New Quotation'   },
@@ -15,6 +17,19 @@ const ALL_PAGES = [
 export default function Sidebar() {
   const { profile, signOut, canAccess } = useAuth()
   const navigate = useNavigate()
+
+  // Phase 6c.1: resolve the entity code from entity_id. Falls back to legacy
+  // profile.entity text until every user has been re-onboarded through the
+  // new Employees form.
+  const [entityCode, setEntityCode] = useState(null)
+  useEffect(() => {
+    let cancelled = false
+    if (!profile?.entity_id) { setEntityCode(null); return }
+    supabase.from('entities').select('code').eq('id', profile.entity_id).maybeSingle()
+      .then(({ data }) => { if (!cancelled) setEntityCode(data?.code ?? null) })
+    return () => { cancelled = true }
+  }, [profile?.entity_id])
+
   if (!profile) return null
 
   const navItems = ALL_PAGES.filter(page => canAccess(page.to))
@@ -31,7 +46,7 @@ export default function Sidebar() {
       </div>
 
       <div className="sidebar-entity">
-        <span className="entity-badge">{profile.entity || 'PTB'}</span>
+        <span className="entity-badge">{entityCode || profile.entity || 'PTB'}</span>
         <span className="sidebar-username">{profile.full_name}</span>
       </div>
 
