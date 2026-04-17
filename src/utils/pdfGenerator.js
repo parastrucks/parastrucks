@@ -11,10 +11,10 @@ const GRAY       = [90, 90, 90]
 const GRAY_LIGHT = [210, 210, 210]
 
 // Table column widths — must sum to CONTENT_W (182 mm)
-const C_PARTICULARS = 86
+const C_PARTICULARS = 102
 const C_QTY         = 12
-const C_UNITCOST    = 42
-const C_AMOUNT      = 42
+const C_UNITCOST    = 34
+const C_AMOUNT      = 34
 // 86 + 12 + 42 + 42 = 182 ✓
 
 function fmt(n) {
