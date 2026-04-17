@@ -10,22 +10,13 @@
 // (kid/JWKS mismatch). The verify() below does stricter validation
 // (getUser + is_active + role whitelist) so nothing is lost.
 //
-// ── Phase 6c.1 extensions ─────────────────────────────────────────────────
-// `create` and `updateProfile` now also accept the new 4-axis columns
-// (permission_level, entity_id, department_id, designation_id, primary_outlet_id,
-// subdept_id) plus the three user↔ref join tables (user_brands,
-// user_sales_verticals, user_outlets). Legacy text columns (role, entity,
-// brand, location, department, vertical, designation) are still written so
-// Sidebar/BottomNav/Profile — which haven't migrated yet — keep rendering.
-//
-// permission_level='admin' is rejected on every write path: the singleton
-// admin is seeded at install time and changing tier to/from admin is a
-// Phase 6c.1 admin-UI-only operation not exposed through this EF. The
-// partial unique index `users_single_admin` is the DB-level backstop.
-//
-// Join-table writes use full-replace semantics on updateProfile: delete all
-// rows for the user, then insert the new set. Simpler + correct than diffing,
-// and the blast radius per user is tiny (≤ a handful of rows each).
+// Phase 6c.3: writes only new 4-axis columns (permission_level, entity_id,
+// department_id, designation_id, primary_outlet_id, subdept_id) + join tables
+// (user_brands, user_sales_verticals, user_outlets). Legacy text columns have
+// been dropped from the users table. Entity-scoping enforced for non-admin
+// callers via requireSameEntity(). permission_level='admin' rejected on all
+// write paths; partial unique index users_single_admin is the DB backstop.
+// Join-table writes use full-replace semantics (delete-then-insert).
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2"
