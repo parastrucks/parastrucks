@@ -127,34 +127,22 @@ Deno.serve(async (req: Request) => {
     return json({ ok: false, error: "rate_limited", retry_after_s: rl.retry_after_s }, 429)
   }
 
-  // Phase 6c.3: tiv_forecast_* tables require entity_id + brand_id NOT NULL.
-  // The Excel parser doesn't include these. Auto-inject PTB + AL defaults.
-  let defaultEntityId: string | null = null
-  let defaultBrandId: string | null = null
-  async function ensureTivDefaults(): Promise<void> {
-    if (defaultEntityId && defaultBrandId) return
-    const [eRes, bRes] = await Promise.all([
-      admin.from("entities").select("id").eq("code", "PTB").maybeSingle(),
-      admin.from("brands").select("id").eq("code", "al").maybeSingle(),
-    ])
-    defaultEntityId = eRes.data?.id ?? null
-    defaultBrandId = bRes.data?.id ?? null
-  }
-
-  function injectTivIds(rows: Record<string, unknown>[]): Record<string, unknown>[] {
-    return rows.map((r) => ({
-      ...r,
-      entity_id: r.entity_id ?? defaultEntityId,
-      brand_id: r.brand_id ?? defaultBrandId,
-    }))
+  function injectTivIds(
+    rows: Record<string, unknown>[],
+    entityId: string,
+    brandId: string,
+  ): Record<string, unknown>[] {
+    return rows.map((r) => ({ ...r, entity_id: entityId, brand_id: brandId }))
   }
 
   try {
     switch (action) {
       case "upsertRows": {
-        const { table, rows } = payload as {
+        const { table, rows, entity_id, brand_id } = payload as {
           table?: string
           rows?: Record<string, unknown>[]
+          entity_id?: string
+          brand_id?: string
         }
         if (!table || !TABLE_CONFIG[table]) {
           return json({ error: `Unknown or disallowed table: ${table}` }, 400)
@@ -162,24 +150,32 @@ Deno.serve(async (req: Request) => {
         if (!Array.isArray(rows)) {
           return json({ error: "rows array is required" }, 400)
         }
+        if (!entity_id || !brand_id) {
+          return json({ error: "entity_id and brand_id are required" }, 400)
+        }
         if (rows.length === 0) return json({ ok: true, count: 0 })
         if (rows.length > 5000) {
           return json({ error: "Max 5000 rows per upsert" }, 400)
         }
-        await ensureTivDefaults()
         const { onConflict } = TABLE_CONFIG[table]
-        const { error } = await admin.from(table).upsert(injectTivIds(rows), { onConflict })
+        const { error } = await admin.from(table).upsert(injectTivIds(rows, entity_id, brand_id), { onConflict })
         if (error) return json({ error: error.message }, 400)
         return json({ ok: true, count: rows.length })
       }
 
       case "insertModelParams": {
-        const { params } = payload as { params?: Record<string, unknown> }
+        const { params, entity_id, brand_id } = payload as {
+          params?: Record<string, unknown>
+          entity_id?: string
+          brand_id?: string
+        }
         if (!params || typeof params !== "object") {
           return json({ error: "params object required" }, 400)
         }
-        await ensureTivDefaults()
-        const injected = { ...params, entity_id: (params as Record<string,unknown>).entity_id ?? defaultEntityId, brand_id: (params as Record<string,unknown>).brand_id ?? defaultBrandId }
+        if (!entity_id || !brand_id) {
+          return json({ error: "entity_id and brand_id are required" }, 400)
+        }
+        const injected = { ...params, entity_id, brand_id }
         const { error } = await admin.from("tiv_forecast_model_params").insert(injected)
         if (error) return json({ error: error.message }, 400)
         return json({ ok: true })

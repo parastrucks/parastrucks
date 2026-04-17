@@ -41,7 +41,7 @@ export default function ForecastTable({ title, subtitle, showTitle = true, forec
                     ? (
                       <>
                         <th key={`${fm.label}-m`} style={{ textAlign: 'center', fontWeight: 500, padding: '4px 8px' }}>Model</th>
-                        <th key={`${fm.label}-j`} style={{ textAlign: 'center', fontWeight: 500, color: 'var(--amber)', padding: '4px 8px' }}>Judg</th>
+                        <th key={`${fm.label}-j`} style={{ textAlign: 'center', fontWeight: 500, fontStyle: 'italic', padding: '4px 8px' }}>Judg</th>
                       </>
                     )
                     : <th key={fm.label}></th>
@@ -69,7 +69,7 @@ export default function ForecastTable({ title, subtitle, showTitle = true, forec
                     return (
                       <>
                         <td key={`${fm.label}-m`} style={{ textAlign: 'right', padding: '7px 10px', fontSize: 13 }}>{dispVal ?? '—'}</td>
-                        <td key={`${fm.label}-j`} style={{ textAlign: 'right', padding: '7px 10px', fontSize: 13, color: 'var(--amber)' }}>{jVal ?? '—'}</td>
+                        <td key={`${fm.label}-j`} style={{ textAlign: 'right', padding: '7px 10px', fontSize: 13, fontStyle: 'italic' }}>{jVal ?? '—'}</td>
                       </>
                     )
                   }
@@ -99,7 +99,7 @@ export default function ForecastTable({ title, subtitle, showTitle = true, forec
                     else total += row.ptb || 0
                   }
                 }
-                return <td key={fm.label} style={{ textAlign: 'right', padding: '7px 10px', fontSize: 13 }}>{total || '—'}</td>
+                return <td key={fm.label} colSpan={judgmentRows[fm.label] ? 2 : 1} style={{ textAlign: 'right', padding: '7px 10px', fontSize: 13 }}>{total || '—'}</td>
               })}
             </tr>
           </tbody>

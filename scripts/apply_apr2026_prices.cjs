@@ -284,11 +284,11 @@ function lakhs(v, dp = 1) {
 
 const featured = {
   'Ecomet 1615 (ICV 16T)': avgByFilter(r => r.segment === 'ICV Truck' && /ecomet|boss.*16t/i.test(r.sub_cat)),
-  '3520 8x2 LA (MBP 35T)': avgByFilter(r => r.segment === 'MBP Truck' && /3520/i.test(r.sub_cat || r.desc)),
+  '3520 8x2 LA (MBP 35T)': avgByFilter(r => r.segment === 'Long Haul Trucks' && /3520/i.test(r.sub_cat || r.desc)),
   '2825 6x4 Tipper':        avgByFilter(r => r.segment === 'Tipper'    && /2825/i.test(r.sub_cat || r.desc)),
   'Viking 12M AC (Bus MCV)':avgByFilter(r => r.segment === 'Bus – MCV' && /12m/i.test(r.sub_cat) && /ddac/i.test(r.desc)),
   'Boss 1415 (ICV 14T)':    avgByFilter(r => r.segment === 'ICV Truck' && /boss.*14t/i.test(r.sub_cat)),
-  'Tractor 5525 (MBP)':     avgByFilter(r => r.segment === 'MBP Truck' && /5525/i.test(r.sub_cat || r.desc)),
+  'Tractor 5525 (MBP)':     avgByFilter(r => r.segment === 'Long Haul Trucks' && /5525/i.test(r.sub_cat || r.desc)),
 }
 
 // Fall back to broader segment average if specific match not found
@@ -296,10 +296,10 @@ if (!featured['Ecomet 1615 (ICV 16T)']) {
   featured['Ecomet 1615 (ICV 16T)'] = avgByFilter(r => r.segment === 'ICV Truck' && /16t|1615/i.test(r.sub_cat || r.desc))
 }
 if (!featured['3520 8x2 LA (MBP 35T)']) {
-  featured['3520 8x2 LA (MBP 35T)'] = avgByFilter(r => r.segment === 'MBP Truck' && /3520/i.test(r.desc))
+  featured['3520 8x2 LA (MBP 35T)'] = avgByFilter(r => r.segment === 'Long Haul Trucks' && /3520/i.test(r.desc))
 }
 if (!featured['Tractor 5525 (MBP)']) {
-  featured['Tractor 5525 (MBP)'] = avgByFilter(r => r.segment === 'MBP Truck' && /5525|tractor/i.test(r.desc))
+  featured['Tractor 5525 (MBP)'] = avgByFilter(r => r.segment === 'Long Haul Trucks' && /5525|tractor/i.test(r.desc))
 }
 
 const alTxt = [

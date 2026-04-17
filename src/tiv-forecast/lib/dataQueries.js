@@ -112,38 +112,38 @@ export async function saveTriggerStateRow(userId, triggerId, { on, severity, dir
 
 // ── Upload helpers (route through admin-tiv Edge Function) ───────────
 
-export async function upsertTivActuals(rows) {
+export async function upsertTivActuals(rows, entityId, brandId) {
   if (!rows.length) return
-  await callEdge('admin-tiv', 'upsertRows', { table: 'tiv_forecast_tiv_actuals', rows })
+  await callEdge('admin-tiv', 'upsertRows', { table: 'tiv_forecast_tiv_actuals', rows, entity_id: entityId, brand_id: brandId })
 }
 
-export async function upsertPtbActuals(rows) {
+export async function upsertPtbActuals(rows, entityId, brandId) {
   if (!rows.length) return
-  await callEdge('admin-tiv', 'upsertRows', { table: 'tiv_forecast_ptb_actuals', rows })
+  await callEdge('admin-tiv', 'upsertRows', { table: 'tiv_forecast_ptb_actuals', rows, entity_id: entityId, brand_id: brandId })
 }
 
-export async function upsertAlActuals(rows) {
+export async function upsertAlActuals(rows, entityId, brandId) {
   if (!rows.length) return
-  await callEdge('admin-tiv', 'upsertRows', { table: 'tiv_forecast_al_actuals', rows })
+  await callEdge('admin-tiv', 'upsertRows', { table: 'tiv_forecast_al_actuals', rows, entity_id: entityId, brand_id: brandId })
 }
 
-export async function upsertJudgmentTiv(rows) {
+export async function upsertJudgmentTiv(rows, entityId, brandId) {
   if (!rows.length) return
-  await callEdge('admin-tiv', 'upsertRows', { table: 'tiv_forecast_judgment_tiv', rows })
+  await callEdge('admin-tiv', 'upsertRows', { table: 'tiv_forecast_judgment_tiv', rows, entity_id: entityId, brand_id: brandId })
 }
 
-export async function upsertJudgmentPtb(rows) {
+export async function upsertJudgmentPtb(rows, entityId, brandId) {
   if (!rows.length) return
-  await callEdge('admin-tiv', 'upsertRows', { table: 'tiv_forecast_judgment_ptb', rows })
+  await callEdge('admin-tiv', 'upsertRows', { table: 'tiv_forecast_judgment_ptb', rows, entity_id: entityId, brand_id: brandId })
 }
 
-export async function upsertRawData(rows) {
+export async function upsertRawData(rows, entityId, brandId) {
   if (!rows.length) return
-  await callEdge('admin-tiv', 'upsertRows', { table: 'tiv_forecast_raw_data', rows })
+  await callEdge('admin-tiv', 'upsertRows', { table: 'tiv_forecast_raw_data', rows, entity_id: entityId, brand_id: brandId })
 }
 
-export async function insertModelParams(params) {
-  await callEdge('admin-tiv', 'insertModelParams', { params })
+export async function insertModelParams(params, entityId, brandId) {
+  await callEdge('admin-tiv', 'insertModelParams', { params, entity_id: entityId, brand_id: brandId })
 }
 
 export async function insertUploadHistory({ userId, uploaderName, fileName, monthsLoaded, lastDataMonth }) {

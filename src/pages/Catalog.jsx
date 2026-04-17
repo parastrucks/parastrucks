@@ -9,7 +9,7 @@ import useFocusTrap from '../hooks/useFocusTrap'
 
 /* ── CONSTANTS ───────────────────────────────────────────────── */
 const SEGMENTS = [
-  'ICV Truck', 'MBP Truck', 'Tipper',
+  'ICV Truck', 'Long Haul Trucks', 'Tipper',
   'Bus – ICV', 'Bus – MCV', 'RMC / Boom Pump',
 ]
 
