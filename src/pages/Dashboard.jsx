@@ -2,14 +2,17 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
 const ALL_TOOLS = [
-  { to: '/quotation',      icon: '📄', title: 'New Quotation',       desc: 'Generate a customer quotation PDF' },
-  { to: '/my-quotations',  icon: '🗂', title: 'My Quotations',       desc: 'View and re-download past quotations' },
-  { to: '/quotation-log',  icon: '📊', title: 'Quotation Log',       desc: 'View all quotations across the organisation' },
-  { to: '/employees',      icon: '👥', title: 'Employee Management', desc: 'Create, edit, and manage team accounts' },
-  { to: '/access-rules',   icon: '🔐', title: 'Access Rules',        desc: 'Configure roles, brands, and tool access' },
-  { to: '/catalog',        icon: '🚛', title: 'Vehicle Catalog',     desc: 'Manage the vehicle price catalog' },
-  { to: '/bus-calculator', icon: '🚌', title: 'Bus Calculator',      desc: 'Build a bus price estimate step by step' },
-  { to: '/tiv-forecast',  icon: '📈', title: 'TIV Forecast',        desc: 'Industry volume forecasting and segment analysis' },
+  { to: '/quotation',          icon: '📄', title: 'New Quotation',         desc: 'Generate a customer quotation PDF' },
+  { to: '/my-quotations',      icon: '🗂', title: 'My Quotations',         desc: 'View and re-download past quotations' },
+  { to: '/quotation-log',      icon: '📊', title: 'Quotation Log',         desc: 'View all quotations across the organisation' },
+  { to: '/proforma-invoice',   icon: '📃', title: 'Proforma Invoice',      desc: 'Generate proforma invoices for physical vehicles' },
+  { to: '/my-proformas',       icon: '🗃', title: 'My Proforma Invoices',  desc: 'View and re-download past proforma invoices' },
+  { to: '/proforma-log',       icon: '📋', title: 'Proforma Invoice Log',  desc: 'View all proforma invoices across the organisation' },
+  { to: '/employees',          icon: '👥', title: 'Employee Management',   desc: 'Create, edit, and manage team accounts' },
+  { to: '/access-rules',       icon: '🔐', title: 'Access Rules',          desc: 'Configure roles, brands, and tool access' },
+  { to: '/catalog',            icon: '🚛', title: 'Vehicle Catalog',       desc: 'Manage the vehicle price catalog' },
+  { to: '/bus-calculator',     icon: '🚌', title: 'Bus Calculator',        desc: 'Build a bus price estimate step by step' },
+  { to: '/tiv-forecast',       icon: '📈', title: 'TIV Forecast',          desc: 'Industry volume forecasting and segment analysis' },
 ]
 
 // Phase 6c.3: permission_level is the only label source.
