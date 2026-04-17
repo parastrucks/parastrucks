@@ -204,7 +204,7 @@ export async function generateQuotationPDF(data) {
 
   // Body rows — vehicle lines
   const bodyRows = lineItems.map(item => [
-    item.description + (item.cbn ? '\n' + item.cbn : ''),
+    item.description,
     { content: String(item.qty), styles: { halign: 'center' } },
     { content: fmt(item.mrp), styles: { halign: 'right' } },
     { content: fmt(item.total_cost), styles: { halign: 'right' } },

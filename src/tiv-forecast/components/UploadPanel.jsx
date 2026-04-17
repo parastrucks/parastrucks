@@ -1,6 +1,7 @@
 // TIV Forecast — Upload Panel (admin-only)
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useAuth } from '../../context/AuthContext'
+import { supabase } from '../../lib/supabase'
 import { parseExcelFile } from '../lib/parseExcel'
 import { retrainModel } from '../lib/retrainModel'
 import {
@@ -11,15 +12,46 @@ import {
 
 export default function UploadPanel({ onUploadComplete }) {
   const { profile, isAdmin } = useAuth()
-  const [collapsed, setCollapsed]     = useState(true)
-  const [file, setFile]               = useState(null)
-  const [preview, setPreview]         = useState(null)  // { monthsLoaded, lastDataMonth }
-  const [uploading, setUploading]     = useState(false)
-  const [progress, setProgress]       = useState(null)  // { pct: 0-100, step: 'label' }
-  const [parseError, setParseError]   = useState('')
-  const [successMsg, setSuccessMsg]   = useState('')
-  const [history, setHistory]         = useState(null)  // null = not loaded yet
-  const [showHistory, setShowHistory] = useState(false)
+  const [collapsed, setCollapsed]         = useState(true)
+  const [file, setFile]                   = useState(null)
+  const [preview, setPreview]             = useState(null)  // { monthsLoaded, lastDataMonth }
+  const [uploading, setUploading]         = useState(false)
+  const [progress, setProgress]           = useState(null)  // { pct: 0-100, step: 'label' }
+  const [parseError, setParseError]       = useState('')
+  const [successMsg, setSuccessMsg]       = useState('')
+  const [history, setHistory]             = useState(null)  // null = not loaded yet
+  const [showHistory, setShowHistory]     = useState(false)
+  const [entities, setEntities]           = useState([])
+  const [entityId, setEntityId]           = useState('')
+  const [brandsForEntity, setBrandsForEntity] = useState([])
+  const [brandId, setBrandId]             = useState('')
+
+  useEffect(() => {
+    if (collapsed) return
+    supabase.from('entities').select('id, name, code').order('name')
+      .then(({ data }) => setEntities(data || []))
+  }, [collapsed])
+
+  useEffect(() => {
+    setBrandId('')
+    setBrandsForEntity([])
+    if (!entityId) return
+    supabase
+      .from('outlet_brands')
+      .select('brand_id, brands(id, name, code), outlets!inner(entity_id)')
+      .eq('outlets.entity_id', entityId)
+      .then(({ data }) => {
+        const seen = {}
+        const brands = []
+        for (const row of data || []) {
+          if (row.brands && !seen[row.brand_id]) {
+            seen[row.brand_id] = true
+            brands.push(row.brands)
+          }
+        }
+        setBrandsForEntity(brands)
+      })
+  }, [entityId])
 
   const UPLOAD_STEPS = [
     { pct: 10, label: 'Parsing file…' },
@@ -84,7 +116,7 @@ export default function UploadPanel({ onUploadComplete }) {
   }
 
   const handleUpload = useCallback(async () => {
-    if (!file || !preview) return
+    if (!file || !preview || !entityId || !brandId) return
     setUploading(true)
     setProgress({ pct: 0, label: 'Starting…' })
     setParseError('')
@@ -98,24 +130,24 @@ export default function UploadPanel({ onUploadComplete }) {
       const parsed = parseExcelFile(buf)
 
       step(1)  // 25% — TIV actuals
-      await upsertTivActuals(parsed.tivActuals)
+      await upsertTivActuals(parsed.tivActuals, entityId, brandId)
 
       step(2)  // 37% — PTB actuals
-      await upsertPtbActuals(parsed.ptbActuals)
+      await upsertPtbActuals(parsed.ptbActuals, entityId, brandId)
 
       step(3)  // 50% — AL actuals
-      await upsertAlActuals(parsed.alActuals)
+      await upsertAlActuals(parsed.alActuals, entityId, brandId)
 
       step(4)  // 62% — judgment forecasts
-      await upsertJudgmentTiv(parsed.judgmentTiv)
-      await upsertJudgmentPtb(parsed.judgmentPtb)
+      await upsertJudgmentTiv(parsed.judgmentTiv, entityId, brandId)
+      await upsertJudgmentPtb(parsed.judgmentPtb, entityId, brandId)
 
       step(5)  // 75% — raw data
-      await upsertRawData(parsed.rawRows)
+      await upsertRawData(parsed.rawRows, entityId, brandId)
 
       step(6)  // 88% — retrain
       const params = retrainModel(parsed.tivActuals, parsed.ptbActuals, parsed.alActuals)
-      await insertModelParams(params)
+      await insertModelParams(params, entityId, brandId)
 
       step(7)  // 95% — upload record
       await insertUploadHistory({
@@ -145,7 +177,7 @@ export default function UploadPanel({ onUploadComplete }) {
       setUploading(false)
       setTimeout(() => setProgress(null), 1200)
     }
-  }, [file, preview, profile, onUploadComplete, showHistory])
+  }, [file, preview, entityId, brandId, profile, onUploadComplete, showHistory])
 
   async function toggleHistory() {
     const next = !showHistory
@@ -187,6 +219,32 @@ export default function UploadPanel({ onUploadComplete }) {
             </div>
           )}
 
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+            <select
+              className="form-select"
+              style={{ flex: '1 1 160px', maxWidth: 220 }}
+              value={entityId}
+              onChange={e => setEntityId(e.target.value)}
+            >
+              <option value="">— Select Entity —</option>
+              {entities.map(e => (
+                <option key={e.id} value={e.id}>{e.name} ({e.code})</option>
+              ))}
+            </select>
+            <select
+              className="form-select"
+              style={{ flex: '1 1 160px', maxWidth: 220 }}
+              value={brandId}
+              onChange={e => setBrandId(e.target.value)}
+              disabled={!entityId || brandsForEntity.length === 0}
+            >
+              <option value="">— Select Brand —</option>
+              {brandsForEntity.map(b => (
+                <option key={b.id} value={b.id}>{b.name} ({b.code})</option>
+              ))}
+            </select>
+          </div>
+
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
             <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer' }}>
               Choose File
@@ -214,7 +272,8 @@ export default function UploadPanel({ onUploadComplete }) {
               className="btn btn-primary btn-sm"
               style={{ marginTop: 12 }}
               onClick={handleUpload}
-              disabled={uploading}
+              disabled={uploading || !entityId || !brandId}
+              title={!entityId || !brandId ? 'Select entity and brand first' : undefined}
             >
               {uploading ? 'Uploading…' : 'Upload & Retrain'}
             </button>

@@ -750,85 +750,6 @@ tbody tr:hover td { background: var(--gray-50); }
   }
 }
 
-/* Line items table */
-.line-items-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-.line-items-table th {
-  padding: 9px 10px;
-  background: var(--gray-50);
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: .5px;
-  color: var(--gray-500);
-  text-align: left;
-  border-bottom: 1px solid var(--gray-200);
-  white-space: nowrap;
-}
-.line-items-table th.text-right,
-.line-items-table td.text-right { text-align: right; }
-.line-items-table td {
-  padding: 10px 10px;
-  border-bottom: 1px solid var(--gray-100);
-  color: var(--gray-700);
-  vertical-align: middle;
-}
-.line-items-table tr:last-child td { border-bottom: none; }
-.line-items-table .td-vehicle { min-width: 160px; }
-.line-items-table .td-vehicle strong { display: block; font-weight: 600; color: var(--gray-900); }
-.line-items-table .td-vehicle span  { font-size: 11.5px; color: var(--gray-400); }
-.line-items-table .td-price input {
-  width: 110px;
-  padding: 6px 10px;
-  font-size: 13px;
-  border: 1.5px solid var(--gray-200);
-  border-radius: var(--radius-xs);
-  background: var(--gray-50);
-  color: var(--gray-800);
-  text-align: right;
-  transition: border-color var(--t), background var(--t);
-}
-.line-items-table .td-price input:focus {
-  border-color: var(--blue);
-  background: var(--white);
-  outline: none;
-}
-.line-items-table .td-price input:read-only {
-  background: var(--gray-100);
-  color: var(--gray-500);
-  cursor: default;
-}
-.line-items-table .td-qty input {
-  width: 56px;
-  padding: 6px 8px;
-  font-size: 13px;
-  border: 1.5px solid var(--gray-200);
-  border-radius: var(--radius-xs);
-  background: var(--gray-50);
-  color: var(--gray-800);
-  text-align: center;
-  transition: border-color var(--t), background var(--t);
-}
-.line-items-table .td-qty input:focus {
-  border-color: var(--blue);
-  background: var(--white);
-  outline: none;
-}
-.line-items-table .remove-btn {
-  color: var(--gray-400);
-  font-size: 16px;
-  line-height: 1;
-  padding: 4px 6px;
-  border-radius: var(--radius-xs);
-  transition: color var(--t), background var(--t);
-}
-.line-items-table .remove-btn:hover {
-  color: var(--red);
-  background: var(--red-light);
-}
 .line-items-empty {
   text-align: center;
   padding: 28px;
@@ -847,32 +768,24 @@ tbody tr:hover td { background: var(--gray-50); }
  *   <div className="{scope}-desktop-table"> ... <table>...</table> </div>
  *   <div className="{scope}-mobile-cards">  ... <Card/> ...            </div>
  *
- * Pick `{scope}` per page (e.g. `line-items-`, `vc-`). Each scope picks
- * its own breakpoint — the threshold is whatever viewport the *table*
- * starts falling apart at. Do NOT try to unify every page on one number:
+ * Pick `{scope}` per page (e.g. `vc-`). Each scope picks its own breakpoint
+ * — the threshold is whatever viewport the *table* starts falling apart at.
  *
- *   .line-items-desktop / .line-items-cards  flip at ≥960px
- *     └ 960 matches where the sticky price rail returns, keeping table
- *       and rail as a locked pair. Below that, cards fill the width.
- *
- *   .vc-desktop-table / .vc-mobile-cards     flip at ≥700px
+ *   .vc-desktop-table / .vc-mobile-cards  flip at ≥700px
  *     └ Catalog has 4–6 columns but most are narrow (CBN, segment,
  *       MRP) so the table survives further down than line items.
  *
- * When adding a third responsive table: mirror this pattern with a new
- * {scope} and pick your own breakpoint based on column count × width.
+ * Note: Quotation line-items use cards on ALL widths (Phase 7a) — long
+ * vehicle descriptions need the full card width regardless of screen size.
+ *
+ * When adding a responsive table: mirror this pattern with a new {scope}
+ * and pick your own breakpoint based on column count × width.
  * Don't invent alternative class names (.tbl-wide, .responsive-table,
  * etc.) — stick with `{scope}-desktop-table` / `{scope}-mobile-cards`
  * so grep discovers every instance from one search. */
 
-/* Line items — responsive shape switch (Phase 6a.P0 #2). */
-.line-items-desktop { display: none; }
-.line-items-cards   { display: flex; flex-direction: column; gap: 12px; }
-
-@media (min-width: 960px) {
-  .line-items-desktop { display: block; }
-  .line-items-cards   { display: none; }
-}
+/* Line items — cards on all screen widths (Phase 7a Fix 1). */
+.line-items-cards { display: flex; flex-direction: column; gap: 12px; }
 
 .line-item-card {
   position: relative;             /* anchor for the absolute .li-card-remove */

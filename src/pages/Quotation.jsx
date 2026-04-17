@@ -6,12 +6,12 @@ import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import { generateQuotationPDF } from '../utils/pdfGenerator'
 
-const SEGMENTS = ['All Segments', 'ICV Trucks', 'MBP Trucks', 'Tippers', 'Buses', 'RMC / Boom Pump']
+const SEGMENTS = ['All Segments', 'ICV Trucks', 'Long Haul Trucks', 'Tippers', 'Buses', 'RMC / Boom Pump']
 
 // Maps each UI segment label to a DB segment filter predicate
 const SEGMENT_FILTER = {
-  'ICV Trucks':      v => v.segment === 'ICV Truck',
-  'MBP Trucks':      v => v.segment === 'MBP Truck',
+  'ICV Trucks':       v => v.segment === 'ICV Truck',
+  'Long Haul Trucks': v => v.segment === 'Long Haul Trucks',
   'Tippers':         v => v.segment === 'Tipper',
   'Buses':           v => v.segment === 'Bus – ICV' || v.segment === 'Bus – MCV',
   'RMC / Boom Pump': v => v.segment === 'RMC / Boom Pump',
@@ -508,123 +508,8 @@ export default function Quotation() {
                 )}
               </div>
 
-              {/* Line items — table at ≥960px, cards below that (Phase 6a.P0 #2). */}
-              <div className="table-wrap line-items-desktop">
-                <table className="line-items-table">
-                  <thead>
-                    <tr>
-                      <th>Vehicle</th>
-                      <th>Tyres</th>
-                      <th>Qty</th>
-                      <th className="text-right">MRP (incl. GST)</th>
-                      <th className="text-right">Basic Amt</th>
-                      <th className="text-right">GST 18%</th>
-                      <th className="text-right">Total</th>
-                      <th></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {lineItems.length === 0 ? (
-                      <tr>
-                        <td colSpan={8} className="line-items-empty">
-                          Search and add vehicles above
-                        </td>
-                      </tr>
-                    ) : (
-                      lineItems.map((item, idx) => {
-                        const isEdited =
-                          item.original_description != null &&
-                          item.description !== item.original_description
-                        return (
-                        <tr key={`${item.cbn}-${idx}`}>
-                          <td className="td-vehicle">
-                            {canEditDescription ? (
-                              <textarea
-                                className="form-input"
-                                value={item.description || ''}
-                                rows={2}
-                                placeholder="Edit description for this quotation only…"
-                                onChange={e => updateItem(idx, 'description', e.target.value)}
-                                onInput={e => {
-                                  e.currentTarget.style.height = 'auto'
-                                  e.currentTarget.style.height = e.currentTarget.scrollHeight + 'px'
-                                }}
-                                style={{
-                                  width: '100%',
-                                  minHeight: 44,
-                                  resize: 'vertical',
-                                  fontWeight: 600,
-                                  fontSize: 13.5,
-                                  lineHeight: 1.35,
-                                  padding: '6px 8px',
-                                }}
-                              />
-                            ) : (
-                              <strong>{item.description}</strong>
-                            )}
-                            <span>{item.cbn}</span>
-                            {isEdited && (
-                              <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                                <span className="badge badge-amber">edited</span>
-                                <button
-                                  type="button"
-                                  className="btn btn-sm"
-                                  onClick={() => resetDescription(idx)}
-                                  title="Revert to the current catalog description"
-                                >
-                                  Reset to catalog
-                                </button>
-                              </div>
-                            )}
-                          </td>
-                          <td style={{ fontSize: 12, color: 'var(--gray-500)' }}>{item.tyres || '—'}</td>
-                          <td className="td-qty">
-                            <input
-                              type="number"
-                              min={1}
-                              max={99}
-                              value={item.qty}
-                              onChange={e => updateItem(idx, 'qty', e.target.value)}
-                            />
-                          </td>
-                          <td className="td-price text-right">
-                            <input
-                              type="number"
-                              value={item.mrp}
-                              readOnly={!canEditPrice}
-                              onChange={e => canEditPrice && updateItem(idx, 'mrp', e.target.value)}
-                            />
-                          </td>
-                          <td className="text-right" style={{ fontWeight: 500 }}>
-                            {fmtINR(item.basic_amt)}
-                          </td>
-                          <td className="text-right" style={{ color: 'var(--gray-500)' }}>
-                            {fmtINR(item.gst_amt)}
-                          </td>
-                          <td className="text-right" style={{ fontWeight: 700 }}>
-                            {fmtINR(item.total_cost)}
-                          </td>
-                          <td>
-                            <button
-                              type="button"
-                              className="remove-btn"
-                              onClick={() => removeItem(idx)}
-                              title="Remove"
-                            >
-                              ×
-                            </button>
-                          </td>
-                        </tr>
-                      )
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Mobile/tablet cards (<960px). Same data, different shape.
-                  Uses <section> with aria-label so screen readers announce the
-                  region (a plain <div> + aria-label is inert). */}
+              {/* Line items — card layout on all screen widths (Phase 7a Fix 1).
+                  Full vehicle description always visible, no column truncation. */}
               <section className="line-items-cards" aria-label="Line items">
                 {lineItems.length === 0 ? (
                   <div className="line-items-empty-card">
