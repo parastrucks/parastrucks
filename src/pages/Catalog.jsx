@@ -793,14 +793,46 @@ const EMPTY_SUBSEG = {
 function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
   const toast = useToast()
   const trapRef = useFocusTrap(true, onClose)
-  const [form,         setForm]         = useState(mode === 'edit' ? { ...subSeg } : EMPTY_SUBSEG)
-  const [brochureFile, setBrochureFile] = useState(null)
-  const [saving,       setSaving]       = useState(false)
-  const [uploadPct,    setUploadPct]    = useState(null) // null = not uploading
-  const [error,        setError]        = useState('')
+  const [form,            setForm]            = useState(mode === 'edit' ? { ...subSeg } : EMPTY_SUBSEG)
+  const [brochureFile,    setBrochureFile]    = useState(null)
+  const [saving,          setSaving]          = useState(false)
+  const [uploadPct,       setUploadPct]       = useState(null)
+  const [error,           setError]           = useState('')
+  const [allocatedCBNs,   setAllocatedCBNs]   = useState([])   // edit: vehicles in this sub-seg
+  const [unallocatedCBNs, setUnallocatedCBNs] = useState([])   // add:  vehicles with no sub-seg
+  const [selectedCBNs,    setSelectedCBNs]    = useState(new Set())
+  const [cbnSearch,       setCbnSearch]       = useState('')
+  const [cbnLoading,      setCbnLoading]      = useState(false)
   const fileRef = useRef()
 
   function set(field, value) { setForm(f => ({ ...f, [field]: value })); setError('') }
+
+  // Edit mode: load CBNs belonging to this sub-segment (by name text match)
+  useEffect(() => {
+    if (mode !== 'edit') return
+    setCbnLoading(true)
+    supabase.from('vehicle_catalog')
+      .select('cbn, description')
+      .eq('sub_category', form.name)
+      .order('cbn')
+      .then(({ data }) => { setAllocatedCBNs(data || []); setCbnLoading(false) })
+  }, [mode, form.name])
+
+  // Add mode: reload unallocated CBNs whenever segment or brand changes
+  useEffect(() => {
+    if (mode !== 'add') return
+    setCbnLoading(true)
+    setSelectedCBNs(new Set())
+    supabase.from('vehicle_catalog')
+      .select('cbn, description')
+      .eq('segment', form.segment)
+      .eq('brand', form.brand)
+      .order('cbn')
+      .then(({ data }) => {
+        setUnallocatedCBNs((data || []).filter(v => !v.sub_category))
+        setCbnLoading(false)
+      })
+  }, [mode, form.segment, form.brand])
 
   // Validate brochure file: ≤10 MB + magic-byte %PDF- header.
   // Runs before the Edge Function signed-URL round-trip to reject bad files early.
@@ -888,6 +920,12 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
     let err
     if (mode === 'add') {
       ;({ error: err } = await supabase.from('sub_segments').insert(payload))
+      if (!err && selectedCBNs.size > 0) {
+        const { error: assignErr } = await supabase.from('vehicle_catalog')
+          .update({ sub_category: payload.name })
+          .in('cbn', [...selectedCBNs])
+        if (assignErr) toast.error('Sub-segment saved but CBN assignment failed: ' + assignErr.message)
+      }
     } else {
       ;({ error: err } = await supabase.from('sub_segments').update(payload).eq('id', subSeg.id))
     }
@@ -1000,6 +1038,95 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
               <div style={{ height: 6, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
                 <div style={{ height: '100%', width: `${uploadPct}%`, background: 'var(--accent)', transition: 'width 0.2s ease' }} />
               </div>
+            </div>
+          )}
+
+          {/* Edit mode: read-only list of CBNs in this sub-segment */}
+          {mode === 'edit' && (
+            <div className="form-group">
+              <label className="form-label">
+                CBN Numbers{allocatedCBNs.length > 0 ? ` (${allocatedCBNs.length})` : ''}
+              </label>
+              {cbnLoading ? (
+                <div style={{ fontSize: 13, color: 'var(--gray-400)' }}>Loading…</div>
+              ) : allocatedCBNs.length === 0 ? (
+                <div style={{ fontSize: 13, color: 'var(--gray-400)' }}>No vehicles assigned to this sub-segment yet.</div>
+              ) : (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, maxHeight: 160, overflowY: 'auto' }}>
+                  {allocatedCBNs.map(v => (
+                    <span key={v.cbn} title={v.description || ''} style={{
+                      fontSize: 12, fontFamily: 'monospace',
+                      background: 'var(--gray-100)', border: '1px solid var(--gray-200)',
+                      borderRadius: 4, padding: '2px 8px', color: 'var(--gray-700)',
+                    }}>{v.cbn}</span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Add mode: filterable checklist of unallocated CBNs */}
+          {mode === 'add' && (
+            <div className="form-group">
+              <label className="form-label">Assign CBN Numbers (optional)</label>
+              {cbnLoading ? (
+                <div style={{ fontSize: 13, color: 'var(--gray-400)' }}>Loading…</div>
+              ) : unallocatedCBNs.length === 0 ? (
+                <div style={{ fontSize: 13, color: 'var(--gray-400)' }}>No unallocated CBNs in this segment / brand.</div>
+              ) : (
+                <>
+                  <input
+                    className="form-input"
+                    placeholder="Filter by CBN or description…"
+                    value={cbnSearch}
+                    onChange={e => setCbnSearch(e.target.value)}
+                    style={{ marginBottom: 6 }}
+                  />
+                  <div style={{
+                    maxHeight: 200, overflowY: 'auto',
+                    border: '1px solid var(--gray-200)', borderRadius: 6,
+                  }}>
+                    {unallocatedCBNs
+                      .filter(v => !cbnSearch ||
+                        v.cbn.toLowerCase().includes(cbnSearch.toLowerCase()) ||
+                        (v.description || '').toLowerCase().includes(cbnSearch.toLowerCase())
+                      )
+                      .map(v => (
+                        <label key={v.cbn} style={{
+                          display: 'flex', alignItems: 'flex-start', gap: 10,
+                          padding: '7px 12px', cursor: 'pointer',
+                          background: selectedCBNs.has(v.cbn) ? 'var(--blue-50, #eff6ff)' : 'transparent',
+                          borderBottom: '1px solid var(--gray-100)',
+                        }}>
+                          <input
+                            type="checkbox"
+                            checked={selectedCBNs.has(v.cbn)}
+                            onChange={e => setSelectedCBNs(s => {
+                              const next = new Set(s)
+                              e.target.checked ? next.add(v.cbn) : next.delete(v.cbn)
+                              return next
+                            })}
+                            style={{ marginTop: 2, flexShrink: 0 }}
+                          />
+                          <span>
+                            <span style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 600 }}>{v.cbn}</span>
+                            {v.description && (
+                              <span style={{ fontSize: 12, color: 'var(--gray-500)', marginLeft: 8 }}>
+                                {v.description.length > 70 ? v.description.substring(0, 70) + '…' : v.description}
+                              </span>
+                            )}
+                          </span>
+                        </label>
+                      ))
+                    }
+                  </div>
+                  {selectedCBNs.size > 0 && (
+                    <div style={{ fontSize: 13, color: 'var(--blue)', marginTop: 6 }}>
+                      {selectedCBNs.size} CBN{selectedCBNs.size > 1 ? 's' : ''} selected
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           )}
 
