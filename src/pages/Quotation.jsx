@@ -532,7 +532,7 @@ export default function Quotation() {
                               <textarea
                                 className="form-input"
                                 value={item.description || ''}
-                                rows={2}
+                                rows={4}
                                 placeholder="Edit description for this quotation only…"
                                 onChange={e => updateItem(idx, 'description', e.target.value)}
                                 onInput={e => {
@@ -541,7 +541,7 @@ export default function Quotation() {
                                 }}
                                 style={{
                                   width: '100%',
-                                  minHeight: 44,
+                                  minHeight: 80,
                                   resize: 'vertical',
                                   fontWeight: 600,
                                   fontSize: 14,
