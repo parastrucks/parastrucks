@@ -188,13 +188,31 @@ Deno.serve(async (req: Request) => {
     return json({ ok: false, error: "rate_limited", retry_after_s: rl.retry_after_s }, 429)
   }
 
+  // ── Entity-scoping guard ─────────────────────────────────────────────
+  // Non-admin callers (HR) may only operate on users within their own
+  // entity. Admin bypasses — they span both entities by design.
+  // For actions that target an existing user (update/setActive/reset),
+  // we look up the target's entity_id. For create, we check the payload.
+  async function requireSameEntity(targetEntityId: string | null | undefined): Promise<Response | null> {
+    if (caller.role === "admin") return null // admin bypasses
+    if (!caller.entity_id) {
+      return json({ error: "Caller has no entity — cannot manage users" }, 403)
+    }
+    if (targetEntityId !== caller.entity_id) {
+      return json({ error: "You can only manage employees within your own entity" }, 403)
+    }
+    return null
+  }
+
+  // For actions targeting an existing user by id, resolve their entity_id
+  async function getTargetEntityId(userId: string): Promise<string | null> {
+    const { data } = await admin.from("users").select("entity_id").eq("id", userId).maybeSingle()
+    return data?.entity_id ?? null
+  }
+
   try {
     switch (action) {
       case "create": {
-        // Phase 6c.3: legacy column parameters dropped. Only the new 4-axis
-        // columns + join-table arrays are accepted. Clients sending legacy
-        // fields now silently have them ignored (not accepted — caller's
-        // `location` in the current form is informational only).
         const p = payload as {
           full_name?: string
           email?: string
@@ -220,6 +238,10 @@ Deno.serve(async (req: Request) => {
         if (!p.entity_id)      return json({ error: "entity_id is required" }, 400)
         if (!p.department_id)  return json({ error: "department_id is required" }, 400)
         if (!p.designation_id) return json({ error: "designation_id is required" }, 400)
+
+        // Entity-scoping: HR can only create users in their own entity
+        const entityErr = await requireSameEntity(p.entity_id)
+        if (entityErr) return entityErr
 
         const { data: authData, error: authErr } = await admin.auth.admin.createUser({
           email: p.email.trim(),
@@ -271,6 +293,10 @@ Deno.serve(async (req: Request) => {
           update?: Record<string, unknown>
         }
         if (!id || !update) return json({ error: "Missing id or update" }, 400)
+
+        // Entity-scoping: HR can only edit users in their own entity
+        const upEntityErr = await requireSameEntity(await getTargetEntityId(id))
+        if (upEntityErr) return upEntityErr
 
         // Phase 6c.3: legacy text columns removed from the whitelist. Only
         // name + new axis columns + informational location remain.
@@ -332,6 +358,9 @@ Deno.serve(async (req: Request) => {
         if (id === caller.id && !is_active) {
           return json({ error: "You cannot deactivate your own account" }, 400)
         }
+        // Entity-scoping
+        const saEntityErr = await requireSameEntity(await getTargetEntityId(id))
+        if (saEntityErr) return saEntityErr
         const { error } = await admin
           .from("users")
           .update({ is_active })
@@ -349,6 +378,9 @@ Deno.serve(async (req: Request) => {
         if (!password || password.length < 8) {
           return json({ error: "Password must be at least 8 characters" }, 400)
         }
+        // Entity-scoping
+        const rpEntityErr = await requireSameEntity(await getTargetEntityId(id))
+        if (rpEntityErr) return rpEntityErr
         const { error } = await admin.auth.admin.updateUserById(id, { password })
         if (error) return json({ error: error.message }, 400)
         return json({ ok: true })

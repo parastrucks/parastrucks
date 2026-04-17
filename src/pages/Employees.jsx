@@ -69,6 +69,7 @@ export default function Employees() {
   const [refSalesVert,   setRefSalesVert]   = useState([]) // {id, brand_id, code, name}
   const [refOutlets,     setRefOutlets]     = useState([]) // {id, entity_id, city, facility_type}
   const [refSubdepts,    setRefSubdepts]    = useState([]) // {id, code, name}
+  const [refOutletBrands,setRefOutletBrands]= useState([]) // {outlet_id, brand_id, entity_id}
 
   // Modal state
   const [modal, setModal]       = useState(null) // 'add' | 'edit' | 'password' | 'confirm'
@@ -121,7 +122,9 @@ export default function Employees() {
       supabase.from('sales_verticals').select('id, brand_id, code, name').eq('is_active', true).order('name'),
       supabase.from('outlets').select('id, entity_id, city, facility_type').eq('is_active', true).order('city'),
       supabase.from('back_office_subdepts').select('id, code, name').eq('is_active', true).order('name'),
-    ]).then(([e, d, dg, b, sv, o, sd]) => {
+      // outlet_brands tells us which brands are sold at which entity's outlets
+      supabase.from('outlet_brands').select('outlet_id, brand_id, outlets(entity_id)'),
+    ]).then(([e, d, dg, b, sv, o, sd, ob]) => {
       if (cancelled) return
       setRefEntities(e.data || [])
       setRefDepartments(d.data || [])
@@ -130,6 +133,7 @@ export default function Employees() {
       setRefSalesVert(sv.data || [])
       setRefOutlets(o.data || [])
       setRefSubdepts(sd.data || [])
+      setRefOutletBrands(ob.data || [])
     })
     return () => { cancelled = true }
   }, [fetchEmployees])
@@ -150,10 +154,27 @@ export default function Employees() {
     () => refOutlets.filter(o => o.entity_id === form.entity_id),
     [refOutlets, form.entity_id],
   )
+  // Brands available at the selected entity — derived from outlet_brands.
+  // PTB only sells AL; PT sells AL + HDH + Switch. This replaces showing
+  // ALL brands regardless of entity (the bug that showed HDH/Switch for PTB).
+  const brandsForEntity = useMemo(() => {
+    if (!form.entity_id) return refBrands // no entity chosen yet → show all
+    const brandIdsAtEntity = new Set(
+      refOutletBrands
+        .filter(ob => ob.outlets?.entity_id === form.entity_id)
+        .map(ob => ob.brand_id)
+    )
+    return refBrands.filter(b => brandIdsAtEntity.has(b.id))
+  }, [refBrands, refOutletBrands, form.entity_id])
+
   const verticalsForBrands = useMemo(
     () => refSalesVert.filter(v => form.brand_ids.includes(v.brand_id)),
     [refSalesVert, form.brand_ids],
   )
+
+  // Non-admin callers are entity-locked — they can only manage their own entity.
+  // Pre-fill the entity on modal open and disable the dropdown.
+  const callerEntityLocked = !isAdmin && !!caller?.entity_id
 
   /* ── filtered list ──────────────────────────────────────────────────── */
   const filtered = employees.filter(e => {
@@ -182,7 +203,8 @@ export default function Employees() {
 
   /* ── modal open/close ───────────────────────────────────────────────── */
   function openAdd() {
-    setForm(EMPTY_FORM)
+    // Pre-fill entity for non-admin callers (entity-locked)
+    setForm({ ...EMPTY_FORM, entity_id: callerEntityLocked ? caller.entity_id : '' })
     setError('')
     setModal('add')
   }
@@ -235,8 +257,9 @@ export default function Employees() {
 
   /* ── cascaded-field handlers ────────────────────────────────────────── */
   // When entity changes, clear outlet selections (they're entity-scoped).
+  // When entity changes, clear outlet + brand selections (both are entity-scoped)
   function onEntityChange(entity_id) {
-    setForm(f => ({ ...f, entity_id, primary_outlet_id: '' }))
+    setForm(f => ({ ...f, entity_id, primary_outlet_id: '', brand_ids: [], sales_vertical_ids: [] }))
   }
 
   // When department changes, clear designation + dept-specific fields.
@@ -552,7 +575,7 @@ export default function Employees() {
           refEntities={refEntities}
           refDepartments={refDepartments}
           designationsForDept={designationsForDept}
-          refBrands={refBrands}
+          refBrands={brandsForEntity}
           refSalesVert={refSalesVert}
           verticalsForBrands={verticalsForBrands}
           outletsForEntity={outletsForEntity}
@@ -566,6 +589,7 @@ export default function Employees() {
           onSubmit={modal === 'add' ? handleCreate : handleUpdate}
           canDelete={isAdmin && modal === 'edit' && selected?.id !== caller?.id}
           onDelete={() => { closeModal(); openConfirm('delete', selected) }}
+          callerEntityLocked={callerEntityLocked}
         />
       )}
 
@@ -691,6 +715,7 @@ function EmployeeFormModal({
   onSubmit,
   canDelete,
   onDelete,
+  callerEntityLocked,
 }) {
   const deptCode = selectedDept?.code
   const F = (field) => ({
@@ -743,10 +768,17 @@ function EmployeeFormModal({
                   id="emp-entity" className="form-select"
                   value={form.entity_id}
                   onChange={e => onEntityChange(e.target.value)}
+                  disabled={callerEntityLocked}
+                  style={callerEntityLocked ? { opacity: 0.6 } : undefined}
                 >
                   <option value="">— Select —</option>
                   {refEntities.map(en => <option key={en.id} value={en.id}>{en.code}</option>)}
                 </select>
+                {callerEntityLocked && (
+                  <div style={{ fontSize: 11, color: 'var(--gray-500)', marginTop: 4 }}>
+                    Locked to your entity. Admin can create cross-entity users.
+                  </div>
+                )}
               </div>
               <div className="form-group">
                 <label className="form-label" htmlFor="emp-dept">Department *</label>
