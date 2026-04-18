@@ -367,7 +367,7 @@ img { max-width: 100%; display: block; }
   display: flex;
   flex-direction: column;
   background: var(--blue-lighter);
-  border-color: var(--blue-light);
+  border-color: #BFDBFE;
 }
 .tool-card.tool-card-group:hover {
   border-color: var(--blue);
