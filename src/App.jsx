@@ -22,6 +22,9 @@ const BusCalculator    = lazy(() => import('./pages/BusCalculator'))
 const AccessRules      = lazy(() => import('./pages/AccessRules'))
 const Catalog          = lazy(() => import('./pages/Catalog'))
 const TivForecastPage  = lazy(() => import('./tiv-forecast/pages/TivForecastPage'))
+const ProformaInvoice  = lazy(() => import('./pages/ProformaInvoice'))
+const MyProformas      = lazy(() => import('./pages/MyProformas'))
+const ProformaLog      = lazy(() => import('./pages/ProformaLog'))
 
 // Placeholder for pages not yet built
 const Soon = ({ name }) => (
@@ -88,7 +91,10 @@ export default function App() {
             <Route path="/employees"      element={<ProtectedRoute><Employees /></ProtectedRoute>} />
             <Route path="/quotation-log"  element={<ProtectedRoute><QuotationLog /></ProtectedRoute>} />
             <Route path="/catalog"        element={<ProtectedRoute><Catalog /></ProtectedRoute>} />
-            <Route path="/tiv-forecast"   element={<ProtectedRoute><TivForecastPage /></ProtectedRoute>} />
+            <Route path="/tiv-forecast"      element={<ProtectedRoute><TivForecastPage /></ProtectedRoute>} />
+            <Route path="/proforma-invoice"  element={<ProtectedRoute><ProformaInvoice /></ProtectedRoute>} />
+            <Route path="/my-proformas"      element={<ProtectedRoute><MyProformas /></ProtectedRoute>} />
+            <Route path="/proforma-log"      element={<ProtectedRoute><ProformaLog /></ProtectedRoute>} />
 
             {/* Access rules — always admin-only (hardcoded safety net) */}
             <Route
