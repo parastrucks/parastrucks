@@ -316,7 +316,7 @@ export default function Employees() {
     if ((deptCode === DEPT_SERVICE || deptCode === DEPT_SPARES) && !form.primary_outlet_id) {
       return 'Primary outlet is required for Service/Spares users.'
     }
-    if (deptCode === DEPT_BACK_OFFICE && !form.subdept_id) {
+    if (deptCode === DEPT_BACK_OFFICE && form.permission_level !== 'gm' && !form.subdept_id) {
       return 'Sub-department is required for Back Office users.'
     }
     return null
@@ -869,7 +869,7 @@ function EmployeeFormModal({
               </DeptSection>
             )}
 
-            {deptCode === 'back_office' && (
+            {deptCode === 'back_office' && form.permission_level !== 'gm' && (
               <DeptSection title="Back Office details">
                 <div className="form-group">
                   <label className="form-label" htmlFor="emp-subdept">Sub-department *</label>
