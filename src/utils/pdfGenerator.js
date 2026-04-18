@@ -678,3 +678,298 @@ export async function generateProformaPdf(data) {
 
   doc.save('ProformaInvoice_' + piNumber.replace(/[-/]/g, '_') + '.pdf')
 }
+
+export async function generateFinancierCopyPdf(data) {
+  const {
+    fcNumber, date, validUntil,
+    customer, entity, entityCode,
+    lineItems, tcsRate, tcsAmount, rtoTax, insurance, grandTotal,
+    chassisNo, engineNo,
+    preparedBy,
+  } = data
+
+  if (!entity) throw new Error('Cannot generate PDF: entity is missing')
+  if (!customer?.name) throw new Error('Cannot generate PDF: customer name is missing')
+  if (!lineItems || lineItems.length === 0) throw new Error('Cannot generate PDF: at least one line item is required')
+
+  const isPT = entityCode === 'PT'
+
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+  let y = MARGIN
+
+  const [parasLogo, alLogo] = await Promise.all([
+    loadImageAsDataURI('/paras-logo.png'),
+    getALLogo(),
+  ])
+
+  // Draw "(Financier's copy)" italic label right-aligned above the AL logo
+  doc.setFont('helvetica', 'italic')
+  doc.setFontSize(8)
+  doc.setTextColor(...GRAY)
+  doc.text("(Financier's copy)", PAGE_W - MARGIN, y, { align: 'right' })
+  y += 4
+
+  const LOGO_H = 14
+  if (parasLogo) {
+    doc.addImage(parasLogo, 'PNG', MARGIN, y, 42, LOGO_H)
+  }
+  if (alLogo) {
+    const alW = Math.round((188 / 40) * LOGO_H)
+    doc.addImage(alLogo, 'PNG', PAGE_W - MARGIN - alW, y, alW, LOGO_H)
+  }
+
+  y += LOGO_H + 2
+
+  doc.setFont('helvetica', 'italic')
+  doc.setFontSize(7.5)
+  doc.setTextColor(...GRAY)
+  doc.text('(Auth. Dealer :- Ashok Leyland India Ltd.)', MARGIN, y)
+  y += 4
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7.5)
+  doc.setTextColor(...GRAY_DARK)
+  const addrLines = doc.splitTextToSize('Main Office : ' + safe(entity.address), CONTENT_W)
+  doc.text(addrLines, MARGIN, y)
+  y += addrLines.length * 4 + 2
+
+  doc.setDrawColor(...BLUE)
+  doc.setLineWidth(0.6)
+  doc.line(MARGIN, y, PAGE_W - MARGIN, y)
+  y += 5
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(13)
+  doc.setTextColor(...GRAY_DARK)
+  doc.text('TAX INVOICE', PAGE_W / 2, y, { align: 'center' })
+  y += 7
+
+  doc.setFontSize(8.5)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(...GRAY_DARK)
+  doc.text('FC No: ' + fcNumber, MARGIN, y)
+  doc.text('DATE : ' + fmtDate(date), PAGE_W - MARGIN, y, { align: 'right' })
+  y += 6
+
+  y += 1
+
+  doc.setDrawColor(...GRAY_LIGHT)
+  doc.setLineWidth(0.2)
+  doc.line(MARGIN, y, PAGE_W - MARGIN, y)
+  y += 4
+
+  const custFields = [
+    ['NAME',          customer.name],
+    ['ADDRESS',       customer.address],
+    ['MOBILE NO',     customer.mobile],
+    ['GSTIN',         customer.gstin],
+    ['Hypo',          customer.hypothecation],
+  ]
+
+  doc.setFontSize(8.5)
+  custFields.forEach(([label, value]) => {
+    const valStr   = value ? String(value) : ''
+    const valLines = doc.splitTextToSize(valStr, CONTENT_W - 28)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(...GRAY_DARK)
+    doc.text(label + ':', MARGIN, y)
+    doc.setFont('helvetica', 'normal')
+    doc.text(valLines, MARGIN + 28, y)
+    y += valLines.length * 5
+  })
+
+  y += 2
+  doc.setDrawColor(...GRAY_LIGHT)
+  doc.line(MARGIN, y, PAGE_W - MARGIN, y)
+  y += 4
+
+  const totalQty = lineItems.reduce((s, i) => s + i.qty, 0)
+
+  const bodyRows = []
+  lineItems.forEach(item => {
+    bodyRows.push([
+      item.description,
+      { content: String(item.qty), styles: { halign: 'center' } },
+      { content: fmt(item.mrp), styles: { halign: 'right' } },
+      { content: fmt(item.total_cost), styles: { halign: 'right' } },
+    ])
+    // Chassis/engine as a separate bold sub-row (jsPDF-autotable can't mix weights in one cell)
+    if (chassisNo || engineNo) {
+      const label = [
+        chassisNo ? 'Chassis No: ' + chassisNo : null,
+        engineNo  ? 'Engine No: '  + engineNo  : null,
+      ].filter(Boolean).join('     ')
+      bodyRows.push([
+        { content: label, styles: { fontStyle: 'bold', fontSize: 8, textColor: GRAY_DARK } },
+        { content: '', styles: {} },
+        { content: '', styles: {} },
+        { content: '', styles: {} },
+      ])
+    }
+  })
+
+  bodyRows.push([
+    {
+      content: 'TCS ' + tcsRate + '% ……………………………………',
+      styles: { halign: 'right', fontStyle: 'normal', textColor: GRAY_DARK },
+    },
+    { content: '', styles: { halign: 'center' } },
+    { content: totalQty > 0 ? fmt(Math.round(tcsAmount / totalQty)) : '', styles: { halign: 'right' } },
+    { content: fmt(tcsAmount), styles: { halign: 'right' } },
+  ])
+
+  if (rtoTax) {
+    bodyRows.push([
+      {
+        content: 'RTO TAX (ADDITIONAL) ……………………….',
+        styles: { halign: 'left', fontStyle: 'normal', textColor: GRAY_DARK },
+      },
+      { content: '', styles: { halign: 'center' } },
+      { content: '', styles: { halign: 'right' } },
+      { content: fmt(rtoTax), styles: { halign: 'right' } },
+    ])
+  }
+
+  if (insurance) {
+    bodyRows.push([
+      {
+        content: 'INSURANCE (ADDITIONAL) ……………….',
+        styles: { halign: 'left', fontStyle: 'normal', textColor: GRAY_DARK },
+      },
+      { content: '', styles: { halign: 'center' } },
+      { content: '', styles: { halign: 'right' } },
+      { content: fmt(insurance), styles: { halign: 'right' } },
+    ])
+  }
+
+  autoTable(doc, {
+    startY: y,
+    margin: { left: MARGIN, right: MARGIN },
+    head: [[
+      { content: 'Particulars', styles: { halign: 'center' } },
+      { content: 'Qty.', styles: { halign: 'center' } },
+      { content: 'Unit Cost', styles: { halign: 'center' } },
+      { content: 'Amount', styles: { halign: 'center' } },
+    ]],
+    body: bodyRows,
+    foot: [[
+      { content: 'GRAND TOTAL', styles: { halign: 'right', fontStyle: 'bold', fontSize: 9, textColor: GRAY_DARK } },
+      { content: String(totalQty), styles: { halign: 'center', fontStyle: 'bold', fontSize: 9, textColor: GRAY_DARK } },
+      { content: '', styles: {} },
+      { content: fmt(grandTotal), styles: { halign: 'right', fontStyle: 'bold', fontSize: 9, textColor: GRAY_DARK } },
+    ]],
+    styles: {
+      fontSize: 8,
+      cellPadding: { top: 3, bottom: 3, left: 3, right: 3 },
+      valign: 'top',
+      overflow: 'linebreak',
+      lineColor: GRAY_LIGHT,
+      lineWidth: 0.2,
+    },
+    headStyles: {
+      fillColor: BLUE,
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+      fontSize: 8,
+    },
+    columnStyles: {
+      0: { cellWidth: C_PARTICULARS },
+      1: { cellWidth: C_QTY,      halign: 'center' },
+      2: { cellWidth: C_UNITCOST, halign: 'right' },
+      3: { cellWidth: C_AMOUNT,   halign: 'right' },
+    },
+    alternateRowStyles: { fillColor: [248, 252, 255] },
+    footStyles: {
+      fillColor: [235, 245, 252],
+      textColor: GRAY_DARK,
+      lineColor: GRAY_LIGHT,
+      lineWidth: 0.2,
+    },
+    showFoot: 'lastPage',
+  })
+
+  y = doc.lastAutoTable.finalY + 5
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(8)
+  doc.setTextColor(...GRAY_DARK)
+  doc.text(
+    'Note : Please issue DD / Cheque / RTGS in Favour of ' + safe(entity.full_name),
+    MARGIN, y
+  )
+  y += 5
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7.5)
+  doc.text('Account No. :- ' + safe(entity.bank_account), MARGIN, y); y += 4
+  doc.text('Bank Name :- ' + safe(entity.bank_name), MARGIN, y);       y += 4
+  doc.text('RTGS/NEFT/IFSC Code : ' + safe(entity.bank_ifsc), MARGIN, y); y += 7
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(8)
+  doc.text('Terms & Conditions', MARGIN, y)
+  y += 4
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(6.8)
+  doc.setTextColor(...GRAY)
+
+  const validityDays = validUntil
+    ? Math.ceil((new Date(validUntil) - new Date(date)) / (1000 * 60 * 60 * 24))
+    : null
+
+  const entityTerms = [...TERMS]
+  entityTerms[4] = isPT
+    ? 'Payments for all the above items will be by demand drafts, RTGS favouring to PARAS TRUCKS.'
+    : 'Payments for all the above items will be by demand drafts, RTGS favouring to PARAS TRUCKS AND BUSES.'
+  entityTerms[8] = isPT
+    ? 'Only the court of Hisar shall have jurisdiction in any proceedings relating to this contract.'
+    : 'Only the court of Ahmedabad shall have jurisdiction in any proceedings relating to this contract.'
+
+  const allTerms = [
+    validityDays != null
+      ? `This tax invoice (Financier's copy) is valid for ${validityDays} day${validityDays !== 1 ? 's' : ''} from the date of issue (until ${fmtDate(validUntil)}).`
+      : null,
+    ...entityTerms,
+  ].filter(Boolean)
+
+  allTerms.forEach((term, i) => {
+    const line = (i + 1) + '-  ' + term
+    const lines = doc.splitTextToSize(line, CONTENT_W)
+    doc.text(lines, MARGIN, y)
+    y += lines.length * 3.3 + 0.5
+  })
+
+  y += 5
+
+  const sigY = y
+  const rx = PAGE_W - MARGIN
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(8.5)
+  doc.setTextColor(...GRAY_DARK)
+  doc.text('For ' + safe(entity.full_name), rx, sigY, { align: 'right' })
+
+  const stamp = await loadImageAsDataURI(isPT ? '/pt-stamp.png' : '/al-stamp.png')
+  if (stamp) {
+    doc.addImage(stamp, 'PNG', rx - 33, sigY + 3, 33, 22)
+  }
+
+  const sigLineY = sigY + 26
+  doc.setDrawColor(...GRAY_LIGHT)
+  doc.setLineWidth(0.3)
+  doc.line(rx - 55, sigLineY, rx, sigLineY)
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7.5)
+  doc.setTextColor(...GRAY)
+  doc.text('Authorised Signatory', rx - 55, sigLineY + 4)
+
+  doc.line(MARGIN, sigLineY, MARGIN + 50, sigLineY)
+  doc.text("Customer's Signature", MARGIN, sigLineY + 4)
+
+  doc.setFontSize(7)
+  doc.text('GSTN:- ' + safe(entity.gstin), MARGIN, sigLineY + 12)
+
+  doc.save('FinancierCopy_' + fcNumber.replace(/[-/]/g, '_') + '.pdf')
+}
