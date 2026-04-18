@@ -388,6 +388,12 @@ img { max-width: 100%; display: block; }
   text-decoration: none;
   color: inherit;
 }
+.tool-card-group--open .tool-card-group-primary {
+  filter: blur(2px);
+  opacity: 0.5;
+  pointer-events: none;
+  transition: filter var(--t), opacity var(--t);
+}
 .tool-card-group-chevron {
   position: absolute;
   top: 10px;
