@@ -367,6 +367,9 @@ img { max-width: 100%; display: block; }
   display: flex;
   flex-direction: column;
 }
+.tool-card.tool-card-group--open {
+  z-index: 20;
+}
 .tool-card-group-primary {
   display: block;
   padding: 22px;

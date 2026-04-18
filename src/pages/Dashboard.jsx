@@ -104,7 +104,7 @@ function GroupCard({ group, canAccess }) {
   }, [open])
 
   return (
-    <div className="tool-card tool-card-group" ref={cardRef}>
+    <div className={`tool-card tool-card-group${open ? ' tool-card-group--open' : ''}`} ref={cardRef}>
       <Link to={effectivePrimaryTo} className="tool-card-group-primary">
         <div className="tool-card-icon">{group.icon}</div>
         <h3>{group.title}</h3>
