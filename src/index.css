@@ -366,9 +366,15 @@ img { max-width: 100%; display: block; }
   overflow: visible;
   display: flex;
   flex-direction: column;
+  background: var(--blue-lighter);
+  border-color: var(--blue-light);
+}
+.tool-card.tool-card-group:hover {
+  border-color: var(--blue);
 }
 .tool-card.tool-card-group--open {
   z-index: 20;
+  border-color: var(--blue);
 }
 .tool-card-group-primary {
   display: block;
@@ -376,11 +382,9 @@ img { max-width: 100%; display: block; }
   text-decoration: none;
   color: inherit;
   flex: 1;
-  /* leave room for chevron button in top-right */
   padding-right: 48px;
 }
 .tool-card-group-primary:hover {
-  /* card hover is handled by the parent .tool-card:hover */
   text-decoration: none;
   color: inherit;
 }
@@ -393,19 +397,29 @@ img { max-width: 100%; display: block; }
   display: flex;
   align-items: center;
   justify-content: center;
-  background: transparent;
-  border: 1px solid var(--gray-200);
+  background: var(--blue-light);
+  border: 1.5px solid var(--blue-light);
   border-radius: 6px;
   cursor: pointer;
-  font-size: 10px;
-  color: var(--gray-500);
+  color: var(--blue);
   transition: background var(--t), border-color var(--t);
   z-index: 2;
 }
 .tool-card-group-chevron:hover {
-  background: var(--gray-100);
-  border-color: var(--gray-300);
-  color: var(--gray-700);
+  background: #d6eaf8;
+  border-color: var(--blue);
+}
+.tool-card-group-chevron-icon {
+  display: block;
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg) translate(-1px, -2px);
+  transition: transform var(--t);
+}
+.tool-card-group--open .tool-card-group-chevron-icon {
+  transform: rotate(-135deg) translate(-1px, 2px);
 }
 .tool-card-group-menu {
   position: absolute;
@@ -413,7 +427,7 @@ img { max-width: 100%; display: block; }
   right: 0;
   min-width: 220px;
   background: var(--white);
-  border: 1.5px solid var(--gray-200);
+  border: 1.5px solid var(--blue-light);
   border-radius: var(--radius);
   box-shadow: var(--shadow-md);
   z-index: 10;
@@ -434,7 +448,7 @@ img { max-width: 100%; display: block; }
   transition: background var(--t);
 }
 .tool-card-group-menu-item:hover {
-  background: var(--blue-50);
+  background: var(--blue-light);
   color: var(--blue);
 }
 

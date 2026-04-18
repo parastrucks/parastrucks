@@ -120,7 +120,7 @@ function GroupCard({ group, canAccess }) {
             aria-label={`More options for ${group.title}`}
             type="button"
           >
-            {open ? '▲' : '▼'}
+            <span className="tool-card-group-chevron-icon" />
           </button>
           {open && (
             <div className="tool-card-group-menu" role="menu">
