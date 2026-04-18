@@ -99,7 +99,17 @@ export default function ForecastTable({ title, subtitle, showTitle = true, forec
                     else total += row.ptb || 0
                   }
                 }
-                return <td key={fm.label} colSpan={judgmentRows[fm.label] ? 2 : 1} style={{ textAlign: 'right', padding: '7px 10px', fontSize: 13 }}>{total || '—'}</td>
+                const jRow = judgmentRows[fm.label]
+                if (jRow) {
+                  const jTotal = SEGMENTS.reduce((s, seg) => s + (jRow[seg] || 0), 0)
+                  return (
+                    <>
+                      <td key={`${fm.label}-m`} style={{ textAlign: 'right', padding: '7px 10px', fontSize: 13 }}>{total || '—'}</td>
+                      <td key={`${fm.label}-j`} style={{ textAlign: 'right', padding: '7px 10px', fontSize: 13, color: 'var(--amber)' }}>{jTotal || '—'}</td>
+                    </>
+                  )
+                }
+                return <td key={fm.label} style={{ textAlign: 'right', padding: '7px 10px', fontSize: 13 }}>{total || '—'}</td>
               })}
             </tr>
           </tbody>
