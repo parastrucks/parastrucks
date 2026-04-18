@@ -1,5 +1,5 @@
-import { NavLink, useLocation } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabase'
 
@@ -52,7 +52,6 @@ function NavGroup({ group, canAccess }) {
   const isGroupActive = accessibleItems.some(item => location.pathname === item.to)
   const [open, setOpen] = useState(isGroupActive)
 
-  // Auto-expand when navigating into this group from elsewhere (e.g. dashboard)
   useEffect(() => {
     if (isGroupActive) setOpen(true)
   }, [isGroupActive])
@@ -86,6 +85,78 @@ function NavGroup({ group, canAccess }) {
   )
 }
 
+function UserMenu({ profile, entityCode }) {
+  const navigate = useNavigate()
+  const { signOut } = useAuth()
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    function onMouseDown(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false)
+    }
+    function onKeyDown(e) {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', onMouseDown)
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', onMouseDown)
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [open])
+
+  const initials = profile.full_name
+    ?.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase() || '?'
+
+  async function handleSignOut() {
+    setOpen(false)
+    await signOut()
+    navigate('/login')
+  }
+
+  return (
+    <div className={`sidebar-entity sidebar-entity--menu${open ? ' open' : ''}`} ref={ref}>
+      <button
+        type="button"
+        className="sidebar-entity-trigger"
+        onClick={() => setOpen(o => !o)}
+        aria-expanded={open}
+        aria-haspopup="menu"
+      >
+        <span className="sidebar-avatar-sm">{initials}</span>
+        <span className="sidebar-entity-info">
+          <span className="sidebar-username">{profile.full_name}</span>
+          {entityCode && <span className="entity-badge">{entityCode}</span>}
+        </span>
+        <span className="sidebar-entity-caret" />
+      </button>
+
+      {open && (
+        <div className="sidebar-entity-dropdown" role="menu">
+          <Link
+            to="/profile"
+            className="sidebar-user-dropdown-item"
+            role="menuitem"
+            onClick={() => setOpen(false)}
+          >
+            👤 Profile
+          </Link>
+          <button
+            type="button"
+            className="sidebar-user-dropdown-item sidebar-user-dropdown-signout"
+            role="menuitem"
+            onClick={handleSignOut}
+          >
+            ↩ Sign Out
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function Sidebar() {
   const { profile, canAccess } = useAuth()
 
@@ -108,10 +179,7 @@ export default function Sidebar() {
         <img src="/paras-logo.png" alt="Paras Trucks" />
       </div>
 
-      <div className="sidebar-entity">
-        <span className="entity-badge">{entityCode || '—'}</span>
-        <span className="sidebar-username">{profile.full_name}</span>
-      </div>
+      <UserMenu profile={profile} entityCode={entityCode} />
 
       <nav className="sidebar-nav">
         <NavLink to="/" end className={({ isActive }) => `sidebar-link${isActive ? ' active' : ''}`}>
@@ -134,7 +202,6 @@ export default function Sidebar() {
           </NavLink>
         ))}
       </nav>
-
     </aside>
   )
 }
