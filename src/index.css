@@ -361,6 +361,7 @@ img { max-width: 100%; display: block; }
 }
 
 /* ─── GROUP CARD (Dashboard) ─────────────────────────────────── */
+.tool-card.tool-card-group::before { display: none; }
 .tool-card.tool-card-group {
   padding: 0;
   overflow: visible;
@@ -421,11 +422,11 @@ img { max-width: 100%; display: block; }
   height: 7px;
   border-right: 2px solid currentColor;
   border-bottom: 2px solid currentColor;
-  transform: rotate(45deg) translate(-1px, -2px);
+  transform: translateY(-2px) rotate(45deg);
   transition: transform var(--t);
 }
 .tool-card-group--open .tool-card-group-chevron-icon {
-  transform: rotate(-135deg) translate(-1px, 2px);
+  transform: translateY(2px) rotate(-135deg);
 }
 .tool-card-group-menu {
   position: absolute;
