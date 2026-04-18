@@ -360,6 +360,81 @@ img { max-width: 100%; display: block; }
   line-height: 1.5;
 }
 
+/* ─── GROUP CARD (Dashboard) ─────────────────────────────────── */
+.tool-card.tool-card-group {
+  padding: 0;
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
+}
+.tool-card-group-primary {
+  display: block;
+  padding: 22px;
+  text-decoration: none;
+  color: inherit;
+  flex: 1;
+  /* leave room for chevron button in top-right */
+  padding-right: 48px;
+}
+.tool-card-group-primary:hover {
+  /* card hover is handled by the parent .tool-card:hover */
+  text-decoration: none;
+  color: inherit;
+}
+.tool-card-group-chevron {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid var(--gray-200);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 10px;
+  color: var(--gray-500);
+  transition: background var(--t), border-color var(--t);
+  z-index: 2;
+}
+.tool-card-group-chevron:hover {
+  background: var(--gray-100);
+  border-color: var(--gray-300);
+  color: var(--gray-700);
+}
+.tool-card-group-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 220px;
+  background: var(--white);
+  border: 1.5px solid var(--gray-200);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  z-index: 10;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tool-card-group-menu-item {
+  display: flex;
+  align-items: center;
+  padding: 9px 12px;
+  border-radius: 4px;
+  text-decoration: none;
+  color: var(--gray-800);
+  font-size: 13.5px;
+  cursor: pointer;
+  transition: background var(--t);
+}
+.tool-card-group-menu-item:hover {
+  background: var(--blue-50);
+  color: var(--blue);
+}
+
 /* ─── FORMS ─────────────────────────────────────────────────── */
 .form-group {
   margin-bottom: 16px;

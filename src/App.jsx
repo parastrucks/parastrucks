@@ -25,6 +25,9 @@ const TivForecastPage  = lazy(() => import('./tiv-forecast/pages/TivForecastPage
 const ProformaInvoice  = lazy(() => import('./pages/ProformaInvoice'))
 const MyProformas      = lazy(() => import('./pages/MyProformas'))
 const ProformaLog      = lazy(() => import('./pages/ProformaLog'))
+const FinancierCopy    = lazy(() => import('./pages/FinancierCopy'))
+const MyFinancierCopies = lazy(() => import('./pages/MyFinancierCopies'))
+const FinancierCopyLog = lazy(() => import('./pages/FinancierCopyLog'))
 
 // Placeholder for pages not yet built
 const Soon = ({ name }) => (
@@ -95,6 +98,9 @@ export default function App() {
             <Route path="/proforma-invoice"  element={<ProtectedRoute><ProformaInvoice /></ProtectedRoute>} />
             <Route path="/my-proformas"      element={<ProtectedRoute><MyProformas /></ProtectedRoute>} />
             <Route path="/proforma-log"      element={<ProtectedRoute><ProformaLog /></ProtectedRoute>} />
+            <Route path="/financier-copy"       element={<ProtectedRoute><FinancierCopy /></ProtectedRoute>} />
+            <Route path="/my-financier-copies"  element={<ProtectedRoute><MyFinancierCopies /></ProtectedRoute>} />
+            <Route path="/financier-copy-log"   element={<ProtectedRoute><FinancierCopyLog /></ProtectedRoute>} />
 
             {/* Access rules — always admin-only (hardcoded safety net) */}
             <Route
