@@ -426,30 +426,34 @@ img { max-width: 100%; display: block; }
   top: 48px;
   right: 10px;
   min-width: 220px;
-  background: var(--white);
-  border: 1.5px solid var(--blue-light);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-md);
+  background: transparent;
   z-index: 10;
-  padding: 4px;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 6px;
 }
 .tool-card-group-menu-item {
   display: flex;
   align-items: center;
-  padding: 9px 12px;
-  border-radius: 4px;
+  padding: 11px 14px;
+  border-radius: var(--radius-sm);
   text-decoration: none;
   color: var(--gray-800);
   font-size: 13.5px;
+  font-weight: 500;
   cursor: pointer;
-  transition: background var(--t);
+  background: var(--white);
+  border: 1.5px solid var(--gray-200);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+  transition: border-color var(--t), box-shadow var(--t), transform var(--t), color var(--t);
 }
 .tool-card-group-menu-item:hover {
-  background: var(--blue-light);
+  background: var(--white);
+  border-color: var(--blue);
+  box-shadow: 0 4px 12px rgba(0,111,173,0.15);
   color: var(--blue);
+  transform: translateY(-1px);
 }
 
 /* ─── FORMS ─────────────────────────────────────────────────── */
