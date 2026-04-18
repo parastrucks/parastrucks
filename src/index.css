@@ -397,17 +397,17 @@ img { max-width: 100%; display: block; }
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--blue-light);
-  border: 1.5px solid var(--blue-light);
+  background: var(--blue);
+  border: 1.5px solid var(--blue);
   border-radius: 6px;
   cursor: pointer;
-  color: var(--blue);
+  color: var(--white);
   transition: background var(--t), border-color var(--t);
   z-index: 2;
 }
 .tool-card-group-chevron:hover {
-  background: #d6eaf8;
-  border-color: var(--blue);
+  background: #005a8e;
+  border-color: #005a8e;
 }
 .tool-card-group-chevron-icon {
   display: block;
@@ -423,8 +423,8 @@ img { max-width: 100%; display: block; }
 }
 .tool-card-group-menu {
   position: absolute;
-  top: calc(100% + 4px);
-  right: 0;
+  top: 48px;
+  right: 10px;
   min-width: 220px;
   background: var(--white);
   border: 1.5px solid var(--blue-light);
