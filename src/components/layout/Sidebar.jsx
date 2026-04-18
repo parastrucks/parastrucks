@@ -1,4 +1,4 @@
-import { NavLink, useNavigate, useLocation } from 'react-router-dom'
+import { NavLink, useLocation } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabase'
@@ -87,8 +87,7 @@ function NavGroup({ group, canAccess }) {
 }
 
 export default function Sidebar() {
-  const { profile, signOut, canAccess } = useAuth()
-  const navigate = useNavigate()
+  const { profile, canAccess } = useAuth()
 
   const [entityCode, setEntityCode] = useState(null)
   useEffect(() => {
@@ -102,11 +101,6 @@ export default function Sidebar() {
   if (!profile) return null
 
   const ungroupedItems = UNGROUPED.filter(item => canAccess(item.to))
-
-  async function handleSignOut() {
-    await signOut()
-    navigate('/login')
-  }
 
   return (
     <aside className="sidebar">
@@ -141,17 +135,6 @@ export default function Sidebar() {
         ))}
       </nav>
 
-      <div className="sidebar-user-bar">
-        <NavLink to="/profile" className="sidebar-user-bar-profile" title="Profile">
-          <span className="sidebar-avatar">
-            {profile.full_name?.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()}
-          </span>
-          <span className="sidebar-user-name">{profile.full_name}</span>
-        </NavLink>
-        <button className="sidebar-user-bar-signout" onClick={handleSignOut} title="Sign out">
-          ↩
-        </button>
-      </div>
     </aside>
   )
 }
