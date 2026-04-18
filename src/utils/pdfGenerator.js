@@ -186,12 +186,14 @@ export async function generateQuotationPDF(data) {
 
   doc.setFontSize(8.5)
   custFields.forEach(([label, value]) => {
+    const valStr   = value ? String(value) : ''
+    const valLines = doc.splitTextToSize(valStr, CONTENT_W - 28)
     doc.setFont('helvetica', 'bold')
     doc.setTextColor(...GRAY_DARK)
     doc.text(label + ':', MARGIN, y)
     doc.setFont('helvetica', 'normal')
-    doc.text(value ? String(value) : '', MARGIN + 28, y)
-    y += 5
+    doc.text(valLines, MARGIN + 28, y)
+    y += valLines.length * 5
   })
 
   y += 2
@@ -471,12 +473,14 @@ export async function generateProformaPdf(data) {
 
   doc.setFontSize(8.5)
   custFields.forEach(([label, value]) => {
+    const valStr   = value ? String(value) : ''
+    const valLines = doc.splitTextToSize(valStr, CONTENT_W - 28)
     doc.setFont('helvetica', 'bold')
     doc.setTextColor(...GRAY_DARK)
     doc.text(label + ':', MARGIN, y)
     doc.setFont('helvetica', 'normal')
-    doc.text(value ? String(value) : '', MARGIN + 28, y)
-    y += 5
+    doc.text(valLines, MARGIN + 28, y)
+    y += valLines.length * 5
   })
 
   y += 2
@@ -486,19 +490,27 @@ export async function generateProformaPdf(data) {
 
   const totalQty = lineItems.reduce((s, i) => s + i.qty, 0)
 
-  const bodyRows = lineItems.map(item => {
-    const particulars = [
+  const bodyRows = []
+  lineItems.forEach(item => {
+    bodyRows.push([
       item.description,
-      chassisNo ? 'Chassis No: ' + chassisNo : null,
-      engineNo  ? 'Engine No: '  + engineNo  : null,
-    ].filter(Boolean).join('\n')
-
-    return [
-      particulars,
       { content: String(item.qty), styles: { halign: 'center' } },
       { content: fmt(item.mrp), styles: { halign: 'right' } },
       { content: fmt(item.total_cost), styles: { halign: 'right' } },
-    ]
+    ])
+    // Chassis/engine as a separate bold sub-row (jsPDF-autotable can't mix weights in one cell)
+    if (chassisNo || engineNo) {
+      const label = [
+        chassisNo ? 'Chassis No: ' + chassisNo : null,
+        engineNo  ? 'Engine No: '  + engineNo  : null,
+      ].filter(Boolean).join('     ')
+      bodyRows.push([
+        { content: label, styles: { fontStyle: 'bold', fontSize: 8, textColor: GRAY_DARK } },
+        { content: '', styles: {} },
+        { content: '', styles: {} },
+        { content: '', styles: {} },
+      ])
+    }
   })
 
   bodyRows.push([

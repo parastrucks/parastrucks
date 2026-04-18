@@ -20,7 +20,7 @@ const DEFAULT_TCS = 1
 
 let rowIdCounter = 1
 function newRow() {
-  return { id: rowIdCounter++, chassis_no: '', engine_no: '', vehicleOverride: null }
+  return { id: rowIdCounter++, chassis_no: '', engine_no: '', vehicleOverride: null, description: '' }
 }
 
 function calcTotals(vehicle, tcsRate, rtoTax, insurance) {
@@ -143,6 +143,16 @@ export default function ProformaInvoice() {
     return () => { cancelled = true }
   }, [])
 
+  // When default vehicle changes, pre-fill descriptions for rows that haven't been edited yet
+  useEffect(() => {
+    if (!defaultVehicle) return
+    setRows(prev => prev.map(r =>
+      !r.vehicleOverride && r.description === ''
+        ? { ...r, description: defaultVehicle.description }
+        : r
+    ))
+  }, [defaultVehicle])
+
   // Close dropdowns on outside click
   useEffect(() => {
     function onClickOutside(e) {
@@ -177,12 +187,18 @@ export default function ProformaInvoice() {
   }
 
   function clearOverride(rowId) {
-    setRows(prev => prev.map(r => r.id === rowId ? { ...r, vehicleOverride: null } : r))
+    setRows(prev => prev.map(r => r.id === rowId
+      ? { ...r, vehicleOverride: null, description: defaultVehicle?.description || '' }
+      : r
+    ))
     setOverrideOpenId(null)
   }
 
   function selectOverrideVehicle(rowId, vehicle) {
-    setRows(prev => prev.map(r => r.id === rowId ? { ...r, vehicleOverride: vehicle } : r))
+    setRows(prev => prev.map(r => r.id === rowId
+      ? { ...r, vehicleOverride: vehicle, description: vehicle.description }
+      : r
+    ))
     setOverrideOpenId(null)
     setOverrideQuery('')
     setOverrideResults([])
@@ -228,7 +244,7 @@ export default function ProformaInvoice() {
 
         const lineItems = [{
           cbn:         vehicle.cbn,
-          description: vehicle.description,
+          description: row.description.trim() || vehicle.description,
           qty:         1,
           mrp:         vehicle.mrp_incl_gst,
           total_cost:  vehicle.mrp_incl_gst,
@@ -481,7 +497,7 @@ export default function ProformaInvoice() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {rows.map((row, idx) => (
                   <div key={row.id} style={{ border: '1px solid var(--gray-200)', borderRadius: 8, padding: '10px 12px', background: 'var(--gray-50)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: row.vehicleOverride ? 8 : 0, flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
                       <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--gray-400)', width: 20, flexShrink: 0 }}>#{idx + 1}</span>
                       <input
                         className="form-input"
@@ -519,6 +535,19 @@ export default function ProformaInvoice() {
                           ✕
                         </button>
                       )}
+                    </div>
+
+                    {/* Editable Particulars */}
+                    <div style={{ paddingLeft: 28 }}>
+                      <textarea
+                        className="form-input"
+                        rows={3}
+                        style={{ minHeight: 60, resize: 'vertical' }}
+                        value={row.description}
+                        onChange={e => updateRow(row.id, 'description', e.target.value)}
+                        placeholder="Particulars / model description"
+                        aria-label={`Row ${idx + 1} description`}
+                      />
                     </div>
 
                     {/* Per-row vehicle override chip */}
