@@ -448,7 +448,7 @@ export default function ProformaInvoice() {
                       {defaultSearch.results.map(v => (
                         <div
                           key={v.id}
-                          className="search-result-item"
+                          className="search-item"
                           onMouseDown={e => {
                             e.preventDefault()
                             setDefaultVehicle(v)
@@ -456,8 +456,8 @@ export default function ProformaInvoice() {
                             defaultSearch.setShowDropdown(false)
                           }}
                         >
-                          <div className="sri-main">{v.sub_category || v.description}</div>
-                          <div className="sri-sub">{v.cbn} · {v.segment} · {fmtINR(v.mrp_incl_gst)}</div>
+                          <div className="search-item-name">{v.sub_category || v.description}</div>
+                          <div className="search-item-meta">{v.cbn} · {v.segment} · {fmtINR(v.mrp_incl_gst)}</div>
                         </div>
                       ))}
                     </div>
@@ -584,11 +584,11 @@ export default function ProformaInvoice() {
                             {overrideResults.map(v => (
                               <div
                                 key={v.id}
-                                className="search-result-item"
+                                className="search-item"
                                 onMouseDown={e => { e.preventDefault(); selectOverrideVehicle(row.id, v) }}
                               >
-                                <div className="sri-main">{v.sub_category || v.description}</div>
-                                <div className="sri-sub">{v.cbn} · {fmtINR(v.mrp_incl_gst)}</div>
+                                <div className="search-item-name">{v.sub_category || v.description}</div>
+                                <div className="search-item-meta">{v.cbn} · {fmtINR(v.mrp_incl_gst)}</div>
                               </div>
                             ))}
                           </div>
