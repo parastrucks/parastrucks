@@ -55,7 +55,11 @@
       "Bash(git push:*)",
       "mcp__dfce7dec-e0a2-4afc-9db0-362f4cd2df62__deploy_edge_function",
       "mcp__dfce7dec-e0a2-4afc-9db0-362f4cd2df62__get_logs",
-      "mcp__dfce7dec-e0a2-4afc-9db0-362f4cd2df62__get_edge_function"
+      "mcp__dfce7dec-e0a2-4afc-9db0-362f4cd2df62__get_edge_function",
+      "Bash(git -C D:/PTB/Website/portal_phase1a_setup/portal log --oneline -3)",
+      "Bash(git restore *)",
+      "Bash(git fetch *)",
+      "Bash(git stash *)"
     ]
   }
 }

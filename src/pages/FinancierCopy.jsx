@@ -19,16 +19,22 @@ const SEGMENT_FILTER = {
 const DEFAULT_TCS = 1
 
 let rowIdCounter = 1
-function newRow() {
-  return { id: rowIdCounter++, chassis_no: '', engine_no: '', vehicleOverride: null, description: '' }
+let modelIdCounter = 1
+
+function newRow(vehicle) {
+  return {
+    id: rowIdCounter++,
+    chassis_no: '',
+    engine_no: '',
+    description: vehicle?.description || '',
+    mrp: vehicle?.mrp_incl_gst ?? '',
+    rtoTax: '',
+    insurance: '',
+  }
 }
 
-function calcTotals(vehicle, tcsRate, rtoTax, insurance) {
-  if (!vehicle) return { vehicleSubtotal: 0, tcsAmount: 0, grandTotal: 0 }
-  const vehicleSubtotal = vehicle.mrp_incl_gst
-  const tcsAmount = Math.round(vehicleSubtotal * tcsRate / 100)
-  const grandTotal = vehicleSubtotal + tcsAmount + (parseInt(rtoTax, 10) || 0) + (parseInt(insurance, 10) || 0)
-  return { vehicleSubtotal, tcsAmount, grandTotal }
+function newModel(vehicle) {
+  return { id: modelIdCounter++, vehicle, rows: [newRow(vehicle)] }
 }
 
 function fmtINR(n) {
@@ -45,7 +51,6 @@ function endOfMonth() {
   return d.toISOString().split('T')[0]
 }
 
-// Shared vehicle search hook used by both the default picker and per-row override
 function useVehicleSearch(catalog, fuseInst) {
   const [query, setQuery] = useState('')
   const debouncedQuery = useDebounce(query, 150)
@@ -73,50 +78,27 @@ export default function FinancierCopy() {
   const { profile } = useAuth()
   const toast = useToast()
 
-  // Catalog
   const [catalog, setCatalog] = useState([])
   const [fuseInst, setFuseInst] = useState(null)
   const [catalogLoading, setCatalogLoading] = useState(true)
   const [catalogError, setCatalogError] = useState(false)
 
-  // Default vehicle (shared across all rows unless overridden)
-  const [defaultVehicle, setDefaultVehicle] = useState(null)
-  const defaultSearchRef = useRef(null)
-  const defaultSearch = useVehicleSearch(catalog, fuseInst)
+  const searchRef = useRef(null)
+  const search = useVehicleSearch(catalog, fuseInst)
 
-  // Per-row override search — track which row is expanding its override
-  const [overrideOpenId, setOverrideOpenId] = useState(null)
-  const [overrideQuery, setOverrideQuery] = useState('')
-  const debouncedOverrideQuery = useDebounce(overrideQuery, 150)
-  const [overrideResults, setOverrideResults] = useState([])
-  const overrideRef = useRef(null)
+  // models: [{ id, vehicle, rows: [{id, chassis_no, engine_no, description, mrp, rtoTax, insurance}] }]
+  const [models, setModels] = useState([])
 
-  useEffect(() => {
-    if (!overrideQuery.trim()) { setOverrideResults([]); return }
-    const tmpFuse = new Fuse(catalog, { keys: [{ name: 'sub_category', weight: 3 }, { name: 'cbn', weight: 2 }, { name: 'description', weight: 1 }], threshold: 0.35, minMatchCharLength: 2 })
-    setOverrideResults(tmpFuse.search(overrideQuery).map(r => r.item).slice(0, 8))
-  }, [debouncedOverrideQuery, catalog])
-
-  // Chassis/engine rows
-  const [rows, setRows] = useState([newRow()])
-
-  // Customer fields
   const [customer, setCustomer] = useState({
     name: '', address: '', mobile: '', gstin: '', hypothecation: '',
   })
   const [validUntil, setValidUntil] = useState(endOfMonth())
-
-  // Extras (apply to every FC in the batch)
-  const [rtoTax, setRtoTax] = useState('')
-  const [insurance, setInsurance] = useState('')
   const [tcsRate] = useState(DEFAULT_TCS)
 
-  // Submission state
   const [saving, setSaving] = useState(false)
   const [savedCount, setSavedCount] = useState(0)
   const [error, setError] = useState('')
 
-  // Load catalog on mount
   useEffect(() => {
     let cancelled = false
     async function load() {
@@ -143,68 +125,60 @@ export default function FinancierCopy() {
     return () => { cancelled = true }
   }, [])
 
-  // When default vehicle changes, pre-fill descriptions for rows that haven't been edited yet
-  useEffect(() => {
-    if (!defaultVehicle) return
-    setRows(prev => prev.map(r =>
-      !r.vehicleOverride && r.description === ''
-        ? { ...r, description: defaultVehicle.description }
-        : r
-    ))
-  }, [defaultVehicle])
-
-  // Close dropdowns on outside click
   useEffect(() => {
     function onClickOutside(e) {
-      if (defaultSearchRef.current && !defaultSearchRef.current.contains(e.target)) {
-        defaultSearch.setShowDropdown(false)
-      }
-      if (overrideRef.current && !overrideRef.current.contains(e.target)) {
-        setOverrideOpenId(null)
-        setOverrideQuery('')
+      if (searchRef.current && !searchRef.current.contains(e.target)) {
+        search.setShowDropdown(false)
       }
     }
     document.addEventListener('mousedown', onClickOutside)
     return () => document.removeEventListener('mousedown', onClickOutside)
   }, [])
 
-  function addRow() {
-    setRows(prev => [...prev, newRow()])
+  function addModel(vehicle) {
+    setModels(prev => [...prev, newModel(vehicle)])
+    search.setQuery('')
+    search.setShowDropdown(false)
   }
 
-  function removeRow(id) {
-    setRows(prev => prev.filter(r => r.id !== id))
+  function removeModel(modelId) {
+    setModels(prev => prev.filter(m => m.id !== modelId))
   }
 
-  function updateRow(id, field, value) {
-    setRows(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r))
-  }
-
-  function openOverride(rowId) {
-    setOverrideOpenId(rowId)
-    setOverrideQuery('')
-    setOverrideResults([])
-  }
-
-  function clearOverride(rowId) {
-    setRows(prev => prev.map(r => r.id === rowId
-      ? { ...r, vehicleOverride: null, description: defaultVehicle?.description || '' }
-      : r
+  function addRow(modelId) {
+    setModels(prev => prev.map(m =>
+      m.id === modelId ? { ...m, rows: [...m.rows, newRow(m.vehicle)] } : m
     ))
-    setOverrideOpenId(null)
   }
 
-  function selectOverrideVehicle(rowId, vehicle) {
-    setRows(prev => prev.map(r => r.id === rowId
-      ? { ...r, vehicleOverride: vehicle, description: vehicle.description }
-      : r
+  function removeRow(modelId, rowId) {
+    setModels(prev => {
+      const next = prev.map(m =>
+        m.id === modelId ? { ...m, rows: m.rows.filter(r => r.id !== rowId) } : m
+      )
+      return next.filter(m => m.rows.length > 0)
+    })
+  }
+
+  function updateRow(modelId, rowId, field, value) {
+    setModels(prev => prev.map(m =>
+      m.id === modelId
+        ? { ...m, rows: m.rows.map(r => r.id === rowId ? { ...r, [field]: value } : r) }
+        : m
     ))
-    setOverrideOpenId(null)
-    setOverrideQuery('')
-    setOverrideResults([])
   }
 
-  const { vehicleSubtotal, tcsAmount, grandTotal } = calcTotals(defaultVehicle, tcsRate, rtoTax, insurance)
+  const totalRows = models.reduce((n, m) => n + m.rows.length, 0)
+
+  // Batch totals
+  const totalMrp = models.reduce((s, m) => s + m.rows.reduce((ss, r) => ss + (parseInt(r.mrp, 10) || 0), 0), 0)
+  const totalTcs = models.reduce((s, m) =>
+    s + m.rows.reduce((ss, r) => ss + Math.round(((parseInt(r.mrp, 10) || 0) * tcsRate) / 100), 0), 0)
+  const totalRto = models.reduce((s, m) => s + m.rows.reduce((ss, r) => ss + (parseInt(r.rtoTax, 10) || 0), 0), 0)
+  const totalIns = models.reduce((s, m) => s + m.rows.reduce((ss, r) => ss + (parseInt(r.insurance, 10) || 0), 0), 0)
+  const grandTotal = totalMrp + totalTcs + totalRto + totalIns
+
+  const anyInvalidMrp = models.some(m => m.rows.some(r => !(parseInt(r.mrp, 10) > 0)))
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -212,15 +186,27 @@ export default function FinancierCopy() {
     setSavedCount(0)
 
     if (!customer.name.trim()) { setError('Customer name is required.'); return }
-    if (!defaultVehicle) { setError('Select a default vehicle.'); return }
+    if (customer.gstin.trim() && customer.gstin.trim().length !== 15) {
+      setError('GSTIN must be exactly 15 characters.'); return
+    }
+    if (totalRows === 0) { setError('Select at least one vehicle.'); return }
 
-    const emptyRow = rows.find(r => !r.chassis_no.trim() || !r.engine_no.trim())
-    if (emptyRow) { setError('All rows require both Chassis No and Engine No.'); return }
+    for (let mi = 0; mi < models.length; mi++) {
+      const m = models[mi]
+      for (let ri = 0; ri < m.rows.length; ri++) {
+        const r = m.rows[ri]
+        if (!r.chassis_no.trim() || !r.engine_no.trim()) {
+          setError(`Model ${mi + 1} row ${ri + 1}: Chassis No and Engine No required.`); return
+        }
+        if (!(parseInt(r.mrp, 10) > 0)) {
+          setError(`Model ${mi + 1} row ${ri + 1}: MRP must be greater than 0.`); return
+        }
+      }
+    }
 
     setSaving(true)
 
     try {
-      // Resolve entity once
       const { data: ent, error: eErr } = profile?.entity_id
         ? await supabase.from('entities')
             .select('id, code, full_name, address, gstin, bank_name, bank_account, bank_ifsc')
@@ -234,84 +220,82 @@ export default function FinancierCopy() {
       const entityCode = ent.code
       const entityData = { full_name: ent.full_name, address: ent.address, gstin: ent.gstin, bank_name: ent.bank_name, bank_account: ent.bank_account, bank_ifsc: ent.bank_ifsc }
 
-      const rtoVal = parseInt(rtoTax, 10) || null
-      const insVal = parseInt(insurance, 10) || null
-
       let count = 0
-      for (const row of rows) {
-        const vehicle = row.vehicleOverride || defaultVehicle
+      for (const model of models) {
+        const vehicle = model.vehicle
         const brandId = vehicle.brand_id
 
-        const lineItems = [{
-          cbn:         vehicle.cbn,
-          description: row.description.trim() || vehicle.description,
-          qty:         1,
-          mrp:         vehicle.mrp_incl_gst,
-          total_cost:  vehicle.mrp_incl_gst,
-          basic_amt:   Math.round(vehicle.mrp_incl_gst / 1.18),
-          gst_amt:     vehicle.mrp_incl_gst - Math.round(vehicle.mrp_incl_gst / 1.18),
-          brand_id:    brandId,
-        }]
+        for (const row of model.rows) {
+          const mrp = parseInt(row.mrp, 10) || 0
+          const rtoVal = parseInt(row.rtoTax, 10) || null
+          const insVal = parseInt(row.insurance, 10) || null
 
-        const rowTcsAmount = Math.round(vehicle.mrp_incl_gst * tcsRate / 100)
-        const rowGrandTotal = vehicle.mrp_incl_gst + rowTcsAmount + (rtoVal || 0) + (insVal || 0)
+          const lineItems = [{
+            cbn:         vehicle.cbn,
+            description: row.description.trim() || vehicle.description,
+            qty:         1,
+            mrp,
+            total_cost:  mrp,
+            basic_amt:   Math.round(mrp / 1.18),
+            gst_amt:     mrp - Math.round(mrp / 1.18),
+            brand_id:    brandId,
+          }]
 
-        const { data: fcNum, error: rpcErr } = await supabase.rpc('next_financier_copy_number', { p_entity_id: entityId })
-        if (rpcErr) throw new Error(`Row ${count + 1}: ${rpcErr.message}`)
+          const rowTcsAmount = Math.round(mrp * tcsRate / 100)
+          const rowGrandTotal = mrp + rowTcsAmount + (rtoVal || 0) + (insVal || 0)
 
-        const { error: insertErr } = await supabase.from('financier_copies').insert({
-          fc_number:        fcNum,
-          entity_id:        entityId,
-          brand_id:         brandId,
-          created_by:       profile.id,
-          chassis_no:       row.chassis_no.trim(),
-          engine_no:        row.engine_no.trim(),
-          customer_name:    customer.name.trim(),
-          customer_address: customer.address.trim() || null,
-          customer_mobile:  customer.mobile.trim() || null,
-          customer_gstin:   customer.gstin.trim() || null,
-          hypothecation:    customer.hypothecation.trim() || null,
-          valid_until:      validUntil,
-          line_items:       lineItems,
-          tcs_rate:         tcsRate,
-          tcs_amount:       rowTcsAmount,
-          rto_tax:          rtoVal,
-          insurance:        insVal,
-          grand_total:      rowGrandTotal,
-        })
-        if (insertErr) throw new Error(`Row ${count + 1}: ${insertErr.message}`)
+          const { data: fcNum, error: rpcErr } = await supabase.rpc('next_financier_copy_number', { p_entity_id: entityId })
+          if (rpcErr) throw new Error(`Row ${count + 1}: ${rpcErr.message}`)
 
-        await generateFinancierCopyPdf({
-          fcNumber:   fcNum,
-          date:       today(),
-          validUntil,
-          customer:   { name: customer.name, address: customer.address, mobile: customer.mobile, gstin: customer.gstin, hypothecation: customer.hypothecation },
-          entity:     entityData,
-          entityCode,
-          lineItems,
-          tcsRate,
-          tcsAmount:  rowTcsAmount,
-          rtoTax:     rtoVal,
-          insurance:  insVal,
-          grandTotal: rowGrandTotal,
-          chassisNo:  row.chassis_no.trim(),
-          engineNo:   row.engine_no.trim(),
-          preparedBy: profile?.full_name,
-        })
+          const { error: insertErr } = await supabase.from('financier_copies').insert({
+            fc_number:        fcNum,
+            entity_id:        entityId,
+            brand_id:         brandId,
+            created_by:       profile.id,
+            chassis_no:       row.chassis_no.trim(),
+            engine_no:        row.engine_no.trim(),
+            customer_name:    customer.name.trim(),
+            customer_address: customer.address.trim() || null,
+            customer_mobile:  customer.mobile.trim() || null,
+            customer_gstin:   customer.gstin.trim() || null,
+            hypothecation:    customer.hypothecation.trim() || null,
+            valid_until:      validUntil,
+            line_items:       lineItems,
+            tcs_rate:         tcsRate,
+            tcs_amount:       rowTcsAmount,
+            rto_tax:          rtoVal,
+            insurance:        insVal,
+            grand_total:      rowGrandTotal,
+          })
+          if (insertErr) throw new Error(`Row ${count + 1}: ${insertErr.message}`)
 
-        count++
-        setSavedCount(count)
+          await generateFinancierCopyPdf({
+            fcNumber:   fcNum,
+            date:       today(),
+            customer:   { name: customer.name, address: customer.address, mobile: customer.mobile, gstin: customer.gstin, hypothecation: customer.hypothecation },
+            entity:     entityData,
+            entityCode,
+            lineItems,
+            tcsRate,
+            tcsAmount:  rowTcsAmount,
+            rtoTax:     rtoVal,
+            insurance:  insVal,
+            grandTotal: rowGrandTotal,
+            chassisNo:  row.chassis_no.trim(),
+            engineNo:   row.engine_no.trim(),
+            preparedBy: profile?.full_name,
+          })
+
+          count++
+          setSavedCount(count)
+        }
       }
 
       toast.success(`${count} Financier's Cop${count !== 1 ? 'ies' : 'y'} generated and downloaded.`)
 
-      // Reset form
-      setRows([newRow()])
-      setDefaultVehicle(null)
-      defaultSearch.setQuery('')
+      setModels([])
+      search.setQuery('')
       setCustomer({ name: '', address: '', mobile: '', gstin: '', hypothecation: '' })
-      setRtoTax('')
-      setInsurance('')
       setValidUntil(endOfMonth())
     } catch (err) {
       console.error(err)
@@ -320,8 +304,6 @@ export default function FinancierCopy() {
       setSaving(false)
     }
   }
-
-  const totalRows = rows.length
 
   return (
     <div>
@@ -338,7 +320,6 @@ export default function FinancierCopy() {
 
       <form onSubmit={handleSubmit} noValidate>
         <div className="q-layout">
-          {/* ── LEFT COLUMN ─────────────────────────────────────── */}
           <div className="q-col-main" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
             {/* Customer Details */}
@@ -347,73 +328,40 @@ export default function FinancierCopy() {
               <div className="customer-grid">
                 <div className="form-group span-2" style={{ marginBottom: 0 }}>
                   <label className="form-label" htmlFor="fc-cust-name">Customer Name *</label>
-                  <input
-                    id="fc-cust-name"
-                    className="form-input"
-                    value={customer.name}
+                  <input id="fc-cust-name" className="form-input" value={customer.name}
                     onChange={e => setCustomer(c => ({ ...c, name: e.target.value }))}
-                    placeholder="Full name or company name"
-                  />
+                    placeholder="Full name or company name" />
                 </div>
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label" htmlFor="fc-cust-mobile">Mobile</label>
-                  <input
-                    id="fc-cust-mobile"
-                    className="form-input"
-                    value={customer.mobile}
+                  <input id="fc-cust-mobile" className="form-input" value={customer.mobile}
                     onChange={e => setCustomer(c => ({ ...c, mobile: e.target.value }))}
-                    placeholder="10-digit number"
-                    maxLength={15}
-                  />
+                    placeholder="10-digit number" maxLength={15} />
                 </div>
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label" htmlFor="fc-cust-gstin">GSTIN</label>
-                  <input
-                    id="fc-cust-gstin"
-                    className="form-input"
-                    value={customer.gstin}
+                  <input id="fc-cust-gstin" className="form-input" value={customer.gstin}
                     onChange={e => setCustomer(c => ({ ...c, gstin: e.target.value.toUpperCase() }))}
-                    placeholder="22AAAAA0000A1Z5"
-                    maxLength={15}
-                  />
+                    placeholder="22AAAAA0000A1Z5" maxLength={15} />
                 </div>
                 <div className="form-group span-2" style={{ marginBottom: 0 }}>
                   <label className="form-label" htmlFor="fc-cust-addr">Address</label>
-                  <input
-                    id="fc-cust-addr"
-                    className="form-input"
-                    value={customer.address}
+                  <input id="fc-cust-addr" className="form-input" value={customer.address}
                     onChange={e => setCustomer(c => ({ ...c, address: e.target.value }))}
-                    placeholder="City, State"
-                  />
+                    placeholder="City, State" />
                 </div>
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label" htmlFor="fc-cust-hyp">Hypothecation</label>
-                  <input
-                    id="fc-cust-hyp"
-                    className="form-input"
-                    value={customer.hypothecation}
+                  <input id="fc-cust-hyp" className="form-input" value={customer.hypothecation}
                     onChange={e => setCustomer(c => ({ ...c, hypothecation: e.target.value }))}
-                    placeholder="Bank / NBFC name"
-                  />
-                </div>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label" htmlFor="fc-valid-until">Valid Until</label>
-                  <input
-                    id="fc-valid-until"
-                    type="date"
-                    className="form-input"
-                    value={validUntil}
-                    min={today()}
-                    onChange={e => setValidUntil(e.target.value)}
-                  />
+                    placeholder="Bank / NBFC name" />
                 </div>
               </div>
             </div>
 
-            {/* Default Vehicle */}
+            {/* Vehicle search */}
             <div className="q-section">
-              <div className="q-section-title">Vehicle (default for all rows)</div>
+              <div className="q-section-title">Vehicle Selection</div>
 
               {catalogError && (
                 <div className="alert alert-error" style={{ marginBottom: 8 }}>
@@ -421,40 +369,25 @@ export default function FinancierCopy() {
                 </div>
               )}
 
-              <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                <select
-                  className="form-select"
-                  value={defaultSearch.segment}
-                  onChange={e => defaultSearch.setSegment(e.target.value)}
-                  style={{ width: 160, flexShrink: 0 }}
-                  aria-label="Segment filter"
-                >
+              <div style={{ display: 'flex', gap: 8 }}>
+                <select className="form-select" value={search.segment}
+                  onChange={e => search.setSegment(e.target.value)}
+                  style={{ width: 160, flexShrink: 0 }} aria-label="Segment filter">
                   {SEGMENTS.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
-                <div style={{ position: 'relative', flex: 1 }} ref={defaultSearchRef}>
-                  <input
-                    className="form-input"
+                <div style={{ position: 'relative', flex: 1 }} ref={searchRef}>
+                  <input className="form-input"
                     placeholder={catalogLoading ? 'Loading catalog…' : 'Search model or sub-segment…'}
                     disabled={catalogLoading || catalogError}
-                    value={defaultSearch.query}
-                    onChange={e => defaultSearch.setQuery(e.target.value)}
-                    onFocus={() => defaultSearch.results.length > 0 && defaultSearch.setShowDropdown(true)}
-                    aria-label="Vehicle search"
-                    autoComplete="off"
-                  />
-                  {defaultSearch.showDropdown && defaultSearch.results.length > 0 && (
+                    value={search.query}
+                    onChange={e => search.setQuery(e.target.value)}
+                    onFocus={() => search.results.length > 0 && search.setShowDropdown(true)}
+                    aria-label="Vehicle search" autoComplete="off" />
+                  {search.showDropdown && search.results.length > 0 && (
                     <div className="search-dropdown">
-                      {defaultSearch.results.map(v => (
-                        <div
-                          key={v.id}
-                          className="search-item"
-                          onMouseDown={e => {
-                            e.preventDefault()
-                            setDefaultVehicle(v)
-                            defaultSearch.setQuery('')
-                            defaultSearch.setShowDropdown(false)
-                          }}
-                        >
+                      {search.results.map(v => (
+                        <div key={v.id} className="search-item"
+                          onMouseDown={e => { e.preventDefault(); addModel(v) }}>
                           <div className="search-item-name">{v.sub_category || v.description}</div>
                           <div className="search-item-meta">{v.cbn} · {v.segment} · {fmtINR(v.mrp_incl_gst)}</div>
                         </div>
@@ -463,212 +396,131 @@ export default function FinancierCopy() {
                   )}
                 </div>
               </div>
+            </div>
 
-              {defaultVehicle && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', background: 'var(--blue-50)', border: '1px solid var(--blue-200)', borderRadius: 6, padding: '8px 12px', marginTop: 4 }}>
+            {/* Model chips */}
+            {models.map((model, mi) => (
+              <div key={model.id} className="model-chip">
+                <div className="model-chip-header">
                   <div>
-                    <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--gray-900)' }}>{defaultVehicle.description}</div>
-                    <div style={{ fontSize: 11.5, color: 'var(--gray-500)', marginTop: 2 }}>
-                      {defaultVehicle.cbn} · {fmtINR(defaultVehicle.mrp_incl_gst)}
+                    <div className="model-chip-name">{model.vehicle.description}</div>
+                    <div className="model-chip-meta">
+                      {model.vehicle.cbn} · catalog {fmtINR(model.vehicle.mrp_incl_gst)}
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-sm"
-                    onClick={() => setDefaultVehicle(null)}
-                    style={{ marginLeft: 8, flexShrink: 0 }}
-                  >
+                  <button type="button" className="btn btn-ghost btn-sm"
+                    onClick={() => removeModel(model.id)}
+                    aria-label={`Remove model ${mi + 1}`}>
                     ✕
                   </button>
                 </div>
-              )}
-            </div>
 
-            {/* Chassis / Engine Grid */}
-            <div className="q-section">
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                <div className="q-section-title" style={{ marginBottom: 0 }}>Chassis &amp; Engine Numbers</div>
-                <button type="button" className="btn btn-secondary btn-sm" onClick={addRow}>
-                  + Add Row
+                <div className="model-chip-subtitle">
+                  Chassis &amp; Engine ({model.rows.length})
+                </div>
+
+                <div className="model-chip-rows">
+                  {model.rows.map((row, ri) => (
+                    <div key={row.id} className="model-chip-row">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--gray-400)', width: 20, flexShrink: 0 }}>#{ri + 1}</span>
+                        <input className="form-input" placeholder="Chassis No."
+                          value={row.chassis_no}
+                          onChange={e => updateRow(model.id, row.id, 'chassis_no', e.target.value)}
+                          style={{ flex: 1, minWidth: 120 }}
+                          aria-label={`Model ${mi + 1} row ${ri + 1} chassis number`} />
+                        <input className="form-input" placeholder="Engine No."
+                          value={row.engine_no}
+                          onChange={e => updateRow(model.id, row.id, 'engine_no', e.target.value)}
+                          style={{ flex: 1, minWidth: 120 }}
+                          aria-label={`Model ${mi + 1} row ${ri + 1} engine number`} />
+                        <button type="button" className="btn btn-ghost btn-sm"
+                          style={{ color: 'var(--red)', padding: '4px 8px' }}
+                          onClick={() => removeRow(model.id, row.id)}
+                          aria-label={`Remove row ${ri + 1}`}>
+                          ✕
+                        </button>
+                      </div>
+
+                      <div style={{ paddingLeft: 28, marginTop: 8 }}>
+                        <textarea className="form-input" rows={3}
+                          style={{ minHeight: 60, resize: 'vertical' }}
+                          value={row.description}
+                          onChange={e => updateRow(model.id, row.id, 'description', e.target.value)}
+                          placeholder="Particulars / model description"
+                          aria-label={`Model ${mi + 1} row ${ri + 1} description`} />
+                      </div>
+
+                      <div className="model-chip-row-prices">
+                        <div className="form-group" style={{ marginBottom: 0 }}>
+                          <label className="form-label">MRP (₹) *</label>
+                          <input className="form-input" type="number" min="0"
+                            value={row.mrp}
+                            onChange={e => updateRow(model.id, row.id, 'mrp', e.target.value)} />
+                        </div>
+                        <div className="form-group" style={{ marginBottom: 0 }}>
+                          <label className="form-label">RTO Tax (₹)</label>
+                          <input className="form-input" type="number" min="0"
+                            value={row.rtoTax}
+                            onChange={e => updateRow(model.id, row.id, 'rtoTax', e.target.value)}
+                            placeholder="0" />
+                        </div>
+                        <div className="form-group" style={{ marginBottom: 0 }}>
+                          <label className="form-label">Insurance (₹)</label>
+                          <input className="form-input" type="number" min="0"
+                            value={row.insurance}
+                            onChange={e => updateRow(model.id, row.id, 'insurance', e.target.value)}
+                            placeholder="0" />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <button type="button" className="btn btn-secondary btn-sm model-chip-add-row"
+                  onClick={() => addRow(model.id)}>
+                  + Add chassis for this model
                 </button>
               </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {rows.map((row, idx) => (
-                  <div key={row.id} style={{ border: '1px solid var(--gray-200)', borderRadius: 8, padding: '10px 12px', background: 'var(--gray-50)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--gray-400)', width: 20, flexShrink: 0 }}>#{idx + 1}</span>
-                      <input
-                        className="form-input"
-                        placeholder="Chassis No."
-                        value={row.chassis_no}
-                        onChange={e => updateRow(row.id, 'chassis_no', e.target.value)}
-                        style={{ flex: 1, minWidth: 120 }}
-                        aria-label={`Row ${idx + 1} chassis number`}
-                      />
-                      <input
-                        className="form-input"
-                        placeholder="Engine No."
-                        value={row.engine_no}
-                        onChange={e => updateRow(row.id, 'engine_no', e.target.value)}
-                        style={{ flex: 1, minWidth: 120 }}
-                        aria-label={`Row ${idx + 1} engine number`}
-                      />
-                      <button
-                        type="button"
-                        className="btn btn-ghost btn-sm"
-                        style={{ fontSize: 11, padding: '4px 8px', color: 'var(--gray-500)' }}
-                        onClick={() => overrideOpenId === row.id ? setOverrideOpenId(null) : openOverride(row.id)}
-                        title="Use a different vehicle for this row"
-                      >
-                        {row.vehicleOverride ? '✏ vehicle' : '+ vehicle'}
-                      </button>
-                      {rows.length > 1 && (
-                        <button
-                          type="button"
-                          className="btn btn-ghost btn-sm"
-                          style={{ color: 'var(--red-500)', padding: '4px 8px' }}
-                          onClick={() => removeRow(row.id)}
-                          aria-label={`Remove row ${idx + 1}`}
-                        >
-                          ✕
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Editable Particulars */}
-                    <div style={{ paddingLeft: 28 }}>
-                      <textarea
-                        className="form-input"
-                        rows={3}
-                        style={{ minHeight: 60, resize: 'vertical' }}
-                        value={row.description}
-                        onChange={e => updateRow(row.id, 'description', e.target.value)}
-                        placeholder="Particulars / model description"
-                        aria-label={`Row ${idx + 1} description`}
-                      />
-                    </div>
-
-                    {/* Per-row vehicle override chip */}
-                    {row.vehicleOverride && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: overrideOpenId === row.id ? 8 : 0, paddingLeft: 28 }}>
-                        <span style={{ fontSize: 11.5, background: 'var(--blue-100)', color: 'var(--blue-700)', borderRadius: 4, padding: '2px 8px', fontWeight: 600 }}>
-                          {row.vehicleOverride.sub_category || row.vehicleOverride.description}
-                        </span>
-                        <button
-                          type="button"
-                          className="btn btn-ghost btn-sm"
-                          style={{ fontSize: 10, padding: '1px 5px', color: 'var(--gray-400)' }}
-                          onClick={() => clearOverride(row.id)}
-                          title="Remove vehicle override"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Override search expander */}
-                    {overrideOpenId === row.id && (
-                      <div style={{ paddingLeft: 28, marginTop: 8 }} ref={overrideRef}>
-                        <input
-                          className="form-input"
-                          placeholder="Search override vehicle…"
-                          value={overrideQuery}
-                          onChange={e => setOverrideQuery(e.target.value)}
-                          autoFocus
-                          style={{ marginBottom: 4 }}
-                        />
-                        {overrideResults.length > 0 && (
-                          <div className="search-dropdown" style={{ position: 'relative', boxShadow: 'none', border: '1px solid var(--gray-200)' }}>
-                            {overrideResults.map(v => (
-                              <div
-                                key={v.id}
-                                className="search-item"
-                                onMouseDown={e => { e.preventDefault(); selectOverrideVehicle(row.id, v) }}
-                              >
-                                <div className="search-item-name">{v.sub_category || v.description}</div>
-                                <div className="search-item-meta">{v.cbn} · {fmtINR(v.mrp_incl_gst)}</div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
+            ))}
 
           </div>
 
-          {/* ── RIGHT COLUMN (sticky summary) ───────────────────── */}
           <div className="q-col-side">
             <div className="price-summary">
-              <div className="ps-title">Per-Vehicle Summary</div>
+              <div className="ps-title">Batch Summary</div>
 
-              {defaultVehicle ? (
+              {totalRows > 0 ? (
                 <>
                   <div className="ps-row">
-                    <span>Vehicle MRP</span>
-                    <span>{fmtINR(defaultVehicle.mrp_incl_gst)}</span>
+                    <span>Total MRP</span>
+                    <span>{fmtINR(totalMrp)}</span>
                   </div>
                   <div className="ps-row">
-                    <span>TCS {tcsRate}%</span>
-                    <span>{fmtINR(tcsAmount)}</span>
+                    <span>Total TCS {tcsRate}%</span>
+                    <span>{fmtINR(totalTcs)}</span>
                   </div>
-
-                  <div className="ps-extra">
-                    <div className="form-group" style={{ marginBottom: 10 }}>
-                      <label className="form-label" htmlFor="fc-rto">RTO Tax (additional)</label>
-                      <input
-                        id="fc-rto"
-                        className="form-input"
-                        type="number"
-                        value={rtoTax}
-                        onChange={e => setRtoTax(e.target.value)}
-                        placeholder="0"
-                        min="0"
-                      />
-                    </div>
-                    <div className="form-group" style={{ marginBottom: 0 }}>
-                      <label className="form-label" htmlFor="fc-ins">Insurance (additional)</label>
-                      <input
-                        id="fc-ins"
-                        className="form-input"
-                        type="number"
-                        value={insurance}
-                        onChange={e => setInsurance(e.target.value)}
-                        placeholder="0"
-                        min="0"
-                      />
-                    </div>
+                  <div className="ps-row">
+                    <span>Total RTO</span>
+                    <span>{fmtINR(totalRto)}</span>
                   </div>
-
+                  <div className="ps-row">
+                    <span>Total Insurance</span>
+                    <span>{fmtINR(totalIns)}</span>
+                  </div>
                   <div className="ps-divider" />
                   <div className="ps-row ps-total">
                     <span>Grand Total</span>
                     <span>{fmtINR(grandTotal)}</span>
                   </div>
+                  <div style={{ fontSize: 11.5, color: 'var(--gray-500)', textAlign: 'center', marginTop: 8 }}>
+                    {totalRows} row{totalRows !== 1 ? 's' : ''} across {models.length} model{models.length !== 1 ? 's' : ''}
+                  </div>
                 </>
               ) : (
                 <div style={{ color: 'var(--gray-400)', fontSize: 13, textAlign: 'center', padding: '16px 0' }}>
-                  Select a vehicle to see pricing
+                  Search and select a vehicle to begin
                 </div>
-              )}
-
-              {!defaultVehicle && (
-                <>
-                  <div className="ps-extra">
-                    <div className="form-group" style={{ marginBottom: 10 }}>
-                      <label className="form-label" htmlFor="fc-rto">RTO Tax (additional)</label>
-                      <input id="fc-rto" className="form-input" type="number" value={rtoTax} onChange={e => setRtoTax(e.target.value)} placeholder="0" min="0" />
-                    </div>
-                    <div className="form-group" style={{ marginBottom: 0 }}>
-                      <label className="form-label" htmlFor="fc-ins">Insurance (additional)</label>
-                      <input id="fc-ins" className="form-input" type="number" value={insurance} onChange={e => setInsurance(e.target.value)} placeholder="0" min="0" />
-                    </div>
-                  </div>
-                </>
               )}
 
               <div style={{ marginTop: 16 }}>
@@ -677,12 +529,13 @@ export default function FinancierCopy() {
                     {savedCount} of {totalRows} generated…
                   </div>
                 )}
-                <button
-                  type="submit"
-                  className="btn btn-primary"
-                  style={{ width: '100%' }}
-                  disabled={saving || !defaultVehicle || !customer.name.trim()}
-                >
+                {error && (
+                  <div style={{ fontSize: 12, color: 'var(--red)', marginBottom: 8, textAlign: 'center' }}>
+                    {error}
+                  </div>
+                )}
+                <button type="submit" className="btn btn-primary" style={{ width: '100%' }}
+                  disabled={saving || !customer.name.trim() || totalRows === 0 || anyInvalidMrp}>
                   {saving
                     ? <><span className="spinner spinner-sm" /> Generating…</>
                     : `Generate ${totalRows} Financier's Cop${totalRows !== 1 ? 'ies' : 'y'}`}

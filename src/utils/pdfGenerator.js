@@ -498,14 +498,17 @@ export async function generateProformaPdf(data) {
       { content: fmt(item.mrp), styles: { halign: 'right' } },
       { content: fmt(item.total_cost), styles: { halign: 'right' } },
     ])
-    // Chassis/engine as a separate bold sub-row (jsPDF-autotable can't mix weights in one cell)
-    if (chassisNo || engineNo) {
-      const label = [
-        chassisNo ? 'Chassis No: ' + chassisNo : null,
-        engineNo  ? 'Engine No: '  + engineNo  : null,
-      ].filter(Boolean).join('     ')
+    if (chassisNo) {
       bodyRows.push([
-        { content: label, styles: { fontStyle: 'bold', fontSize: 8, textColor: GRAY_DARK } },
+        { content: 'Chassis No: ' + chassisNo, styles: { fontStyle: 'bold', fontSize: 8, textColor: GRAY_DARK } },
+        { content: '', styles: {} },
+        { content: '', styles: {} },
+        { content: '', styles: {} },
+      ])
+    }
+    if (engineNo) {
+      bodyRows.push([
+        { content: 'Engine No: ' + engineNo, styles: { fontStyle: 'bold', fontSize: 8, textColor: GRAY_DARK } },
         { content: '', styles: {} },
         { content: '', styles: {} },
         { content: '', styles: {} },
@@ -681,7 +684,7 @@ export async function generateProformaPdf(data) {
 
 export async function generateFinancierCopyPdf(data) {
   const {
-    fcNumber, date, validUntil,
+    fcNumber, date,
     customer, entity, entityCode,
     lineItems, tcsRate, tcsAmount, rtoTax, insurance, grandTotal,
     chassisNo, engineNo,
@@ -793,14 +796,17 @@ export async function generateFinancierCopyPdf(data) {
       { content: fmt(item.mrp), styles: { halign: 'right' } },
       { content: fmt(item.total_cost), styles: { halign: 'right' } },
     ])
-    // Chassis/engine as a separate bold sub-row (jsPDF-autotable can't mix weights in one cell)
-    if (chassisNo || engineNo) {
-      const label = [
-        chassisNo ? 'Chassis No: ' + chassisNo : null,
-        engineNo  ? 'Engine No: '  + engineNo  : null,
-      ].filter(Boolean).join('     ')
+    if (chassisNo) {
       bodyRows.push([
-        { content: label, styles: { fontStyle: 'bold', fontSize: 8, textColor: GRAY_DARK } },
+        { content: 'Chassis No: ' + chassisNo, styles: { fontStyle: 'bold', fontSize: 8, textColor: GRAY_DARK } },
+        { content: '', styles: {} },
+        { content: '', styles: {} },
+        { content: '', styles: {} },
+      ])
+    }
+    if (engineNo) {
+      bodyRows.push([
+        { content: 'Engine No: ' + engineNo, styles: { fontStyle: 'bold', fontSize: 8, textColor: GRAY_DARK } },
         { content: '', styles: {} },
         { content: '', styles: {} },
         { content: '', styles: {} },
@@ -914,10 +920,6 @@ export async function generateFinancierCopyPdf(data) {
   doc.setFontSize(6.8)
   doc.setTextColor(...GRAY)
 
-  const validityDays = validUntil
-    ? Math.ceil((new Date(validUntil) - new Date(date)) / (1000 * 60 * 60 * 24))
-    : null
-
   const entityTerms = [...TERMS]
   entityTerms[4] = isPT
     ? 'Payments for all the above items will be by demand drafts, RTGS favouring to PARAS TRUCKS.'
@@ -926,12 +928,7 @@ export async function generateFinancierCopyPdf(data) {
     ? 'Only the court of Hisar shall have jurisdiction in any proceedings relating to this contract.'
     : 'Only the court of Ahmedabad shall have jurisdiction in any proceedings relating to this contract.'
 
-  const allTerms = [
-    validityDays != null
-      ? `This tax invoice (Financier's copy) is valid for ${validityDays} day${validityDays !== 1 ? 's' : ''} from the date of issue (until ${fmtDate(validUntil)}).`
-      : null,
-    ...entityTerms,
-  ].filter(Boolean)
+  const allTerms = entityTerms
 
   allTerms.forEach((term, i) => {
     const line = (i + 1) + '-  ' + term

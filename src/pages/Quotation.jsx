@@ -246,6 +246,9 @@ export default function Quotation() {
     setError('')
 
     if (!customer.name.trim()) { setError('Customer name is required.'); return }
+    if (customer.gstin.trim() && customer.gstin.trim().length !== 15) {
+      setError('GSTIN must be exactly 15 characters.'); return
+    }
     if (lineItems.length === 0) { setError('Add at least one vehicle.'); return }
     const emptyDescIdx = lineItems.findIndex(li => !String(li.description || '').trim())
     if (emptyDescIdx !== -1) {
