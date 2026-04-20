@@ -869,19 +869,21 @@ function EmployeeFormModal({
               </DeptSection>
             )}
 
-            {deptCode === 'back_office' && form.permission_level !== 'gm' && (
+            {deptCode === 'back_office' && (
               <DeptSection title="Back Office details">
-                <div className="form-group">
-                  <label className="form-label" htmlFor="emp-subdept">Sub-department *</label>
-                  <select
-                    id="emp-subdept" className="form-select"
-                    value={form.subdept_id}
-                    onChange={e => setForm(f => ({ ...f, subdept_id: e.target.value }))}
-                  >
-                    <option value="">— Select —</option>
-                    {refSubdepts.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                  </select>
-                </div>
+                {form.permission_level !== 'gm' && (
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="emp-subdept">Sub-department *</label>
+                    <select
+                      id="emp-subdept" className="form-select"
+                      value={form.subdept_id}
+                      onChange={e => setForm(f => ({ ...f, subdept_id: e.target.value }))}
+                    >
+                      <option value="">— Select —</option>
+                      {refSubdepts.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    </select>
+                  </div>
+                )}
                 <MultiCheckbox
                   id="bo-brands"
                   label="Brands (for quotation log scope)"
