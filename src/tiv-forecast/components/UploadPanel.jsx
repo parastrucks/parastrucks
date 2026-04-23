@@ -28,8 +28,11 @@ export default function UploadPanel({ onUploadComplete }) {
 
   useEffect(() => {
     if (collapsed) return
-    supabase.from('entities').select('id, name, code').order('name')
-      .then(({ data }) => setEntities(data || []))
+    supabase.from('entities').select('id, full_name, code').order('full_name')
+      .then(({ data, error }) => {
+        if (error) console.error('Failed to load entities:', error)
+        setEntities(data || [])
+      })
   }, [collapsed])
 
   useEffect(() => {
@@ -228,7 +231,7 @@ export default function UploadPanel({ onUploadComplete }) {
             >
               <option value="">— Select Entity —</option>
               {entities.map(e => (
-                <option key={e.id} value={e.id}>{e.name} ({e.code})</option>
+                <option key={e.id} value={e.id}>{e.full_name} ({e.code})</option>
               ))}
             </select>
             <select
