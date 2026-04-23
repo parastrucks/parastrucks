@@ -67,21 +67,46 @@ function applyTriggers(base, segment, monthNum, triggerState) {
 }
 
 // ── Compute forecast month metadata ─────────────────────────────────
+// Forecast starts at the later of (lastDataMonth + 1) and (currentMonth + 1).
+// This prevents the first column being a nowcast when actuals lag by a month
+// (e.g. Mar-26 data uploaded in Apr-26 → forecast should start May-26, not Apr).
 function computeForecastMonths(lastDataMonth) {
   const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
   const m = lastDataMonth?.match(/^([A-Za-z]{3})-(\d{2})$/)
   if (!m) return []
+
+  // Start cursor at lastDataMonth + 1, horizon = 1
   let monthIdx = MONTH_ABBR.indexOf(m[1])
   let year = parseInt(m[2]) + 2000
-  const result = []
-  for (let h = 1; h <= FORECAST_HORIZON_LENGTH; h++) {
+  monthIdx = (monthIdx + 1) % 12
+  if (monthIdx === 0) year++
+  let horizon = 1
+  let cursor = year * 12 + monthIdx
+
+  // "Next real month" (month after today)
+  const now = new Date()
+  const nextRealMonthIdx = (now.getMonth() + 1) % 12
+  const nextRealYear = nextRealMonthIdx === 0 ? now.getFullYear() + 1 : now.getFullYear()
+  const nextRealCursor = nextRealYear * 12 + nextRealMonthIdx
+
+  // Skip ahead until we're at or past "next real month" — preserving true horizon
+  while (cursor < nextRealCursor) {
     monthIdx = (monthIdx + 1) % 12
     if (monthIdx === 0) year++
+    cursor = year * 12 + monthIdx
+    horizon++
+  }
+
+  const result = []
+  for (let i = 0; i < FORECAST_HORIZON_LENGTH; i++) {
     result.push({
       label:     `${MONTH_ABBR[monthIdx]}-${String(year).slice(2)}`,
       month_num: monthIdx + 1,
-      horizon:   h,
+      horizon,
     })
+    monthIdx = (monthIdx + 1) % 12
+    if (monthIdx === 0) year++
+    horizon++
   }
   return result
 }
