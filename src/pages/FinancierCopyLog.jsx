@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
-import { generateFinancierCopyPdf } from '../utils/pdfGenerator'
+import { generateFinancierCopyPdf, buildFinancierCopyPdfArgs } from '../utils/pdfGenerator'
 import Skeleton from '../components/Skeleton'
 
 function fmtINR(n) {
@@ -47,6 +47,8 @@ export default function FinancierCopyLog() {
             chassis_no, engine_no,
             customer_name, customer_address, customer_mobile, customer_gstin, hypothecation,
             line_items, tcs_rate, tcs_amount, rto_tax, insurance, grand_total,
+            ship_to, tax_type, seller_state_code, buyer_state_code,
+            amount_in_words, customer_pan, pdf_format_version,
             entity_id, entities(code),
             users:created_by ( full_name, designations(name) )
           `, { count: 'exact' })
@@ -97,29 +99,9 @@ export default function FinancierCopyLog() {
         .single()
       if (eErr) throw eErr
 
-      await generateFinancierCopyPdf({
-        fcNumber:   p.fc_number,
-        date:       p.created_at?.split('T')[0],
-        validUntil: p.valid_until,
-        customer: {
-          name:          p.customer_name,
-          address:       p.customer_address,
-          mobile:        p.customer_mobile,
-          gstin:         p.customer_gstin,
-          hypothecation: p.hypothecation,
-        },
-        entity:     entityData,
-        entityCode,
-        lineItems:  p.line_items,
-        tcsRate:    p.tcs_rate,
-        tcsAmount:  p.tcs_amount,
-        rtoTax:     p.rto_tax,
-        insurance:  p.insurance,
-        grandTotal: p.grand_total,
-        chassisNo:  p.chassis_no,
-        engineNo:   p.engine_no,
-        preparedBy: p.users?.full_name,
-      })
+      await generateFinancierCopyPdf(
+        buildFinancierCopyPdfArgs(p, entityData, entityCode, p.users?.full_name)
+      )
     } catch (err) {
       console.error(err)
       toast.error('Failed to generate PDF.')
