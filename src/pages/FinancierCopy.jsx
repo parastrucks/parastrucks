@@ -5,6 +5,10 @@ import { useDebounce } from '../lib/useDebounce'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import { generateFinancierCopyPdf } from '../utils/pdfGenerator'
+import {
+  deriveTaxType, splitGst, stateCodeFromGstin, panFromGstin,
+} from '../utils/gstUtils'
+import { inrInWords } from '../utils/amountInWords'
 
 const SEGMENTS = ['All Segments', 'ICV Trucks', 'Long Haul Trucks', 'Tippers', 'Buses', 'RMC / Boom Pump']
 
@@ -34,7 +38,9 @@ function newRow(vehicle) {
 }
 
 function newModel(vehicle) {
-  return { id: modelIdCounter++, vehicle, rows: [newRow(vehicle)] }
+  // hsn is per-model (same HSN code applies to every chassis row of the same variant).
+  // Stored in component state only; persisted into line_items JSONB on save.
+  return { id: modelIdCounter++, vehicle, hsn: '', rows: [newRow(vehicle)] }
 }
 
 function fmtINR(n) {
@@ -91,6 +97,11 @@ export default function FinancierCopy() {
 
   const [customer, setCustomer] = useState({
     name: '', address: '', mobile: '', gstin: '', hypothecation: '',
+  })
+  // Optional "ship to a different address" block. Off by default; when off
+  // the PDF renders ship = bill.
+  const [shipTo, setShipTo] = useState({
+    enabled: false, name: '', address: '', gstin: '', state: '',
   })
   const [validUntil, setValidUntil] = useState(endOfMonth())
   const [tcsRate] = useState(DEFAULT_TCS)
@@ -168,6 +179,12 @@ export default function FinancierCopy() {
     ))
   }
 
+  function updateModelHsn(modelId, value) {
+    setModels(prev => prev.map(m =>
+      m.id === modelId ? { ...m, hsn: value.replace(/[^0-9]/g, '').slice(0, 12) } : m
+    ))
+  }
+
   const totalRows = models.reduce((n, m) => n + m.rows.length, 0)
 
   // Batch totals
@@ -190,6 +207,13 @@ export default function FinancierCopy() {
       setError('GSTIN must be exactly 15 characters.'); return
     }
     if (totalRows === 0) { setError('Select at least one vehicle.'); return }
+
+    // Ship-to validation (only when toggled on). State is optional — it's
+    // derived from the ship-to GSTIN when provided, and falls back to the
+    // bill-to state otherwise. Only the GSTIN length rule is enforced.
+    if (shipTo.enabled && shipTo.gstin.trim() && shipTo.gstin.trim().length !== 15) {
+      setError('Ship-to GSTIN must be exactly 15 characters.'); return
+    }
 
     for (let mi = 0; mi < models.length; mi++) {
       const m = models[mi]
@@ -220,70 +244,125 @@ export default function FinancierCopy() {
       const entityCode = ent.code
       const entityData = { full_name: ent.full_name, address: ent.address, gstin: ent.gstin, bank_name: ent.bank_name, bank_account: ent.bank_account, bank_ifsc: ent.bank_ifsc }
 
+      // ── Derive tax regime & state codes ONCE — same for every row in this batch,
+      // since they all share the same buyer and seller.
+      const sellerStateCode = stateCodeFromGstin(entityData.gstin)
+      const buyerGstinForTax = (shipTo.enabled && shipTo.gstin.trim())
+        ? shipTo.gstin.trim()
+        : customer.gstin.trim()
+      const taxType = deriveTaxType({
+        sellerGstin: entityData.gstin,
+        buyerGstin:  buyerGstinForTax,
+        fallback:    'intra',
+      })
+      const buyerStateCode = stateCodeFromGstin(buyerGstinForTax) || sellerStateCode
+      const customerPan    = panFromGstin(customer.gstin)
+
       let count = 0
       for (const model of models) {
         const vehicle = model.vehicle
         const brandId = vehicle.brand_id
+        const hsn     = (model.hsn || '').trim()
 
         for (const row of model.rows) {
-          const mrp = parseInt(row.mrp, 10) || 0
-          const rtoVal = parseInt(row.rtoTax, 10) || null
-          const insVal = parseInt(row.insurance, 10) || null
+          const mrpIncl = parseInt(row.mrp, 10) || 0         // GST-inclusive MRP (what the user entered)
+          const rtoVal  = parseInt(row.rtoTax, 10) || null
+          const insVal  = parseInt(row.insurance, 10) || null
 
-          const lineItems = [{
+          // Reverse-calculate taxable value and per-head tax split.
+          // 18% is the only GST rate in our flow (per plan).
+          const taxable = Math.round(mrpIncl / 1.18)
+          const { cgst, sgst, igst } = splitGst(taxable, 18, taxType)
+
+          // Line "Total Amt" = taxable + tax heads. Since mrpIncl was our input
+          // (GST-inclusive), this equals mrpIncl back within +/- 1 rupee of rounding.
+          const lineTotal = taxable + cgst + sgst + igst
+          const lineItem = {
             cbn:         vehicle.cbn,
             description: row.description.trim() || vehicle.description,
+            hsn:         hsn || null,
             qty:         1,
-            mrp,
-            total_cost:  mrp,
-            basic_amt:   Math.round(mrp / 1.18),
-            gst_amt:     mrp - Math.round(mrp / 1.18),
+            mrp_incl:    mrpIncl,
+            taxable,
+            cgst_rate:   taxType === 'intra' ? 9  : 0,
+            cgst_amt:    cgst,
+            sgst_rate:   taxType === 'intra' ? 9  : 0,
+            sgst_amt:    sgst,
+            igst_rate:   taxType === 'inter' ? 18 : 0,
+            igst_amt:    igst,
+            total:       lineTotal,
+            chassis_no:  row.chassis_no.trim(),
+            engine_no:   row.engine_no.trim(),
+            rto:         rtoVal,
+            insurance:   insVal,
             brand_id:    brandId,
-          }]
+          }
+          const lineItems = [lineItem]
 
-          const rowTcsAmount = Math.round(mrp * tcsRate / 100)
-          const rowGrandTotal = mrp + rowTcsAmount + (rtoVal || 0) + (insVal || 0)
+          // Totals for THIS FC (single line)
+          const taxableTotal = lineItem.taxable
+          const cgstTotal    = lineItem.cgst_amt
+          const sgstTotal    = lineItem.sgst_amt
+          const igstTotal    = lineItem.igst_amt
+          const afterTax     = taxableTotal + cgstTotal + sgstTotal + igstTotal
+          const rowTcsAmount = Math.round(mrpIncl * tcsRate / 100)
+          const gTotal       = afterTax + (rtoVal || 0) + (insVal || 0) + rowTcsAmount
+          const amountInWords = inrInWords(gTotal)
 
           const { data: fcNum, error: rpcErr } = await supabase.rpc('next_financier_copy_number', { p_entity_id: entityId })
           if (rpcErr) throw new Error(`Row ${count + 1}: ${rpcErr.message}`)
 
           const { error: insertErr } = await supabase.from('financier_copies').insert({
-            fc_number:        fcNum,
-            entity_id:        entityId,
-            brand_id:         brandId,
-            created_by:       profile.id,
-            chassis_no:       row.chassis_no.trim(),
-            engine_no:        row.engine_no.trim(),
-            customer_name:    customer.name.trim(),
-            customer_address: customer.address.trim() || null,
-            customer_mobile:  customer.mobile.trim() || null,
-            customer_gstin:   customer.gstin.trim() || null,
-            hypothecation:    customer.hypothecation.trim() || null,
-            valid_until:      validUntil,
-            line_items:       lineItems,
-            tcs_rate:         tcsRate,
-            tcs_amount:       rowTcsAmount,
-            rto_tax:          rtoVal,
-            insurance:        insVal,
-            grand_total:      rowGrandTotal,
+            fc_number:          fcNum,
+            entity_id:          entityId,
+            brand_id:           brandId,
+            created_by:         profile.id,
+            chassis_no:         row.chassis_no.trim(),
+            engine_no:          row.engine_no.trim(),
+            customer_name:      customer.name.trim(),
+            customer_address:   customer.address.trim() || null,
+            customer_mobile:    customer.mobile.trim() || null,
+            customer_gstin:     customer.gstin.trim() || null,
+            hypothecation:      customer.hypothecation.trim() || null,
+            valid_until:        validUntil,
+            line_items:         lineItems,
+            tcs_rate:           tcsRate,
+            tcs_amount:         rowTcsAmount,
+            rto_tax:            rtoVal,
+            insurance:          insVal,
+            grand_total:        gTotal,
+            // V2 snapshot columns — persisted so re-download reproduces byte-identically
+            ship_to:            shipTo.enabled ? shipTo : null,
+            tax_type:           taxType,
+            seller_state_code:  sellerStateCode,
+            buyer_state_code:   buyerStateCode,
+            amount_in_words:    amountInWords,
+            customer_pan:       customerPan,
+            pdf_format_version: 2,
           })
           if (insertErr) throw new Error(`Row ${count + 1}: ${insertErr.message}`)
 
           await generateFinancierCopyPdf({
-            fcNumber:   fcNum,
-            date:       today(),
-            customer:   { name: customer.name, address: customer.address, mobile: customer.mobile, gstin: customer.gstin, hypothecation: customer.hypothecation },
-            entity:     entityData,
+            pdf_format_version: 2,
+            fcNumber:           fcNum,
+            date:               today(),
+            customer,
+            shipTo:             shipTo.enabled ? shipTo : null,
+            entity:             entityData,
             entityCode,
             lineItems,
+            taxType,
+            sellerStateCode,
+            buyerStateCode,
             tcsRate,
-            tcsAmount:  rowTcsAmount,
-            rtoTax:     rtoVal,
-            insurance:  insVal,
-            grandTotal: rowGrandTotal,
-            chassisNo:  row.chassis_no.trim(),
-            engineNo:   row.engine_no.trim(),
-            preparedBy: profile?.full_name,
+            tcsAmount:          rowTcsAmount,
+            totals: {
+              taxableTotal, cgstTotal, sgstTotal, igstTotal,
+              rtoTotal: rtoVal || 0,
+              insTotal: insVal || 0,
+              afterTax, gTotal,
+            },
+            amountInWords,
           })
 
           count++
@@ -296,6 +375,7 @@ export default function FinancierCopy() {
       setModels([])
       search.setQuery('')
       setCustomer({ name: '', address: '', mobile: '', gstin: '', hypothecation: '' })
+      setShipTo({ enabled: false, name: '', address: '', gstin: '', state: '' })
       setValidUntil(endOfMonth())
     } catch (err) {
       console.error(err)
@@ -357,6 +437,46 @@ export default function FinancierCopy() {
                     placeholder="Bank / NBFC name" />
                 </div>
               </div>
+
+              {/* Optional ship-to block — off by default; when enabled the PDF
+                  renders a separate "Ship To" block and the tax regime (intra vs
+                  inter) is decided from the ship-to state. */}
+              <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px dashed var(--gray-200)' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600, color: 'var(--gray-700)' }}>
+                  <input type="checkbox" checked={shipTo.enabled}
+                    onChange={e => setShipTo(s => ({ ...s, enabled: e.target.checked }))} />
+                  Ship to a different address
+                </label>
+
+                {shipTo.enabled && (
+                  <div className="customer-grid" style={{ marginTop: 10 }}>
+                    <div className="form-group span-2" style={{ marginBottom: 0 }}>
+                      <label className="form-label" htmlFor="fc-ship-name">Ship-to Name</label>
+                      <input id="fc-ship-name" className="form-input" value={shipTo.name}
+                        onChange={e => setShipTo(s => ({ ...s, name: e.target.value }))}
+                        placeholder="Consignee name (leave blank = same as customer)" />
+                    </div>
+                    <div className="form-group span-2" style={{ marginBottom: 0 }}>
+                      <label className="form-label" htmlFor="fc-ship-addr">Ship-to Address</label>
+                      <input id="fc-ship-addr" className="form-input" value={shipTo.address}
+                        onChange={e => setShipTo(s => ({ ...s, address: e.target.value }))}
+                        placeholder="City, State" />
+                    </div>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label className="form-label" htmlFor="fc-ship-gstin">Ship-to GSTIN</label>
+                      <input id="fc-ship-gstin" className="form-input" value={shipTo.gstin}
+                        onChange={e => setShipTo(s => ({ ...s, gstin: e.target.value.toUpperCase() }))}
+                        placeholder="22AAAAA0000A1Z5" maxLength={15} />
+                    </div>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label className="form-label" htmlFor="fc-ship-state">Ship-to State</label>
+                      <input id="fc-ship-state" className="form-input" value={shipTo.state}
+                        onChange={e => setShipTo(s => ({ ...s, state: e.target.value }))}
+                        placeholder="Only needed when GSTIN is blank" />
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Vehicle search */}
@@ -413,6 +533,21 @@ export default function FinancierCopy() {
                     aria-label={`Remove model ${mi + 1}`}>
                     ✕
                   </button>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px 0', flexWrap: 'wrap' }}>
+                  <label className="form-label" style={{ margin: 0, fontSize: 12, color: 'var(--gray-600)' }}>
+                    HSN Code
+                  </label>
+                  <input className="form-input" type="text" inputMode="numeric"
+                    value={model.hsn}
+                    onChange={e => updateModelHsn(model.id, e.target.value)}
+                    placeholder="e.g. 87060019"
+                    style={{ width: 140, padding: '4px 8px', fontSize: 13 }}
+                    aria-label={`Model ${mi + 1} HSN code`} />
+                  <span style={{ fontSize: 11, color: 'var(--gray-400)' }}>
+                    (printed on the tax invoice; not stored on the catalog)
+                  </span>
                 </div>
 
                 <div className="model-chip-subtitle">
