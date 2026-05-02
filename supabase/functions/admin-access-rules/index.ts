@@ -13,6 +13,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2"
 import { rateLimit } from "../_shared/rateLimit.ts"
 import { jsonResponse, preflight } from "../_shared/cors.ts"
+import { audit } from "../_shared/auditLog.ts"
 
 type CallerProfile = {
   id: string
@@ -127,22 +128,59 @@ Deno.serve(async (req: Request) => {
         }
         if (!p.entity_id)     return json({ error: "entity_id is required" }, 400)
         if (!p.department_id) return json({ error: "department_id is required" }, 400)
-        const { error } = await admin.from("access_rules").insert({
-          route: p.route,
-          permission_level: p.permission_level,
-          entity_id: p.entity_id,
-          department_id: p.department_id,
-          designation_id: p.designation_id ?? null,
-        })
+        const { data: inserted, error } = await admin
+          .from("access_rules")
+          .insert({
+            route: p.route,
+            permission_level: p.permission_level,
+            entity_id: p.entity_id,
+            department_id: p.department_id,
+            designation_id: p.designation_id ?? null,
+          })
+          .select("id")
+          .maybeSingle()
         if (error) return json({ error: error.message }, 400)
+
+        // Phase 9e M3 / H6 — audit privilege rule creation
+        await audit(admin, {
+          actorId: caller.id,
+          action: "createRule",
+          targetId: null,
+          after: {
+            id: inserted?.id ?? null,
+            route: p.route,
+            permission_level: p.permission_level,
+            entity_id: p.entity_id,
+            department_id: p.department_id,
+            designation_id: p.designation_id ?? null,
+          },
+        })
+
         return json({ ok: true })
       }
 
       case "deleteRule": {
         const { id } = payload as { id?: number | string }
         if (id == null) return json({ error: "id is required" }, 400)
+
+        // Capture rule before deletion for audit
+        const { data: prev } = await admin
+          .from("access_rules")
+          .select("id, route, permission_level, entity_id, department_id, designation_id")
+          .eq("id", id)
+          .maybeSingle()
+
         const { error } = await admin.from("access_rules").delete().eq("id", id)
         if (error) return json({ error: error.message }, 400)
+
+        // Phase 9e M3 / H6 — audit privilege rule deletion
+        await audit(admin, {
+          actorId: caller.id,
+          action: "deleteRule",
+          targetId: null,
+          before: prev ?? { id },
+        })
+
         return json({ ok: true })
       }
 
@@ -165,8 +203,26 @@ Deno.serve(async (req: Request) => {
         if (Object.keys(clean).length === 0) {
           return json({ error: "No GM fields provided" }, 400)
         }
+
+        // Capture previous GM pointers for audit
+        const { data: prev } = await admin
+          .from("entities")
+          .select("gm_service_user_id, gm_spares_user_id, gm_backoffice_user_id")
+          .eq("id", entity_id)
+          .maybeSingle()
+
         const { error } = await admin.from("entities").update(clean).eq("id", entity_id)
         if (error) return json({ error: error.message }, 400)
+
+        // Phase 9e M3 — audit GM-pointer changes
+        await audit(admin, {
+          actorId: caller.id,
+          action: "updateEntityGMs",
+          targetId: entity_id,
+          before: prev ?? null,
+          after: clean,
+        })
+
         return json({ ok: true })
       }
 

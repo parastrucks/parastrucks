@@ -73,7 +73,6 @@ export default function Login() {
   const [rememberMe, setRememberMe] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [failsRemaining, setFailsRemaining] = useState(null)
   const [lockedUntil, setLockedUntil] = useState(0) // epoch seconds
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000))
   const [turnstileToken, setTurnstileToken] = useState('')
@@ -106,9 +105,6 @@ export default function Login() {
       setError(err.message || 'Login failed.')
       if (err.code === 'locked') {
         setLockedUntil(Math.floor(Date.now() / 1000) + (err.retryAfter || 0))
-        setFailsRemaining(0)
-      } else if (err.code === 'invalid_credentials' && typeof err.failsRemaining === 'number') {
-        setFailsRemaining(err.failsRemaining)
       }
       // Reset CAPTCHA token after any failure so the user has a fresh
       // challenge on the next attempt (Turnstile tokens are single-use).
@@ -137,13 +133,6 @@ export default function Login() {
                 ? `Too many failed attempts. Try again in ${remainingMin}:${String(remainingSec).padStart(2,'0')}.`
                 : error}
             </span>
-          </div>
-        )}
-
-        {!locked && failsRemaining != null && failsRemaining > 0 && failsRemaining <= 2 && (
-          <div className="alert alert-warn">
-            <span>⚠</span>
-            <span>{failsRemaining} attempt{failsRemaining === 1 ? '' : 's'} remaining before lockout.</span>
           </div>
         )}
 

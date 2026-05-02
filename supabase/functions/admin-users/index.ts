@@ -22,6 +22,20 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2"
 import { rateLimit } from "../_shared/rateLimit.ts"
 import { jsonResponse, preflight } from "../_shared/cors.ts"
+import { audit, adminLogoutUser } from "../_shared/auditLog.ts"
+
+// Phase 9e C2 — tier rank for HR-edit guardrails. Higher number = more
+// privilege. Caller cannot edit a target whose current OR proposed tier is
+// >= caller's own tier. Admin bypasses every check.
+const TIER_RANK: Record<string, number> = {
+  staff: 1,
+  executive: 2,
+  manager: 3,
+  gm: 4,
+  admin: 5,
+}
+const tierOf = (perm: string | null | undefined): number =>
+  TIER_RANK[perm ?? "staff"] ?? 1
 
 type CallerProfile = {
   id: string
@@ -264,6 +278,20 @@ Deno.serve(async (req: Request) => {
           return json({ error: joinErr }, 400)
         }
 
+        // Phase 9e M3 — audit log
+        await audit(admin, {
+          actorId: caller.id,
+          action: "createUser",
+          targetId: authData.user.id,
+          after: {
+            email: p.email!.trim(),
+            permission_level: p.permission_level ?? null,
+            entity_id: p.entity_id,
+            department_id: p.department_id,
+            designation_id: p.designation_id,
+          },
+        })
+
         return json({ ok: true, id: authData.user.id })
       }
 
@@ -274,9 +302,53 @@ Deno.serve(async (req: Request) => {
         }
         if (!id || !update) return json({ error: "Missing id or update" }, 400)
 
+        // Phase 9e C2.1 — block self-edit of privilege-sensitive fields.
+        // Other self-edits (full_name, location) stay allowed.
+        if (id === caller.id) {
+          for (const k of ["permission_level", "entity_id", "department_id"]) {
+            if (k in update) {
+              return json({ error: `Cannot change your own ${k}` }, 403)
+            }
+          }
+        }
+
+        // Phase 9e — fetch target's current state once. Used for entity gate,
+        // HR-target gate, tier gate, and as the `before_jsonb` in the audit row.
+        const { data: target } = await admin
+          .from("users")
+          .select("id, full_name, permission_level, entity_id, department_id, designation_id, primary_outlet_id, subdept_id, location, is_active, departments(code)")
+          .eq("id", id)
+          .maybeSingle() as unknown as {
+            data: {
+              id: string
+              full_name: string | null
+              permission_level: string | null
+              entity_id: string | null
+              department_id: string | null
+              designation_id: string | null
+              primary_outlet_id: string | null
+              subdept_id: string | null
+              location: string | null
+              is_active: boolean
+              departments: { code: string } | null
+            } | null
+          }
+        if (!target) return json({ error: "User not found" }, 404)
+
         // Entity-scoping: HR can only edit users in their own entity
-        const upEntityErr = await requireSameEntity(await getTargetEntityId(id))
+        const upEntityErr = await requireSameEntity(target.entity_id)
         if (upEntityErr) return upEntityErr
+
+        // Phase 9e C2.2 — non-admin caller cannot edit another HR user.
+        // Self-editing your own non-sensitive fields is still allowed
+        // (self-edit of privilege fields is already blocked above).
+        if (
+          caller.role !== "admin"
+          && target.departments?.code === "hr"
+          && target.id !== caller.id
+        ) {
+          return json({ error: "You cannot edit another HR user" }, 403)
+        }
 
         // Phase 6c.3: legacy text columns removed from the whitelist. Only
         // name + new axis columns + informational location remain.
@@ -299,6 +371,22 @@ Deno.serve(async (req: Request) => {
           clean.permission_level as string | null | undefined,
         )
         if (adminErr) return json({ error: adminErr }, 400)
+
+        // Phase 9e C2.3 — tier guard for non-admin callers. Reject when the
+        // target's CURRENT or PROPOSED tier is at or above the caller's tier.
+        // Admin always bypasses (tier 5 > everyone).
+        if (caller.role !== "admin") {
+          const callerTier = tierOf(caller.permission_level)
+          const currentTier = tierOf(target.permission_level)
+          const proposedTier = clean.permission_level
+            ? tierOf(clean.permission_level as string)
+            : currentTier
+          if (currentTier >= callerTier || proposedTier >= callerTier) {
+            return json({
+              error: "You cannot edit a user at or above your own tier",
+            }, 403)
+          }
+        }
 
         // Join-table arrays live inside `update` too, extracted separately
         // because they don't go on the users row.
@@ -323,6 +411,17 @@ Deno.serve(async (req: Request) => {
           (await replaceJoin(admin, "user_outlets",         id, "outlet_id",   outletIds))
         if (joinErr) return json({ error: joinErr }, 400)
 
+        // Phase 9e M3 — audit log. Capture before (from `target` fetched
+        // earlier) and after (target ∪ clean) so privilege diffs are
+        // reconstructable from the log alone.
+        await audit(admin, {
+          actorId: caller.id,
+          action: "updateProfile",
+          targetId: id,
+          before: { ...target },
+          after: { ...target, ...clean },
+        })
+
         return json({ ok: true })
       }
 
@@ -341,11 +440,38 @@ Deno.serve(async (req: Request) => {
         // Entity-scoping
         const saEntityErr = await requireSameEntity(await getTargetEntityId(id))
         if (saEntityErr) return saEntityErr
+
+        // Capture previous state for audit (best-effort)
+        const { data: prev } = await admin
+          .from("users")
+          .select("is_active")
+          .eq("id", id)
+          .maybeSingle()
+
         const { error } = await admin
           .from("users")
           .update({ is_active })
           .eq("id", id)
         if (error) return json({ error: error.message }, 400)
+
+        // Phase 9e H4 — when deactivating, revoke all refresh tokens for the
+        // user so an existing JWT can't be silently refreshed for another
+        // hour. Best-effort; the RLS is_active gate is the real protection.
+        if (!is_active) {
+          const url = Deno.env.get("SUPABASE_URL")!
+          const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+          await adminLogoutUser(url, service, id)
+        }
+
+        // Phase 9e M3 — audit log
+        await audit(admin, {
+          actorId: caller.id,
+          action: "setActive",
+          targetId: id,
+          before: { is_active: prev?.is_active ?? null },
+          after: { is_active },
+        })
+
         return json({ ok: true })
       }
 
@@ -363,6 +489,14 @@ Deno.serve(async (req: Request) => {
         if (rpEntityErr) return rpEntityErr
         const { error } = await admin.auth.admin.updateUserById(id, { password })
         if (error) return json({ error: error.message }, 400)
+
+        // Phase 9e M3 — audit log (no before/after for the password itself)
+        await audit(admin, {
+          actorId: caller.id,
+          action: "resetPassword",
+          targetId: id,
+        })
+
         return json({ ok: true })
       }
 
@@ -376,11 +510,29 @@ Deno.serve(async (req: Request) => {
         if (id === caller.id) {
           return json({ error: "You cannot delete your own account" }, 400)
         }
+
+        // Capture target snapshot before deletion (best-effort) so the audit
+        // row contains who was deleted, not just an opaque uuid.
+        const { data: prev } = await admin
+          .from("users")
+          .select("id, full_name, email, permission_level, entity_id, department_id")
+          .eq("id", id)
+          .maybeSingle()
+
         // Deletes the auth user; the FK cascade removes the profile row,
         // which in turn cascades to user_brands/user_sales_verticals/
         // user_outlets/user_profiles (all `on delete cascade` on user_id).
         const { error } = await admin.auth.admin.deleteUser(id)
         if (error) return json({ error: error.message }, 400)
+
+        // Phase 9e M3 — audit log
+        await audit(admin, {
+          actorId: caller.id,
+          action: "deleteUser",
+          targetId: id,
+          before: prev ?? { id },
+        })
+
         return json({ ok: true })
       }
 

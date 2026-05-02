@@ -149,7 +149,7 @@ Deno.serve(async (req: Request) => {
         p_success: false,
       })
       const row = Array.isArray(recData) && recData.length > 0
-        ? recData[0] as { locked: boolean; retry_after_s: number | null; fails_remaining: number | null }
+        ? recData[0] as { locked: boolean; retry_after_s: number | null }
         : null
 
       // If that increment pushed us over the edge, surface a locked response.
@@ -160,10 +160,9 @@ Deno.serve(async (req: Request) => {
         }, 429)
       }
 
-      return json({
-        error: "invalid_credentials",
-        fails_remaining: row?.fails_remaining ?? null,
-      }, 401)
+      // Phase 9e H2 — fails_remaining removed from response. The lockout
+      // countdown UI is preserved (returned as part of the `locked` branch).
+      return json({ error: "invalid_credentials" }, 401)
     }
 
     stage = "signin-success-cleanup"
