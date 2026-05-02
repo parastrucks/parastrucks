@@ -17,19 +17,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 import { createClient } from "npm:@supabase/supabase-js@2"
 import { rateLimit } from "../_shared/rateLimit.ts"
-
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-}
-
-const json = (b: unknown, status = 200) =>
-  new Response(JSON.stringify(b), {
-    status,
-    headers: { ...CORS, "Content-Type": "application/json" },
-  })
+import { jsonResponse, preflight } from "../_shared/cors.ts"
 
 // Truncate long strings to prevent payload-bomb DoS.
 const trunc = (v: unknown, max: number): string | null => {
@@ -39,7 +27,8 @@ const trunc = (v: unknown, max: number): string | null => {
 }
 
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: CORS })
+  const json = (b: unknown, status = 200) => jsonResponse(req, b, status)
+  if (req.method === "OPTIONS") return preflight(req)
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405)
 
   const authHeader = req.headers.get("Authorization") ?? ""

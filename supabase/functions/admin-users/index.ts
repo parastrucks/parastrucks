@@ -21,19 +21,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2"
 import { rateLimit } from "../_shared/rateLimit.ts"
-
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-}
-
-const json = (b: unknown, status = 200) =>
-  new Response(JSON.stringify(b), {
-    status,
-    headers: { ...CORS, "Content-Type": "application/json" },
-  })
+import { jsonResponse, preflight } from "../_shared/cors.ts"
 
 type CallerProfile = {
   id: string
@@ -54,7 +42,7 @@ async function verify(
   allowedRoles: string[],
 ): Promise<VerifyResult> {
   const authHeader = req.headers.get("Authorization") ?? ""
-  if (!authHeader) return { err: json({ error: "Missing auth" }, 401) }
+  if (!authHeader) return { err: jsonResponse(req, { error: "Missing auth" }, 401) }
   const jwt = authHeader.replace("Bearer ", "")
 
   const url = Deno.env.get("SUPABASE_URL")!
@@ -67,7 +55,7 @@ async function verify(
     auth: { persistSession: false, autoRefreshToken: false },
   })
   const { data: u, error: uErr } = await userClient.auth.getUser(jwt)
-  if (uErr || !u?.user) return { err: json({ error: "Invalid token" }, 401) }
+  if (uErr || !u?.user) return { err: jsonResponse(req, { error: "Invalid token" }, 401) }
 
   // Service-role client used for all writes inside this function
   const admin = createClient(url, service, {
@@ -94,15 +82,15 @@ async function verify(
       } | null
     }
 
-  if (!prof) return { err: json({ error: "Profile not found" }, 403) }
-  if (!prof.is_active) return { err: json({ error: "Account inactive" }, 403) }
+  if (!prof) return { err: jsonResponse(req, { error: "Profile not found" }, 403) }
+  if (!prof.is_active) return { err: jsonResponse(req, { error: "Account inactive" }, 403) }
 
   const token =
     prof.permission_level === "admin" ? "admin"
     : (prof.departments?.code ?? null)
 
   if (!token || !allowedRoles.includes(token)) {
-    return { err: json({ error: "Forbidden" }, 403) }
+    return { err: jsonResponse(req, { error: "Forbidden" }, 403) }
   }
 
   return {
@@ -154,7 +142,8 @@ async function replaceJoin(
 }
 
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: CORS })
+  const json = (b: unknown, status = 200) => jsonResponse(req, b, status)
+  if (req.method === "OPTIONS") return preflight(req)
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405)
 
   let body: { action?: string; payload?: Record<string, unknown> } = {}

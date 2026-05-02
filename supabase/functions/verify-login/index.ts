@@ -30,27 +30,18 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 import { createClient } from "npm:@supabase/supabase-js@2"
+import { jsonResponse, preflight } from "../_shared/cors.ts"
 
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-}
+// Phase 9c (H3): when REQUIRE_CAPTCHA=true, the EF fails closed if Turnstile
+// can't be verified — missing secret OR Cloudflare network error both cause a
+// 503. When unset/false (dev/local), behaviour stays "inert" / "fail-open".
+type TurnstileResult = "ok" | "failed" | "unavailable"
 
-const json = (b: unknown, status = 200) =>
-  new Response(JSON.stringify(b), {
-    status,
-    headers: { ...CORS, "Content-Type": "application/json" },
-  })
-
-// Verify a Turnstile token against Cloudflare's siteverify endpoint.
-// Returns true when no secret is configured (inert mode — dev & pre-Turnstile
-// prod), true on success, false on Cloudflare rejection.
-async function verifyTurnstile(token: string | undefined): Promise<boolean> {
+async function verifyTurnstile(token: string | undefined): Promise<TurnstileResult> {
   const secret = Deno.env.get("TURNSTILE_SECRET")
-  if (!secret) return true // inert until env var is set
-  if (!token) return false
+  const required = Deno.env.get("REQUIRE_CAPTCHA") === "true"
+  if (!secret) return required ? "unavailable" : "ok"
+  if (!token) return "failed"
 
   try {
     const form = new FormData()
@@ -61,22 +52,23 @@ async function verifyTurnstile(token: string | undefined): Promise<boolean> {
       { method: "POST", body: form },
     )
     const data = await r.json().catch(() => null) as { success?: boolean } | null
-    return !!data?.success
+    return data?.success ? "ok" : "failed"
   } catch {
-    // Network error calling Cloudflare. Fail open on the CAPTCHA so a
-    // Cloudflare outage doesn't block all logins. Password check still runs.
-    return true
+    // Network error calling Cloudflare. Fail open by default so a Cloudflare
+    // outage doesn't block all logins; fail closed when REQUIRE_CAPTCHA=true.
+    return required ? "unavailable" : "ok"
   }
 }
 
 Deno.serve(async (req: Request) => {
   // Stage marker — incremented through the handler so that if we hit the
-  // top-level catch we know exactly where the crash happened. Surfaced in the
-  // 500 response body so the browser devtools Network tab shows it.
+  // top-level catch we know exactly where the crash happened. Logged to stderr;
+  // never surfaced in the response body (Phase 9c H1 — no info disclosure).
   let stage = "enter"
+  const json = (b: unknown, status = 200) => jsonResponse(req, b, status)
 
   try {
-    if (req.method === "OPTIONS") return new Response(null, { headers: CORS })
+    if (req.method === "OPTIONS") return preflight(req)
     if (req.method !== "POST") return json({ error: "Method not allowed" }, 405)
 
     stage = "read-env"
@@ -129,9 +121,13 @@ Deno.serve(async (req: Request) => {
 
     stage = "captcha"
     // 2. CAPTCHA verification. Failures here do NOT hit auth_attempt_record —
-    //    they're not password failures.
-    const captchaOk = await verifyTurnstile(turnstileToken)
-    if (!captchaOk) {
+    //    they're not password failures. When REQUIRE_CAPTCHA=true and
+    //    Cloudflare/secret is unavailable, fail closed with 503 (Phase 9c H3).
+    const captchaResult = await verifyTurnstile(turnstileToken)
+    if (captchaResult === "unavailable") {
+      return json({ error: "captcha_unavailable" }, 503)
+    }
+    if (captchaResult === "failed") {
       return json({ error: "captcha_failed" }, 403)
     }
 
@@ -192,15 +188,12 @@ Deno.serve(async (req: Request) => {
       expires_at: s.expires_at ?? null,
     })
   } catch (e) {
-    // Any unhandled crash surfaces here. Log to stderr AND include the message
-    // + stage in the response body so diagnosis is possible from the browser.
+    // Phase 9c H1 — log full detail to stderr (Supabase log explorer) but
+    // return only a generic error code to the caller. Stage and message are
+    // intentionally NOT in the response body to avoid leaking internals.
     const msg = (e as Error)?.message || String(e)
     const stack = (e as Error)?.stack || null
     console.error(`verify-login crashed at stage=${stage}:`, msg, stack)
-    return json({
-      error: "internal_error",
-      stage,
-      debug: msg,
-    }, 500)
+    return json({ error: "internal_error" }, 500)
   }
 })
