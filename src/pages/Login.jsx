@@ -27,6 +27,11 @@ function useTurnstile(enabled, onToken) {
         script.src = SCRIPT_SRC
         script.async = true
         script.defer = true
+        // Phase 9g T1 — don't leak the portal URL to Cloudflare's loader.
+        // Cloudflare officially recommends against SRI on v0/api.js because
+        // they update the build silently, so referrer-policy is the
+        // strongest hardening available for this third-party script.
+        script.referrerPolicy = 'no-referrer'
         document.head.appendChild(script)
       }
       const iv = setInterval(() => {
