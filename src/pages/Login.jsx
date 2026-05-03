@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import './Login.css'
 
 // Cloudflare Turnstile is loaded dynamically only when VITE_TURNSTILE_SITE_KEY
 // is present. No site key → no script tag, no widget, no token — the whole
@@ -215,94 +216,6 @@ export default function Login() {
         </p>
       </div>
 
-      <style>{`
-        .login-page {
-          min-height: 100vh;
-          background: linear-gradient(135deg, #0A1628 0%, #0D2844 50%, #0B4F7A 100%);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 24px 16px;
-        }
-        .login-card {
-          background: var(--white);
-          border-radius: var(--radius);
-          padding: 36px 32px;
-          width: 100%;
-          max-width: 400px;
-          box-shadow: var(--shadow-lg);
-          animation: slideUp .25s ease;
-        }
-        .login-logo-wrap {
-          display: flex;
-          justify-content: center;
-          margin-bottom: 20px;
-        }
-        .login-logo {
-          height: 44px;
-          width: auto;
-        }
-        .login-title {
-          text-align: center;
-          font-size: 22px;
-          font-weight: 800;
-          color: var(--gray-900);
-          letter-spacing: -.5px;
-          margin-bottom: 4px;
-        }
-        .login-subtitle {
-          text-align: center;
-          font-size: 14px;
-          color: var(--gray-500);
-          margin-bottom: 24px;
-        }
-        .remember-row {
-          margin-top: -4px;
-        }
-        .remember-label {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          font-size: 13px;
-          color: var(--gray-700, #374151);
-          cursor: pointer;
-          user-select: none;
-        }
-        .remember-label input[type="checkbox"] {
-          width: 16px;
-          height: 16px;
-          accent-color: var(--blue, #0B4F7A);
-          cursor: pointer;
-        }
-        .turnstile-wrap {
-          display: flex;
-          justify-content: center;
-          min-height: 65px;
-        }
-        .alert-warn {
-          display: flex;
-          gap: 8px;
-          align-items: flex-start;
-          background: #FFF7E6;
-          border: 1px solid #F5C16C;
-          color: #7A4F00;
-          padding: 10px 12px;
-          border-radius: 6px;
-          font-size: 13px;
-          margin-bottom: 12px;
-        }
-        .login-footer {
-          text-align: center;
-          font-size: 13px;
-          color: var(--gray-400);
-          margin-top: 20px;
-        }
-        .login-footer a {
-          color: var(--blue);
-          font-weight: 600;
-        }
-        .login-footer a:hover { text-decoration: underline; }
-      `}</style>
     </div>
   )
 }

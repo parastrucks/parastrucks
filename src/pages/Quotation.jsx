@@ -300,7 +300,15 @@ export default function Quotation() {
       const rtoVal = parseInt(rtoTax, 10) || null
       const insVal = parseInt(insurance, 10) || null
 
-      // Insert quotation
+      // Phase 9f M6 — generate a per-save-click UUID. If the user
+      // double-clicks Save (or an offline retry happens), the unique partial
+      // index quotations_idempotency_idx makes the second insert collide
+      // with code 23505. We catch that, fetch the original row, and proceed
+      // with its quotation_number — so the PDF reflects the saved row, not
+      // the wasted RPC sequence value from the second click.
+      const clientRequestId = (globalThis.crypto?.randomUUID?.()) ?? null
+      let effectiveQNum = qNum
+
       const { error: insertErr } = await supabase.from('quotations').insert({
         quotation_number: qNum,
         entity_id: entityId,
@@ -318,12 +326,32 @@ export default function Quotation() {
         rto_tax: rtoVal,
         insurance: insVal,
         grand_total: grandTotal,
+        client_request_id: clientRequestId,
       })
-      if (insertErr) throw insertErr
+      if (insertErr) {
+        const isIdempotencyConflict =
+          insertErr.code === '23505'
+          && (insertErr.message || '').includes('quotations_idempotency_idx')
+        if (isIdempotencyConflict && clientRequestId) {
+          // Re-submission of an already-saved request. Fetch the original
+          // row's quotation_number and continue. No user-visible error.
+          const { data: existing } = await supabase
+            .from('quotations')
+            .select('quotation_number')
+            .eq('created_by', profile.id)
+            .eq('client_request_id', clientRequestId)
+            .maybeSingle()
+          if (existing?.quotation_number) effectiveQNum = existing.quotation_number
+        } else {
+          throw insertErr
+        }
+      }
 
-      // Generate PDF
+      // Generate PDF — use effectiveQNum so the duplicate-save case shows
+      // the original quotation_number, not the unused sequence value from
+      // the second click.
       await generateQuotationPDF({
-        quotationNumber: qNum,
+        quotationNumber: effectiveQNum,
         date: today(),
         validUntil,
         customer: {
@@ -344,7 +372,7 @@ export default function Quotation() {
         preparedBy: profile?.full_name,
       })
 
-      toast.success(`Quotation ${qNum} saved and PDF downloaded.`)
+      toast.success(`Quotation ${effectiveQNum} saved and PDF downloaded.`)
       // Reset form
       setLineItems([])
       setCustomer({ name: '', address: '', mobile: '', gstin: '', hypothecation: '' })

@@ -186,13 +186,14 @@ Deno.serve(async (req: Request) => {
       }
 
       // ── Brochure upload: return a one-shot signed URL ─────────
-      // The client POSTs the PDF directly to this URL — the file never
-      // passes through the Edge Function (no payload size limits, no cold-start cost).
+      // Phase 9f M5 — server generates an unguessable UUID filename.
+      // The client-supplied `path` is ignored entirely. The original filename
+      // (for the download UX) lives on vehicle_catalog.brochure_filename and
+      // is set by the client when it patches the vehicle row after upload.
+      // The client POSTs the PDF directly to the signed URL — the file never
+      // passes through the Edge Function (no payload size limits).
       case "signBrochureUpload": {
-        const { path } = payload as { path?: string }
-        if (!path || !/^[a-z0-9_\-\/]+\.pdf$/i.test(path)) {
-          return json({ error: "Invalid brochure path" }, 400)
-        }
+        const path = `${crypto.randomUUID()}.pdf`
         const { data, error } = await admin.storage
           .from("brochures")
           .createSignedUploadUrl(path)
