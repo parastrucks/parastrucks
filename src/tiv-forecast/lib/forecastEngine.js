@@ -67,9 +67,14 @@ function applyTriggers(base, segment, monthNum, triggerState) {
 }
 
 // ── Compute forecast month metadata ─────────────────────────────────
-// Forecast starts at the later of (lastDataMonth + 1) and (currentMonth + 1).
-// This prevents the first column being a nowcast when actuals lag by a month
-// (e.g. Mar-26 data uploaded in Apr-26 → forecast should start May-26, not Apr).
+// Forecast starts at the later of (lastDataMonth + 1) and (currentMonth).
+// When actuals lag (e.g. Apr-26 data still loaded mid-May-26), the first
+// column shows the current month — a nowcast for the elapsed-so-far portion
+// plus a forecast for the remainder. Product decision (2026-05-14): users
+// prefer always seeing the current month in the grid over the strict
+// "pure forecast only" rule the original 2026-04-23 hotfix enforced.
+// Horizon math is preserved — skipped months still increment horizon so the
+// damped-trend equation stays consistent.
 function computeForecastMonths(lastDataMonth) {
   const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
   const m = lastDataMonth?.match(/^([A-Za-z]{3})-(\d{2})$/)
@@ -83,14 +88,15 @@ function computeForecastMonths(lastDataMonth) {
   let horizon = 1
   let cursor = year * 12 + monthIdx
 
-  // "Next real month" (month after today)
+  // Current real month (today's month, regardless of how far through it we are)
   const now = new Date()
-  const nextRealMonthIdx = (now.getMonth() + 1) % 12
-  const nextRealYear = nextRealMonthIdx === 0 ? now.getFullYear() + 1 : now.getFullYear()
-  const nextRealCursor = nextRealYear * 12 + nextRealMonthIdx
+  const currentMonthIdx = now.getMonth()
+  const currentYear = now.getFullYear()
+  const currentMonthCursor = currentYear * 12 + currentMonthIdx
 
-  // Skip ahead until we're at or past "next real month" — preserving true horizon
-  while (cursor < nextRealCursor) {
+  // Skip ahead until we're at or past the current month — preserving true
+  // horizon so damped-trend math stays valid for skipped months.
+  while (cursor < currentMonthCursor) {
     monthIdx = (monthIdx + 1) % 12
     if (monthIdx === 0) year++
     cursor = year * 12 + monthIdx
