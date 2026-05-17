@@ -1,11 +1,64 @@
 # Parastrucks — Project Memory
 
-> **Current website phase:** Phase 9 — Security & Hardening (VAPT remediation).
-> All work for this phase happens on branch `claude/secure-login-vulnerabilities-Ypeoh` and is broken into sub-phases `9a`–`9i`. See the roadmap at the bottom of this file.
+> **Current website phase:** Phase 9 sub-phases 9b–9g — **DEPLOYED to production 2026-05-17/18.**
+> Next engineering work is **9h** (medium-effort hardening: MFA, new-device email,
+> active-sessions page, security-monitor cron, file-upload virus scan, PII encryption)
+> and **9i** (programme/process items). Both are untouched. See the roadmap at the bottom.
 >
 > **Naming convention:** label PRs / commits / branches with the sub-phase ID (e.g. `9b-deps`, `9c-ef-perimeter`). Future website phases should be `Phase 10`, `Phase 11`, etc.
 >
 > **Stack constraints:** Free tier of Supabase, Vercel (Hobby), Cloudflare. Hardening items are tagged `[FREE]`, `[PAID]`, or `[FREE-ALT]`.
+
+---
+
+## Phase 9 — Deployment Record (9b–9g)
+
+**Shipped to production 2026-05-17 → 2026-05-18.** All Critical/High/Medium VAPT
+findings remediated, verified end-to-end on a dedicated staging Supabase project
+before prod (9/9 functional tests + prod-build console-strip check, zero regressions).
+
+**PRs merged to `portal`:**
+- **#57** (`421259b`) — Phase 9 stack 9b–9g (one commit per sub-phase).
+- **#58** (`b9cce59`) — `fix(csp)`: `vercel.json` header `source` `/:path*` → `/(.*)`. The
+  `/:path*` pattern never matched the bare root `/`, so the CSP + security headers
+  were absent on the root document (the page most users land on). Caught by curling
+  prod *after* #57 — config was byte-perfect but not effective.
+- **#59** (`bf2553e`) — `fix(catalog)`: xlsx bulk-import now resolves `brand_id`
+  (pre-existing bug, surfaced during staging verification).
+- **#60** (`9e76199`) — `fix(dates)`: `today()`/`endOfMonth()` in Quotation /
+  ProformaInvoice / FinancierCopy used `.toISOString()` (UTC), rolling the date back
+  a day for IST users working 00:00–05:30. Replaced with local-time `fmtLocalDate()`.
+
+**Prod infrastructure changes (not in git):**
+- Supabase Functions secrets set on prod (`mmmxvjaavdtwlpcnjgzy`):
+  `ALLOWED_ORIGINS=https://team.parastrucks.in`, `REQUIRE_CAPTCHA=true`
+  (`TURNSTILE_SECRET` was already present).
+- Migrations `20260502_phase9_security_hardening.sql` + `20260502_phase9f_quotation_idempotency.sql`
+  applied to prod via `psql` (Supabase CLI `db dump`/`db push` need Docker, which
+  isn't installed locally — direct `psql` through the Session Pooler was used instead).
+- All 6 Edge Functions redeployed to prod (verify-login v6, admin-users v12,
+  admin-access-rules v10, admin-catalog v9, admin-tiv v11, log-error v9).
+- Pre-deploy `pg_dump` backup taken (`prod_backup_pre_phase9_*.sql`, stored off-machine).
+
+**Staging:** Supabase project `klpnhpnlotcbbovwswmq` (`paras-portal-staging`, Mumbai)
+now exists — bootstrapped from a prod schema dump + reference-data dump. Reusable for
+future migration testing. The migrations folder is NOT a full history (earliest file
+is `20260401_*`); a fresh project must be seeded from a prod dump, not `db push`.
+
+**Known residuals (not blocking, deferred):**
+- Transitive CVEs `postcss 8.5.8` (GHSA-qx2v-qp2m-jg93) + `dompurify 3.3.3` —
+  fixable with a `package.json` `overrides` block; left for a follow-up.
+- 9h / 9i not started (multi-week feature track + process items).
+- Local dump artifacts (`prod_schema.sql`, `prod_seed_data.sql`, `staging_apply.sql`,
+  `prod_backup_pre_phase9_*.sql`) and the worktree `elated-volhard-c88b85` can be
+  cleaned up once prod is confirmed stable.
+
+**Verification facts worth keeping:** CSP is enforced based on the header delivered
+with the *document* — verify security headers by curling actual page URLs
+(`/`, `/login`), not by reading `vercel.json`. The login page console is flooded by
+Cloudflare Turnstile's own iframe/worker noise (`normal?lang=auto`, `about:srcdoc`,
+`blob:challenges.cloudflare.com`) — that is third-party, not the portal; do CSP
+console checks on app pages (Dashboard), not the login page.
 
 ---
 
