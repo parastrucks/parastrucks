@@ -25,13 +25,19 @@ function calcItem(item) {
   return { ...item, total_cost, basic_amt, gst_amt }
 }
 
+// Format a Date as YYYY-MM-DD using LOCAL calendar fields. Deliberately not
+// toISOString() — that converts to UTC, so between 00:00–05:30 IST the date
+// would roll back a day (e.g. 31-May 02:00 IST → 30-May UTC).
+function fmtLocalDate(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 function today() {
-  return new Date().toISOString().split('T')[0]
+  return fmtLocalDate(new Date())
 }
 function endOfMonth() {
   const d = new Date()
   d.setMonth(d.getMonth() + 1, 0)
-  return d.toISOString().split('T')[0]
+  return fmtLocalDate(d)
 }
 function fmtINR(n) {
   if (!n && n !== 0) return '—'
