@@ -1246,6 +1246,20 @@ function ImportTab({ subSegs, onRefresh }) {
         .in('cbn', cbns)
       const existingSet = new Set((existing || []).map(r => r.cbn))
 
+      // Resolve the uuid brand_id for the selected brand code — vehicle_catalog.brand_id
+      // is NOT NULL, so every imported row must carry it (the legacy `brand` text
+      // column alone is not enough for the insert to succeed).
+      const { data: brandRow, error: brandErr } = await supabase
+        .from('brands')
+        .select('id')
+        .eq('code', brand)
+        .single()
+      if (brandErr || !brandRow) {
+        setError(`Could not resolve brand "${brand}" — no matching row in the brands table.`)
+        return
+      }
+      const brand_id = brandRow.id
+
       const mapped = dataRows.map(row => {
         const cbn         = String(row[cbnIdx]).trim()
         const sub_category = subIdx >= 0 ? String(row[subIdx]).trim() : ''
@@ -1263,6 +1277,7 @@ function ImportTab({ subSegs, onRefresh }) {
           mrp_incl_gst: mrp,
           gst_rate:     18,
           brand,
+          brand_id,
           is_active:    true,
           _isNew:       !existingSet.has(cbn),
         }
