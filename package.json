@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "prepare": "husky"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.7",
@@ -17,10 +18,11 @@
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.22.3",
     "recharts": "^3.8.1",
-    "xlsx": "^0.18.5"
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.1",
-    "vite": "^5.1.6"
+    "husky": "^9.1.7",
+    "vite": "^5.4.21"
   }
 }

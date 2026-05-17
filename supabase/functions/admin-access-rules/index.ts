@@ -12,19 +12,8 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2"
 import { rateLimit } from "../_shared/rateLimit.ts"
-
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-}
-
-const json = (b: unknown, status = 200) =>
-  new Response(JSON.stringify(b), {
-    status,
-    headers: { ...CORS, "Content-Type": "application/json" },
-  })
+import { jsonResponse, preflight } from "../_shared/cors.ts"
+import { audit } from "../_shared/auditLog.ts"
 
 type CallerProfile = {
   id: string
@@ -41,7 +30,7 @@ async function verify(
   allowedRoles: string[],
 ): Promise<VerifyResult> {
   const authHeader = req.headers.get("Authorization") ?? ""
-  if (!authHeader) return { err: json({ error: "Missing auth" }, 401) }
+  if (!authHeader) return { err: jsonResponse(req, { error: "Missing auth" }, 401) }
   const jwt = authHeader.replace("Bearer ", "")
 
   const url = Deno.env.get("SUPABASE_URL")!
@@ -53,7 +42,7 @@ async function verify(
     auth: { persistSession: false, autoRefreshToken: false },
   })
   const { data: u, error: uErr } = await userClient.auth.getUser(jwt)
-  if (uErr || !u?.user) return { err: json({ error: "Invalid token" }, 401) }
+  if (uErr || !u?.user) return { err: jsonResponse(req, { error: "Invalid token" }, 401) }
 
   const admin = createClient(url, service, {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -76,22 +65,23 @@ async function verify(
       } | null
     }
 
-  if (!prof) return { err: json({ error: "Profile not found" }, 403) }
-  if (!prof.is_active) return { err: json({ error: "Account inactive" }, 403) }
+  if (!prof) return { err: jsonResponse(req, { error: "Profile not found" }, 403) }
+  if (!prof.is_active) return { err: jsonResponse(req, { error: "Account inactive" }, 403) }
 
   const token =
     prof.permission_level === "admin" ? "admin"
     : (prof.departments?.code ?? null)
 
   if (!token || !allowedRoles.includes(token)) {
-    return { err: json({ error: "Forbidden" }, 403) }
+    return { err: jsonResponse(req, { error: "Forbidden" }, 403) }
   }
 
   return { caller: { id: prof.id, role: token, is_active: prof.is_active }, admin }
 }
 
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: CORS })
+  const json = (b: unknown, status = 200) => jsonResponse(req, b, status)
+  if (req.method === "OPTIONS") return preflight(req)
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405)
 
   let body: { action?: string; payload?: Record<string, unknown> } = {}
@@ -138,22 +128,59 @@ Deno.serve(async (req: Request) => {
         }
         if (!p.entity_id)     return json({ error: "entity_id is required" }, 400)
         if (!p.department_id) return json({ error: "department_id is required" }, 400)
-        const { error } = await admin.from("access_rules").insert({
-          route: p.route,
-          permission_level: p.permission_level,
-          entity_id: p.entity_id,
-          department_id: p.department_id,
-          designation_id: p.designation_id ?? null,
-        })
+        const { data: inserted, error } = await admin
+          .from("access_rules")
+          .insert({
+            route: p.route,
+            permission_level: p.permission_level,
+            entity_id: p.entity_id,
+            department_id: p.department_id,
+            designation_id: p.designation_id ?? null,
+          })
+          .select("id")
+          .maybeSingle()
         if (error) return json({ error: error.message }, 400)
+
+        // Phase 9e M3 / H6 — audit privilege rule creation
+        await audit(admin, {
+          actorId: caller.id,
+          action: "createRule",
+          targetId: null,
+          after: {
+            id: inserted?.id ?? null,
+            route: p.route,
+            permission_level: p.permission_level,
+            entity_id: p.entity_id,
+            department_id: p.department_id,
+            designation_id: p.designation_id ?? null,
+          },
+        })
+
         return json({ ok: true })
       }
 
       case "deleteRule": {
         const { id } = payload as { id?: number | string }
         if (id == null) return json({ error: "id is required" }, 400)
+
+        // Capture rule before deletion for audit
+        const { data: prev } = await admin
+          .from("access_rules")
+          .select("id, route, permission_level, entity_id, department_id, designation_id")
+          .eq("id", id)
+          .maybeSingle()
+
         const { error } = await admin.from("access_rules").delete().eq("id", id)
         if (error) return json({ error: error.message }, 400)
+
+        // Phase 9e M3 / H6 — audit privilege rule deletion
+        await audit(admin, {
+          actorId: caller.id,
+          action: "deleteRule",
+          targetId: null,
+          before: prev ?? { id },
+        })
+
         return json({ ok: true })
       }
 
@@ -176,8 +203,26 @@ Deno.serve(async (req: Request) => {
         if (Object.keys(clean).length === 0) {
           return json({ error: "No GM fields provided" }, 400)
         }
+
+        // Capture previous GM pointers for audit
+        const { data: prev } = await admin
+          .from("entities")
+          .select("gm_service_user_id, gm_spares_user_id, gm_backoffice_user_id")
+          .eq("id", entity_id)
+          .maybeSingle()
+
         const { error } = await admin.from("entities").update(clean).eq("id", entity_id)
         if (error) return json({ error: error.message }, 400)
+
+        // Phase 9e M3 — audit GM-pointer changes
+        await audit(admin, {
+          actorId: caller.id,
+          action: "updateEntityGMs",
+          targetId: entity_id,
+          before: prev ?? null,
+          after: clean,
+        })
+
         return json({ ok: true })
       }
 

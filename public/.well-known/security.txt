@@ -1,0 +1,4 @@
+Contact: mailto:hr.guj@parastrucks.in
+Expires: 2027-05-03T00:00:00Z
+Preferred-Languages: en, hi
+Canonical: https://portal.parastrucks.in/.well-known/security.txt

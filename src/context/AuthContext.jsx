@@ -251,8 +251,9 @@ export function AuthProvider({ children }) {
   // table's RLS surface.
   //
   // On error, we throw a SignInError — a plain Error subclass that carries
-  // structured `code` + `retry_after_s` + `fails_remaining` so Login.jsx can
-  // render the right message without string-matching.
+  // structured `code` + `retry_after_s` so Login.jsx can render the right
+  // message without string-matching. Phase 9e H2: `fails_remaining` no longer
+  // surfaces on the error — the lockout countdown UI is the only signal.
   async function signIn(email, password, { rememberMe = false, turnstileToken } = {}) {
     // Set the remember-me flag BEFORE any supabase write so the storage
     // adapter picks the right bucket for the session that's about to land.
@@ -277,7 +278,6 @@ export function AuthProvider({ children }) {
       const err = new Error(signInErrorMessage(body.error))
       err.code = body.error || 'unknown'
       if (body.retry_after_s != null) err.retryAfter = body.retry_after_s
-      if (body.fails_remaining != null) err.failsRemaining = body.fails_remaining
       throw err
     }
 

@@ -1,0 +1,19 @@
+#!/bin/sh
+# Phase 9g T10 — secret scan before commit.
+#
+# Uses gitleaks (https://github.com/gitleaks/gitleaks). If gitleaks isn't on
+# PATH, prints a warning and lets the commit proceed — installing gitleaks
+# is a one-time per-developer setup, not a hard CI gate. The CI workflow
+# (.github/workflows/security.yml) catches anything that slips through.
+#
+# Install:
+#   Windows:  scoop install gitleaks   |   choco install gitleaks
+#   macOS:    brew install gitleaks
+#   Linux:    see https://github.com/gitleaks/gitleaks/releases
+
+if command -v gitleaks >/dev/null 2>&1; then
+  gitleaks protect --staged --redact --verbose
+else
+  echo "warning: gitleaks not on PATH; skipping local secret scan."
+  echo "         install: https://github.com/gitleaks/gitleaks (commits still scanned in CI)"
+fi

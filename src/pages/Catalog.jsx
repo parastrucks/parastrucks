@@ -882,17 +882,19 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
     let brochure_filename = form.brochure_filename  || null
 
     if (brochureFile) {
-      const safeName = form.name.replace(/[^a-zA-Z0-9_-]/g, '_')
-      const path = `${form.brand}/${safeName}.pdf`
+      // Phase 9f M5 — the EF generates an unguessable UUID filename
+      // server-side; the client no longer chooses the path. The original
+      // filename is preserved on vehicle_catalog.brochure_filename so the
+      // download UX can use it via Content-Disposition.
       setUploadPct(0)
+      let serverPath = null
       try {
-        // Ask the Edge Function for a one-shot signed upload URL.
-        // The file uploads directly to storage — never passes through the function.
-        const { token } = await callEdge('admin-catalog', 'signBrochureUpload', { path })
+        const { path: uuidPath, token } = await callEdge('admin-catalog', 'signBrochureUpload', {})
+        serverPath = uuidPath
         const { error: upErr } = await supabase.storage
           .from('brochures')
-          .uploadToSignedUrl(path, token, brochureFile, {
-            upsert: true,
+          .uploadToSignedUrl(uuidPath, token, brochureFile, {
+            upsert: false, // server-generated UUID; collisions impossible
             contentType: 'application/pdf',
           })
         setUploadPct(null)
@@ -903,7 +905,7 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
         setSaving(false)
         return
       }
-      brochure_url      = path
+      brochure_url      = serverPath
       brochure_filename = brochureFile.name
     }
 
