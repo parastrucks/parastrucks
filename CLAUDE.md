@@ -62,6 +62,42 @@ console checks on app pages (Dashboard), not the login page.
 
 ---
 
+## Phase 9 — Post-Deployment VAPT Re-Test (2026-05-18) — ALL FINDINGS TABLED
+
+After 9b–9g shipped, three red-team agents re-attacked production (non-destructive:
+perimeter probing + code/RLS review; no brute-force, no data mutation). **Result: the
+Phase 9 perimeter held — every deployed control passed.** The findings below are
+gaps *outside* the Phase 9 scope. **Decision (2026-05-18): all tabled, none actioned.**
+None are anonymous-internet exploitable — every one requires a valid portal login.
+Full plain-English report: `docs/security-vapt/phase9-verification-report.md`.
+
+| ID | Finding | Severity | File |
+|----|---------|----------|------|
+| **C1** | `users_select` RLS policy lets ANY authenticated user read every coworker's PII (email/phone/employee_code/permission_level/is_active) in their entity. Caused by the April recursion hotfix adding an `entity_id = get_my_entity_id()` OR-branch that was never narrowed back. | **High** (insider PII leak, live) | `supabase/migrations/20260418_fix_users_select_recursion_hotfix.sql:18-21` |
+| **M-1** | `bulkUpsertVehicles` has no field whitelist — client `rows` go straight into a service-role `upsert` (up to 5000 rows). Single-row `updateVehicle` *does* whitelist. Mass-assignment. | Medium | `supabase/functions/admin-catalog/index.ts:173-186` |
+| **M-2** | `injectTivIds` trusts `entity_id`/`brand_id` from the payload with no caller-owns-entity check — a back-office user can write TIV data tagged to the *other* entity (IDOR). | Medium | `supabase/functions/admin-tiv/index.ts:119-153` |
+| **H-1** | `admin-access-rules` never compares `permission_level` against the caller's own tier (H6 spec said it should). Harmless today — only `admin` can call it — but a latent self-escalation path if a non-admin role is ever added. | Low (latent) | `supabase/functions/admin-access-rules/index.ts` |
+| **H-2** | Reference-data mutations (`toggleDepartment`, `toggleBrand`, `createOperatingUnit`, …) write no `security_audit_log` row, despite some changing users' effective role. | Low (audit gap) | `admin-users` / `admin-catalog` |
+| **M-3** | C2 self-edit block omits `is_active` from the blocked-field loop (spec listed it). Not reachable today. | Low (spec gap) | `admin-users/index.ts` |
+| **L-1** | Rate limiter + `verify-login` lockout both **fail open** on a DB error. Brute-force throttling is best-effort only. | Low | `verify-login/index.ts` |
+| — | `team.parastrucks.in` static responses send `Access-Control-Allow-Origin: *` (EF CORS is correctly locked; static-site config only). | Low | `vercel.json` |
+| — | `postcss 8.5.8` / `dompurify 3.3.3` CVEs — confirmed NOT reachable in current app usage (build-time / unconfigured DOMPurify). | Info | `package.json` |
+
+**Open product question for C1 before any fix:** the `entity_id` OR-branch may exist
+because some screen needs an employee list (a colleague dropdown / team page). The fix
+is likely "lock sensitive fields, allow a name-only view if a screen needs it" — confirm
+what the UI actually depends on before narrowing the policy, or that screen goes blank.
+
+**Confirmed PASS (Phase 9 worked):** EF CORS allow-list rejects unknown origins · all
+security headers correct on `/` and deep paths · CSP3 split correct · `security.txt`
+served · EFs reject unauth with clean 401, no leaks · caller identity always validated
+via `getUser()` (so `verify_jwt:false` is safe) · C2 HR-edit guardrails · H4 signOut on
+deactivate · RLS fails closed when `current_user_role()` is NULL · all SECURITY DEFINER
+functions pin `search_path` · no XSS sinks in `src/` · no service-role key in the
+client bundle · entity isolation on quotations/invoices/tiv/catalog holds.
+
+---
+
 # Parastrucks VAPT — Final Remediation Plan (v2, post-review)
 
 ## Context
