@@ -11,6 +11,53 @@
 
 ---
 
+## Next Actions — START HERE
+
+> Maintained as the single source of truth for "what to do next". Update this list
+> as items are completed (move them to a deployment record) or added.
+
+### Task A — Restore localhost development on the current laptop
+
+**Context:** Laptop was migrated (2026-05-22). Production (`team.parastrucks.in`) works
+on the new machine, but `npm run dev` on `http://localhost:3000` fails with a **CORS
+error** — the prod Supabase Edge Functions' `ALLOWED_ORIGINS` only whitelists
+`https://team.parastrucks.in` (Phase 9c hardening, working as designed).
+
+**DO NOT add `localhost` to the PROD project's `ALLOWED_ORIGINS`** — explicitly rejected
+by the owner as a production risk. Use the staging project instead:
+
+- [ ] Point local `.env` at the **staging** Supabase project `klpnhpnlotcbbovwswmq`
+      (`paras-portal-staging`, Mumbai) — update `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`,
+      `VITE_SUPABASE_SERVICE_KEY` to staging values. Keep a prod `.env` copy aside for the
+      rare case prod testing is needed.
+- [ ] On the **staging** project only, set Edge Function secret
+      `ALLOWED_ORIGINS=http://localhost:3000` (add the staging site URL too if one exists).
+- [ ] Confirm `npm run dev` → `http://localhost:3000` → login works with no CORS error.
+- [ ] Note: Vite dev port is 3000 (`vite.config.js` `server.port`); if it ever starts on
+      5173, align the `ALLOWED_ORIGINS` value or set `PORT=3000`.
+
+### Task B — Phase 9 residual hardening
+
+- [ ] **CVE overrides** (was deferred at deploy): add a `package.json` `overrides` block to
+      pull patched `postcss` (≥8.5.10, GHSA-qx2v-qp2m-jg93) and `dompurify` (GHSA for
+      3.3.3). Both confirmed NOT reachable in current app usage — low urgency, but closes
+      `npm audit`. **Do NOT use `npm audit fix --force`** (would unpin the `xlsx` CDN
+      tarball and undo Phase 9b). Hand-write the `overrides` block, then `npm install`.
+- [ ] **9h — medium-effort feature hardening** (each its own PR, do not bundle):
+      9h-1 MFA for admin/HR · 9h-2 new-device email (Resend) · 9h-3 active-sessions page ·
+      9h-4 security-monitor cron · 9h-5 file-upload virus scan · 9h-6 PII encryption.
+      Full specs in the "9h" roadmap section below.
+- [ ] **9i — programme/process items** (T14–T20): not engineering work — calendar
+      reminders, docs, vendor scheduling. See the "9i" section below.
+
+### Optional cleanup (from the Phase 9 deployment)
+
+- [ ] Remove local dump artifacts once prod is confirmed stable: `prod_schema.sql`,
+      `prod_seed_data.sql`, `staging_apply.sql`, `prod_backup_pre_phase9_*.sql`, and the
+      worktree `elated-volhard-c88b85`.
+
+---
+
 ## Phase 9 — Deployment Record (9b–9g)
 
 **Shipped to production 2026-05-17 → 2026-05-18.** All Critical/High/Medium VAPT

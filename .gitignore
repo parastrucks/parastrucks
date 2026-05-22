@@ -6,3 +6,4 @@ dist
 public/Screenshot*.png
 
 .vercel
+MIGRATION.md
