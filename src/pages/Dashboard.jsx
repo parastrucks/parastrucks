@@ -8,6 +8,7 @@ const UNGROUPED_TOOLS = [
   { to: '/catalog',        icon: '🚛', title: 'Vehicle Catalog',     desc: 'Manage the vehicle price catalog' },
   { to: '/bus-calculator', icon: '🚌', title: 'Bus Calculator',      desc: 'Build a bus price estimate step by step' },
   { to: '/tiv-forecast',   icon: '📈', title: 'TIV Forecast',        desc: 'Industry volume forecasting and segment analysis' },
+  { to: '/vendor-jobs',    icon: '🔧', title: 'Vendor Jobs', desc: 'Track outside-workshop & ancillary repair jobs' },
 ]
 
 const GROUPS = [
