@@ -26,6 +26,16 @@ const DEPT_TABS = {
     { to: '/employees',      icon: '👥', label: 'Employees' },
     { to: '/profile',        icon: '👤', label: 'Profile' },
   ],
+  service: [
+    { to: '/',               icon: '⊞', label: 'Home' },
+    { to: '/vendor-jobs',    icon: '🔧', label: 'Jobs' },
+    { to: '/profile',        icon: '👤', label: 'Profile' },
+  ],
+  accounts: [
+    { to: '/',               icon: '⊞', label: 'Home' },
+    { to: '/vendor-jobs',    icon: '🔧', label: 'Jobs' },
+    { to: '/profile',        icon: '👤', label: 'Profile' },
+  ],
 }
 
 const ADMIN_TABS = [

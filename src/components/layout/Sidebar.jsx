@@ -42,6 +42,7 @@ const UNGROUPED = [
   { to: '/catalog',        icon: '🚛', label: 'Vehicle Catalog' },
   { to: '/bus-calculator', icon: '🚌', label: 'Bus Calculator'  },
   { to: '/tiv-forecast',   icon: '📈', label: 'TIV Forecast'    },
+  { to: '/vendor-jobs',    icon: '🔧', label: 'Vendor Jobs' },
 ]
 
 function NavGroup({ group, canAccess }) {
