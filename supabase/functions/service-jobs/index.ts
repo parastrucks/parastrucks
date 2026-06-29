@@ -314,10 +314,15 @@ Deno.serve(async (req: Request) => {
         return json({ ok: true })
       }
 
-      // ── Advance spine (managers+) ──────────────────────────────
+      // ── Advance spine ──────────────────────────────────────────
+      // Advancing to work_completed is open to any portal user (incl. service
+      // executives — they run the physical job). Advancing to invoice_received
+      // stays manager+.
       case "advanceStage": {
-        if (!isManagerPlus(caller)) return json({ error: "Forbidden" }, 403)
         const { jobId, toStage } = payload as { jobId?: string; toStage?: string }
+        if (toStage === "invoice_received" && !isManagerPlus(caller)) {
+          return json({ error: "Forbidden — only managers can mark invoice received" }, 403)
+        }
         const r = await loadJob(jobId); if ("err" in r) return r.err
         const job = r.job
         const curIdx = SPINE.indexOf(job.stage)
