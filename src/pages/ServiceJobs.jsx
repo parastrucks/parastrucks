@@ -84,6 +84,10 @@ function jobPending(j) {
   const curIdx = SPINE.indexOf(j.stage)
   const settleStage = j.repair_type === 'warranty' ? (aw ? 'work_completed' : 'invoice_received') : 'invoice_received'
   const out = []
+  // Spine advancement (the manager/exec's core operational work): someone must
+  // mark work completed, then (non-AW) mark the vendor invoice received.
+  if (j.stage === 'po_generated') out.push('advance_work')
+  else if (!aw && j.stage === 'work_completed') out.push('advance_invoice')
   if (!j.settlement_status && j.stage === settleStage)
     out.push(j.repair_type === 'warranty' ? 'approve_warranty' : 'settle_payment')
   if (!aw && !j.payment_done_at && j.stage === 'invoice_received') out.push('pay_vendor')
@@ -104,7 +108,7 @@ function capsForRole(role) {
     default:         return { canManage: false, isAccounts: false, canGm: false } // exec / capture
   }
 }
-const ADMIN_LENSES = [['admin', 'Overview'], ['gm', 'GM'], ['manager', 'Manager'], ['accounts', 'Accounts'], ['exec', 'Executive']]
+const ADMIN_LENSES = [['admin', 'Everything'], ['gm', 'GM'], ['manager', 'Manager'], ['accounts', 'Accounts'], ['exec', 'Executive']]
 
 // Group the open jobs into the action queues this lens should act on.
 function buildBuckets(open, caps, myId) {
@@ -115,6 +119,10 @@ function buildBuckets(open, caps, myId) {
   const capture = caps.canManage || !caps.isAccounts
   const list = []
   if (caps.canManage) {
+    const aw1 = open.filter(j => has(j, 'advance_work'))
+    if (aw1.length) list.push({ key: 'advance_work', title: 'Mark work completed', tone: 'blue', hint: 'Vendor has finished — advance the job', jobs: aw1 })
+    const ai = open.filter(j => has(j, 'advance_invoice'))
+    if (ai.length) list.push({ key: 'advance_invoice', title: 'Mark invoice received', tone: 'blue', hint: 'Vendor invoice in — enables payment', jobs: ai })
     const w = open.filter(j => has(j, 'approve_warranty'))
     if (w.length) list.push({ key: 'approve_warranty', title: 'Warranty to approve', tone: 'amber', hint: 'Process the claim, or convert to paid', jobs: w })
   }
@@ -145,6 +153,45 @@ const blankForm = () => ({
   customer_name: '', chassis_no: '', engine_no: '', km_hrs: '', date_of_sale: '',
   model: '', make: '', complaint_date: '', complaint: '', check_item: '', serial_no: '', qty: '',
 })
+
+// Admin lens switcher. Custom dropdown (not a native <select>) — native option
+// popups can't be styled and render as a messy bleed-over-content overlay on
+// mobile. This matches the Dashboard/Sidebar dropdown pattern (outside-click +
+// Esc to close, fully controlled appearance, high z-index).
+function LensDropdown({ value, onChange }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  const label = (ADMIN_LENSES.find(([r]) => r === value) || ['', value])[1]
+  useEffect(() => {
+    if (!open) return
+    function onDown(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    function onKey(e) { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', onDown)
+    window.addEventListener('keydown', onKey)
+    return () => { document.removeEventListener('mousedown', onDown); window.removeEventListener('keydown', onKey) }
+  }, [open])
+  return (
+    <div className={`sj-lens${open ? ' open' : ''}`} ref={ref}>
+      <button type="button" className="sj-lens-trigger" aria-haspopup="menu" aria-expanded={open}
+        aria-label="View Needs-you as role" onClick={() => setOpen(o => !o)}>
+        <span className="sj-lens-cap">Viewing:</span>
+        <span className="sj-lens-val">{label}</span>
+        <span className="sj-lens-arrow" aria-hidden="true">▾</span>
+      </button>
+      {open && (
+        <div className="sj-lens-menu" role="menu">
+          {ADMIN_LENSES.map(([r, lbl]) => (
+            <button key={r} type="button" role="menuitemradio" aria-checked={r === value}
+              className={`sj-lens-item${r === value ? ' active' : ''}`}
+              onClick={() => { onChange(r); setOpen(false) }}>
+              {lbl}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function ServiceJobs() {
   const { profile } = useAuth()
@@ -193,6 +240,9 @@ export default function ServiceJobs() {
   const canManage = ['manager', 'gm', 'admin'].includes(perm)
   const canGm = ['gm', 'admin'].includes(perm)
   const isAccounts = isAdmin || deptCode === 'accounts'
+  // "Capture" roles handle the physical job (service exec + any manager+, not pure
+  // accounts). They may advance a job to work_completed; invoice_received stays manager+.
+  const canCapture = canManage || !isAccounts
   const myId = profile?.id
 
   // The lens deciding which Needs-you buckets show. Non-admins are pinned to
@@ -460,29 +510,28 @@ export default function ServiceJobs() {
             Needs you{needCount ? <span className="sj-mode-count">{needCount}</span> : ''}
           </button>
           <button className={`seg-btn ${mode === 'all' ? 'active' : ''}`} onClick={() => setMode('all')}>All jobs</button>
+          {canManage && (
+            <button className={`seg-btn ${mode === 'overview' ? 'active' : ''}`} onClick={() => setMode('overview')}>Overview</button>
+          )}
         </div>
         {/* Admin-only lens switcher (hidden for single-role users). */}
         {isAdmin && mode === 'needs' && (
-          <label className="sj-lens">
-            <span className="sj-lens-cap">Viewing:</span>
-            <select className="sj-lens-sel" value={asRole} aria-label="View Needs-you as role"
-              onChange={e => setAsRole(e.target.value)}>
-              {ADMIN_LENSES.map(([r, label]) => <option key={r} value={r}>{label}</option>)}
-            </select>
-            <span className="sj-lens-arrow" aria-hidden="true">▾</span>
-          </label>
+          <LensDropdown value={asRole} onChange={setAsRole} />
         )}
       </div>
 
-      {mode === 'needs' ? (
+      {mode === 'overview' ? (
+        <div className="sj-view sj-needs" key="overview">
+          {loading && jobs.length === 0 ? <div className="spinner" /> : (
+            <OverviewDash overview={overview} onOpen={openDetail}
+              onJumpParts={() => { setMode('all'); setTab('parts') }}
+              onJumpAccounts={() => { setMode('all'); setTab('active') }} />
+          )}
+        </div>
+      ) : mode === 'needs' ? (
         <div className="sj-view sj-needs" key={`needs:${isAdmin ? asRole : myLens}`}>
           {loading && jobs.length === 0 ? <div className="spinner" /> : (
             <>
-              {isAdmin && asRole === 'admin' ? (
-                <OverviewDash overview={overview} onOpen={openDetail}
-                  onJumpParts={() => { setMode('all'); setTab('parts') }}
-                  onJumpAccounts={() => setAsRole('accounts')} />
-              ) : (<>
               {needCount > 0 && (
                 <p className="sj-needs-cap">
                   <strong>{needCount}</strong> {needCount === 1 ? 'job needs' : 'jobs need'} your attention
@@ -516,7 +565,6 @@ export default function ServiceJobs() {
                   <button type="button" className="btn btn-secondary btn-sm" onClick={() => setMode('all')}>Browse all jobs →</button>
                 </div>
               )}
-              </>)}
 
               {/* GM / admin: recent status changes with one-click undo (shown in every lens). */}
               {viewCaps.canGm && recent.length > 0 && (
@@ -721,7 +769,7 @@ export default function ServiceJobs() {
           <JobDetail
             key={selected.id}
             job={selected} events={events} busy={busy}
-            caps={{ isAdmin, canManage, canGm, isAccounts }}
+            caps={{ isAdmin, canManage, canGm, isAccounts, canCapture }}
             onAct={act} onReprint={() => { pdfFor(selected); showToast('PO downloaded') }}
           />
         </Modal>
@@ -743,6 +791,8 @@ function BIcon({ name }) {
     chase: <><circle cx="12" cy="12" r="8.2" /><path d="M12 7.5V12l3 1.8" /></>,
     anc_ref: <><path d="M10.5 13.5a4 4 0 0 0 5.7 0l2-2a4 4 0 0 0-5.7-5.7l-1 1" /><path d="M13.5 10.5a4 4 0 0 0-5.7 0l-2 2a4 4 0 0 0 5.7 5.7l1-1" /></>,
     mine: <><rect x="3" y="7" width="18" height="13" rx="2" /><path d="M8 7V5.5A2.5 2.5 0 0 1 10.5 3h3A2.5 2.5 0 0 1 16 5.5V7" /></>,
+    advance_work: <><circle cx="12" cy="12" r="8.5" /><path d="M8.5 12l2.5 2.5L16 9.5" /></>,
+    advance_invoice: <><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z" /><path d="M9.5 8h5M9.5 11.5h5" /></>,
   }
   return (
     <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
@@ -768,6 +818,10 @@ function NeedCard({ job, bucket, index, busy, onOpen, onQuick, onReprint }) {
     action = <button className="btn btn-sm btn-primary" disabled={busy} onClick={stop(() => onQuick('markPaymentDone', { jobId: job.id }, 'Vendor marked paid'))}>Mark vendor paid</button>
   else if (bucket.key === 'settle_payment')
     action = <button className="btn btn-sm btn-primary" disabled={busy} onClick={stop(() => onQuick('setSettlement', { jobId: job.id }, 'Payment received'))}>Mark payment received</button>
+  else if (bucket.key === 'advance_work')
+    action = <button className="btn btn-sm btn-primary" disabled={busy} onClick={stop(() => onQuick('advanceStage', { jobId: job.id, toStage: 'work_completed' }, 'Marked work completed'))}>Mark work completed</button>
+  else if (bucket.key === 'advance_invoice')
+    action = <button className="btn btn-sm btn-primary" disabled={busy} onClick={stop(() => onQuick('advanceStage', { jobId: job.id, toStage: 'invoice_received' }, 'Marked invoice received'))}>Mark invoice received</button>
   else if (bucket.key === 'chase')
     action = <button className="btn btn-sm btn-secondary" disabled={busy} onClick={stop(onReprint)}>Re-print PO</button>
 
@@ -1065,7 +1119,7 @@ function NewJobForm({ form, setForm, vendors, canManage, onReloadVendors, onSubm
 }
 
 function JobDetail({ job, events, busy, caps, onAct, onReprint }) {
-  const { isAdmin, canManage, canGm, isAccounts } = caps
+  const { isAdmin, canManage, canGm, isAccounts, canCapture } = caps
   const aw = job.job_type === 'ancillary' && job.repair_type === 'warranty'
   const closed = !!job.closed_at
   const [ancRef, setAncRef] = useState(job.ancillary_ref || '')
@@ -1074,6 +1128,9 @@ function JobDetail({ job, events, busy, caps, onAct, onReprint }) {
   const curIdx = SPINE.indexOf(job.stage)
   const maxIdx = aw ? 1 : 2 // ancillary-warranty caps at work_completed
   const nextStage = curIdx < maxIdx ? SPINE[curIdx + 1] : null
+  // Advancing to work_completed is open to capture roles (incl. executives);
+  // advancing to invoice_received stays manager+.
+  const canAdvance = !closed && !!nextStage && (nextStage === 'work_completed' ? canCapture : canManage)
 
   const settleStage = job.repair_type === 'warranty' ? (aw ? 'work_completed' : 'invoice_received') : 'invoice_received'
   const canSettle = !closed && !job.settlement_status && job.stage === settleStage &&
@@ -1128,7 +1185,7 @@ function JobDetail({ job, events, busy, caps, onAct, onReprint }) {
 
       <div className="sj-actions">
         <button className="btn btn-sm btn-secondary" onClick={onReprint}>🖨 Re-print PO</button>
-        {canManage && !closed && nextStage && (
+        {canAdvance && (
           <button className="btn btn-sm btn-primary" disabled={busy}
             onClick={() => onAct('advanceStage', { jobId: job.id, toStage: nextStage }, job.id, `Advanced to ${STAGE_LABEL[nextStage]}`)}>Advance → {STAGE_LABEL[nextStage]}</button>
         )}
