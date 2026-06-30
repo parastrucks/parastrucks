@@ -1,6 +1,10 @@
 # Parastrucks — Project Memory
 
-> **Current website phase:** Phase 9 sub-phases 9b–9g — **DEPLOYED to production 2026-05-17/18.**
+> **Current website phase:** Phase 9 (9b–9g) **DEPLOYED 2026-05-17/18**, and
+> **Phase 9.5 — Vendor Jobs (outside-workshop & ancillary job tracker) DEPLOYED to
+> production 2026-06-28/29** (PRs #61–#64; route `/vendor-jobs`, EF `service-jobs` prod v2).
+> See "Phase 9.5 — Deployment Record" below. The Phase 9 residual deps are also now
+> cleared (vite 5→8 + `npm audit fix` → `npm audit` reports 0 vulnerabilities; CI fully green).
 > Next engineering work is **9h** (medium-effort hardening: MFA, new-device email,
 > active-sessions page, security-monitor cron, file-upload virus scan, PII encryption)
 > and **9i** (programme/process items). Both are untouched. See the roadmap at the bottom.
@@ -38,11 +42,15 @@ by the owner as a production risk. Use the staging project instead:
 
 ### Task B — Phase 9 residual hardening
 
-- [ ] **CVE overrides** (was deferred at deploy): add a `package.json` `overrides` block to
-      pull patched `postcss` (≥8.5.10, GHSA-qx2v-qp2m-jg93) and `dompurify` (GHSA for
-      3.3.3). Both confirmed NOT reachable in current app usage — low urgency, but closes
-      `npm audit`. **Do NOT use `npm audit fix --force`** (would unpin the `xlsx` CDN
-      tarball and undo Phase 9b). Hand-write the `overrides` block, then `npm install`.
+- [x] **CVE overrides / npm-audit — DONE (2026-06-29).** Resolved in stages: (1) `postcss`
+      + `dompurify` `overrides` block hand-added (commit `6670d00`); (2) `npm audit fix`
+      (no `--force`) patched ws/babel/dompurify/react-router (PR #62, `39f1dff`); (3) vite
+      `5.4.21`→`8.1.0` + `@vitejs/plugin-react` `4`→`6` cleared the last dev-server-only
+      esbuild/vite advisories (PR #64, `9b6f610`). `npm audit` now reports **0 vulnerabilities**.
+      The `xlsx` CDN-tarball pin was preserved throughout (explicit installs, never
+      `audit fix --force`). Also fixed the broken `trivy-fs` CI job (yanked
+      `aquasecurity/trivy-action@0.24.0` → `@0.35.0`). **The `security` workflow is now fully green.**
+      Note for future dep work: vite 8 needs node `^20.19 || >=22.12` (CI node 20.x + Vercel 22.x both satisfy).
 - [ ] **9h — medium-effort feature hardening** (each its own PR, do not bundle):
       9h-1 MFA for admin/HR · 9h-2 new-device email (Resend) · 9h-3 active-sessions page ·
       9h-4 security-monitor cron · 9h-5 file-upload virus scan · 9h-6 PII encryption.
@@ -52,9 +60,12 @@ by the owner as a production risk. Use the staging project instead:
 
 ### Optional cleanup (from the Phase 9 deployment)
 
+- [x] **Stale git branches + worktree — DONE (2026-06-29).** All 28 merged-PR feature
+      branches deleted from origin; the `claude/elated-volhard-c88b85` branch (and the
+      leftover `vibrant-williams-74d295` worktree) removed; stale PR #18 (TIV Forecast UX,
+      from April, superseded) closed. Remote now has only `main` + `portal`.
 - [ ] Remove local dump artifacts once prod is confirmed stable: `prod_schema.sql`,
-      `prod_seed_data.sql`, `staging_apply.sql`, `prod_backup_pre_phase9_*.sql`, and the
-      worktree `elated-volhard-c88b85`.
+      `prod_seed_data.sql`, `staging_apply.sql`, `prod_backup_pre_phase9_*.sql` (if still present locally).
 
 ---
 
@@ -106,6 +117,54 @@ with the *document* — verify security headers by curling actual page URLs
 Cloudflare Turnstile's own iframe/worker noise (`normal?lang=auto`, `about:srcdoc`,
 `blob:challenges.cloudflare.com`) — that is third-party, not the portal; do CSP
 console checks on app pages (Dashboard), not the login page.
+
+---
+
+## Phase 9.5 — Deployment Record (Vendor Jobs)
+
+**Shipped to production 2026-06-28 → 06-29.** New feature: the service team's
+**outside-workshop & ancillary job tracker** at route **`/vendor-jobs`** (user-facing
+label "Vendor Jobs"). Tracks the four cases {outside, ancillary} × {warranty, paid}
+through a PO-number lifecycle (status tracking + PO/warranty-letter PDF only — no money,
+no invoice metadata, no uploads in v1). Full design/history: plan file
+`C:\Users\dhruv\.claude\plans\immutable-petting-hearth.md` + memory `phase95_service_tracker.md`.
+
+**Architecture:** new tables `service_vendors` / `service_jobs` / `service_job_events`
+(append-only track log); SECURITY DEFINER RPC `create_service_job()` (atomic fiscal-year
+PO numbering + idempotency); helper `is_manager_or_above()`; RLS (entity+role reads, EF
+writes); 12 `access_rules` rows for `/vendor-jobs`. Edge Function **`service-jobs`**
+(`verify_jwt:false`, custom `verify()` — the 7th EF) enforces per-action authority +
+entity-ownership (no IDOR) + audit. Migration `supabase/migrations/20260625_phase95_service_jobs.sql`.
+
+**PRs merged to `portal`:**
+- **#61** (`d3468a5`) — Phase 9.5 feature (DB migration + EF + `ServiceJobs.jsx` +
+  `generateServicePoPdf` + nav/route wiring). Migration applied to prod via the Supabase
+  MCP `apply_migration`; EF deployed prod **v1**.
+- **#62** (`39f1dff`) — `npm audit fix` (ws/babel/dompurify/react-router; no `--force`).
+- **#63** (`62799f4`) — 4 fixes: Overview promoted to a top-level tab (Needs you | All jobs
+  | Overview) for manager/gm/admin; manager Needs-you now surfaces spine-advancement work
+  ("Mark work completed" / "Mark invoice received" buckets); executives can advance a job
+  **to work_completed** (EF `advanceStage` relaxed — invoice_received stays manager+);
+  lens switcher native `<select>` → custom dropdown (native popup bled over cards on mobile).
+  EF deployed prod **v2**.
+- **#64** (`9b6f610`) — vite 5→8 + plugin-react 4→6 + trivy CI fix (see Task B above).
+
+**Role model:** create job = all portal users · advance to work_completed = any portal
+user (incl. executive) · advance to invoice_received / approve warranty / convert / cancel
+= manager+ · payments (vendor payout + customer received) = accounts · undo last status =
+gm/admin. Vendors are typed `is_authorized` (OEM dealers → ancillary work) vs general
+(→ outside jobs). All 5 roles verified live on staging.
+
+**Prod infra (not in git):** EF `service-jobs` prod **v2** (`verify_jwt:false`); prod
+`ALLOWED_ORIGINS` already covered `https://team.parastrucks.in` (untouched). Staging
+project `klpnhpnlotcbbovwswmq`: EF v7, test data cleared after verification (test users
+`svc.mgr@`/`svc.exec@`/`gm@`/`pt.mgr@`/`admin@`/`tester@parastrucks.test`, pwd `StagingTest#2026`, kept).
+
+**Verify-on-staging facts worth keeping:** the portal session lives in
+`sessionStorage['sb-session']` (custom storage adapter — NOT localStorage); the login
+form gates submit on a Turnstile token (staging has `REQUIRE_CAPTCHA=false` so it passes) —
+to drive login in the preview harness, set fields via the native value setter + `input`
+event, wait for the `cf-turnstile-response` token, then `form.requestSubmit()`.
 
 ---
 
