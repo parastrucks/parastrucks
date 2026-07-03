@@ -1044,9 +1044,9 @@ function NewJobForm({ form, setForm, vendors, canManage, onReloadVendors, onSubm
           </div>
         </div>
         <div className="form-group">
-          <label className="form-label" htmlFor="sj-vendor">{isAncillary ? 'Authorized dealer' : 'Vendor'}</label>
+          <label className="form-label" htmlFor="sj-vendor">{isAncillary ? 'Authorized dealer' : 'Vendor'} <span className="req">*</span></label>
           <div className="sj-vendor-row">
-            <select id="sj-vendor" className="form-select" value={form.vendor_id} onChange={set('vendor_id')}>
+            <select id="sj-vendor" className="form-select" required value={form.vendor_id} onChange={set('vendor_id')}>
               <option value="">{isAncillary ? '— select authorized dealer —' : '— select vendor —'}</option>
               {eligibleVendors.map(v => <option key={v.id} value={v.id}>{v.name}{v.oem ? ` (${v.oem})` : ''}</option>)}
             </select>
