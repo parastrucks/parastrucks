@@ -213,6 +213,7 @@ Deno.serve(async (req: Request) => {
           return json({ error: "vehicle_registration_no is required" }, 400)
         }
         if (!p.customer_name) return json({ error: "customer_name is required" }, 400)
+        if (!p.vendor_id) return json({ error: "vendor is required" }, 400)
         const aw = jobType === "ancillary" && repairType === "warranty"
         // customer_name is a common column now; these are the AW-letter-only extras.
         const letterCols = ["chassis_no", "engine_no", "km_hrs", "date_of_sale",
