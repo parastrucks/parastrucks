@@ -148,17 +148,45 @@ entity-ownership (no IDOR) + audit. Migration `supabase/migrations/20260625_phas
   lens switcher native `<select>` → custom dropdown (native popup bled over cards on mobile).
   EF deployed prod **v2**.
 - **#64** (`9b6f610`) — vite 5→8 + plugin-react 4→6 + trivy CI fix (see Task B above).
+- **#66** (`7270771`) — **vendor is now compulsory for a new job/PO**: `NewJobForm`
+  vendor `<select>` gets `required` + `*`; EF `createJob` rejects a missing `vendor_id`.
+  DB `vendor_id` stays **nullable** (existing prod rows untouched — gates NEW jobs only).
+  EF deployed prod **v3** / staging v8.
+- **#67** (`c648b4f`) — **security: revoke `anon` EXECUTE on `create_service_job()`**.
+  A prod audit found the RPC still `anon`-executable: the original migration revoked it
+  from `public`+`authenticated` but Supabase grants EXECUTE to `anon` on function creation
+  and that direct grant survived the `revoke … from public`. Anon key is public (client
+  bundle) → anon could POST `/rest/v1/rpc/create_service_job` with forged owner/entity,
+  bypassing the EF. Revoked from `anon` on prod+staging (migration
+  `phase95_revoke_anon_create_service_job` + repo file `supabase/migrations/20260629_*`);
+  now `service_role`-only. **Reusable lesson:** locking down a SECURITY DEFINER RPC needs
+  `revoke … from anon` AND `from authenticated`, not just `from public`.
 
-**Role model:** create job = all portal users · advance to work_completed = any portal
-user (incl. executive) · advance to invoice_received / approve warranty / convert / cancel
-= manager+ · payments (vendor payout + customer received) = accounts · undo last status =
-gm/admin. Vendors are typed `is_authorized` (OEM dealers → ancillary work) vs general
-(→ outside jobs). All 5 roles verified live on staging.
+**Role model:** create job = all portal users (vendor now required) · advance to
+work_completed = any portal user (incl. executive) · advance to invoice_received / approve
+warranty / convert / cancel = manager+ · payments (vendor payout + customer received) =
+accounts · undo last status = gm/admin. Vendors are typed `is_authorized` (OEM dealers →
+ancillary work) vs general (→ outside jobs). All 5 roles verified live on staging.
 
-**Prod infra (not in git):** EF `service-jobs` prod **v2** (`verify_jwt:false`); prod
+**Prod infra (not in git):** EF `service-jobs` prod **v3** (`verify_jwt:false`); prod
 `ALLOWED_ORIGINS` already covered `https://team.parastrucks.in` (untouched). Staging
-project `klpnhpnlotcbbovwswmq`: EF v7, test data cleared after verification (test users
+project `klpnhpnlotcbbovwswmq`: EF v8, test data cleared after verification (test users
 `svc.mgr@`/`svc.exec@`/`gm@`/`pt.mgr@`/`admin@`/`tester@parastrucks.test`, pwd `StagingTest#2026`, kept).
+Prod holds real usage data (1 vendor, 2 jobs, 10 events as of 2026-06-29) — do NOT touch.
+
+**Prod audit (2026-06-29, read-only):** only 1 migration (`phase95_service_jobs`) + only
+the `service-jobs` EF were added by 9.5 (other 6 EFs untouched); RLS + policy counts correct
+on all 3 service tables; the 3 new SECURITY DEFINER objects pin `search_path`. Only gap =
+the `anon` grant above (fixed, #67). **Still open, pre-existing (Phase 7b/8, NOT 9.5):**
+`next_proforma_number()` and `next_financier_copy_number()` are also `anon`-executable and
+consume fiscal counters — same class of gap, a one-line `revoke … from anon` each would
+close them (deferred; flagged for the owner).
+
+**Verify-on-staging facts worth keeping:** the portal session lives in
+`sessionStorage['sb-session']` (custom storage adapter — NOT localStorage); the login
+form gates submit on a Turnstile token (staging has `REQUIRE_CAPTCHA=false` so it passes) —
+to drive login in the preview harness, set fields via the native value setter + `input`
+event, wait for the `cf-turnstile-response` token, then `form.requestSubmit()`.
 
 **Verify-on-staging facts worth keeping:** the portal session lives in
 `sessionStorage['sb-session']` (custom storage adapter — NOT localStorage); the login
