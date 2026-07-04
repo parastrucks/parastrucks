@@ -312,9 +312,12 @@ export default function ProformaInvoice() {
 
   return (
     <div>
-      <div className="page-header">
-        <h1>Proforma Invoice</h1>
-        <p>Generate proforma invoices for physical vehicles</p>
+      <div className="page-head">
+        <div>
+          <div className="page-head-crumb">Proforma Invoices</div>
+          <h1 className="page-head-title">Proforma Invoice<span className="period-accent">.</span></h1>
+          <div className="page-head-sub">Generate proforma invoices for physical vehicles</div>
+        </div>
       </div>
 
       {error && (

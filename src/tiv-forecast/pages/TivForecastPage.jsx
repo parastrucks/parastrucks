@@ -116,9 +116,12 @@ export default function TivForecastPage() {
 
   return (
     <div>
-      <div className="page-header">
-        <h1>TIV Forecast</h1>
-        <p>Industry volume forecasting and AL submission preparation · Ahmedabad territory</p>
+      <div className="page-head">
+        <div>
+          <div className="page-head-crumb">Back Office Tools</div>
+          <h1 className="page-head-title">TIV Forecast<span className="period-accent">.</span></h1>
+          <div className="page-head-sub">Industry volume forecasting and AL submission preparation · Ahmedabad territory</div>
+        </div>
       </div>
 
       {error && (

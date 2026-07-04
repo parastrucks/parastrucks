@@ -310,9 +310,12 @@ export default function BusCalculator() {
 
   return (
     <div>
-      <div className="page-header">
-        <h1>Bus Price Calculator</h1>
-        <p>Build a chassis + body estimate step by step — all prices incl. GST</p>
+      <div className="page-head">
+        <div>
+          <div className="page-head-crumb">Sales Tools</div>
+          <h1 className="page-head-title">Bus Price Calculator<span className="period-accent">.</span></h1>
+          <div className="page-head-sub">Build a chassis + body estimate step by step — all prices incl. GST</div>
+        </div>
       </div>
 
       <div className="bc-layout">

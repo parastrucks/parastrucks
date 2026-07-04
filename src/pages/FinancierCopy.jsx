@@ -393,9 +393,12 @@ export default function FinancierCopy() {
 
   return (
     <div>
-      <div className="page-header">
-        <h1>Financier's Copy</h1>
-        <p>Generate a Tax Invoice (Financier's copy) for bank/NBFC disbursement</p>
+      <div className="page-head">
+        <div>
+          <div className="page-head-crumb">Financier's Copies</div>
+          <h1 className="page-head-title">Financier's Copy<span className="period-accent">.</span></h1>
+          <div className="page-head-sub">Generate a Tax Invoice (Financier's copy) for bank/NBFC disbursement</div>
+        </div>
       </div>
 
       {error && (

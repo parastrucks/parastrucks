@@ -106,9 +106,12 @@ function AdminCatalog() {
 
   return (
     <div>
-      <div className="page-header">
-        <h1>Vehicle Catalog</h1>
-        <p>Manage vehicles, sub-segments and import price circulars</p>
+      <div className="page-head">
+        <div>
+          <div className="page-head-crumb">Sales Tools</div>
+          <h1 className="page-head-title">Vehicle Catalog<span className="period-accent">.</span></h1>
+          <div className="page-head-sub">Manage vehicles, sub-segments and import price circulars</div>
+        </div>
       </div>
 
       <div className="vc-tabs">
@@ -1627,12 +1630,15 @@ function SalesCatalog({ profile }) {
 
   return (
     <div>
-      <div className="page-header">
-        <h1>Vehicle Catalog</h1>
-        <p>
-          Browse models and download brochures
-          {verticalLabels.length > 0 ? ` · ${verticalLabels.join(', ')} range` : ''}
-        </p>
+      <div className="page-head">
+        <div>
+          <div className="page-head-crumb">Sales Tools</div>
+          <h1 className="page-head-title">Vehicle Catalog<span className="period-accent">.</span></h1>
+          <div className="page-head-sub">
+            Browse models and download brochures
+            {verticalLabels.length > 0 ? ` · ${verticalLabels.join(', ')} range` : ''}
+          </div>
+        </div>
       </div>
 
       <div className="vc-controls">

@@ -492,12 +492,13 @@ export default function ServiceJobs() {
 
   return (
     <div className="page">
-      <div className="page-header sj-page-head">
+      <div className="page-head">
         <div>
-          <h1>Vendor Jobs</h1>
-          <p>Track outside-workshop &amp; ancillary repair jobs end to end</p>
+          <div className="page-head-crumb">Service Tools</div>
+          <h1 className="page-head-title">Vendor Jobs<span className="period-accent">.</span></h1>
+          <div className="page-head-sub">Track outside-workshop &amp; ancillary repair jobs end to end</div>
         </div>
-        <button className="btn btn-primary" onClick={openNew}>+ New Job</button>
+        <button className="btn btn-primary page-head-right" onClick={openNew}>+ New Job</button>
       </div>
 
       {/* Load/page-level errors only when no modal is open (action errors render inside the modal). */}

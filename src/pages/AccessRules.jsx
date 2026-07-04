@@ -803,9 +803,12 @@ export default function AccessRules() {
 
   return (
     <div>
-      <div className="page-header">
-        <h1>Access Rules</h1>
-        <p>Define route-level access, assign entity GMs, manage reference data.</p>
+      <div className="page-head">
+        <div>
+          <div className="page-head-crumb">Operations Tools</div>
+          <h1 className="page-head-title">Access Rules<span className="period-accent">.</span></h1>
+          <div className="page-head-sub">Define route-level access, assign entity GMs, manage reference data.</div>
+        </div>
       </div>
 
       <div className="ar-tabs">

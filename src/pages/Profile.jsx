@@ -80,9 +80,12 @@ export default function Profile() {
 
   return (
     <div style={{ maxWidth: 560 }}>
-      <div className="page-header">
-        <h1>My Profile</h1>
-        <p>Your account details. To update attributes, contact HR.</p>
+      <div className="page-head">
+        <div>
+          <div className="page-head-crumb">Account</div>
+          <h1 className="page-head-title">My Profile<span className="period-accent">.</span></h1>
+          <div className="page-head-sub">Your account details. To update attributes, contact HR.</div>
+        </div>
       </div>
 
       <div className="card mb-24">
