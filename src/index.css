@@ -2615,15 +2615,20 @@ tbody tr:hover td { background: var(--gray-50); }
 .rowlink { cursor: pointer; transition: background-color var(--t); }
 .rowlink:hover { background: var(--accent-wash); box-shadow: inset 3px 0 0 var(--accent); }
 
-/* Desktop-table ↔ mobile-card visibility flip (shell breakpoint = 760px) */
+/* Desktop-table ↔ mobile-card visibility flip (shell breakpoint = 760px).
+   NOTE: .mobile-cards must NOT set `display` on its own — the element also
+   carries .only-mobile, and an equal-specificity `display` there would win
+   by source order and leak the cards onto desktop. Display is owned solely
+   by the .only-mobile / .only-desktop toggle below. */
 .only-mobile { display: none; }
 @media (max-width: 759px) {
   .only-desktop { display: none; }
   .only-mobile { display: block; }
+  .only-mobile.mobile-cards { display: flex; }
 }
 
-/* Mobile stacked-card scaffolding for table pages */
-.mobile-cards { display: flex; flex-direction: column; gap: 10px; }
+/* Mobile stacked-card scaffolding for table pages (layout only, no display) */
+.mobile-cards { flex-direction: column; gap: 10px; }
 .m-card {
   background: var(--white);
   border: 1px solid var(--border-default);
