@@ -75,7 +75,7 @@ function useVehicleSearch(catalog, fuseInst) {
     const segPred = SEGMENT_FILTER[seg]
     const pool = segPred ? catalog.filter(segPred) : catalog
     const tmpFuse = (!fuseInst || seg !== 'All Segments')
-      ? new Fuse(pool, { keys: [{ name: 'sub_category', weight: 3 }, { name: 'cbn', weight: 2 }, { name: 'description', weight: 1 }], threshold: 0.35, minMatchCharLength: 2 })
+      ? new Fuse(pool, { keys: [{ name: 'sub_category', weight: 3 }, { name: 'cbn', weight: 2 }, { name: 'description', weight: 1 }], threshold: 0.35, ignoreLocation: true, minMatchCharLength: 2 })
       : fuseInst
     setResults(tmpFuse.search(q).map(r => r.item).slice(0, 12))
     setShowDropdown(true)
@@ -133,6 +133,7 @@ export default function FinancierCopy() {
         setFuseInst(new Fuse(data || [], {
           keys: [{ name: 'sub_category', weight: 3 }, { name: 'cbn', weight: 2 }, { name: 'description', weight: 1 }],
           threshold: 0.35,
+          ignoreLocation: true,
           minMatchCharLength: 2,
         }))
       } catch { if (!cancelled) setCatalogError(true) }
@@ -208,11 +209,27 @@ export default function FinancierCopy() {
     setError('')
     setSavedCount(0)
 
-    if (!customer.name.trim()) { setError('Customer name is required.'); return }
-    if (customer.gstin.trim() && customer.gstin.trim().length !== 15) {
-      setError('GSTIN must be exactly 15 characters.'); return
+    const focusEl = (el) => {
+      if (!el) return
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      if (typeof el.focus === 'function') { try { el.focus({ preventScroll: true }) } catch { el.focus() } }
     }
-    if (totalRows === 0) { setError('Select at least one vehicle.'); return }
+
+    if (!customer.name.trim()) {
+      setError('Customer name is required.')
+      focusEl(document.querySelector('input[placeholder="Full name or company name"]'))
+      return
+    }
+    if (customer.gstin.trim() && customer.gstin.trim().length !== 15) {
+      setError('GSTIN must be exactly 15 characters.')
+      focusEl(document.querySelector('input[placeholder="22AAAAA0000A1Z5"]'))
+      return
+    }
+    if (totalRows === 0) {
+      setError('Select at least one vehicle.')
+      focusEl(document.querySelector('input[placeholder*="sub-segment" i], input[placeholder*="model" i]'))
+      return
+    }
 
     // Ship-to validation (only when toggled on). State is optional — it's
     // derived from the ship-to GSTIN when provided, and falls back to the
@@ -518,6 +535,9 @@ export default function FinancierCopy() {
                         <div key={v.id} className="search-item"
                           onMouseDown={e => { e.preventDefault(); addModel(v) }}>
                           <div className="search-item-name">{v.sub_category || v.description}</div>
+                          {v.sub_category && v.description && (
+                            <div className="search-item-desc" title={v.description}>{v.description}</div>
+                          )}
                           <div className="search-item-meta">{v.cbn} · {v.segment} · {fmtINR(v.mrp_incl_gst)}</div>
                         </div>
                       ))}
