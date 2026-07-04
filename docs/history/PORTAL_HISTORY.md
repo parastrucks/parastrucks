@@ -1216,3 +1216,100 @@ for the always-current summary; this is the durable long-form record.*
   and `docs/db/` (gold-standard `schema-current.sql` + `seed-reference.sql`); slimmed `CLAUDE.md`
   to an operational core with a Documentation Map; refreshed `README.md`; tidied `docs/` into
   `history/` + `backlog/`; fixed stale memory reference docs against the post-Phase-6c model.
+
+---
+
+## Appendix — archived `project_next_session.md` (pre-reorg snapshot, 2026-07-04)
+
+*Preserved verbatim during the documentation reorg. The live memory file was rewritten to a
+lean "next actions + backlog"; its full prior content (dated reminders, per-session status,
+deferred engineering backlog) is kept here for the record.*
+
+## Dated reminders — check on next session
+
+- **On or after 2026-06-02 (≈15 days post-Phase-9 prod deploy of 2026-05-17/18) — Phase 9 prod-soak verification + cleanup.**
+  1. Confirm prod stable: scan Supabase logs (Edge Functions + Postgres) for any new 5xx / RLS-denial spikes since 2026-05-18; check Vercel deploy logs for new build errors; ask user if any staff have reported regressions since Phase 9.
+  2. If clean, with user's go-ahead: delete local dump artifacts in main worktree (`prod_schema.sql`, `prod_seed_data.sql`, `staging_apply.sql`, `prod_backup_pre_phase9_*.sql`) and remove the worktree `.claude/worktrees/elated-volhard-c88b85` plus its branch `claude/elated-volhard-c88b85`.
+  3. If NOT clean, log findings and roll back the cleanup decision; the dumps are the only off-machine backup.
+
+- **Standing rule (no fixed date) — Phase 6b column-drop verification window.**
+  Whenever a legacy-column/table drop comes up for approval, require ≥1 week (preferably ≥2 weeks / 15 days) in production with the *new* code path live and the old columns *unread*, before submitting the DROP to the user. Confirm zero reads from Supabase Postgres logs first.
+
+- **On or after 2026-06-04 — `public.roles` table drop eligibility check.**
+  Code-side gate is OPEN as of 2026-05-21: zero references in `src/` or `supabase/functions/`; only the table's own RLS policies (Phase 5 migration `20260411_phase5_u1_rls_coverage.sql:70-75`) remain. Action on 2026-06-04 (≈2-week runtime window):
+  1. Query Supabase Postgres logs (`get_logs` MCP / dashboard) for any `roles` table activity since 2026-05-21 — `SELECT/INSERT/UPDATE/DELETE` on `public.roles`. Free-tier retention is 7 days, so the actual check must happen within a week of the target date or earlier.
+  2. If logs show zero reads/writes, submit `DROP TABLE public.roles CASCADE` (with policy + grant cleanup) to user for explicit permission. Per "Never delete DB rows/columns/tables without explicit permission."
+  3. If logs show ANY activity, stop and investigate the caller — there's an off-codebase consumer (script, external tool, manual psql) the grep missed.
+
+## Status as of 2026-05-18 (end of session)
+
+**Phase 9 sub-phases 9b–9g DEPLOYED to production and verified end-to-end. portal HEAD `9e668b2`.**
+
+### Just-completed (2026-05-17/18)
+- **Phase 9 fully shipped to prod.** Staging Supabase (`klpnhpnlotcbbovwswmq`, paras-portal-staging, Mumbai) stood up from a prod dump; 9/9 functional tests + console-strip check passed there before prod. Then prod: Functions secrets set (`ALLOWED_ORIGINS=https://team.parastrucks.in`, `REQUIRE_CAPTCHA=true`), 2 migrations applied via `psql`, 6 EFs redeployed (verify-login v6, admin-users v12, admin-access-rules v10, admin-catalog v9, admin-tiv v11, log-error v9), pre-deploy `pg_dump` backup taken off-machine.
+- **PRs merged to portal:** #57 (`421259b` Phase 9 9b–9g) · #58 (`b9cce59` CSP root-path `/:path*`→`/(.*)`) · #59 (`bf2553e` Catalog brand_id) · #60 (`9e76199` date-helper UTC→local-time fix) · `9e668b2` (CLAUDE.md deployment record).
+- Full deployment record is now in `CLAUDE.md` at repo root ("Phase 9 — Deployment Record" section).
+- Prod smoke test passed: login + Turnstile + quotation + PDF all working; CSP/headers/CORS/security.txt curl-verified.
+
+### Still pending / next session
+- **VAPT re-test findings (2026-05-18) — ALL TABLED by user, none actioned.** 3 red-team agents re-attacked prod after Phase 9 shipped; perimeter held. Out-of-scope gaps logged: C1 (High, live — `users_select` RLS leaks coworker PII entity-wide), M-1 (catalog bulk-upsert mass-assignment), M-2 (admin-tiv cross-entity write IDOR), H-1/H-2/M-3/L-1/CORS (low). Full report: `docs/security-vapt/phase9-verification-report.md`; table in `CLAUDE.md`. C1 needs a product check (does any UI need an entity-wide employee list?) before fixing.
+- **9h** — medium-effort hardening (MFA for admin/HR, new-device email, active-sessions page, security-monitor cron, file-upload virus scan, PII encryption). Multi-week; not started. Each is its own PR.
+- **9i** — programme/process items (vendor VAPT, training, calendar). Not engineering work.
+- Transitive CVE residuals `postcss 8.5.8` (GHSA-qx2v-qp2m-jg93) + `dompurify 3.3.3` — fixable via `package.json` `overrides`; deferred.
+- Cleanup when prod confirmed stable: worktree `.claude/worktrees/elated-volhard-c88b85` and local dump files (`prod_schema.sql`, `prod_seed_data.sql`, `staging_apply.sql`, `prod_backup_pre_phase9_*.sql`).
+- Optional: manual .xlsx Catalog-import verification (PR #59's fix).
+
+### Gotchas learned this deploy (keep)
+- Supabase CLI `db dump`/`db push` need **Docker** (not installed locally). Workaround: native `pg_dump`/`psql` (installed via `winget PostgreSQL.PostgreSQL.17`) through the **Session Pooler** URI (Direct connection is IPv6-only on free tier).
+- The `supabase/migrations/` folder is **not** a full history (starts `20260401_*`) — a fresh Supabase project cannot be built with `db push`; bootstrap from a prod dump instead.
+- CSP is enforced via the header on the **document**; verify by curling real URLs, not by reading `vercel.json`. `vercel.json` header `source` must be `/(.*)` (matches root), not `/:path*` (doesn't).
+- The login-page console is flooded by Cloudflare Turnstile's own iframe noise — do CSP console checks on app pages, not `/login`.
+
+### Prior — Status as of 2026-05-14
+
+**One hotfix shipped; large Phase 9 security stack staged locally (unpushed) — NOW MERGED, see above.**
+
+### 2026-05-14 session
+- **PR #56** (`1a2ecaa` on portal, squash-merged): `fix(tiv): always show current month in forecast horizon`. **Reverses the product decision in `eb481c6`** (the 2026-05-01 hotfix). Today's `lastDataMonth=Apr-26`; old behaviour started forecast at Jun-26, new behaviour starts at May-26. Anchored at `currentMonth` instead of `currentMonth+1`. Horizon math preserved (skipped months still increment horizon). File: `src/tiv-forecast/lib/forecastEngine.js:69-98`. Vercel auto-deploy confirmed `success` at 2026-05-14T08:46Z.
+- Reason: users prefer always seeing the current month in the grid, even though it's partially-elapsed (a nowcast). The earlier hotfix's "pure forecast only" rule was unwelcome.
+
+### Phase 9 — Security & Hardening — IN PROGRESS, unpushed, on worktree
+- Worktree: `.claude/worktrees/elated-volhard-c88b85/` on branch `claude/elated-volhard-c88b85`.
+- 7 unpushed commits forming a complete code stack (9b–9g) — verifications + deploys NOT done.
+- Plan + handoff context lives in `CLAUDE.md` at worktree root (734 lines, also committed as `e7410a7`).
+- Commit stack (in order): `e7410a7` (docs), `4f1037c` (9b deps), `7b8006f` (9c EF perimeter), `fc9161d` (9d migration SQL), `16866bb` (9e privilege EFs), `caa4813` (9f CSP/UUID brochures/idempotency), `c632feb` (9g security.txt/workflows/husky).
+- Two transitive CVE residuals open: `postcss 8.5.8` (GHSA-qx2v-qp2m-jg93) and `dompurify 3.3.3`. Fixable via `package.json` `overrides`; deferred pending decision.
+- Manual ops checklist (staging Supabase setup, Supabase dashboard toggles, DNS, Cloudflare WAF, GitHub repo settings, prod deploy) is in chat history of session ending 2026-05-14; reproducing it would be a 30-min ask. **User does NOT have staging Supabase yet** — that's the first concrete blocker on resumption.
+- Explicitly NOT done: 9a baselines, 9h (MFA / Resend / sessions / virus-scan / PII encryption — multi-week feature work), 9i (vendor procurement, training, calendar items).
+
+### Prior sessions for reference
+- **2026-05-01:** TIV hotfixes (`a2e313e` entity dropdown column rename; `eb481c6` skip elapsed months — now superseded by PR #56).
+- **2026-04-23:** PR #55 (`58b083c`): FC PDF V2 tax-invoice redesign.
+
+### Prior session (2026-04-23) — for reference
+- **PR #55** (`58b083c`, squash-merged to portal): FC PDF V2 tax-invoice redesign. HSN per line, CGST+SGST/IGST split, PAN, Indian-numbering amount-in-words, ship-to, dispatcher pattern via `pdf_format_version`. 21/21 smoke passed.
+
+### Deferred (unchanged, no active owner)
+> **2026-05-21 recategorization** of column/table drop items (was: lumped under "deferred = ready, just waiting"). A grep of `src/` and `supabase/functions/` showed three of the four drop items still have live callers → they are **blocked on refactor**, not waiting on a clock. Only `roles` is genuinely waiting-only (see dated reminder above).
+
+1. **REFACTOR REQUIRED (not just deferred)** — Drop DB column `financier_copies.valid_until`. Code-side gate CLOSED: `FinancierCopy.jsx:327` writes it, `FinancierCopyLog.jsx:46` + `MyFinancierCopies.jsx:30` read it, `pdfGenerator.js:1528` reads it. Identical `valid_until` column on `proforma_invoices` + `quotations` similarly used — these are load-bearing, not residual. Refactor target unclear; needs product decision before any code work.
+2. Vercel env var: `VITE_TURNSTILE_SITE_KEY` on prod (verify present)
+3. Assign brands to Ashok Prajapati in Employees UI (blocks his vehicle dropdown)
+4. PDF generator `operating_units` lookup — still uses legacy brand+location text
+5. **`public.roles` legacy table** — code-side gate OPEN as of 2026-05-21; dated runtime-window check on 2026-06-04 (see dated reminders). **`public.locations` legacy table** — code-side gate CLOSED: `AccessRules.jsx:422` selects from it; `admin-access-rules/index.ts:264, 281` inserts and reads it. **Not deferred — actively used.** Refactor (or accept the table as non-legacy and remove from this list) before any drop discussion.
+6. **REFACTOR REQUIRED (not just deferred)** — `vehicle_catalog.brand` text column. Code-side gate CLOSED: `Catalog.jsx:72` and `:1503` both `.select('... brand ...')` (text column, alongside `brand_id`). Refactor: switch both selects to join `brands` via `brand_id`. Smallest of the three blocked items — good "tabled for later" candidate.
+7. `next_quotation_number` RPC — refactor to accept `entity_id`
+8. Apply tax-invoice redesign to Proforma Invoice PDF if/when requested
+9. Promote HSN to a `vehicle_catalog` column with seed data (currently form-only per chip)
+10. **Audit other Supabase queries that swallow `error` in `.then()` destructuring** — the TIV bug pattern (`.then(({ data }) => ...)` ignoring `error`) likely exists elsewhere. Worth a one-pass grep for `\.then\(\(\{\s*data\s*\}\)`.
+
+### Context for next agent
+- Supabase project `mmmxvjaavdtwlpcnjgzy`. All 6 EFs `verify_jwt:false`.
+- Main worktree: `D:\PTB\Website\portal_phase1a_setup\portal` (branch `portal`, latest = `1a2ecaa`).
+- Worktrees under `.claude/worktrees/<slug>` — `crazy-vaughan-fa55f7` exists from FC work but is now stale; safe to remove if tidying up.
+- `entities` table columns: `id, code, full_name, address, gstin, bank_name, bank_account, bank_ifsc, ...` (NOT `name`).
+- Vercel deploy cmd from main worktree: `npx --yes vercel --prod --yes`. CLI installed via npx, not globally.
+- Dev server: `preview_list` to find serverId; port 3000 in worktree.
+- Never delete DB rows/columns/tables without explicit permission.
+- Platform: Windows, bash via git-bash, no Python.
+- Hotfixes vs features: small UI/data fixes can go direct to `portal` branch + push + redeploy. FC-scale work uses feature branch + PR + squash-merge.
