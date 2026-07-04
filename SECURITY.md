@@ -3,7 +3,7 @@
 ## Reporting a vulnerability
 
 If you believe you have found a security vulnerability in the Paras Trucks
-Team Portal (https://portal.parastrucks.in), please report it privately to:
+Team Portal (https://team.parastrucks.in), please report it privately to:
 
 - **Email:** hr.guj@parastrucks.in
 - **Subject prefix:** `[SECURITY]`
@@ -28,7 +28,7 @@ required.
 
 In scope:
 
-- The portal at `https://portal.parastrucks.in` and its Supabase backend
+- The portal at `https://team.parastrucks.in` and its Supabase backend
   (Edge Functions, RLS policies, database schema).
 - The codebase in this repository.
 
