@@ -5,6 +5,7 @@ import { useToast } from '../context/ToastContext'
 import useAsyncAction from '../hooks/useAsyncAction'
 import useFocusTrap from '../hooks/useFocusTrap'
 import Skeleton from '../components/Skeleton'
+import Icon from '../components/Icon'
 import { useAuth } from '../context/AuthContext'
 
 /* ── Permission-level tiers shown in the UI ──────────────────────────────
@@ -444,33 +445,34 @@ export default function Employees() {
   return (
     <div>
       {/* Page header */}
-      <div className="flex-between mb-24" style={{ flexWrap: 'wrap', gap: 12 }}>
-        <div className="page-header" style={{ marginBottom: 0 }}>
-          <h1>Employees</h1>
-          <p>Manage team accounts, departments, designations, and access.</p>
+      <div className="page-head">
+        <div>
+          <div className="page-head-crumb">Operations Tools</div>
+          <h1 className="page-head-title">Employees<span className="period-accent">.</span></h1>
+          <div className="page-head-sub">Manage team accounts, departments, designations, and access.</div>
         </div>
-        <button className="btn btn-primary" onClick={openAdd}>
-          + Add Employee
+        <button className="btn btn-primary page-head-right" onClick={openAdd}>
+          <Icon name="plus" size={15} /> Add Employee
         </button>
       </div>
 
-      {/* Stat cards */}
-      <div className="stat-grid">
-        <div className="stat-card">
-          <div className="stat-label">Total</div>
-          <div className="stat-value">{stats.total}</div>
+      {/* Stat strip */}
+      <div className="stat-strip">
+        <div className="stat-block">
+          <div className="stat-block-label">Total</div>
+          <div className="stat-block-value stat-block-value--accent">{stats.total}</div>
         </div>
-        <div className="stat-card">
-          <div className="stat-label">Active</div>
-          <div className="stat-value" style={{ color: 'var(--green)' }}>{stats.active}</div>
+        <div className="stat-block">
+          <div className="stat-block-label">Active</div>
+          <div className="stat-block-value" style={{ color: 'var(--green)' }}>{stats.active}</div>
         </div>
-        <div className="stat-card">
-          <div className="stat-label">PTB · Gujarat</div>
-          <div className="stat-value">{stats.ptb}</div>
+        <div className="stat-block">
+          <div className="stat-block-label">PTB · Gujarat</div>
+          <div className="stat-block-value">{stats.ptb}</div>
         </div>
-        <div className="stat-card">
-          <div className="stat-label">PT · Haryana</div>
-          <div className="stat-value">{stats.pt}</div>
+        <div className="stat-block">
+          <div className="stat-block-label">PT · Haryana</div>
+          <div className="stat-block-value">{stats.pt}</div>
         </div>
       </div>
 
@@ -514,58 +516,94 @@ export default function Employees() {
         </div>
       ) : filtered.length === 0 ? (
         <div className="empty-state">
-          <div className="empty-state-icon">👥</div>
+          <div className="empty-state-icon"><Icon name="users" size={40} color="var(--text-muted)" /></div>
           <h3>No employees found</h3>
           <p>Try adjusting the filters or add a new employee.</p>
         </div>
       ) : (
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Entity</th>
-                <th>Department · Designation</th>
-                <th>Permission</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(emp => {
-                const dept = deptById[emp.department_id]
-                const desig = designationById[emp.designation_id]
-                const ent = entityById[emp.entity_id]
-                return (
-                  <tr key={emp.id}>
-                    <td style={{ fontWeight: 600, color: 'var(--gray-900)' }}>{emp.full_name}</td>
-                    <td style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--gray-500)' }}>{emp.email}</td>
-                    <td><span className="badge badge-blue">{ent?.code || '—'}</span></td>
-                    <td>
-                      <div style={{ fontSize: 13 }}>{dept?.name || '—'}</div>
-                      {desig?.name && <div style={{ fontSize: 11, color: 'var(--gray-400)', marginTop: 2 }}>{desig.name}</div>}
-                    </td>
-                    <td><Badge tier={emp.permission_level} /></td>
-                    <td><StatusBadge active={emp.is_active} /></td>
-                    <td>
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        <button className="btn btn-secondary btn-sm" onClick={() => openEdit(emp)}>Edit</button>
-                        <button className="btn btn-secondary btn-sm" onClick={() => openPassword(emp)}>Reset PW</button>
-                        <button
-                          className={`btn btn-sm ${emp.is_active ? 'btn-danger' : 'btn-secondary'}`}
-                          onClick={() => openConfirm(emp.is_active ? 'deactivate' : 'activate', emp)}
-                        >
-                          {emp.is_active ? 'Deactivate' : 'Activate'}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+        <>
+          <div className="table-wrap only-desktop">
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Entity</th>
+                  <th>Department · Designation</th>
+                  <th>Permission</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(emp => {
+                  const dept = deptById[emp.department_id]
+                  const desig = designationById[emp.designation_id]
+                  const ent = entityById[emp.entity_id]
+                  return (
+                    <tr key={emp.id}>
+                      <td style={{ fontWeight: 600, color: 'var(--ink)' }}>{emp.full_name}</td>
+                      <td style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--text-secondary)' }}>{emp.email}</td>
+                      <td><span className="badge badge-blue">{ent?.code || '—'}</span></td>
+                      <td>
+                        <div style={{ fontSize: 13 }}>{dept?.name || '—'}</div>
+                        {desig?.name && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{desig.name}</div>}
+                      </td>
+                      <td><Badge tier={emp.permission_level} /></td>
+                      <td><StatusBadge active={emp.is_active} /></td>
+                      <td>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                          <button className="btn btn-secondary btn-sm" onClick={() => openEdit(emp)}>Edit</button>
+                          <button className="btn btn-secondary btn-sm" onClick={() => openPassword(emp)}>Reset PW</button>
+                          <button
+                            className={`btn btn-sm ${emp.is_active ? 'btn-danger' : 'btn-secondary'}`}
+                            onClick={() => openConfirm(emp.is_active ? 'deactivate' : 'activate', emp)}
+                          >
+                            {emp.is_active ? 'Deactivate' : 'Activate'}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="only-mobile mobile-cards">
+            {filtered.map(emp => {
+              const dept = deptById[emp.department_id]
+              const desig = designationById[emp.designation_id]
+              const ent = entityById[emp.entity_id]
+              return (
+                <div className="m-card" key={emp.id}>
+                  <div className="m-card-top">
+                    <span style={{ fontWeight: 700 }}>{emp.full_name}</span>
+                    <Badge tier={emp.permission_level} />
+                  </div>
+                  <div style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--text-secondary)', wordBreak: 'break-all' }}>{emp.email}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                    <span className="badge badge-blue">{ent?.code || '—'}</span>
+                    <span style={{ fontSize: 12.5 }}>{dept?.name || '—'}{desig?.name ? <span style={{ color: 'var(--text-secondary)' }}> · {desig.name}</span> : null}</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border-faint)', gap: 8, flexWrap: 'wrap' }}>
+                    <StatusBadge active={emp.is_active} />
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <button className="btn btn-secondary btn-sm" onClick={() => openEdit(emp)}>Edit</button>
+                      <button className="btn btn-secondary btn-sm" onClick={() => openPassword(emp)}>Reset PW</button>
+                      <button
+                        className={`btn btn-sm ${emp.is_active ? 'btn-danger' : 'btn-secondary'}`}
+                        onClick={() => openConfirm(emp.is_active ? 'deactivate' : 'activate', emp)}
+                      >
+                        {emp.is_active ? 'Deactivate' : 'Activate'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </>
       )}
 
       {/* ── ADD / EDIT MODAL ─────────────────────────────────────────── */}
