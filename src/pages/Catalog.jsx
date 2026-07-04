@@ -801,7 +801,6 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
   const [allocatedCBNs,   setAllocatedCBNs]   = useState([])   // edit: vehicles in this sub-seg
   const [cbnOptions,      setCbnOptions]      = useState([])   // add:  all vehicles in segment/brand (carry current sub_category)
   const [selectedCBNs,    setSelectedCBNs]    = useState(new Set())
-  const [confirmMovers,   setConfirmMovers]   = useState(null) // add: selected CBNs already in another sub-seg, awaiting move confirm
   const [cbnSearch,       setCbnSearch]       = useState('')
   const [cbnLoading,      setCbnLoading]      = useState(false)
   const fileRef = useRef()
@@ -827,7 +826,6 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
     if (mode !== 'add') return
     setCbnLoading(true)
     setSelectedCBNs(new Set())
-    setConfirmMovers(null)
     supabase.from('vehicle_catalog')
       .select('cbn, description, sub_category')
       .eq('segment', form.segment)
@@ -882,16 +880,6 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
     if (!form.name.trim()) { setError('Name is required'); return }
     if (!form.segment)     { setError('Segment is required'); return }
 
-    // One-CBN-one-sub-segment: any selected CBN already in another sub-segment is
-    // MOVED here (its single sub_category is overwritten). Require an explicit
-    // confirm before stealing it from its current sub-segment.
-    if (mode === 'add' && !confirmMovers) {
-      const movers = [...selectedCBNs]
-        .map(c => cbnOptions.find(v => v.cbn === c))
-        .filter(v => v && v.sub_category)
-      if (movers.length > 0) { setConfirmMovers(movers); return }
-    }
-
     setSaving(true)
     let brochure_url      = form.brochure_url      || null
     let brochure_filename = form.brochure_filename  || null
@@ -938,10 +926,18 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
     if (mode === 'add') {
       ;({ error: err } = await supabase.from('sub_segments').insert(payload))
       if (!err && selectedCBNs.size > 0) {
+        // Latest assignment takes priority: a selected CBN already in another
+        // sub-segment is reassigned here (its single sub_category is overwritten,
+        // so a CBN is only ever in one sub-segment). Count the reassignments to
+        // report them non-blockingly.
+        const movedCount = [...selectedCBNs]
+          .map(c => cbnOptions.find(v => v.cbn === c))
+          .filter(v => v && v.sub_category).length
         const { error: assignErr } = await supabase.from('vehicle_catalog')
           .update({ sub_category: payload.name })
           .in('cbn', [...selectedCBNs])
         if (assignErr) toast.error('Sub-segment saved but CBN assignment failed: ' + assignErr.message)
+        else if (movedCount > 0) toast.info(`${movedCount} CBN${movedCount > 1 ? 's' : ''} reassigned here — latest assignment takes priority.`)
       }
     } else {
       ;({ error: err } = await supabase.from('sub_segments').update(payload).eq('id', subSeg.id))
@@ -1118,11 +1114,11 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
                           <input
                             type="checkbox"
                             checked={selectedCBNs.has(v.cbn)}
-                            onChange={e => { setConfirmMovers(null); setSelectedCBNs(s => {
+                            onChange={e => setSelectedCBNs(s => {
                               const next = new Set(s)
                               e.target.checked ? next.add(v.cbn) : next.delete(v.cbn)
                               return next
-                            }) }}
+                            })}
                             style={{ marginTop: 2, flexShrink: 0 }}
                           />
                           <span>
@@ -1147,19 +1143,16 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
                       {selectedCBNs.size} CBN{selectedCBNs.size > 1 ? 's' : ''} selected
                     </div>
                   )}
-                  {confirmMovers && confirmMovers.length > 0 && (
-                    <div style={{
-                      fontSize: 13, color: '#92400e', background: '#fffbeb',
-                      border: '1px solid #f59e0b', borderRadius: 6, padding: '8px 10px', marginTop: 6,
-                    }}>
-                      ⚠ {confirmMovers.length} selected CBN{confirmMovers.length > 1 ? 's are' : ' is'} already in another sub-segment and will be <strong>moved</strong> here:
-                      <div style={{ marginTop: 4, fontFamily: 'monospace', fontSize: 12 }}>
-                        {confirmMovers.slice(0, 8).map(v => `${v.cbn} (from ${v.sub_category})`).join(', ')}
-                        {confirmMovers.length > 8 ? ` +${confirmMovers.length - 8} more` : ''}
+                  {(() => {
+                    const reassigning = [...selectedCBNs]
+                      .map(c => cbnOptions.find(v => v.cbn === c))
+                      .filter(v => v && v.sub_category).length
+                    return reassigning > 0 ? (
+                      <div style={{ fontSize: 12, color: '#92400e', marginTop: 4 }}>
+                        {reassigning} selected CBN{reassigning > 1 ? 's are' : ' is'} already in another sub-segment and will be reassigned here — latest assignment takes priority.
                       </div>
-                      <div style={{ marginTop: 4 }}>Press <strong>Confirm move &amp; save</strong> to proceed.</div>
-                    </div>
-                  )}
+                    ) : null
+                  })()}
                 </>
               )}
             </div>
@@ -1172,9 +1165,7 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
                 ? `Uploading… ${uploadPct}%`
                 : saving
                   ? 'Saving…'
-                  : confirmMovers
-                    ? 'Confirm move & save'
-                    : mode === 'add' ? 'Add Sub-Segment' : 'Save Changes'}
+                  : mode === 'add' ? 'Add Sub-Segment' : 'Save Changes'}
             </button>
           </div>
         </div>
