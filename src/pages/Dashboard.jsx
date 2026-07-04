@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { callEdge } from '../lib/api'
 
 const UNGROUPED_TOOLS = [
   { to: '/employees',      icon: '👥', title: 'Employee Management', desc: 'Create, edit, and manage team accounts' },
@@ -147,10 +148,30 @@ function GroupCard({ group, canAccess }) {
 
 export default function Dashboard() {
   const { profile, canAccess } = useAuth()
+  const [erpBusy, setErpBusy] = useState(false)
   if (!profile) return null
 
   const ungroupedTools = UNGROUPED_TOOLS.filter(t => canAccess(t.to))
   const tierLabel = PERM_LABEL[profile.permission_level] || '—'
+
+  // One-click SSO into the HD Hyundai Service ERP (separate Supabase project).
+  // erp-sso validates this portal session, mints an ERP magic-link by email,
+  // and returns the ERP /sso URL. First click also provisions the account (JIT).
+  async function openErp() {
+    if (erpBusy) return
+    setErpBusy(true)
+    try {
+      const res = await callEdge('erp-sso', 'open', {})
+      if (res?.url) { window.location.href = res.url; return }
+      setErpBusy(false)
+      alert('Could not open the ERP. Please try again.')
+    } catch (e) {
+      setErpBusy(false)
+      alert(e?.message === 'no_erp_access'
+        ? 'You do not have HD Hyundai Service ERP access yet. Contact an admin if you need it.'
+        : 'Could not open the ERP. Please try again.')
+    }
+  }
 
   return (
     <div>
@@ -173,6 +194,19 @@ export default function Dashboard() {
             <p>{tool.desc}</p>
           </Link>
         ))}
+        <div
+          className="tool-card"
+          role="button"
+          tabIndex={0}
+          onClick={openErp}
+          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openErp() } }}
+          style={{ cursor: erpBusy ? 'wait' : 'pointer' }}
+          aria-busy={erpBusy}
+        >
+          <div className="tool-card-icon">🏗️</div>
+          <h3>HD Hyundai Service ERP</h3>
+          <p>{erpBusy ? 'Opening…' : 'Service ops — job cards, spares, stock & billing'}</p>
+        </div>
       </div>
     </div>
   )
