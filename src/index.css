@@ -2742,3 +2742,70 @@ tbody tr:hover td { background: var(--gray-50); }
 .sheet-row-text { flex: 1; min-width: 0; }
 .sheet-row-label { display: block; font-size: 14.5px; font-weight: 700; color: var(--ink); }
 .sheet-row-desc { display: block; font-size: 12px; color: var(--text-secondary); margin-top: 1px; }
+
+/* ═══ DASHBOARD cards (Phase 9.6) — new .dcard-* names, no legacy collision ══ */
+.dash-section { margin-bottom: 30px; }
+.dash-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+@media (max-width: 760px) { .dash-grid { grid-template-columns: 1fr; } }
+
+.dcard {
+  background: var(--white);
+  border: 1px solid var(--border-default);
+  display: flex; flex-direction: column;
+  min-height: 138px;
+  color: inherit; text-decoration: none;
+  font-family: var(--font);
+}
+.dcard-top { display: flex; align-items: center; justify-content: space-between; }
+.dcard-ico { color: var(--ink); display: flex; transition: color var(--t); }
+.dcard-corner { color: var(--text-muted); display: flex; transition: color var(--t); }
+.dcard-title { font-size: 16.5px; font-weight: 700; margin-top: 16px; color: var(--ink); transition: color var(--t); }
+.dcard-desc { font-size: 13px; color: var(--text-secondary); margin-top: 5px; line-height: 1.45; }
+
+/* single (link) card — monochrome → accent hover */
+.dcard--link { padding: 22px; cursor: pointer; text-align: left; transition: border-color var(--t), background-color var(--t); }
+.dcard--link:hover { border-color: var(--accent); background: var(--accent-wash); }
+.dcard--link:hover .dcard-ico,
+.dcard--link:hover .dcard-corner,
+.dcard--link:hover .dcard-title { color: var(--accent); }
+
+/* inverted (ERP) card */
+.dcard--inverted { padding: 22px; cursor: pointer; text-align: left; background: var(--ink); border-color: var(--ink); transition: background-color var(--t), border-color var(--t); }
+.dcard--inverted:hover { background: var(--gray-800); border-color: var(--accent); }
+.dcard--inverted .dcard-title { color: #fff; }
+.dcard--inverted .dcard-desc { color: var(--gray-200); }
+.dcard--inverted .dcard-ico { color: #fff; }
+.dcard--inverted .dcard-corner { color: rgba(255,255,255,.6); }
+.dcard--inverted:hover .dcard-corner { color: #6AA0FF; }
+
+/* group card — lead region + MORE OPTIONS expander */
+.dcard--group { padding: 0; }
+.dcard-lead {
+  display: block; padding: 22px; flex: 1;
+  border-top: 3px solid var(--ink);
+  color: inherit; text-decoration: none; cursor: pointer;
+  transition: background-color var(--t), border-color var(--t);
+}
+.dcard-lead:hover { background: var(--accent-wash); border-top-color: var(--accent); }
+.dcard-lead:hover .dcard-title,
+.dcard-lead:hover .dcard-new { color: var(--accent); }
+.dcard-new {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11.5px; font-weight: 700; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--text-muted); transition: color var(--t);
+}
+.dcard-more {
+  margin-top: auto;
+  display: flex; width: 100%; align-items: center; justify-content: space-between;
+  padding: 12px 22px; border: 0; border-top: 1px solid var(--border-default);
+  background: var(--surface-sunken); cursor: pointer;
+  font-family: var(--font); font-size: 12.5px; font-weight: 700; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--text-secondary);
+}
+.dcard-more-item {
+  display: flex; width: 100%; align-items: center; justify-content: space-between;
+  padding: 13px 22px; border: 0; border-top: 1px solid var(--border-faint);
+  background: none; cursor: pointer; text-decoration: none;
+  font-family: var(--font); font-size: 13.5px; font-weight: 600; color: var(--ink);
+}
+.dcard-more-item:hover { background: var(--surface-sunken); color: var(--accent); }
