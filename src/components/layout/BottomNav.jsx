@@ -38,9 +38,10 @@ const DEPT_TABS = {
   ],
 }
 
+// 4 icons + the raised center Create (+) = 5 slots. "Quote" is omitted here
+// because New Quotation is already the first action in the Create sheet.
 const ADMIN_TABS = [
   { to: '/',             icon: 'dashboard', label: 'Home' },
-  { to: '/quotation',    icon: 'file',      label: 'Quote' },
   { to: '/tiv-forecast', icon: 'trending',  label: 'TIV' },
   { to: '/employees',    icon: 'users',     label: 'Team' },
   { to: '/profile',      icon: 'user',      label: 'Profile' },
