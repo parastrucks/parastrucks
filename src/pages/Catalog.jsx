@@ -799,8 +799,9 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
   const [uploadPct,       setUploadPct]       = useState(null)
   const [error,           setError]           = useState('')
   const [allocatedCBNs,   setAllocatedCBNs]   = useState([])   // edit: vehicles in this sub-seg
-  const [unallocatedCBNs, setUnallocatedCBNs] = useState([])   // add:  vehicles with no sub-seg
+  const [cbnOptions,      setCbnOptions]      = useState([])   // add:  all vehicles in segment/brand (carry current sub_category)
   const [selectedCBNs,    setSelectedCBNs]    = useState(new Set())
+  const [confirmMovers,   setConfirmMovers]   = useState(null) // add: selected CBNs already in another sub-seg, awaiting move confirm
   const [cbnSearch,       setCbnSearch]       = useState('')
   const [cbnLoading,      setCbnLoading]      = useState(false)
   const fileRef = useRef()
@@ -818,18 +819,22 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
       .then(({ data }) => { setAllocatedCBNs(data || []); setCbnLoading(false) })
   }, [mode, form.name])
 
-  // Add mode: reload unallocated CBNs whenever segment or brand changes
+  // Add mode: reload all CBNs in this segment/brand (with their CURRENT
+  // sub_category) whenever segment or brand changes. We show every CBN and mark
+  // the ones already in another sub-segment; selecting one MOVES it (a CBN can
+  // only ever be in one sub-segment — sub_category is a single column).
   useEffect(() => {
     if (mode !== 'add') return
     setCbnLoading(true)
     setSelectedCBNs(new Set())
+    setConfirmMovers(null)
     supabase.from('vehicle_catalog')
-      .select('cbn, description')
+      .select('cbn, description, sub_category')
       .eq('segment', form.segment)
       .eq('brand', form.brand)
       .order('cbn')
       .then(({ data }) => {
-        setUnallocatedCBNs((data || []).filter(v => !v.sub_category))
+        setCbnOptions(data || [])
         setCbnLoading(false)
       })
   }, [mode, form.segment, form.brand])
@@ -876,6 +881,16 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
   async function save() {
     if (!form.name.trim()) { setError('Name is required'); return }
     if (!form.segment)     { setError('Segment is required'); return }
+
+    // One-CBN-one-sub-segment: any selected CBN already in another sub-segment is
+    // MOVED here (its single sub_category is overwritten). Require an explicit
+    // confirm before stealing it from its current sub-segment.
+    if (mode === 'add' && !confirmMovers) {
+      const movers = [...selectedCBNs]
+        .map(c => cbnOptions.find(v => v.cbn === c))
+        .filter(v => v && v.sub_category)
+      if (movers.length > 0) { setConfirmMovers(movers); return }
+    }
 
     setSaving(true)
     let brochure_url      = form.brochure_url      || null
@@ -1073,8 +1088,8 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
               <label className="form-label">Assign CBN Numbers (optional)</label>
               {cbnLoading ? (
                 <div style={{ fontSize: 13, color: 'var(--gray-400)' }}>Loading…</div>
-              ) : unallocatedCBNs.length === 0 ? (
-                <div style={{ fontSize: 13, color: 'var(--gray-400)' }}>No unallocated CBNs in this segment / brand.</div>
+              ) : cbnOptions.length === 0 ? (
+                <div style={{ fontSize: 13, color: 'var(--gray-400)' }}>No CBNs in this segment / brand.</div>
               ) : (
                 <>
                   <input
@@ -1088,7 +1103,7 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
                     maxHeight: 200, overflowY: 'auto',
                     border: '1px solid var(--gray-200)', borderRadius: 6,
                   }}>
-                    {unallocatedCBNs
+                    {cbnOptions
                       .filter(v => !cbnSearch ||
                         v.cbn.toLowerCase().includes(cbnSearch.toLowerCase()) ||
                         (v.description || '').toLowerCase().includes(cbnSearch.toLowerCase())
@@ -1103,11 +1118,11 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
                           <input
                             type="checkbox"
                             checked={selectedCBNs.has(v.cbn)}
-                            onChange={e => setSelectedCBNs(s => {
+                            onChange={e => { setConfirmMovers(null); setSelectedCBNs(s => {
                               const next = new Set(s)
                               e.target.checked ? next.add(v.cbn) : next.delete(v.cbn)
                               return next
-                            })}
+                            }) }}
                             style={{ marginTop: 2, flexShrink: 0 }}
                           />
                           <span>
@@ -1115,6 +1130,11 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
                             {v.description && (
                               <span style={{ fontSize: 12, color: 'var(--gray-500)', marginLeft: 8 }}>
                                 {v.description.length > 70 ? v.description.substring(0, 70) + '…' : v.description}
+                              </span>
+                            )}
+                            {v.sub_category && (
+                              <span style={{ fontSize: 11, color: '#b45309', marginLeft: 8, whiteSpace: 'nowrap' }}>
+                                • in {v.sub_category}
                               </span>
                             )}
                           </span>
@@ -1125,6 +1145,19 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
                   {selectedCBNs.size > 0 && (
                     <div style={{ fontSize: 13, color: 'var(--blue)', marginTop: 6 }}>
                       {selectedCBNs.size} CBN{selectedCBNs.size > 1 ? 's' : ''} selected
+                    </div>
+                  )}
+                  {confirmMovers && confirmMovers.length > 0 && (
+                    <div style={{
+                      fontSize: 13, color: '#92400e', background: '#fffbeb',
+                      border: '1px solid #f59e0b', borderRadius: 6, padding: '8px 10px', marginTop: 6,
+                    }}>
+                      ⚠ {confirmMovers.length} selected CBN{confirmMovers.length > 1 ? 's are' : ' is'} already in another sub-segment and will be <strong>moved</strong> here:
+                      <div style={{ marginTop: 4, fontFamily: 'monospace', fontSize: 12 }}>
+                        {confirmMovers.slice(0, 8).map(v => `${v.cbn} (from ${v.sub_category})`).join(', ')}
+                        {confirmMovers.length > 8 ? ` +${confirmMovers.length - 8} more` : ''}
+                      </div>
+                      <div style={{ marginTop: 4 }}>Press <strong>Confirm move &amp; save</strong> to proceed.</div>
                     </div>
                   )}
                 </>
@@ -1139,7 +1172,9 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
                 ? `Uploading… ${uploadPct}%`
                 : saving
                   ? 'Saving…'
-                  : mode === 'add' ? 'Add Sub-Segment' : 'Save Changes'}
+                  : confirmMovers
+                    ? 'Confirm move & save'
+                    : mode === 'add' ? 'Add Sub-Segment' : 'Save Changes'}
             </button>
           </div>
         </div>
