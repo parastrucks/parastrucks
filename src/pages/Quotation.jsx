@@ -123,6 +123,7 @@ export default function Quotation() {
               { name: 'description', weight: 1 },
             ],
             threshold: 0.35,
+            ignoreLocation: true,
             minMatchCharLength: 2,
           })
         )
@@ -161,6 +162,7 @@ export default function Quotation() {
             { name: 'description', weight: 1 },
           ],
           threshold: 0.35,
+          ignoreLocation: true,
           minMatchCharLength: 2,
         })
         found = tmpFuse.search(q).map(r => r.item)
@@ -251,11 +253,27 @@ export default function Quotation() {
     e.preventDefault()
     setError('')
 
-    if (!customer.name.trim()) { setError('Customer name is required.'); return }
-    if (customer.gstin.trim() && customer.gstin.trim().length !== 15) {
-      setError('GSTIN must be exactly 15 characters.'); return
+    const focusEl = (el) => {
+      if (!el) return
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      if (typeof el.focus === 'function') { try { el.focus({ preventScroll: true }) } catch { el.focus() } }
     }
-    if (lineItems.length === 0) { setError('Add at least one vehicle.'); return }
+
+    if (!customer.name.trim()) {
+      setError('Customer name is required.')
+      focusEl(document.querySelector('input[placeholder="Full name or company name"]'))
+      return
+    }
+    if (customer.gstin.trim() && customer.gstin.trim().length !== 15) {
+      setError('GSTIN must be exactly 15 characters.')
+      focusEl(document.querySelector('input[placeholder="22AAAAA0000A1Z5"]'))
+      return
+    }
+    if (lineItems.length === 0) {
+      setError('Add at least one vehicle.')
+      focusEl(searchRef.current?.querySelector('input') || searchRef.current)
+      return
+    }
     const emptyDescIdx = lineItems.findIndex(li => !String(li.description || '').trim())
     if (emptyDescIdx !== -1) {
       setError(`Vehicle #${emptyDescIdx + 1} description cannot be empty.`)
@@ -540,7 +558,10 @@ export default function Quotation() {
                         onMouseDown={() => addVehicle(v)}
                       >
                         <div className="search-item-name">{v.sub_category || v.description}</div>
-                        <div className="search-item-meta">{v.cbn} · {v.tyres}</div>
+                        {v.sub_category && v.description && (
+                          <div className="search-item-desc" title={v.description}>{v.description}</div>
+                        )}
+                        <div className="search-item-meta">{v.cbn}{v.tyres ? ` · ${v.tyres}` : ''}</div>
                         <div className="search-item-price">{fmtINR(v.mrp_incl_gst)}</div>
                       </div>
                     ))}
