@@ -316,6 +316,9 @@ export default function Employees() {
     if ((deptCode === DEPT_SERVICE || deptCode === DEPT_SPARES) && !form.primary_outlet_id) {
       return 'Primary outlet is required for Service/Spares users.'
     }
+    if ((deptCode === DEPT_SERVICE || deptCode === DEPT_SPARES) && form.brand_ids.length === 0) {
+      return 'Select at least one brand for Service/Spares users.'
+    }
     if (deptCode === DEPT_BACK_OFFICE && form.permission_level !== 'gm' && !form.subdept_id) {
       return 'Sub-department is required for Back Office users.'
     }
@@ -339,6 +342,8 @@ export default function Employees() {
       subdept_id:        form.subdept_id || null,
       location:          form.location || null,
       brand_ids:          deptCode === DEPT_SALES       ? form.brand_ids
+                        : deptCode === DEPT_SERVICE     ? form.brand_ids
+                        : deptCode === DEPT_SPARES      ? form.brand_ids
                         : deptCode === DEPT_BACK_OFFICE ? form.brand_ids : [],
       sales_vertical_ids: deptCode === DEPT_SALES ? form.sales_vertical_ids : [],
       outlet_ids:         [],
@@ -357,6 +362,8 @@ export default function Employees() {
       subdept_id:        form.subdept_id || null,
       location:          form.location || null,
       brand_ids:          deptCode === DEPT_SALES       ? form.brand_ids
+                        : deptCode === DEPT_SERVICE     ? form.brand_ids
+                        : deptCode === DEPT_SPARES      ? form.brand_ids
                         : deptCode === DEPT_BACK_OFFICE ? form.brand_ids : [],
       sales_vertical_ids: deptCode === DEPT_SALES ? form.sales_vertical_ids : [],
       outlet_ids:         [],
@@ -866,6 +873,15 @@ function EmployeeFormModal({
                     ))}
                   </select>
                 </div>
+                <MultiCheckbox
+                  id="svc-brands"
+                  label="Brands *"
+                  items={refBrands}
+                  selected={form.brand_ids}
+                  onToggle={id => setForm(f => ({ ...f, brand_ids: toggleId(f.brand_ids, id) }))}
+                  labelKey="name"
+                  badgeKey="code"
+                />
               </DeptSection>
             )}
 
