@@ -1197,7 +1197,7 @@ These were left as user actions in 9a and don't gate 9b.
 *Append a dated entry per work session. Newest at the bottom. See `memory/phase_status.md`
 for the always-current summary; this is the durable long-form record.*
 
-### 2026-07-04 — Employee brands, prod backfill, bus-calc sticky, docs reorg
+### 2026-07-04 — Employee brands, prod backfill, bus-calc sticky, docs reorg (portal + ERP), catalog CBN rule
 
 - **Service/Spares require Brands** (PR #69, `49e93ad`, deployed): `src/pages/Employees.jsx`
   gained a required Brands picker for the Service and Spares departments (was Sales-only);
@@ -1212,10 +1212,23 @@ for the always-current summary; this is the durable long-form record.*
   block. Verified sticky at 1280px, unchanged (static/stacked) at 375px mobile.
 - **gitignore `.env*`** (PR #70, `f8de64b`, deployed): broadened from `.env`/`.env.local`
   to `.env*` + `!.env.example` so the local prod-creds `.env .prod .bak` can never be staged.
-- **Documentation reorganization** (this PR): created this master archive, `docs/RECONSTRUCTION.md`,
-  and `docs/db/` (gold-standard `schema-current.sql` + `seed-reference.sql`); slimmed `CLAUDE.md`
-  to an operational core with a Documentation Map; refreshed `README.md`; tidied `docs/` into
-  `history/` + `backlog/`; fixed stale memory reference docs against the post-Phase-6c model.
+- **Documentation reorganization** (PR #72, `7aeefc9`, deployed): created this master archive,
+  `docs/RECONSTRUCTION.md`, and `docs/db/` (gold-standard `schema-current.sql` + `seed-reference.sql`
+  from the owner's `pg_dump`); slimmed `CLAUDE.md` 957→90 lines to an operational core with a
+  Documentation Map; refreshed `README.md`; tidied `docs/` into `history/` + `backlog/`; fixed stale
+  memory reference docs against the post-Phase-6c model. Also surfaced Phase 10 (Vehicle Tracker) as
+  planned (`docs/backlog/phase10-vehicle-tracker.md`).
+- **ERP documentation reorganization** (separate repo `erp-parastrucks`, PR #1): mirrored this scheme
+  onto the HD Hyundai ERP — created its missing `CLAUDE.md` + `README.md`, `docs/RECONSTRUCTION.md`,
+  and `docs/history/HISTORY.md` (folding in the 11a–11k build knowledge that had been stranded in the
+  portal's memory). See `memory/project_hd_hyundai_vertical.md` (now a pointer).
+- **Catalog: one CBN per sub-segment — latest assignment wins** (PR #73, `a69887d`, deployed):
+  `src/pages/Catalog.jsx` — the sub-segment Add picker selected only `cbn, description`, so its
+  "unallocated only" filter (`!v.sub_category`) was always true → every CBN showed as available and
+  could be silently pulled from another sub-segment. Fix: picker now selects `sub_category`, shows all
+  CBNs badged with their current sub-segment (`• in <name>`), and reassigns on save with
+  **last-write-wins** (owner's rule: latest assignment takes priority) + inline note + post-save toast.
+  A CBN is only ever in one sub-segment (single `sub_category` column; `cbn` UNIQUE).
 
 ---
 
