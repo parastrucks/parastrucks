@@ -66,9 +66,9 @@ const PERM_LABEL = { admin: 'Admin', gm: 'GM', manager: 'Manager', executive: 'E
 
 function greeting() {
   const h = new Date().getHours()
-  if (h < 12) return 'Good morning'
-  if (h < 17) return 'Good afternoon'
-  return 'Good evening'
+  if (h >= 5 && h < 12) return 'Good morning'
+  if (h >= 12 && h < 17) return 'Good afternoon'
+  return 'Good evening'   // 17:00–04:59 (incl. late night)
 }
 
 function LinkCard({ card }) {
@@ -175,7 +175,7 @@ export default function Dashboard() {
 
   return (
     <div>
-      <div className="page-header">
+      <div className="page-header" style={{ borderBottom: 'none', paddingBottom: 0, marginBottom: 22 }}>
         <h1>{greeting()}, {firstName}<span className="period-accent">.</span></h1>
         <div className="eyebrow" style={{ marginTop: 8 }}>{sub}</div>
       </div>
