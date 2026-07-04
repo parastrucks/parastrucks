@@ -59,9 +59,10 @@ export const NAV_SECTIONS = [
 
 /* Quick-create actions for the mobile Create (+) sheet. */
 export const CREATE_ACTIONS = [
-  { to: '/quotation',        icon: 'file',     label: 'New Quotation', desc: 'Customer price quotation PDF' },
-  { to: '/proforma-invoice', icon: 'files',    label: 'New Proforma',  desc: 'Proforma invoice for physical vehicles' },
-  { to: '/financier-copy',   icon: 'landmark', label: 'New Copy',      desc: "Financier's copy (Tax Invoice)" },
+  { to: '/quotation',        icon: 'file',     label: 'New Quotation',   desc: 'Customer price quotation PDF' },
+  { to: '/proforma-invoice', icon: 'files',    label: 'New Proforma',    desc: 'Proforma invoice for physical vehicles' },
+  { to: '/financier-copy',   icon: 'landmark', label: 'New Copy',        desc: "Financier's copy (Tax Invoice)" },
+  { to: '/vendor-jobs',      icon: 'wrench',   label: 'New Vendor Job',  desc: 'Outside-workshop / ancillary repair job', openNew: true },
 ]
 
 /* Is a nav item reachable for this user? ERP is gated server-side (JIT), so it

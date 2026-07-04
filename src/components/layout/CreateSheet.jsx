@@ -24,7 +24,7 @@ export default function CreateSheet({ open, onClose, actions }) {
           <button className="sheet-close" onClick={onClose} aria-label="Close"><Icon name="x" size={20} /></button>
         </div>
         {actions.map(a => (
-          <button key={a.to} type="button" className="sheet-row" onClick={() => { onClose(); navigate(a.to) }}>
+          <button key={a.to} type="button" className="sheet-row" onClick={() => { onClose(); navigate(a.openNew ? `${a.to}?new=1` : a.to) }}>
             <span className="sheet-row-icon"><Icon name={a.icon} size={19} color="var(--ink)" /></span>
             <span className="sheet-row-text">
               <span className="sheet-row-label">{a.label}</span>

@@ -2,6 +2,7 @@
 // Tracks the four cases {outside, ancillary} × {warranty, paid}. Reads are direct
 // supabase under RLS; every write goes through the `service-jobs` Edge Function.
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { callEdge } from '../lib/api'
@@ -207,6 +208,17 @@ export default function ServiceJobs() {
   const [showNew, setShowNew] = useState(false)
   const [form, setForm] = useState(blankForm())
   const [selected, setSelected] = useState(null)
+
+  // Auto-open the New Job form when arrived via the mobile Create (+) sheet
+  // (/vendor-jobs?new=1). Strip the param so refresh/back won't re-open it.
+  const [searchParams, setSearchParams] = useSearchParams()
+  useEffect(() => {
+    if (searchParams.get('new') === '1') {
+      openNew()
+      searchParams.delete('new')
+      setSearchParams(searchParams, { replace: true })
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const [events, setEvents] = useState([])
   const [toast, setToast] = useState(null) // { msg, kind }
   const [showFilters, setShowFilters] = useState(false)
