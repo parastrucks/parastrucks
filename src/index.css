@@ -2615,6 +2615,13 @@ tbody tr:hover td { background: var(--gray-50); }
 .rowlink { cursor: pointer; transition: background-color var(--t); }
 .rowlink:hover { background: var(--accent-wash); box-shadow: inset 3px 0 0 var(--accent); }
 
+/* Desktop-table ↔ mobile-card visibility flip (shell breakpoint = 760px) */
+.only-mobile { display: none; }
+@media (max-width: 759px) {
+  .only-desktop { display: none; }
+  .only-mobile { display: block; }
+}
+
 /* Mobile stacked-card scaffolding for table pages */
 .mobile-cards { display: flex; flex-direction: column; gap: 10px; }
 .m-card {

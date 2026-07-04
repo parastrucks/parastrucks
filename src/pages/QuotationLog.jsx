@@ -3,10 +3,11 @@ import { supabase } from '../lib/supabase'
 import { useToast } from '../context/ToastContext'
 import { generateQuotationPDF } from '../utils/pdfGenerator'
 import Skeleton from '../components/Skeleton'
+import Icon from '../components/Icon'
 
 function fmtINR(n) {
   if (!n && n !== 0) return '—'
-  return '₹\u00a0' + Number(n).toLocaleString('en-IN')
+  return '₹ ' + Number(n).toLocaleString('en-IN')
 }
 function fmtDate(iso) {
   if (!iso) return '—'
@@ -127,20 +128,30 @@ export default function QuotationLog() {
 
   const vehicleCount = (q) =>
     (q.line_items || []).reduce((s, i) => s + (i.qty || 1), 0)
+  const units = (q) => `${vehicleCount(q)} unit${vehicleCount(q) !== 1 ? 's' : ''}`
 
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
   const hasPrev = page > 0
   const hasNext = (page + 1) * PAGE_SIZE < totalCount
 
+  const pdfBtn = (q) => (
+    <button className="btn btn-secondary btn-sm" onClick={() => handleRedownload(q)} disabled={downloadingId === q.id}>
+      {downloadingId === q.id
+        ? <><span className="spinner spinner-sm" /> Generating…</>
+        : <><Icon name="download" size={15} /> PDF</>}
+    </button>
+  )
+
   return (
     <div>
-      <div className="page-header flex-between" style={{ flexWrap: 'wrap', gap: 12 }}>
+      <div className="page-head">
         <div>
-          <h1>Quotation Log</h1>
-          <p>All quotations across all users</p>
+          <div className="page-head-crumb">Quotations</div>
+          <h1 className="page-head-title">Quotation Log<span className="period-accent">.</span></h1>
+          <div className="page-head-sub">All quotations across all users</div>
         </div>
         <input
-          className="form-input"
+          className="form-input page-head-right"
           style={{ maxWidth: 260 }}
           placeholder="Search quotation no. or customer…"
           aria-label="Search quotations"
@@ -155,17 +166,18 @@ export default function QuotationLog() {
         </div>
       ) : quotations.length === 0 ? (
         <div className="empty-state">
-          <div className="empty-state-icon">📋</div>
+          <div className="empty-state-icon"><Icon name="clipboard" size={40} color="var(--text-muted)" /></div>
           <h3>{debouncedSearch ? 'No results found' : 'No quotations yet'}</h3>
           <p>{debouncedSearch ? 'Try a different search term.' : 'Quotations created by the team will appear here.'}</p>
         </div>
       ) : (
         <>
-          <div style={{ marginBottom: 10, fontSize: 13, color: 'var(--gray-500)' }}>
+          <div className="eyebrow" style={{ marginBottom: 12 }}>
             {totalCount} quotation{totalCount !== 1 ? 's' : ''}
             {debouncedSearch && ` matching "${debouncedSearch}"`}
           </div>
-          <div className="table-wrap">
+
+          <div className="table-wrap only-desktop">
             <table>
               <thead>
                 <tr>
@@ -185,67 +197,53 @@ export default function QuotationLog() {
                     <td><span className="q-number">{q.quotation_number}</span></td>
                     <td>{fmtDate(q.created_at)}</td>
                     <td>
-                      <div style={{ fontWeight: 600, color: 'var(--gray-900)', fontSize: 13 }}>
+                      <div style={{ fontWeight: 600, color: 'var(--ink)', fontSize: 13 }}>
                         {q.users?.full_name || '—'}
                       </div>
                       {q.users?.designations?.name && (
-                        <div style={{ fontSize: 11.5, color: 'var(--gray-400)' }}>
-                          {q.users.designations.name}
-                        </div>
+                        <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{q.users.designations.name}</div>
                       )}
                     </td>
                     <td>
                       <div className="q-customer">{q.customer_name}</div>
-                      {q.customer_mobile && (
-                        <div className="q-customer-sub">{q.customer_mobile}</div>
-                      )}
+                      {q.customer_mobile && <div className="q-customer-sub">{q.customer_mobile}</div>}
                     </td>
-                    <td>
-                      <span className="badge badge-blue">{vehicleCount(q)} unit{vehicleCount(q) !== 1 ? 's' : ''}</span>
-                    </td>
+                    <td><span className="badge badge-blue">{units(q)}</span></td>
                     <td style={{ textAlign: 'right', fontWeight: 700 }}>{fmtINR(q.grand_total)}</td>
                     <td>{fmtDate(q.valid_until)}</td>
-                    <td>
-                      <button
-                        className="btn btn-secondary btn-sm"
-                        onClick={() => handleRedownload(q)}
-                        disabled={downloadingId === q.id}
-                      >
-                        {downloadingId === q.id
-                          ? <><span className="spinner spinner-sm" /> Generating…</>
-                          : '↓ PDF'}
-                      </button>
-                    </td>
+                    <td>{pdfBtn(q)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              gap: 12,
-              marginTop: 16,
-            }}
-          >
-            <button
-              className="btn btn-ghost btn-sm"
-              onClick={() => setPage(p => Math.max(0, p - 1))}
-              disabled={!hasPrev}
-            >
-              ← Previous
+
+          <div className="only-mobile mobile-cards">
+            {quotations.map(q => (
+              <div className="m-card" key={q.id}>
+                <div className="m-card-top">
+                  <span className="q-number">{q.quotation_number}</span>
+                  <span className="badge badge-blue">{units(q)}</span>
+                </div>
+                <div className="q-customer">{q.customer_name}</div>
+                <div className="q-customer-sub">{q.customer_mobile ? `${q.customer_mobile} · ` : ''}{fmtDate(q.created_at)}</div>
+                <div className="m-card-kvs">
+                  <div><div className="m-kv-label">Grand Total</div><div className="m-kv-val">{fmtINR(q.grand_total)}</div></div>
+                  <div><div className="m-kv-label">Valid Until</div><div className="m-kv-val">{fmtDate(q.valid_until)}</div></div>
+                  <div><div className="m-kv-label">Prepared By</div><div className="m-kv-val">{q.users?.full_name || '—'}</div></div>
+                  <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'flex-end' }}>{pdfBtn(q)}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 16 }}>
+            <button className="btn btn-ghost btn-sm" onClick={() => setPage(p => Math.max(0, p - 1))} disabled={!hasPrev}>
+              <Icon name="chevron-left" size={15} /> Previous
             </button>
-            <span style={{ fontSize: 13, color: 'var(--gray-500)' }}>
-              Page {page + 1} of {totalPages}
-            </span>
-            <button
-              className="btn btn-ghost btn-sm"
-              onClick={() => setPage(p => p + 1)}
-              disabled={!hasNext}
-            >
-              Next →
+            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Page {page + 1} of {totalPages}</span>
+            <button className="btn btn-ghost btn-sm" onClick={() => setPage(p => p + 1)} disabled={!hasNext}>
+              Next <Icon name="chevron-right" size={15} />
             </button>
           </div>
         </>

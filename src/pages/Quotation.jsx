@@ -395,9 +395,12 @@ export default function Quotation() {
 
   return (
     <div>
-      <div className="page-header">
-        <h1>New Quotation</h1>
-        <p>Create a truck price quotation for a customer</p>
+      <div className="page-head">
+        <div>
+          <div className="page-head-crumb">Quotations</div>
+          <h1 className="page-head-title">New Quotation<span className="period-accent">.</span></h1>
+          <div className="page-head-sub">Create a truck price quotation for a customer</div>
+        </div>
       </div>
 
       {error && (
