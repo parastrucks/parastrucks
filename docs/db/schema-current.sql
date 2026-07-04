@@ -6820,7 +6820,7 @@ CREATE TRIGGER service_jobs_touch_updated_at_trg BEFORE UPDATE ON public.service
 -- Name: users sync_erp_users; Type: TRIGGER; Schema: public; Owner: -
 --
 
-CREATE TRIGGER sync_erp_users AFTER INSERT OR DELETE OR UPDATE ON public.users FOR EACH ROW EXECUTE FUNCTION supabase_functions.http_request('https://mmmxvjaavdtwlpcnjgzy.functions.supabase.co/sync-erp-users', 'POST', '{"Content-type":"application/json","Authorization":"Bearer de2f789fac4a1a904cc99b4ed6342eb091f3774ef3e8ec6d4bfbd9246b546035"}', '{}', '5000');
+CREATE TRIGGER sync_erp_users AFTER INSERT OR DELETE OR UPDATE ON public.users FOR EACH ROW EXECUTE FUNCTION supabase_functions.http_request('https://mmmxvjaavdtwlpcnjgzy.functions.supabase.co/sync-erp-users', 'POST', '{"Content-type":"application/json","Authorization":"Bearer __REDACTED_ROTATE_SEE_RECONSTRUCTION__"}', '{}', '5000');
 
 
 --
