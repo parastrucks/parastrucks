@@ -799,7 +799,7 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
   const [uploadPct,       setUploadPct]       = useState(null)
   const [error,           setError]           = useState('')
   const [allocatedCBNs,   setAllocatedCBNs]   = useState([])   // edit: vehicles in this sub-seg
-  const [unallocatedCBNs, setUnallocatedCBNs] = useState([])   // add:  vehicles with no sub-seg
+  const [cbnOptions,      setCbnOptions]      = useState([])   // add:  all vehicles in segment/brand (carry current sub_category)
   const [selectedCBNs,    setSelectedCBNs]    = useState(new Set())
   const [cbnSearch,       setCbnSearch]       = useState('')
   const [cbnLoading,      setCbnLoading]      = useState(false)
@@ -818,18 +818,21 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
       .then(({ data }) => { setAllocatedCBNs(data || []); setCbnLoading(false) })
   }, [mode, form.name])
 
-  // Add mode: reload unallocated CBNs whenever segment or brand changes
+  // Add mode: reload all CBNs in this segment/brand (with their CURRENT
+  // sub_category) whenever segment or brand changes. We show every CBN and mark
+  // the ones already in another sub-segment; selecting one MOVES it (a CBN can
+  // only ever be in one sub-segment — sub_category is a single column).
   useEffect(() => {
     if (mode !== 'add') return
     setCbnLoading(true)
     setSelectedCBNs(new Set())
     supabase.from('vehicle_catalog')
-      .select('cbn, description')
+      .select('cbn, description, sub_category')
       .eq('segment', form.segment)
       .eq('brand', form.brand)
       .order('cbn')
       .then(({ data }) => {
-        setUnallocatedCBNs((data || []).filter(v => !v.sub_category))
+        setCbnOptions(data || [])
         setCbnLoading(false)
       })
   }, [mode, form.segment, form.brand])
@@ -923,10 +926,18 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
     if (mode === 'add') {
       ;({ error: err } = await supabase.from('sub_segments').insert(payload))
       if (!err && selectedCBNs.size > 0) {
+        // Latest assignment takes priority: a selected CBN already in another
+        // sub-segment is reassigned here (its single sub_category is overwritten,
+        // so a CBN is only ever in one sub-segment). Count the reassignments to
+        // report them non-blockingly.
+        const movedCount = [...selectedCBNs]
+          .map(c => cbnOptions.find(v => v.cbn === c))
+          .filter(v => v && v.sub_category).length
         const { error: assignErr } = await supabase.from('vehicle_catalog')
           .update({ sub_category: payload.name })
           .in('cbn', [...selectedCBNs])
         if (assignErr) toast.error('Sub-segment saved but CBN assignment failed: ' + assignErr.message)
+        else if (movedCount > 0) toast.info(`${movedCount} CBN${movedCount > 1 ? 's' : ''} reassigned here — latest assignment takes priority.`)
       }
     } else {
       ;({ error: err } = await supabase.from('sub_segments').update(payload).eq('id', subSeg.id))
@@ -1073,8 +1084,8 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
               <label className="form-label">Assign CBN Numbers (optional)</label>
               {cbnLoading ? (
                 <div style={{ fontSize: 13, color: 'var(--gray-400)' }}>Loading…</div>
-              ) : unallocatedCBNs.length === 0 ? (
-                <div style={{ fontSize: 13, color: 'var(--gray-400)' }}>No unallocated CBNs in this segment / brand.</div>
+              ) : cbnOptions.length === 0 ? (
+                <div style={{ fontSize: 13, color: 'var(--gray-400)' }}>No CBNs in this segment / brand.</div>
               ) : (
                 <>
                   <input
@@ -1088,7 +1099,7 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
                     maxHeight: 200, overflowY: 'auto',
                     border: '1px solid var(--gray-200)', borderRadius: 6,
                   }}>
-                    {unallocatedCBNs
+                    {cbnOptions
                       .filter(v => !cbnSearch ||
                         v.cbn.toLowerCase().includes(cbnSearch.toLowerCase()) ||
                         (v.description || '').toLowerCase().includes(cbnSearch.toLowerCase())
@@ -1117,6 +1128,11 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
                                 {v.description.length > 70 ? v.description.substring(0, 70) + '…' : v.description}
                               </span>
                             )}
+                            {v.sub_category && (
+                              <span style={{ fontSize: 11, color: '#b45309', marginLeft: 8, whiteSpace: 'nowrap' }}>
+                                • in {v.sub_category}
+                              </span>
+                            )}
                           </span>
                         </label>
                       ))
@@ -1127,6 +1143,16 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
                       {selectedCBNs.size} CBN{selectedCBNs.size > 1 ? 's' : ''} selected
                     </div>
                   )}
+                  {(() => {
+                    const reassigning = [...selectedCBNs]
+                      .map(c => cbnOptions.find(v => v.cbn === c))
+                      .filter(v => v && v.sub_category).length
+                    return reassigning > 0 ? (
+                      <div style={{ fontSize: 12, color: '#92400e', marginTop: 4 }}>
+                        {reassigning} selected CBN{reassigning > 1 ? 's are' : ' is'} already in another sub-segment and will be reassigned here — latest assignment takes priority.
+                      </div>
+                    ) : null
+                  })()}
                 </>
               )}
             </div>
