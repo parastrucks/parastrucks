@@ -1,7 +1,8 @@
 node_modules
 dist
-.env
-.env.local
+# Ignore all env files (incl. backups like ".env .prod .bak") except the example
+.env*
+!.env.example
 .DS_Store
 public/Screenshot*.png
 
