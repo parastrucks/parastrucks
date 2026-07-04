@@ -24,6 +24,13 @@
 | **Legacy seeds (superseded)** | [`docs/db/schema-phase1-base.sql`](db/schema-phase1-base.sql), [`docs/db/seed_vehicles-legacy.sql`](db/seed_vehicles-legacy.sql) | Phase-1 base schema + old vehicle seed. Kept for provenance; `schema-current.sql` + `seed-reference.sql` supersede both. |
 | **Build tooling** | [`scripts/`](../scripts/) | `apply_migration.cjs` (Docker-free migration apply via `pg`), `create_access_rules.cjs`, `generate_seed.cjs`, etc. |
 
+> **⚠️ Secrets in `schema-current.sql` — scrub before committing.** A `pg_dump --schema-only`
+> captures **DB-webhook triggers with their `Authorization: Bearer …` headers** (e.g. the
+> `sync_erp_users` trigger's `SYNC_SECRET`). Before committing any refreshed dump, redact those
+> tokens: `sed -E 's/(Authorization":"Bearer )[A-Za-z0-9._-]+/\1__REDACTED__/g'`. The value in this
+> repo is already redacted; the real secret lives only in the Supabase webhook config + the
+> matching Edge Function secret (rotate both together if it ever leaks).
+
 ---
 
 ## 1. Prerequisites
