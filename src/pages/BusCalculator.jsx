@@ -534,7 +534,7 @@ export default function BusCalculator() {
         </div>
 
         {/* ── RIGHT: SUMMARY ── */}
-        <div>
+        <div className="bc-sum-col">
           <div className="bc-sum-panel">
             <div className="bc-sum-hd">
               <div className="bc-sum-lbl">Total Estimated Price</div>

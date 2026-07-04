@@ -1861,7 +1861,13 @@ tbody tr:hover td { background: var(--gray-50); }
   background: var(--white); border: 1px solid var(--gray-200); border-radius: var(--radius);
   box-shadow: var(--shadow-sm); overflow: hidden;
 }
-@media (min-width: 960px) { .bc-sum-panel { position: sticky; top: 80px; } }
+/* Stretch the summary column to the grid row height (overrides .bc-layout's
+   align-items:start) so the sticky panel inside has room to travel — otherwise
+   the column shrink-wraps the panel and it scrolls away instead of sticking. */
+@media (min-width: 960px) {
+  .bc-sum-col { align-self: stretch; }
+  .bc-sum-panel { position: sticky; top: 80px; }
+}
 .bc-sum-hd {
   background: linear-gradient(135deg, var(--gray-900) 0%, #0D2137 100%);
   padding: 18px 20px;
