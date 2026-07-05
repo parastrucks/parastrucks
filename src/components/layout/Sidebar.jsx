@@ -31,13 +31,15 @@ function NavGroup({ group, canAccess }) {
   // groups with the same predicate so the guard below is unreachable today, but
   // keep the hooks unconditional so a future predicate divergence can't blank the tree.
   const location = useLocation()
-  // Collapsed by default — do NOT auto-expand on active (design decision).
-  const [open, setOpen] = useState(false)
-
   const accessibleItems = group.items.filter(item => canAccess(item.to))
-  if (accessibleItems.length === 0) return null
-
   const isGroupActive = accessibleItems.some(item => location.pathname === item.to)
+  // Auto-expand the group that holds the active route (open on mount if we land
+  // directly on one of its pages, and open it when navigation enters the group).
+  // Still user-collapsible otherwise.
+  const [open, setOpen] = useState(isGroupActive)
+  useEffect(() => { if (isGroupActive) setOpen(true) }, [isGroupActive])
+
+  if (accessibleItems.length === 0) return null
 
   return (
     <div className={`sidebar-group${open ? ' sidebar-group--open' : ''}`}>
