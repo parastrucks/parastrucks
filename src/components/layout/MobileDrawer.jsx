@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import { useEffect } from 'react'
 import { useAuth } from '../../context/AuthContext'
-import { useErp } from '../../lib/erp'
+import { useErp, useErpVisible } from '../../lib/erp'
 import Icon from '../Icon'
 import { NAV_SECTIONS, itemVisible } from './navConfig'
 
@@ -12,6 +12,7 @@ const IDLE = 'rgba(255,255,255,0.75)'
 export default function MobileDrawer({ open, onClose }) {
   const { canAccess } = useAuth()
   const { openErp } = useErp()
+  const erpVisible = useErpVisible()
 
   useEffect(() => {
     if (!open) return
@@ -37,7 +38,7 @@ export default function MobileDrawer({ open, onClose }) {
           </NavLink>
 
           {NAV_SECTIONS.map(section => {
-            const visible = section.items.filter(i => itemVisible(i, canAccess))
+            const visible = section.items.filter(i => i.type === 'erp' ? erpVisible : itemVisible(i, canAccess))
             if (visible.length === 0) return null
             return (
               <div className="drawer-section" key={section.label}>

@@ -1,5 +1,36 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { callEdge } from './api'
+import { supabase } from './supabase'
+import { useAuth } from '../context/AuthContext'
+
+/* Whether to surface the HD Hyundai ERP entry (Sidebar item + Drawer + Dashboard
+   card). HD Hyundai is a PT-entity-only brand, so eligibility follows the `hdh`
+   brand assignment: a PTB user (no hdh brand) never sees it. Admins keep it (the
+   owner is a manually-provisioned ERP admin without a portal brand row). The
+   erp-sso function still gates access server-side for anyone who does click. */
+export function useErpVisible() {
+  const { profile, isAdmin } = useAuth()
+  const [visible, setVisible] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    if (!profile?.id) { setVisible(false); return }
+    if (isAdmin) { setVisible(true); return }
+    setVisible(false)
+    supabase
+      .from('user_brands')
+      .select('brands(code)')
+      .eq('user_id', profile.id)
+      .then(({ data }) => {
+        if (cancelled) return
+        const codes = (data || []).map(r => r.brands?.code).filter(Boolean)
+        setVisible(codes.includes('hdh'))
+      })
+    return () => { cancelled = true }
+  }, [profile?.id, isAdmin])
+
+  return visible
+}
 
 /* Shared HD Hyundai Service ERP one-click SSO (Phase 9.6).
    Used by both the Dashboard ERP card and the Sidebar ERP item so the flow +

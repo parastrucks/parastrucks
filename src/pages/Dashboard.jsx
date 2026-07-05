@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { useErp } from '../lib/erp'
+import { useErp, useErpVisible } from '../lib/erp'
 import Icon from '../components/Icon'
 
 /* Cards grouped under the same four sections as the sidebar. */
@@ -161,6 +161,7 @@ function GroupCard({ card, canAccess }) {
 
 export default function Dashboard() {
   const { profile, canAccess } = useAuth()
+  const erpVisible = useErpVisible()
   if (!profile) return null
 
   const firstName = profile.full_name?.split(' ')?.[0] || 'there'
@@ -168,7 +169,7 @@ export default function Dashboard() {
   const sub = `${tierLabel}${profile.location ? ` · ${profile.location}` : ''}`
 
   function cardVisible(card) {
-    if (card.type === 'erp') return true
+    if (card.type === 'erp') return erpVisible
     if (card.type === 'group') return canAccess(card.primary.to) || card.extras.some(e => canAccess(e.to))
     return canAccess(card.to)
   }

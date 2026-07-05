@@ -2,7 +2,7 @@ import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabase'
-import { useErp } from '../../lib/erp'
+import { useErp, useErpVisible } from '../../lib/erp'
 import Icon from '../Icon'
 import { NAV_SECTIONS, itemVisible } from './navConfig'
 
@@ -155,6 +155,7 @@ function UserMenu({ profile, entityCode }) {
 
 export default function Sidebar() {
   const { profile, canAccess } = useAuth()
+  const erpVisible = useErpVisible()
 
   const [entityCode, setEntityCode] = useState(null)
   useEffect(() => {
@@ -179,7 +180,7 @@ export default function Sidebar() {
         <SidebarLink to="/" icon="dashboard" label="Dashboard" />
 
         {NAV_SECTIONS.map(section => {
-          const visible = section.items.filter(item => itemVisible(item, canAccess))
+          const visible = section.items.filter(item => item.type === 'erp' ? erpVisible : itemVisible(item, canAccess))
           if (visible.length === 0) return null
           return (
             <div className="sidebar-section" key={section.label}>
