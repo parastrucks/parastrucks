@@ -2,6 +2,7 @@ import { NavLink } from 'react-router-dom'
 import { useEffect } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { useErp, useErpVisible } from '../../lib/erp'
+import useFocusTrap from '../../hooks/useFocusTrap'
 import Icon from '../Icon'
 import { NAV_SECTIONS, itemVisible } from './navConfig'
 
@@ -13,24 +14,22 @@ export default function MobileDrawer({ open, onClose }) {
   const { canAccess } = useAuth()
   const { openErp } = useErp()
   const erpVisible = useErpVisible()
+  // Trap Tab focus inside the drawer + handle Escape → close (no text inputs
+  // here, so the historical per-keystroke focus-steal bug can't apply).
+  const trapRef = useFocusTrap(open, onClose)
 
   useEffect(() => {
     if (!open) return
     const prevOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden' // lock the page behind the drawer
-    const onKey = e => { if (e.key === 'Escape') onClose() }
-    window.addEventListener('keydown', onKey)
-    return () => {
-      document.body.style.overflow = prevOverflow
-      window.removeEventListener('keydown', onKey)
-    }
-  }, [open, onClose])
+    return () => { document.body.style.overflow = prevOverflow }
+  }, [open])
 
   if (!open) return null
 
   return (
     <div className="drawer-backdrop" onClick={onClose}>
-      <div className="drawer-panel" onClick={e => e.stopPropagation()} role="dialog" aria-label="Navigation">
+      <div className="drawer-panel" ref={trapRef} onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Navigation">
         <div className="drawer-head">
           <img className="drawer-logo" src="/paras-logo.png" alt="Paras Trucks" />
           <button className="drawer-close" onClick={onClose} aria-label="Close menu">
