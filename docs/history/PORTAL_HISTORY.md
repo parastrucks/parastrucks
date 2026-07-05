@@ -1403,3 +1403,34 @@ guards, pagination/search, `canAccess`, icon names, desktop↔mobile flip.
 Service/Accounts (Profile via top-bar avatar); M3 sidebar groups no longer auto-expand on active
 route (per handoff); L2 drawer/sheet lack a focus-trap (net-new); LOW-1 log mobile cards omit the
 preparer designation. All in `memory/known_issues.md`.
+
+**Session 2 (2026-07-05) — red-team round 2 (4 Fable-5 agents) + fixes + prod brand provisioning.**
+Re-ran the red-team with 4 parallel Fable-5 reviewers (data-integrity / access-control /
+CSS-responsive / runtime-build) vs `origin/portal` as the "known-good" baseline. Verdict again
+**SHIP-SAFE, no CRITICAL/HIGH**; build green, `npm audit` 0, all 51 Icon names resolve, zero orphaned
+CSS, route/`canAccess` parity confirmed. Six fixes across two commits:
+- `dff4211` — (1) `ServiceJobs` `?new=1` auto-open effect keyed on `searchParams` so Create (+) →
+  New Vendor Job opens the form even when already on `/vendor-jobs` (was a mount-only no-op that also
+  left the param in the URL); (2) hooks hoisted above the accessible-items early return in
+  `Sidebar.NavGroup` + `Dashboard.GroupCard` (rules-of-hooks latent-crash guard); (3) shell mobile
+  media queries `759px`→`759.98px` (closes the 759–760 fractional-viewport dead-zone under 125/150%
+  display scaling); (4) drawer/sheet backdrops+panels hidden `@media (min-width:760px)` so a resize
+  into desktop can't leave them overlaying the sidebar.
+- `96d8f65` — (5) MED-2: normalized all 58 off-grid `font-weight` declarations (500/600/800) in
+  `index.css`/`Login.css` to Carlito's real 400/700 grid — pixel-identical (browser already snapped
+  them) but honest CSS + documented at the `--font` token; true 5-weight hierarchy would need a font
+  swap away from the Calibri-metric Carlito (owner call, not done). (6) LOW: gated the "New …" CTAs on
+  My Quotations / My Proformas / My Financier Copies behind `canAccess(route)`.
+- **Resolved not-a-bug:** the "ERP-card gating changed" flag — prod audit confirmed the only
+  `hdh`-branded user is in Service (keeps the card); nobody loses ERP access under the redesign.
+- **Prod data fix (`user_brands`):** owner asked whether accounts/back-office/HR have brand
+  provisioning "like sales/service/spares". Prod audit of all 36 users: sales (22 `al`), service
+  (6, `al`+1`hdh`+1`switch`), back_office (3 `al`) were provisioned; **accounts (3) + hr (1) had
+  zero brand rows**; owner (admin, no dept) bypasses. No `spares` department exists in prod. Owner
+  rule = PTB→`al`, PT→all three; all 4 gaps are PTB → each got `al` (brand `1e7ab9db-…`). Inserted 4
+  rows on prod `mmmxvjaavdtwlpcnjgzy` (merge-duplicates, no deletes) via the `.env .prod .bak`
+  service-role key; re-verified accounts 3/3, hr 1/1, 0 remaining. Users: Pradeep Chavda (hr),
+  Bhadresh Thakor / Mahir Makwana / Bhavesh Solanki (accounts).
+- Branch now **24 commits** ahead of `origin/portal`, all pushed, build green. Owner decisions
+  M2/M3/L2/LOW-1 remain open; cosmetic LOWs addressed next (drawer-open-across-back, no scroll-lock,
+  bottom-nav fallback flicker). PR → one-shot merge still pending owner go-ahead.
