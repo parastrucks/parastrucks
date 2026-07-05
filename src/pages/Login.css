@@ -88,6 +88,6 @@
 }
 .login-footer a {
   color: var(--blue);
-  font-weight: 600;
+  font-weight: 700;
 }
 .login-footer a:hover { text-decoration: underline; }

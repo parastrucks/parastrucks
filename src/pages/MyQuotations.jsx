@@ -17,7 +17,7 @@ function fmtDate(iso) {
 }
 
 export default function MyQuotations() {
-  const { profile } = useAuth()
+  const { profile, canAccess } = useAuth()
   const [quotations, setQuotations] = useState([])
   const [loading, setLoading] = useState(true)
   const [downloadingId, setDownloadingId] = useState(null)
@@ -113,7 +113,9 @@ export default function MyQuotations() {
           <h1 className="page-head-title">My Quotations<span className="period-accent">.</span></h1>
           <div className="page-head-sub">Your quotation history — re-download any PDF</div>
         </div>
-        <Link to="/quotation" className="btn btn-primary page-head-right"><Icon name="plus" size={15} /> New Quotation</Link>
+        {canAccess('/quotation') && (
+          <Link to="/quotation" className="btn btn-primary page-head-right"><Icon name="plus" size={15} /> New Quotation</Link>
+        )}
       </div>
 
       {loading ? (

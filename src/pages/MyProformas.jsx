@@ -17,7 +17,7 @@ function fmtDate(iso) {
 }
 
 export default function MyProformas() {
-  const { profile } = useAuth()
+  const { profile, canAccess } = useAuth()
   const [proformas, setProformas] = useState([])
   const [loading, setLoading] = useState(true)
   const [downloadingId, setDownloadingId] = useState(null)
@@ -106,7 +106,9 @@ export default function MyProformas() {
           <h1 className="page-head-title">My Proforma Invoices<span className="period-accent">.</span></h1>
           <div className="page-head-sub">Your proforma invoice history — re-download any PDF</div>
         </div>
-        <Link to="/proforma-invoice" className="btn btn-primary page-head-right"><Icon name="plus" size={15} /> New Proforma</Link>
+        {canAccess('/proforma-invoice') && (
+          <Link to="/proforma-invoice" className="btn btn-primary page-head-right"><Icon name="plus" size={15} /> New Proforma</Link>
+        )}
       </div>
 
       {loading ? (
