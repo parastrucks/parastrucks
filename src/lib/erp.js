@@ -21,8 +21,13 @@ export function useErpVisible() {
       .from('user_brands')
       .select('brands(code)')
       .eq('user_id', profile.id)
-      .then(({ data }) => {
+      .then(({ data, error }) => {
         if (cancelled) return
+        // Fail OPEN on a read error: pre-redesign the ERP entry was always
+        // shown (erp-sso gates the actual click), so a transient brand-lookup
+        // failure must not strip a legitimately-entitled user of every ERP
+        // entry point with no recovery. A successful empty read still hides it.
+        if (error) { setVisible(true); return }
         const codes = (data || []).map(r => r.brands?.code).filter(Boolean)
         setVisible(codes.includes('hdh'))
       })

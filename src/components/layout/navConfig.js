@@ -65,10 +65,12 @@ export const CREATE_ACTIONS = [
   { to: '/vendor-jobs',      icon: 'wrench',   label: 'New Vendor Job',  desc: 'Outside-workshop / ancillary repair job', openNew: true },
 ]
 
-/* Is a nav item reachable for this user? ERP is gated server-side (JIT), so it
-   always shows here (mirrors the Dashboard ERP card). Groups need ≥1 child. */
+/* Is a nav item reachable for this user? Groups need ≥1 accessible child.
+   ERP is NOT decided here — callers gate it with useErpVisible() (hdh brand /
+   admin). We return false for erp so that if a future refactor ever routes an
+   ERP item through this helper, it fails closed instead of leaking to all. */
 export function itemVisible(item, canAccess) {
-  if (item.type === 'erp') return true
+  if (item.type === 'erp') return false
   if (item.type === 'group') return item.items.some(c => canAccess(c.to))
   return canAccess(item.to)
 }

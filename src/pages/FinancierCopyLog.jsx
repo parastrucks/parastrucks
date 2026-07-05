@@ -8,7 +8,7 @@ import Icon from '../components/Icon'
 
 function fmtINR(n) {
   if (!n && n !== 0) return '—'
-  return '₹ ' + Number(n).toLocaleString('en-IN')
+  return '₹ ' + Number(n).toLocaleString('en-IN')
 }
 function fmtDate(iso) {
   if (!iso) return '—'
