@@ -1431,6 +1431,14 @@ CSS, route/`canAccess` parity confirmed. Six fixes across two commits:
   rows on prod `mmmxvjaavdtwlpcnjgzy` (merge-duplicates, no deletes) via the `.env .prod .bak`
   service-role key; re-verified accounts 3/3, hr 1/1, 0 remaining. Users: Pradeep Chavda (hr),
   Bhadresh Thakor / Mahir Makwana / Bhavesh Solanki (accounts).
-- Branch now **24 commits** ahead of `origin/portal`, all pushed, build green. Owner decisions
-  M2/M3/L2/LOW-1 remain open; cosmetic LOWs addressed next (drawer-open-across-back, no scroll-lock,
-  bottom-nav fallback flicker). PR → one-shot merge still pending owner go-ahead.
+- Cosmetic LOWs then addressed (commit `e992c17`): drawer closes on route change (browser back),
+  drawer+sheet lock body scroll, bottom-nav no longer flashes the wrong FALLBACK tabs (`deptResolved`
+  gate). Only the non-visual 3×-dup-`user_brands` ERP read left deferred.
+- **All four owner design-decisions then resolved (2026-07-05):** M2 — accepted as-is (owner
+  "reducing the tab is ok"; bottom nav keeps dropping the Profile tab on odd-count depts, Profile via
+  top-bar avatar). M3 — **restored sidebar auto-expand** on the active route (`NavGroup` seeds
+  `useState` from `isGroupActive` + effect; still collapsible). L2 — **wired `useFocusTrap` into
+  MobileDrawer + CreateSheet** (Tab-cycle, Escape-close, `role=dialog aria-modal`); safe re the PR #42
+  keystroke focus-steal (hook hardened to deps `[active]` + no text inputs in either overlay). LOW-1
+  — declined (owner "no need"). Branch now **29 commits** ahead of `origin/portal`, all pushed, build
+  green. PR → one-shot merge still pending owner go-ahead.
