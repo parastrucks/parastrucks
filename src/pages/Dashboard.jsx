@@ -105,16 +105,11 @@ function ErpCard({ card }) {
 }
 
 function GroupCard({ card, canAccess }) {
+  // Hooks must run before any early return (rules of hooks) — the parent filters
+  // cards with the same predicate so the guard below is unreachable today, but
+  // keep the hooks unconditional so a future predicate divergence can't blank the tree.
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
-
-  const primaryAccessible = canAccess(card.primary.to)
-  const accessibleExtras = card.extras.filter(e => canAccess(e.to))
-  if (!primaryAccessible && accessibleExtras.length === 0) return null
-
-  const effectivePrimaryTo = primaryAccessible ? card.primary.to : accessibleExtras[0].to
-  const dropdownExtras = primaryAccessible ? accessibleExtras : accessibleExtras.slice(1)
-  const showMore = dropdownExtras.length > 0
 
   useEffect(() => {
     if (!open) return
@@ -124,6 +119,14 @@ function GroupCard({ card, canAccess }) {
     window.addEventListener('keydown', onKey)
     return () => { document.removeEventListener('mousedown', onDown); window.removeEventListener('keydown', onKey) }
   }, [open])
+
+  const primaryAccessible = canAccess(card.primary.to)
+  const accessibleExtras = card.extras.filter(e => canAccess(e.to))
+  if (!primaryAccessible && accessibleExtras.length === 0) return null
+
+  const effectivePrimaryTo = primaryAccessible ? card.primary.to : accessibleExtras[0].to
+  const dropdownExtras = primaryAccessible ? accessibleExtras : accessibleExtras.slice(1)
+  const showMore = dropdownExtras.length > 0
 
   return (
     <div className="dcard dcard--group" ref={ref}>

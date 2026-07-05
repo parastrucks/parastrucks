@@ -211,7 +211,9 @@ export default function ServiceJobs() {
   const [selected, setSelected] = useState(null)
 
   // Auto-open the New Job form when arrived via the mobile Create (+) sheet
-  // (/vendor-jobs?new=1). Strip the param so refresh/back won't re-open it.
+  // (/vendor-jobs?new=1). Keyed on searchParams so it also fires when the user
+  // is already on this route (the (+) sheet just changes the query string, it
+  // does not remount). Stripping the param re-runs this with no ?new, a no-op.
   const [searchParams, setSearchParams] = useSearchParams()
   useEffect(() => {
     if (searchParams.get('new') === '1') {
@@ -219,7 +221,7 @@ export default function ServiceJobs() {
       searchParams.delete('new')
       setSearchParams(searchParams, { replace: true })
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [searchParams]) // eslint-disable-line react-hooks/exhaustive-deps
   const [events, setEvents] = useState([])
   const [toast, setToast] = useState(null) // { msg, kind }
   const [showFilters, setShowFilters] = useState(false)

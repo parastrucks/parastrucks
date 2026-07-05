@@ -541,7 +541,7 @@ img { max-width: 100%; display: block; }
  * box's floor. .btn-sm is NOT exempted: on mobile it expands to
  * 44px anyway because the small visual style (12px font, tight
  * padding) stops earning its keep once you're dragging a thumb. */
-@media (max-width: 759px) {
+@media (max-width: 759.98px) {
   .btn,
   .form-input,
   .form-select { min-height: 44px; }
@@ -2446,7 +2446,7 @@ tbody tr:hover td { background: var(--gray-50); }
    by source order and leak the cards onto desktop. Display is owned solely
    by the .only-mobile / .only-desktop toggle below. */
 .only-mobile { display: none; }
-@media (max-width: 759px) {
+@media (max-width: 759.98px) {
   .only-desktop { display: none; }
   .only-mobile { display: block; }
   .only-mobile.mobile-cards { display: flex; }
@@ -2486,7 +2486,7 @@ tbody tr:hover td { background: var(--gray-50); }
 
 /* Top bar — mobile only (<760px) */
 .topbar { display: none; }
-@media (max-width: 759px) {
+@media (max-width: 759.98px) {
   .topbar {
     display: flex;
     align-items: center;
@@ -2557,6 +2557,13 @@ tbody tr:hover td { background: var(--gray-50); }
   position: fixed; left: 0; right: 0; bottom: 0;
   background: var(--white); border-top: 3px solid var(--ink);
   max-height: 82%; overflow-y: auto; animation: mslideU .22s ease;
+}
+/* Desktop kill-switch: the drawer/sheet are JS-toggled (AppLayout/BottomNav) with
+   no width guard, so a resize or device rotation crossing into desktop while one is
+   open would overlay the sidebar shell. Hide both wholesale at the desktop breakpoint. */
+@media (min-width: 760px) {
+  .drawer-backdrop, .drawer-panel,
+  .sheet-backdrop, .sheet-panel { display: none; }
 }
 .sheet-head {
   display: flex; justify-content: space-between; align-items: center;
