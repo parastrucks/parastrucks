@@ -80,12 +80,15 @@ export default function BottomNav() {
 
   if (!profile) return null
 
-  const tabs = isAdmin ? ADMIN_TABS : (DEPT_TABS[deptCode] || FALLBACK_TABS)
+  let tabs = isAdmin ? ADMIN_TABS : (DEPT_TABS[deptCode] || FALLBACK_TABS)
   const createActions = CREATE_ACTIONS.filter(a => canAccess(a.to))
   const hasCreate = createActions.length > 0
 
-  // Split the department tabs around a raised center Create (+) button.
-  const mid = Math.ceil(tabs.length / 2)
+  // Keep the raised Create (+) visually centred by splitting an EVEN number of
+  // tabs around it (equal on both sides). If the count is odd, drop the last
+  // tab (Profile — still reachable via the top-bar avatar and the drawer).
+  if (hasCreate && tabs.length % 2 === 1) tabs = tabs.slice(0, -1)
+  const mid = tabs.length / 2
   const left = hasCreate ? tabs.slice(0, mid) : tabs
   const right = hasCreate ? tabs.slice(mid) : []
 
