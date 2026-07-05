@@ -29,14 +29,26 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ---
 
-## Current state (2026-07-04)
+## Current state (2026-07-05)
 
 - **Deployed & live:** Phases 1A–9 + **Phase 9.5 Vendor Jobs** (`/vendor-jobs`) + the 2026-07-04
   changes (Service/Spares require Brands; bus-calc sticky fix; gitignore `.env*`). CI + Vercel green.
+- **Built, NOT yet live — Phase 9.6 visual redesign** (Paras Group print-report language: paper/ink/
+  hairline/one-blue-accent, Carlito, Lucide; 4-section sidebar; new mobile shell; PageHead; mobile
+  card tables). Branch **`9.6-portal-redesign`** (off `origin/portal`, 21 commits, builds green),
+  smoke-tested on staging + red-teamed (ship-safe). Visual/structural only. **Next = open PR → owner
+  one-shot merge to `portal`.** Detail: `memory/phase96_portal_redesign.md`; open owner decisions in
+  `memory/known_issues.md`. Old-portal designer handoff on the branch: `docs/PORTAL_UI_HANDOFF.md`.
 - **Planned, not started:** **Phase 10 — Vehicle Tracker** (`/tracker`) — see `docs/backlog/phase10-vehicle-tracker.md`.
 - **Separate project (not this repo):** the HD Hyundai **ERP** (`erp.parastrucks.in`, repo `erp-parastrucks`) — see `memory/project_hd_hyundai_vertical.md`.
 
 ## Next actions
+
+- **Phase 9.6 redesign go-live:** open PR `9.6-portal-redesign` → `portal` (runs CI + Vercel
+  prod-candidate) → **owner merges** for the one-shot release → verify prod + CSP. Optionally action
+  the open owner design-decisions first (drawer Profile / sidebar auto-expand / drawer focus-trap /
+  mobile-card designation — `memory/known_issues.md`). Worktree `.claude/worktrees/awesome-kare-7d6c1b`
+  has dev-local `.env`→staging + `launch.json`→port 5173 (uncommitted).
 
 - **Task A — restore localhost dev:** keep local `.env` pointed at the **staging** Supabase
   project (`klpnhpnlotcbbovwswmq`); staging EFs whitelist `http://localhost:3000` in `ALLOWED_ORIGINS`.

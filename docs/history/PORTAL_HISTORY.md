@@ -1354,3 +1354,52 @@ deferred engineering backlog) is kept here for the record.*
 - Never delete DB rows/columns/tables without explicit permission.
 - Platform: Windows, bash via git-bash, no Python.
 - Hotfixes vs features: small UI/data fixes can go direct to `portal` branch + push + redeploy. FC-scale work uses feature branch + PR + squash-merge.
+
+---
+
+## Phase 9.6 — Portal visual redesign (Paras Group print-report language) — BUILT, NOT YET LIVE (2026-07-05)
+
+Full **visual/structural redesign** of the whole portal to the Paras Group print-report design
+language. Zero behavioural change intended — routing, Supabase, edge-fn calls, `canAccess`, and all
+business logic preserved. On branch **`9.6-portal-redesign`** (off `origin/portal`, 21 commits,
+every `npm run build` green). Smoke-tested on staging + 3-agent red-team (ship-safe). **Not yet
+merged — PR + one-shot merge to `portal` pending owner go-ahead.** Live working state:
+`memory/phase96_portal_redesign.md`; open owner decisions: `memory/known_issues.md`.
+
+**Design language:** paper `#F4F4F4` ground · ink `#000` · `#D4D4D4` hairline-rule tables · square
+corners (2px only on inputs/buttons) · ONE blue accent `#2563EB` · **Carlito** font (Google Fonts,
+metric Calibri substitute) · thin-line **Lucide** icons. Source of truth = the design handoff at
+`D:\PTB\Website\Website redesign guidance\design_handoff_portal_redesign\`. Plan
+`~/.claude/plans/buzzing-popping-fairy.md`.
+
+**Build (phased):** (0) `lucide-react` npm dep + Inter→Carlito. (1) rewrote `src/index.css` `:root`
+tokens keeping the old names so ~400 `var()` refs cascade, retuned every family, appended
+print-report primitives (`.page-head`, `.eyebrow`, `.tag`, `.stat-block`/`.stat-strip`,
+`.table-card`/`.rowlink`, `.mobile-cards`/`.m-card`, `.panel`, `.only-desktop`/`.only-mobile`).
+(2) `Icon.jsx` Lucide wrapper. (3) `Sidebar.jsx` → 4 labelled sections + pinned Dashboard + HD
+Hyundai ERP item; shared `navConfig.js` + `lib/erp.js`; groups collapsed by default. (4) new mobile
+shell — `TopBar.jsx` + `MobileDrawer.jsx` + hybrid `BottomNav.jsx` (dept tabs + centered Create(+)
+→ `CreateSheet.jsx`, incl. New Vendor Job → `/vendor-jobs?new=1`); shell breakpoint 900→760.
+(5) `Dashboard.jsx` → section eyebrows + `.dcard` link/group/inverted cards + MORE OPTIONS expander.
+(6) PageHead on all pages + mobile stacked-card tables for customer-facing lists; dense admin tables
+(Access Rules, TIV) stay h-scroll; Login dark→paper.
+
+**Owner review fixes (staging walkthrough):** bottom nav capped ≤4 icons + centered create; New
+Vendor Job in the + sheet; late-night greeting; removed doubled dashboard rule; **fixed mobile cards
+leaking onto the desktop table**; vehicle search shows description + `ignoreLocation` + validation
+focus (Quotation/Proforma/Financier); **HD Hyundai ERP entry brand-gated (hdh) so PTB users don't
+see it** (`useErpVisible`, admin override, fails open on error). Residual polish: emoji→Lucide on the
+last buttons; removed ~187 lines of dead `.tool-card*`/`.stat-*` CSS; fixed the long-broken favicon
+(`public/favicon.svg`).
+
+**Red-team (assumed pre-redesign portal was perfect) — regressions found & FIXED:** (H1)
+`useErpVisible` failed CLOSED → fails OPEN on read error (pre-redesign the ERP card was always shown,
+server-gated); (Med) `.badge-gray`/`.tag--inactive` text on grey ~2.4:1 → `--text-secondary` ~4.5:1;
+(Med) six list-page `fmtINR` had lost the ₹ non-breaking space → restored; hardening —
+`navConfig.itemVisible` erp→false. Verified clean: all `.select()` columns, PDF args, re-download
+guards, pagination/search, `canAccess`, icon names, desktop↔mobile flip.
+
+**Open owner decisions (flagged, not actioned):** M2 mobile bottom nav drops Profile tab for
+Service/Accounts (Profile via top-bar avatar); M3 sidebar groups no longer auto-expand on active
+route (per handoff); L2 drawer/sheet lack a focus-trap (net-new); LOW-1 log mobile cards omit the
+preparer designation. All in `memory/known_issues.md`.
