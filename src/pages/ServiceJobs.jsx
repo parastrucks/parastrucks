@@ -3,6 +3,7 @@
 // supabase under RLS; every write goes through the `service-jobs` Edge Function.
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import Icon from '../components/Icon'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { callEdge } from '../lib/api'
@@ -510,7 +511,7 @@ export default function ServiceJobs() {
           <h1 className="page-head-title">Vendor Jobs<span className="period-accent">.</span></h1>
           <div className="page-head-sub">Track outside-workshop &amp; ancillary repair jobs end to end</div>
         </div>
-        <button className="btn btn-primary page-head-right" onClick={openNew}>+ New Job</button>
+        <button className="btn btn-primary page-head-right" onClick={openNew}><Icon name="plus" size={15} /> New Job</button>
       </div>
 
       {/* Load/page-level errors only when no modal is open (action errors render inside the modal). */}
@@ -1107,7 +1108,7 @@ function NewJobForm({ form, setForm, vendors, canManage, onReloadVendors, onSubm
 
         {aw && (
           <div className="sj-letter">
-            <div className="sj-letter-legend">📝 Warranty request letter details</div>
+            <div className="sj-letter-legend"><Icon name="clipboard" size={15} /> Warranty request letter details</div>
             <div className="sj-grid-2">
               {LETTER_FIELDS.map(([key, label, type]) => (
                 <div className="form-group" key={key}>
@@ -1197,7 +1198,7 @@ function JobDetail({ job, events, busy, caps, onAct, onReprint }) {
       )}
 
       <div className="sj-actions">
-        <button className="btn btn-sm btn-secondary" onClick={onReprint}>🖨 Re-print PO</button>
+        <button className="btn btn-sm btn-secondary" onClick={onReprint}><Icon name="printer" size={15} /> Re-print PO</button>
         {canAdvance && (
           <button className="btn btn-sm btn-primary" disabled={busy}
             onClick={() => onAct('advanceStage', { jobId: job.id, toStage: nextStage }, job.id, `Advanced to ${STAGE_LABEL[nextStage]}`)}>Advance → {STAGE_LABEL[nextStage]}</button>

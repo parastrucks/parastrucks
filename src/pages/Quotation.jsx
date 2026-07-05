@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import Fuse from 'fuse.js'
+import Icon from '../components/Icon'
 import { supabase } from '../lib/supabase'
 import { useDebounce } from '../lib/useDebounce'
 import { useAuth } from '../context/AuthContext'
@@ -768,7 +769,7 @@ export default function Quotation() {
                 {saving ? (
                   <><span className="spinner spinner-sm" /> Saving…</>
                 ) : (
-                  '💾 Save & Download PDF'
+                  <><Icon name="download" size={16} /> Save &amp; Download PDF</>
                 )}
               </button>
             </div>
