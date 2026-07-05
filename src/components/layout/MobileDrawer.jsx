@@ -16,9 +16,14 @@ export default function MobileDrawer({ open, onClose }) {
 
   useEffect(() => {
     if (!open) return
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden' // lock the page behind the drawer
     const onKey = e => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    return () => {
+      document.body.style.overflow = prevOverflow
+      window.removeEventListener('keydown', onKey)
+    }
   }, [open, onClose])
 
   if (!open) return null

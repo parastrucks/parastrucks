@@ -68,17 +68,22 @@ function Tab({ tab }) {
 export default function BottomNav() {
   const { profile, isAdmin, canAccess } = useAuth()
   const [deptCode, setDeptCode] = useState(null)
+  const [deptResolved, setDeptResolved] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
 
   useEffect(() => {
     let cancelled = false
-    if (!profile?.department_id) { setDeptCode(null); return }
+    if (!profile?.department_id) { setDeptCode(null); setDeptResolved(true); return }
+    setDeptResolved(false)
     supabase.from('departments').select('code').eq('id', profile.department_id).maybeSingle()
-      .then(({ data }) => { if (!cancelled) setDeptCode(data?.code ?? null) })
+      .then(({ data }) => { if (!cancelled) { setDeptCode(data?.code ?? null); setDeptResolved(true) } })
     return () => { cancelled = true }
   }, [profile?.department_id])
 
   if (!profile) return null
+  // A non-admin with a department whose code is still resolving: render nothing
+  // for that one fetch round-trip rather than flashing the wrong FALLBACK tabs.
+  if (!isAdmin && profile.department_id && !deptResolved) return null
 
   let tabs = isAdmin ? ADMIN_TABS : (DEPT_TABS[deptCode] || FALLBACK_TABS)
   const createActions = CREATE_ACTIONS.filter(a => canAccess(a.to))
