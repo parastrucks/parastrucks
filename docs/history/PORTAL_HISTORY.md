@@ -1229,6 +1229,34 @@ for the always-current summary; this is the durable long-form record.*
   CBNs badged with their current sub-segment (`• in <name>`), and reassigns on save with
   **last-write-wins** (owner's rule: latest assignment takes priority) + inline note + post-save toast.
   A CBN is only ever in one sub-segment (single `sub_category` column; `cbn` UNIQUE).
+- **Docs catch-up** (PR #74, `6288473`, merged): appended the ERP-docs reorg + catalog #73 above (this
+  archive was written mid-session and omitted the later work).
+- **Secret leak — rotated + scrubbed** (PR #75, `f4924b0`, merged): GitGuardian flagged the **`SYNC_SECRET`**
+  Bearer token embedded in the `sync_erp_users` `pg_net` webhook trigger's `Authorization` header, which
+  `pg_dump --schema-only` captured into `docs/db/schema-current.sql`. It's a custom shared secret guarding
+  the portal→ERP sync EF — **not** the service-role key (no DB access). Fix: redacted to a placeholder +
+  scrub note in `RECONSTRUCTION.md`; **owner rotated `SYNC_SECRET`** across all 4 places (portal webhook
+  header + `sync-erp-users` EF secret + ERP GitHub Actions secret + `erp-parastrucks/.env`); verified
+  old→401 (dead), new→cron run green. `gitleaks` missed the hex-in-JSON pattern; GitGuardian caught it.
+  **Future schema-dump refreshes MUST scrub `Authorization: Bearer` headers before commit.**
+
+### 2026-07-07 — AL July-2026 pricelist applied to prod catalog (data-only, no deploy)
+
+- Source `D:\Claude CoWork\PTB\Pricelist\PTB_CombinedPricelist_20260706.xlsx` (870 rows; 4 AL circulars
+  WEF 1-Jul-26; also carries Base Price + Dealer Markup, which the catalog does **not** store — MRP-incl-GST
+  only). Applied to prod `vehicle_catalog` (`mmmxvjaavdtwlpcnjgzy`) via service-role REST, matched by CBN.
+- **770 existing CBN prices updated + 100 new CBNs inserted** → catalog **906 → 1006**; all 870 set
+  `effective_date=2026-07-01`, `price_circular='Jul 2026 Circular'`.
+- **Portal taxonomy preserved** — the file's coarser AL segment/sub-segment names were NOT imported (would
+  have broken quotation filters + brochure sub-segments). New CBNs' taxonomy was derived from a
+  matched-CBN `file-sub-segment → portal` map (82 auto; 16 CNG → `Ecomet CNG`; 2 orphans hand-assigned:
+  MCV bus `CCT25120D00027` → `Bus – MCV`/`12M Coach`; tipper `CTN482529B0052_YW` → **new sub_segment
+  `10x2 Tipper – 48T GVW`**, id 45).
+- **136 catalog CBNs not in this circular** (heavy 35T/55T tractors, RMC/Boom Pump, special variants) left
+  **untouched per owner** — still sold, keep older prices; NOT discontinued.
+- Data-only (no deploy — catalog is read live, so new prices are immediately in effect for new quotations).
+  Rollback backup: `D:\Claude CoWork\PTB\Pricelist\catalog_backup_pre_20260706.json` (906 rows, old prices).
+  The two new sub-segments have no brochure PDF yet (attach via Catalog UI).
 
 ---
 
