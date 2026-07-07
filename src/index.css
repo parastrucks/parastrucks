@@ -572,6 +572,7 @@ img { max-width: 100%; display: block; }
 /* ─── TABLE ─────────────────────────────────────────────────── */
 .table-wrap {
   overflow-x: auto;
+  overflow-y: hidden; /* horizontal-scroll only; keep vertical on the page, no inner scrollbar */
   border-radius: var(--radius);
   border: 1px solid var(--gray-200);
   border-top: 2px solid var(--ink);
@@ -1925,6 +1926,8 @@ tbody tr:hover td { background: var(--gray-50); }
   border-bottom: 2px solid var(--gray-200);
   padding-bottom: 0;
   overflow-x: auto;
+  overflow-y: hidden; /* setting overflow-x makes overflow-y compute to auto → a
+                         stray vertical scrollbar over the 2px tab-underline; pin it hidden */
   -webkit-overflow-scrolling: touch;
 }
 .vc-tab {

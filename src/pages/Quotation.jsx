@@ -278,6 +278,8 @@ export default function Quotation() {
     const emptyDescIdx = lineItems.findIndex(li => !String(li.description || '').trim())
     if (emptyDescIdx !== -1) {
       setError(`Vehicle #${emptyDescIdx + 1} description cannot be empty.`)
+      const card = document.querySelectorAll('.line-item-card')[emptyDescIdx]
+      focusEl(card?.querySelector('textarea, input') || card)
       return
     }
 
