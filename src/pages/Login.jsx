@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import Icon from '../components/Icon'
 import './Login.css'
 
 // Cloudflare Turnstile is loaded dynamically only when VITE_TURNSTILE_SITE_KEY
@@ -178,12 +179,12 @@ export default function Login() {
                 style={{
                   position: 'absolute', right: '12px', top: '50%',
                   transform: 'translateY(-50%)', color: 'var(--gray-400)',
-                  fontSize: '16px', lineHeight: 1
+                  display: 'flex', lineHeight: 1
                 }}
                 tabIndex={-1}
                 aria-label={showPw ? 'Hide password' : 'Show password'}
               >
-                {showPw ? '🙈' : '👁'}
+                <Icon name={showPw ? 'eye-off' : 'eye'} size={18} color="currentColor" />
               </button>
             </div>
           </div>
