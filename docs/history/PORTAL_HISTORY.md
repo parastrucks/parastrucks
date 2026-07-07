@@ -1440,5 +1440,18 @@ CSS, route/`canAccess` parity confirmed. Six fixes across two commits:
   `useState` from `isGroupActive` + effect; still collapsible). L2 — **wired `useFocusTrap` into
   MobileDrawer + CreateSheet** (Tab-cycle, Escape-close, `role=dialog aria-modal`); safe re the PR #42
   keystroke focus-steal (hook hardened to deps `[active]` + no text inputs in either overlay). LOW-1
-  — declined (owner "no need"). Branch now **29 commits** ahead of `origin/portal`, all pushed, build
-  green. PR → one-shot merge still pending owner go-ahead.
+  — declined (owner "no need").
+- **Full local staging walkthrough (2026-07-07) — PASSED, zero console errors.** Dev server on
+  `:5173` vs staging; logged in as `admin@` and `svc.mgr@parastrucks.test`. The preview harness has no
+  layout viewport (`innerWidth` 0) so it renders the mobile shell — used that to verify live: M3
+  sidebar auto-expand (group opens + active sub highlighted on nav, still collapsible); L2 focus-trap
+  on drawer (18 focusables) + create-sheet (5) with Tab/Shift-Tab wrap + `aria-modal`; body scroll-lock
+  engages+restores; drawer closes on link-nav AND browser-back; `?new=1` opens the New Job form from
+  another page AND when already on `/vendor-jobs` (round-2 fix) with the param stripped; **ERP hidden
+  on dashboard+sidebar+drawer for the PTB service manager** (owner requirement) while admin sees it;
+  create-sheet `canAccess`-filtered (admin = 4 actions, service = New Vendor Job only); mobile cards
+  render full data. **One residual emoji found + fixed** — login show-password toggle `👁`/`🙈` →
+  Lucide `eye`/`eye-off` (`Icon` wrapper), verified live. Desktop *rendering* (sidebar-visible view,
+  desktop tables, 759.98 fractional fix) still wants one real-browser eyeball — not renderable in this
+  harness. Branch now **31 commits** ahead of `origin/portal`, all pushed, build green. PR → one-shot
+  merge still pending owner go-ahead.

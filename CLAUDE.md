@@ -35,13 +35,17 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   changes (Service/Spares require Brands; bus-calc sticky fix; gitignore `.env*`). CI + Vercel green.
 - **Built, NOT yet live — Phase 9.6 visual redesign** (Paras Group print-report language: paper/ink/
   hairline/one-blue-accent, Carlito, Lucide; 4-section sidebar; new mobile shell; PageHead; mobile
-  card tables). Branch **`9.6-portal-redesign`** (off `origin/portal`, 29 commits, builds green),
+  card tables). Branch **`9.6-portal-redesign`** (off `origin/portal`, 31 commits, builds green),
   smoke-tested on staging + **red-teamed twice** (round 1 = 3 agents, round 2 = 4 Fable-5 agents; both
-  ship-safe, all findings fixed). Visual/structural only. Also this session: **accounts + HR users
-  got their missing `user_brands` rows on prod** (PTB→`al`; audit found sales/service/back_office
-  already provisioned); **all four owner design-decisions resolved** (M2 accepted as-is · M3 sidebar
-  auto-expand restored · L2 drawer/sheet focus-trap wired · LOW-1 declined). **Next = open PR → owner
-  one-shot merge to `portal`.** Detail: `memory/phase96_portal_redesign.md`; decisions + fixed-item
+  ship-safe, all findings fixed) + **full local staging walkthrough passed** (mobile shell live: M3
+  auto-expand, L2 focus-trap, drawer close-on-back, body scroll-lock, `?new=1` incl. already-on-page,
+  ERP hidden for PTB service manager, create-sheet canAccess filtering, mobile cards — zero console
+  errors). Visual/structural only. Also this session: **accounts + HR users got their missing
+  `user_brands` rows on prod** (PTB→`al`; audit found sales/service/back_office already provisioned);
+  **all four owner design-decisions resolved** (M2 accepted as-is · M3 sidebar auto-expand restored ·
+  L2 drawer/sheet focus-trap wired · LOW-1 declined); **login show-password emoji → Lucide eye**.
+  **Next = open PR → owner one-shot merge to `portal`** (one real-desktop-width eyeball still advised —
+  the preview harness has no layout viewport). Detail: `memory/phase96_portal_redesign.md`; decisions + fixed-item
   log in `memory/known_issues.md`. Old-portal designer handoff on the branch: `docs/PORTAL_UI_HANDOFF.md`.
 - **Planned, not started:** **Phase 10 — Vehicle Tracker** (`/tracker`) — see `docs/backlog/phase10-vehicle-tracker.md`.
 - **Separate project (not this repo):** the HD Hyundai **ERP** (`erp.parastrucks.in`, repo `erp-parastrucks`) — see `memory/project_hd_hyundai_vertical.md`.
