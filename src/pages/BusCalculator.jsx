@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
+import Icon from '../components/Icon'
 
 // ── Chassis Database (84 AL Bus Cowl Chassis — Apr 2026) ──────────────────────
 const DB = [
@@ -330,7 +331,7 @@ export default function BusCalculator() {
             </div>
 
             <div className="bc-srch-wrap" ref={searchRef}>
-              <span className="bc-srch-ico">⌕</span>
+              <span className="bc-srch-ico"><Icon name="search" size={17} /></span>
               <input
                 type="text"
                 className="bc-srch-in"
@@ -548,7 +549,7 @@ export default function BusCalculator() {
 
             {!summary ? (
               <div className="bc-sum-ph">
-                <div className="bc-sum-ph-ico">🚌</div>
+                <div className="bc-sum-ph-ico"><Icon name="bus" size={40} strokeWidth={1.4} /></div>
                 <div className="bc-sum-ph-txt">Search a CBN or model in Step 1 to begin building the price estimate.</div>
               </div>
             ) : (
