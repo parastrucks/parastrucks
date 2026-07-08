@@ -19,7 +19,18 @@ import { createClient } from "npm:@supabase/supabase-js@2"
 import { corsHeaders, preflight, jsonResponse } from "../_shared/cors.ts"
 
 const TIER: Record<string, string> = { admin: "admin", gm: "gm", manager: "manager", executive: "executor" }
-const BRANCH_BY_CITY: Record<string, string> = { "Hisar": "HSR", "Karnal": "KNL", "Rohtak": "RTK", "Charkhi Dadri": "CHD" }
+// City → ERP branch. Keys are normalised (lower-case, single-spaced) and include
+// common spelling variants so a stray "Hissar"/extra whitespace doesn't silently
+// skip a manager/executor (that bug cost us a day of head-scratching once).
+const BRANCH_BY_CITY: Record<string, string> = {
+  "hisar": "HSR", "hissar": "HSR",
+  "karnal": "KNL",
+  "rohtak": "RTK",
+  "charkhi dadri": "CHD", "dadri": "CHD",
+  "sirsa": "SRS",
+}
+const cityToBranch = (city?: string | null): string | null =>
+  city ? (BRANCH_BY_CITY[city.trim().toLowerCase().replace(/\s+/g, " ")] ?? null) : null
 const ERP_FUNCS = ["service", "spares", "accounts"]
 
 type Mapped = {
@@ -84,7 +95,7 @@ Deno.serve(async (req: Request) => {
       // branch: gm/admin ride all branches (null); manager/executor need a mapped outlet
       let branch_code: string | null = null
       const cities = (r.user_outlets ?? []).map((uo: { outlets?: { city?: string } }) => uo.outlets?.city).filter(Boolean) as string[]
-      for (const c of cities) if (BRANCH_BY_CITY[c]) { branch_code = BRANCH_BY_CITY[c]; break }
+      for (const c of cities) { const code = cityToBranch(c); if (code) { branch_code = code; break } }
       if (tier !== "gm" && tier !== "admin" && !branch_code) {
         skipped.push({ email, reason: `no ERP-branch outlet for ${tier} (outlets: ${cities.join(", ") || "none"})` }); continue
       }
