@@ -5,6 +5,7 @@ import { callEdge } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import Skeleton from '../components/Skeleton'
+import Icon from '../components/Icon'
 import useFocusTrap from '../hooks/useFocusTrap'
 
 /* ── CONSTANTS ───────────────────────────────────────────────── */
@@ -1388,7 +1389,7 @@ function ImportTab({ subSegs, onRefresh }) {
             style={{ display: 'none' }}
             onChange={e => e.target.files[0] && processFile(e.target.files[0])}
           />
-          <div className="vc-dropzone-icon">📊</div>
+          <div className="vc-dropzone-icon"><Icon name="upload" size={34} strokeWidth={1.4} color="var(--text-muted)" /></div>
           {file ? (
             <div>
               <div style={{ fontWeight: 600 }}>{file.name}</div>
