@@ -1455,3 +1455,40 @@ CSS, route/`canAccess` parity confirmed. Six fixes across two commits:
   desktop tables, 759.98 fractional fix) still wants one real-browser eyeball — not renderable in this
   harness. Branch now **31 commits** ahead of `origin/portal`, all pushed, build green. PR → one-shot
   merge still pending owner go-ahead.
+
+**Session 2026-07-14 — owner step-by-step localhost review (Phase 9.6).** Owner reviewed the
+redesign screen-by-screen on `localhost:5173` (staging DB); each fix committed as it landed (new
+standing preference). Branch → **40 commits, all pushed**, build green. Fixes:
+- **Catalog stray vertical scrollbar** — `.vc-tabs` / `.table-wrap` set `overflow-x:auto`, which per
+  CSS spec makes `overflow-y` compute to `auto`; the tab row was 2px taller than its box, so a
+  phantom scrollbar appeared. Pinned `overflow-y:hidden` on both.
+- **Mobile drawer, mweb-first** (owner: "sidebar menu looks too tiny on mweb") — 50px touch targets,
+  16px text, larger section labels, and **collapsible groups with chevrons that auto-expand the
+  active group** — restoring the dropdown chevron that had "disappeared" on mobile vs desktop.
+- **Bus Calculator re-skin** (owner: "has not been redesigned") — it had only received the PageHead +
+  token cascade. Swapped the ⌕/🚌 and School/Staff/With-AC emoji for Lucide (toggles now text-only,
+  matching the seating buttons); gradient summary header → solid ink; multi-colour spec tags →
+  monochrome with length as the one accent; blue-washed chassis card / dropdown / notes / formula →
+  white + hairline + ink top-rule; **₹ and the amount unified into one bordered control** (the ₹ had
+  sat outside a box with the number right-aligned, leaving a gap that read as "uneven"); sticky
+  summary `top` 80→24px.
+- **Lining figures, app-wide** (owner: "the 8 is larger") — Carlito/Calibri default to **old-style
+  numerals**; a canvas measurement confirmed "8" ink-ascent **139px vs 131px** for "0"/"1", so 6 and
+  8 ride tall. Added `font-variant-numeric: lining-nums` on `body` and folded it into the existing
+  `tabular-nums` declarations. Fixes every number in the app.
+- **Full emoji → Lucide sweep** — 37 glyphs across 17 files: empty-state icons, brochure paperclips,
+  Coming-Soon wrench, overdue clock, Filters gear, the **⚠ in every alert box**, ✕ modal-close, and
+  ✓/ℹ toast marks. Residual scan clean — no UI-facing emoji remain.
+- **Validation errors moved to the field** (owner: *"banners are not intuitive. Nobody will scroll
+  up."*) — `errorField` state flags the offending input red (`.error`, strengthened to beat `:focus`)
+  and renders the message inline under it (`.form-error`), clearing as the user types. The top alert
+  banner is **deleted**; save/server failures become toasts. Done on Quotation, then rolled to
+  Proforma, Financier, Login, Profile (AccessRules/Employees part-done; Catalog, ServiceJobs and TIV
+  still pending). `ErrorBoundary` keeps its banner by design — a full-page crash has no field to
+  point at. Also gave "Reset to catalog" `btn-secondary` (a bare `.btn` has no fill/border in the new
+  design and read as plain text).
+- **DECIDED: PDFs keep "Rs.", not ₹.** jsPDF's built-in fonts are WinAnsi-encoded and have no glyph
+  for U+20B9, so the code prints "Rs." deliberately. The only fix is embedding a TTF; the verified
+  path (Arimo — metric-compatible with Helvetica, so the hard-coded mm tax-invoice columns would not
+  shift — subset via `subset-font`, base64 into jsPDF) was prototyped then reverted as not worth
+  blocking the ship. Not a redesign regression: `pdfGenerator.js` is untouched by 9.6.
