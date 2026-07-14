@@ -1769,7 +1769,9 @@ tbody tr:hover td { background: var(--gray-50); }
    the column shrink-wraps the panel and it scrolls away instead of sticking. */
 @media (min-width: 960px) {
   .bc-sum-col { align-self: stretch; }
-  .bc-sum-panel { position: sticky; top: 80px; }
+  /* Sticky only applies here (≥960px, no top bar), so pin near the content top
+     (~28px app-main padding) — 80px left the panel floating below the form. */
+  .bc-sum-panel { position: sticky; top: 24px; }
 }
 .bc-sum-hd {
   background: var(--ink);
