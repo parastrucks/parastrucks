@@ -116,6 +116,7 @@ export default function FinancierCopy() {
   const [saving, setSaving] = useState(false)
   const [savedCount, setSavedCount] = useState(0)
   const [error, setError] = useState('')
+  const [errorField, setErrorField] = useState(null) // which field to flag red on validation
 
   useEffect(() => {
     let cancelled = false
@@ -129,7 +130,7 @@ export default function FinancierCopy() {
           .eq('is_active', true)
           .order('segment').order('sub_category').order('description')
         if (cancelled) return
-        if (err) { setCatalogError(true); return }
+        if (err) { setCatalogError(true); toast.error('Failed to load vehicle catalog.'); return }
         setCatalog(data || [])
         setFuseInst(new Fuse(data || [], {
           keys: [{ name: 'sub_category', weight: 3 }, { name: 'cbn', weight: 2 }, { name: 'description', weight: 1 }],
@@ -137,7 +138,9 @@ export default function FinancierCopy() {
           ignoreLocation: true,
           minMatchCharLength: 2,
         }))
-      } catch { if (!cancelled) setCatalogError(true) }
+      } catch {
+        if (!cancelled) { setCatalogError(true); toast.error('Failed to load vehicle catalog.') }
+      }
       finally { if (!cancelled) setCatalogLoading(false) }
     }
     load()
@@ -158,6 +161,7 @@ export default function FinancierCopy() {
     setModels(prev => [...prev, newModel(vehicle)])
     search.setQuery('')
     search.setShowDropdown(false)
+    setErrorField(f => f === 'search' ? null : f)
   }
 
   function removeModel(modelId) {
@@ -185,6 +189,12 @@ export default function FinancierCopy() {
         ? { ...m, rows: m.rows.map(r => r.id === rowId ? { ...r, [field]: value } : r) }
         : m
     ))
+    // Clear the inline error as soon as the offending field is touched.
+    if (field === 'chassis_no' || field === 'engine_no') {
+      setErrorField(f => f === `ce-${modelId}-${rowId}` ? null : f)
+    } else if (field === 'mrp') {
+      setErrorField(f => f === `mrp-${modelId}-${rowId}` ? null : f)
+    }
   }
 
   function updateModelHsn(modelId, value) {
@@ -208,6 +218,7 @@ export default function FinancierCopy() {
   async function handleSubmit(e) {
     e.preventDefault()
     setError('')
+    setErrorField(null)
     setSavedCount(0)
 
     const focusEl = (el) => {
@@ -218,17 +229,20 @@ export default function FinancierCopy() {
 
     if (!customer.name.trim()) {
       setError('Customer name is required.')
-      focusEl(document.querySelector('input[placeholder="Full name or company name"]'))
+      setErrorField('name')
+      focusEl(document.getElementById('fc-cust-name'))
       return
     }
     if (customer.gstin.trim() && customer.gstin.trim().length !== 15) {
       setError('GSTIN must be exactly 15 characters.')
-      focusEl(document.querySelector('input[placeholder="22AAAAA0000A1Z5"]'))
+      setErrorField('gstin')
+      focusEl(document.getElementById('fc-cust-gstin'))
       return
     }
     if (totalRows === 0) {
       setError('Select at least one vehicle.')
-      focusEl(document.querySelector('input[placeholder*="sub-segment" i], input[placeholder*="model" i]'))
+      setErrorField('search')
+      focusEl(document.getElementById('fc-search'))
       return
     }
 
@@ -236,7 +250,10 @@ export default function FinancierCopy() {
     // derived from the ship-to GSTIN when provided, and falls back to the
     // bill-to state otherwise. Only the GSTIN length rule is enforced.
     if (shipTo.enabled && shipTo.gstin.trim() && shipTo.gstin.trim().length !== 15) {
-      setError('Ship-to GSTIN must be exactly 15 characters.'); return
+      setError('Ship-to GSTIN must be exactly 15 characters.')
+      setErrorField('ship-gstin')
+      focusEl(document.getElementById('fc-ship-gstin'))
+      return
     }
 
     for (let mi = 0; mi < models.length; mi++) {
@@ -244,10 +261,18 @@ export default function FinancierCopy() {
       for (let ri = 0; ri < m.rows.length; ri++) {
         const r = m.rows[ri]
         if (!r.chassis_no.trim() || !r.engine_no.trim()) {
-          setError(`Model ${mi + 1} row ${ri + 1}: Chassis No and Engine No required.`); return
+          setError(`Model ${mi + 1} row ${ri + 1}: Chassis No and Engine No required.`)
+          setErrorField(`ce-${m.id}-${r.id}`)
+          focusEl(document.getElementById(
+            !r.chassis_no.trim() ? `fc-chassis-${m.id}-${r.id}` : `fc-engine-${m.id}-${r.id}`
+          ))
+          return
         }
         if (!(parseInt(r.mrp, 10) > 0)) {
-          setError(`Model ${mi + 1} row ${ri + 1}: MRP must be greater than 0.`); return
+          setError(`Model ${mi + 1} row ${ri + 1}: MRP must be greater than 0.`)
+          setErrorField(`mrp-${m.id}-${r.id}`)
+          focusEl(document.getElementById(`fc-mrp-${m.id}-${r.id}`))
+          return
         }
       }
     }
@@ -403,7 +428,9 @@ export default function FinancierCopy() {
       setValidUntil(endOfMonth())
     } catch (err) {
       console.error(err)
-      setError(err.message || "Failed to generate financier's copies.")
+      // No banner: save failures surface as a toast (validation errors show
+      // inline at the offending field instead).
+      toast.error(err.message || "Failed to generate financier's copies.")
     } finally {
       setSaving(false)
     }
@@ -419,12 +446,6 @@ export default function FinancierCopy() {
         </div>
       </div>
 
-      {error && (
-        <div className="alert alert-error" role="alert">
-          <span><Icon name="alert" size={15} /></span> {error}
-        </div>
-      )}
-
       <form onSubmit={handleSubmit} noValidate>
         <div className="q-layout">
           <div className="q-col-main" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -435,9 +456,10 @@ export default function FinancierCopy() {
               <div className="customer-grid">
                 <div className="form-group span-2" style={{ marginBottom: 0 }}>
                   <label className="form-label" htmlFor="fc-cust-name">Customer Name *</label>
-                  <input id="fc-cust-name" className="form-input" value={customer.name}
-                    onChange={e => setCustomer(c => ({ ...c, name: e.target.value }))}
+                  <input id="fc-cust-name" className={`form-input ${errorField === 'name' ? 'error' : ''}`} value={customer.name}
+                    onChange={e => { setCustomer(c => ({ ...c, name: e.target.value })); setErrorField(f => f === 'name' ? null : f) }}
                     placeholder="Full name or company name" />
+                  {errorField === 'name' && <div className="form-error">{error}</div>}
                 </div>
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label" htmlFor="fc-cust-mobile">Mobile</label>
@@ -447,9 +469,10 @@ export default function FinancierCopy() {
                 </div>
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label" htmlFor="fc-cust-gstin">GSTIN</label>
-                  <input id="fc-cust-gstin" className="form-input" value={customer.gstin}
-                    onChange={e => setCustomer(c => ({ ...c, gstin: e.target.value.toUpperCase() }))}
+                  <input id="fc-cust-gstin" className={`form-input ${errorField === 'gstin' ? 'error' : ''}`} value={customer.gstin}
+                    onChange={e => { setCustomer(c => ({ ...c, gstin: e.target.value.toUpperCase() })); setErrorField(f => f === 'gstin' ? null : f) }}
                     placeholder="22AAAAA0000A1Z5" maxLength={15} />
+                  {errorField === 'gstin' && <div className="form-error">{error}</div>}
                 </div>
                 <div className="form-group span-2" style={{ marginBottom: 0 }}>
                   <label className="form-label" htmlFor="fc-cust-addr">Address</label>
@@ -491,9 +514,10 @@ export default function FinancierCopy() {
                     </div>
                     <div className="form-group" style={{ marginBottom: 0 }}>
                       <label className="form-label" htmlFor="fc-ship-gstin">Ship-to GSTIN</label>
-                      <input id="fc-ship-gstin" className="form-input" value={shipTo.gstin}
-                        onChange={e => setShipTo(s => ({ ...s, gstin: e.target.value.toUpperCase() }))}
+                      <input id="fc-ship-gstin" className={`form-input ${errorField === 'ship-gstin' ? 'error' : ''}`} value={shipTo.gstin}
+                        onChange={e => { setShipTo(s => ({ ...s, gstin: e.target.value.toUpperCase() })); setErrorField(f => f === 'ship-gstin' ? null : f) }}
                         placeholder="22AAAAA0000A1Z5" maxLength={15} />
+                      {errorField === 'ship-gstin' && <div className="form-error">{error}</div>}
                     </div>
                     <div className="form-group" style={{ marginBottom: 0 }}>
                       <label className="form-label" htmlFor="fc-ship-state">Ship-to State</label>
@@ -508,13 +532,14 @@ export default function FinancierCopy() {
 
             {/* Vehicle search */}
             <div className="q-section">
-              <div className="q-section-title">Vehicle Selection</div>
-
-              {catalogError && (
-                <div className="alert alert-error" style={{ marginBottom: 8 }}>
-                  Failed to load vehicle catalog.
-                </div>
-              )}
+              <div className="q-section-title">
+                Vehicle Selection
+                {catalogError && (
+                  <span style={{ marginLeft: 10, fontSize: 13, color: 'var(--red)', fontWeight: 400 }}>
+                    Failed to load vehicle catalog.
+                  </span>
+                )}
+              </div>
 
               <div style={{ display: 'flex', gap: 8 }}>
                 <select className="form-select" value={search.segment}
@@ -523,11 +548,11 @@ export default function FinancierCopy() {
                   {SEGMENTS.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
                 <div style={{ position: 'relative', flex: 1 }} ref={searchRef}>
-                  <input className="form-input"
+                  <input id="fc-search" className={`form-input ${errorField === 'search' ? 'error' : ''}`}
                     placeholder={catalogLoading ? 'Loading catalog…' : 'Search model or sub-segment…'}
                     disabled={catalogLoading || catalogError}
                     value={search.query}
-                    onChange={e => search.setQuery(e.target.value)}
+                    onChange={e => { search.setQuery(e.target.value); setErrorField(f => f === 'search' ? null : f) }}
                     onFocus={() => search.results.length > 0 && search.setShowDropdown(true)}
                     aria-label="Vehicle search" autoComplete="off" />
                   {search.showDropdown && search.results.length > 0 && (
@@ -546,6 +571,7 @@ export default function FinancierCopy() {
                   )}
                 </div>
               </div>
+              {errorField === 'search' && <div className="form-error">{error}</div>}
             </div>
 
             {/* Model chips */}
@@ -589,12 +615,16 @@ export default function FinancierCopy() {
                     <div key={row.id} className="model-chip-row">
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                         <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--gray-400)', width: 20, flexShrink: 0 }}>#{ri + 1}</span>
-                        <input className="form-input" placeholder="Chassis No."
+                        <input id={`fc-chassis-${model.id}-${row.id}`}
+                          className={`form-input ${errorField === `ce-${model.id}-${row.id}` && !row.chassis_no.trim() ? 'error' : ''}`}
+                          placeholder="Chassis No."
                           value={row.chassis_no}
                           onChange={e => updateRow(model.id, row.id, 'chassis_no', e.target.value)}
                           style={{ flex: 1, minWidth: 120 }}
                           aria-label={`Model ${mi + 1} row ${ri + 1} chassis number`} />
-                        <input className="form-input" placeholder="Engine No."
+                        <input id={`fc-engine-${model.id}-${row.id}`}
+                          className={`form-input ${errorField === `ce-${model.id}-${row.id}` && !row.engine_no.trim() ? 'error' : ''}`}
+                          placeholder="Engine No."
                           value={row.engine_no}
                           onChange={e => updateRow(model.id, row.id, 'engine_no', e.target.value)}
                           style={{ flex: 1, minWidth: 120 }}
@@ -606,6 +636,7 @@ export default function FinancierCopy() {
                           <Icon name="x" size={18} />
                         </button>
                       </div>
+                      {errorField === `ce-${model.id}-${row.id}` && <div className="form-error">{error}</div>}
 
                       <div style={{ paddingLeft: 28, marginTop: 8 }}>
                         <textarea className="form-input" rows={3}
@@ -619,9 +650,12 @@ export default function FinancierCopy() {
                       <div className="model-chip-row-prices">
                         <div className="form-group" style={{ marginBottom: 0 }}>
                           <label className="form-label">MRP (₹) *</label>
-                          <input className="form-input" type="number" min="0"
+                          <input id={`fc-mrp-${model.id}-${row.id}`}
+                            className={`form-input ${errorField === `mrp-${model.id}-${row.id}` ? 'error' : ''}`}
+                            type="number" min="0"
                             value={row.mrp}
                             onChange={e => updateRow(model.id, row.id, 'mrp', e.target.value)} />
+                          {errorField === `mrp-${model.id}-${row.id}` && <div className="form-error">{error}</div>}
                         </div>
                         <div className="form-group" style={{ marginBottom: 0 }}>
                           <label className="form-label">RTO Tax (₹)</label>
@@ -692,11 +726,6 @@ export default function FinancierCopy() {
                 {saving && savedCount > 0 && (
                   <div style={{ fontSize: 12, color: 'var(--gray-500)', textAlign: 'center', marginBottom: 8 }}>
                     {savedCount} of {totalRows} generated…
-                  </div>
-                )}
-                {error && (
-                  <div style={{ fontSize: 12, color: 'var(--red)', marginBottom: 8, textAlign: 'center' }}>
-                    {error}
                   </div>
                 )}
                 <button type="submit" className="btn btn-primary" style={{ width: '100%' }}

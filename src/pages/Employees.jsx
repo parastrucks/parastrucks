@@ -77,8 +77,36 @@ export default function Employees() {
   const [selected, setSelected] = useState(null)
   const [form, setForm]         = useState(EMPTY_FORM)
   const { run: runSave, loading: saving, error, setError, clearError } = useAsyncAction()
+  const [errorField, setErrorField] = useState(null) // which field to flag red on validation
   const toast = useToast()
   const trapRef = useFocusTrap(!!modal, closeModal)
+
+  // Server/EF failures never get a banner — they surface as a toast. Validation
+  // errors are rendered inline at the offending field instead.
+  const toastOnError = { onError: e => toast.error(e?.message || 'Something went wrong.') }
+
+  // Map a validation field key → the DOM id of the control to scroll/focus.
+  const FIELD_EL_ID = {
+    full_name: 'emp-name',
+    email: 'emp-email',
+    password: 'emp-pw',
+    entity_id: 'emp-entity',
+    department_id: 'emp-dept',
+    designation_id: 'emp-desig',
+    permission_level: 'emp-tier',
+    primary_outlet_id: 'emp-outlet',
+    subdept_id: 'emp-subdept',
+    brand_ids: 'emp-brands',
+    sales_vertical_ids: 'sales-verticals',
+    'new-pw': 'pw-new',
+    'confirm-pw': 'pw-confirm',
+  }
+  function focusField(field) {
+    const el = document.getElementById(FIELD_EL_ID[field] || '')
+    if (!el) return
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    if (typeof el.focus === 'function') { try { el.focus({ preventScroll: true }) } catch { el.focus() } }
+  }
 
   // Password reset state
   const [newPassword, setNewPassword]         = useState('')
@@ -207,12 +235,14 @@ export default function Employees() {
     // Pre-fill entity for non-admin callers (entity-locked)
     setForm({ ...EMPTY_FORM, entity_id: callerEntityLocked ? caller.entity_id : '' })
     setError('')
+    setErrorField(null)
     setModal('add')
   }
 
   async function openEdit(emp) {
     setSelected(emp)
     setError('')
+    setErrorField(null)
     // Load current join-table rows for this user. RLS allows admin/HR/BO + self.
     const [brandRes, vertRes, outletRes] = await Promise.all([
       supabase.from('user_brands').select('brand_id').eq('user_id', emp.id),
@@ -241,6 +271,7 @@ export default function Employees() {
     setNewPassword('')
     setConfirmPassword('')
     setError('')
+    setErrorField(null)
     setModal('password')
   }
 
@@ -253,6 +284,7 @@ export default function Employees() {
     setModal(null)
     setSelected(null)
     clearError()
+    setErrorField(null)
     setConfirmAction(null)
   }
 
@@ -261,10 +293,12 @@ export default function Employees() {
   // When entity changes, clear outlet + brand selections (both are entity-scoped)
   function onEntityChange(entity_id) {
     setForm(f => ({ ...f, entity_id, primary_outlet_id: '', brand_ids: [], sales_vertical_ids: [] }))
+    setErrorField(f => f === 'entity_id' ? null : f)
   }
 
   // When department changes, clear designation + dept-specific fields.
   function onDepartmentChange(department_id) {
+    setErrorField(f => f === 'department_id' ? null : f)
     setForm(f => ({
       ...f,
       department_id,
@@ -281,6 +315,7 @@ export default function Employees() {
   // default_permission_tier (admin never appears — designation table has no
   // admin rows). The admin can still override manually via the dropdown.
   function onDesignationChange(designation_id) {
+    setErrorField(f => f === 'designation_id' ? null : f)
     setForm(f => {
       const d = designationById[designation_id]
       const next = { ...f, designation_id }
@@ -294,34 +329,36 @@ export default function Employees() {
   }
 
   /* ── form-field validation ──────────────────────────────────────────── */
+  // Returns null when valid, else { message, field } — the message is rendered
+  // inline under `field` and that control is flagged red.
   function validateForm({ requirePassword }) {
-    if (!form.full_name.trim()) return 'Full name is required.'
-    if (!form.email.trim())     return 'Email is required.'
+    if (!form.full_name.trim()) return { message: 'Full name is required.', field: 'full_name' }
+    if (!form.email.trim())     return { message: 'Email is required.', field: 'email' }
     if (requirePassword && form.password.length < 8) {
-      return 'Password must be at least 8 characters.'
+      return { message: 'Password must be at least 8 characters.', field: 'password' }
     }
-    if (!form.entity_id)        return 'Entity is required.'
-    if (!form.department_id)    return 'Department is required.'
-    if (!form.designation_id)   return 'Designation is required.'
+    if (!form.entity_id)        return { message: 'Entity is required.', field: 'entity_id' }
+    if (!form.department_id)    return { message: 'Department is required.', field: 'department_id' }
+    if (!form.designation_id)   return { message: 'Designation is required.', field: 'designation_id' }
     if (!form.permission_level || !PERM_TIERS.includes(form.permission_level)) {
-      return 'Permission level is required.'
+      return { message: 'Permission level is required.', field: 'permission_level' }
     }
 
     const deptCode = deptById[form.department_id]?.code
     if (deptCode === DEPT_SALES && form.brand_ids.length === 0) {
-      return 'Select at least one brand for Sales users.'
+      return { message: 'Select at least one brand for Sales users.', field: 'brand_ids' }
     }
     if (deptCode === DEPT_SALES && form.sales_vertical_ids.length === 0) {
-      return 'Select at least one sales vertical for Sales users.'
+      return { message: 'Select at least one sales vertical for Sales users.', field: 'sales_vertical_ids' }
     }
     if ((deptCode === DEPT_SERVICE || deptCode === DEPT_SPARES) && !form.primary_outlet_id) {
-      return 'Primary outlet is required for Service/Spares users.'
+      return { message: 'Primary outlet is required for Service/Spares users.', field: 'primary_outlet_id' }
     }
     if ((deptCode === DEPT_SERVICE || deptCode === DEPT_SPARES) && form.brand_ids.length === 0) {
-      return 'Select at least one brand for Service/Spares users.'
+      return { message: 'Select at least one brand for Service/Spares users.', field: 'brand_ids' }
     }
     if (deptCode === DEPT_BACK_OFFICE && form.permission_level !== 'gm' && !form.subdept_id) {
-      return 'Sub-department is required for Back Office users.'
+      return { message: 'Sub-department is required for Back Office users.', field: 'subdept_id' }
     }
     return null
   }
@@ -374,22 +411,26 @@ export default function Employees() {
   /* ── CREATE employee ────────────────────────────────────────────────── */
   async function handleCreate(e) {
     e.preventDefault()
+    setError('')
+    setErrorField(null)
     const err = validateForm({ requirePassword: true })
-    if (err) { setError(err); return }
+    if (err) { setError(err.message); setErrorField(err.field); focusField(err.field); return }
 
     await runSave(async () => {
       await callEdge('admin-users', 'create', buildCreatePayload())
       toast.success(`${form.full_name} added successfully.`)
       await fetchEmployees()
       closeModal()
-    }).catch(() => {})
+    }, toastOnError).catch(() => {})
   }
 
   /* ── UPDATE employee ────────────────────────────────────────────────── */
   async function handleUpdate(e) {
     e.preventDefault()
+    setError('')
+    setErrorField(null)
     const err = validateForm({ requirePassword: false })
-    if (err) { setError(err); return }
+    if (err) { setError(err.message); setErrorField(err.field); focusField(err.field); return }
 
     await runSave(async () => {
       await callEdge('admin-users', 'updateProfile', {
@@ -399,14 +440,26 @@ export default function Employees() {
       toast.success('Employee updated.')
       await fetchEmployees()
       closeModal()
-    }).catch(() => {})
+    }, toastOnError).catch(() => {})
   }
 
   /* ── RESET PASSWORD ─────────────────────────────────────────────────── */
   async function handleResetPassword(e) {
     e.preventDefault()
-    if (newPassword.length < 8)          { setError('Password must be at least 8 characters.'); return }
-    if (newPassword !== confirmPassword) { setError('Passwords do not match.'); return }
+    setError('')
+    setErrorField(null)
+    if (newPassword.length < 8) {
+      setError('Password must be at least 8 characters.')
+      setErrorField('new-pw')
+      focusField('new-pw')
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setError('Passwords do not match.')
+      setErrorField('confirm-pw')
+      focusField('confirm-pw')
+      return
+    }
 
     await runSave(async () => {
       await callEdge('admin-users', 'resetPassword', {
@@ -415,7 +468,7 @@ export default function Employees() {
       })
       toast.success(`Password updated for ${selected.full_name}.`)
       closeModal()
-    }).catch(() => {})
+    }, toastOnError).catch(() => {})
   }
 
   /* ── DEACTIVATE / ACTIVATE ──────────────────────────────────────────── */
@@ -427,7 +480,7 @@ export default function Employees() {
       toast.success(`${emp.full_name} ${newStatus ? 'activated' : 'deactivated'}.`)
       await fetchEmployees()
       closeModal()
-    }).catch(() => {})
+    }, toastOnError).catch(() => {})
   }
 
   /* ── DELETE (permanent) ─────────────────────────────────────────────── */
@@ -438,7 +491,7 @@ export default function Employees() {
       toast.success(`${emp.full_name} deleted.`)
       await fetchEmployees()
       closeModal()
-    }).catch(() => {})
+    }, toastOnError).catch(() => {})
   }
 
   /* ══ RENDER ═════════════════════════════════════════════════════════ */
@@ -616,6 +669,8 @@ export default function Employees() {
           form={form}
           setForm={setForm}
           error={error}
+          errorField={errorField}
+          setErrorField={setErrorField}
           saving={saving}
           refEntities={refEntities}
           refDepartments={refDepartments}
@@ -647,17 +702,21 @@ export default function Employees() {
               <button className="modal-close" onClick={closeModal}>×</button>
             </div>
             <div className="modal-body">
-              {error && <div className="alert alert-error"><span><Icon name="alert" size={15} /></span><span>{error}</span></div>}
               <form onSubmit={handleResetPassword} noValidate>
                 <div className="form-group">
                   <label className="form-label" htmlFor="pw-new">New Password</label>
-                  <input id="pw-new" className="form-input" type="password" placeholder="Min. 8 characters"
-                    value={newPassword} onChange={e => setNewPassword(e.target.value)} autoFocus />
+                  <input id="pw-new" className={`form-input ${errorField === 'new-pw' ? 'error' : ''}`} type="password" placeholder="Min. 8 characters"
+                    value={newPassword}
+                    onChange={e => { setNewPassword(e.target.value); setErrorField(f => f === 'new-pw' ? null : f) }}
+                    autoFocus />
+                  {errorField === 'new-pw' && <div className="form-error">{error}</div>}
                 </div>
                 <div className="form-group">
                   <label className="form-label" htmlFor="pw-confirm">Confirm Password</label>
-                  <input id="pw-confirm" className="form-input" type="password" placeholder="Re-enter password"
-                    value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} />
+                  <input id="pw-confirm" className={`form-input ${errorField === 'confirm-pw' ? 'error' : ''}`} type="password" placeholder="Re-enter password"
+                    value={confirmPassword}
+                    onChange={e => { setConfirmPassword(e.target.value); setErrorField(f => f === 'confirm-pw' ? null : f) }} />
+                  {errorField === 'confirm-pw' && <div className="form-error">{error}</div>}
                 </div>
                 <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
                   <button type="submit" className="btn btn-primary" disabled={saving}>
@@ -684,7 +743,6 @@ export default function Employees() {
               <button className="modal-close" onClick={closeModal}>×</button>
             </div>
             <div className="modal-body">
-              {error && <div className="alert alert-error"><span><Icon name="alert" size={15} /></span><span>{error}</span></div>}
               {confirmAction.type === 'deactivate' && (
                 <p style={{ fontSize: 14, color: 'var(--gray-600)', lineHeight: 1.6 }}>
                   Deactivating <strong>{confirmAction.employee.full_name}</strong> will prevent them from logging in.
@@ -742,6 +800,8 @@ function EmployeeFormModal({
   form,
   setForm,
   error,
+  errorField,
+  setErrorField,
   saving,
   refEntities,
   refDepartments,
@@ -765,8 +825,16 @@ function EmployeeFormModal({
   const deptCode = selectedDept?.code
   const F = (field) => ({
     value: form[field],
-    onChange: e => setForm(f => ({ ...f, [field]: e.target.value })),
+    onChange: e => {
+      setForm(f => ({ ...f, [field]: e.target.value }))
+      setErrorField(f => f === field ? null : f)
+    },
   })
+  // Red-border helper + the inline message rendered right under the control.
+  const cls = (base, field) => `${base} ${errorField === field ? 'error' : ''}`
+  const FieldError = ({ field }) => (
+    errorField === field ? <div className="form-error">{error}</div> : null
+  )
 
   const title = mode === 'add' ? 'Add Employee' : `Edit — ${selected?.full_name}`
 
@@ -778,29 +846,31 @@ function EmployeeFormModal({
           <button className="modal-close" onClick={closeModal}>×</button>
         </div>
         <div className="modal-body">
-          {error && <div className="alert alert-error"><span><Icon name="alert" size={15} /></span><span>{error}</span></div>}
           <form onSubmit={onSubmit} noValidate>
             {/* Identity */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
               <div className="form-group">
                 <label className="form-label" htmlFor="emp-name">Full Name *</label>
-                <input id="emp-name" className="form-input" placeholder="Ramesh Kumar" {...F('full_name')} />
+                <input id="emp-name" className={cls('form-input', 'full_name')} placeholder="Ramesh Kumar" {...F('full_name')} />
+                <FieldError field="full_name" />
               </div>
               <div className="form-group">
                 <label className="form-label" htmlFor="emp-email">Email *</label>
                 <input
-                  id="emp-email" className="form-input" type="email"
+                  id="emp-email" className={cls('form-input', 'email')} type="email"
                   placeholder="ramesh@parastrucks.in"
                   value={form.email}
-                  onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+                  onChange={e => { setForm(f => ({ ...f, email: e.target.value })); setErrorField(f => f === 'email' ? null : f) }}
                   disabled={mode === 'edit'}
                   style={mode === 'edit' ? { opacity: 0.6 } : undefined}
                 />
+                <FieldError field="email" />
               </div>
               {mode === 'add' && (
                 <div className="form-group">
                   <label className="form-label" htmlFor="emp-pw">Temporary Password *</label>
-                  <input id="emp-pw" className="form-input" type="password" placeholder="Min. 8 characters" {...F('password')} />
+                  <input id="emp-pw" className={cls('form-input', 'password')} type="password" placeholder="Min. 8 characters" {...F('password')} />
+                  <FieldError field="password" />
                 </div>
               )}
             </div>
@@ -810,7 +880,7 @@ function EmployeeFormModal({
               <div className="form-group">
                 <label className="form-label" htmlFor="emp-entity">Entity *</label>
                 <select
-                  id="emp-entity" className="form-select"
+                  id="emp-entity" className={cls('form-select', 'entity_id')}
                   value={form.entity_id}
                   onChange={e => onEntityChange(e.target.value)}
                   disabled={callerEntityLocked}
@@ -819,6 +889,7 @@ function EmployeeFormModal({
                   <option value="">— Select —</option>
                   {refEntities.map(en => <option key={en.id} value={en.id}>{en.code}</option>)}
                 </select>
+                <FieldError field="entity_id" />
                 {callerEntityLocked && (
                   <div style={{ fontSize: 11, color: 'var(--gray-500)', marginTop: 4 }}>
                     Locked to your entity. Admin can create cross-entity users.
@@ -828,18 +899,19 @@ function EmployeeFormModal({
               <div className="form-group">
                 <label className="form-label" htmlFor="emp-dept">Department *</label>
                 <select
-                  id="emp-dept" className="form-select"
+                  id="emp-dept" className={cls('form-select', 'department_id')}
                   value={form.department_id}
                   onChange={e => onDepartmentChange(e.target.value)}
                 >
                   <option value="">— Select —</option>
                   {refDepartments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                 </select>
+                <FieldError field="department_id" />
               </div>
               <div className="form-group">
                 <label className="form-label" htmlFor="emp-desig">Designation *</label>
                 <select
-                  id="emp-desig" className="form-select"
+                  id="emp-desig" className={cls('form-select', 'designation_id')}
                   value={form.designation_id}
                   onChange={e => onDesignationChange(e.target.value)}
                   disabled={!form.department_id}
@@ -849,12 +921,14 @@ function EmployeeFormModal({
                     <option key={d.id} value={d.id}>{d.name}</option>
                   ))}
                 </select>
+                <FieldError field="designation_id" />
               </div>
               <div className="form-group">
                 <label className="form-label" htmlFor="emp-tier">Permission Level *</label>
-                <select id="emp-tier" className="form-select" {...F('permission_level')}>
+                <select id="emp-tier" className={cls('form-select', 'permission_level')} {...F('permission_level')}>
                   {PERM_TIERS.map(t => <option key={t} value={t}>{PERM_LABEL[t]}</option>)}
                 </select>
+                <FieldError field="permission_level" />
                 <div style={{ fontSize: 11, color: 'var(--gray-500)', marginTop: 4 }}>
                   Auto-filled from designation. Admin tier never offered.
                 </div>
@@ -865,32 +939,40 @@ function EmployeeFormModal({
             {deptCode === 'sales' && (
               <DeptSection title="Sales details">
                 <MultiCheckbox
-                  id="sales-brands"
+                  id="emp-brands"
                   label="Brands *"
                   items={refBrands}
                   selected={form.brand_ids}
-                  onToggle={id => setForm(f => {
-                    const nextBrands = toggleId(f.brand_ids, id)
-                    // Prune any selected verticals whose brand is no longer checked.
-                    // Uses the full sales_verticals list so we compare against
-                    // ground truth, not the currently-rendered subset.
-                    const nextVerts = f.sales_vertical_ids.filter(vId => {
-                      const row = refSalesVert.find(v => v.id === vId)
-                      return row && nextBrands.includes(row.brand_id)
+                  onToggle={id => {
+                    setErrorField(f => f === 'brand_ids' ? null : f)
+                    setForm(f => {
+                      const nextBrands = toggleId(f.brand_ids, id)
+                      // Prune any selected verticals whose brand is no longer checked.
+                      // Uses the full sales_verticals list so we compare against
+                      // ground truth, not the currently-rendered subset.
+                      const nextVerts = f.sales_vertical_ids.filter(vId => {
+                        const row = refSalesVert.find(v => v.id === vId)
+                        return row && nextBrands.includes(row.brand_id)
+                      })
+                      return { ...f, brand_ids: nextBrands, sales_vertical_ids: nextVerts }
                     })
-                    return { ...f, brand_ids: nextBrands, sales_vertical_ids: nextVerts }
-                  })}
+                  }}
                   labelKey="name"
                   badgeKey="code"
+                  error={errorField === 'brand_ids' ? error : null}
                 />
                 <MultiCheckbox
                   id="sales-verticals"
                   label="Sales verticals *"
                   items={verticalsForBrands}
                   selected={form.sales_vertical_ids}
-                  onToggle={id => setForm(f => ({ ...f, sales_vertical_ids: toggleId(f.sales_vertical_ids, id) }))}
+                  onToggle={id => {
+                    setErrorField(f => f === 'sales_vertical_ids' ? null : f)
+                    setForm(f => ({ ...f, sales_vertical_ids: toggleId(f.sales_vertical_ids, id) }))
+                  }}
                   labelKey="name"
                   emptyHint={form.brand_ids.length === 0 ? 'Select one or more brands first.' : null}
+                  error={errorField === 'sales_vertical_ids' ? error : null}
                 />
               </DeptSection>
             )}
@@ -900,9 +982,12 @@ function EmployeeFormModal({
                 <div className="form-group">
                   <label className="form-label" htmlFor="emp-outlet">Primary outlet *</label>
                   <select
-                    id="emp-outlet" className="form-select"
+                    id="emp-outlet" className={cls('form-select', 'primary_outlet_id')}
                     value={form.primary_outlet_id}
-                    onChange={e => setForm(f => ({ ...f, primary_outlet_id: e.target.value }))}
+                    onChange={e => {
+                      setForm(f => ({ ...f, primary_outlet_id: e.target.value }))
+                      setErrorField(f => f === 'primary_outlet_id' ? null : f)
+                    }}
                     disabled={!form.entity_id}
                   >
                     <option value="">— Select —</option>
@@ -910,15 +995,20 @@ function EmployeeFormModal({
                       <option key={o.id} value={o.id}>{o.city} ({o.facility_type})</option>
                     ))}
                   </select>
+                  <FieldError field="primary_outlet_id" />
                 </div>
                 <MultiCheckbox
-                  id="svc-brands"
+                  id="emp-brands"
                   label="Brands *"
                   items={refBrands}
                   selected={form.brand_ids}
-                  onToggle={id => setForm(f => ({ ...f, brand_ids: toggleId(f.brand_ids, id) }))}
+                  onToggle={id => {
+                    setErrorField(f => f === 'brand_ids' ? null : f)
+                    setForm(f => ({ ...f, brand_ids: toggleId(f.brand_ids, id) }))
+                  }}
                   labelKey="name"
                   badgeKey="code"
+                  error={errorField === 'brand_ids' ? error : null}
                 />
               </DeptSection>
             )}
@@ -929,17 +1019,21 @@ function EmployeeFormModal({
                   <div className="form-group">
                     <label className="form-label" htmlFor="emp-subdept">Sub-department *</label>
                     <select
-                      id="emp-subdept" className="form-select"
+                      id="emp-subdept" className={cls('form-select', 'subdept_id')}
                       value={form.subdept_id}
-                      onChange={e => setForm(f => ({ ...f, subdept_id: e.target.value }))}
+                      onChange={e => {
+                        setForm(f => ({ ...f, subdept_id: e.target.value }))
+                        setErrorField(f => f === 'subdept_id' ? null : f)
+                      }}
                     >
                       <option value="">— Select —</option>
                       {refSubdepts.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                     </select>
+                    <FieldError field="subdept_id" />
                   </div>
                 )}
                 <MultiCheckbox
-                  id="bo-brands"
+                  id="emp-brands"
                   label="Brands (for quotation log scope)"
                   items={refBrands}
                   selected={form.brand_ids}
@@ -989,7 +1083,7 @@ function DeptSection({ title, children }) {
 }
 
 /* Reusable multi-checkbox group — used for brands and sales verticals. */
-function MultiCheckbox({ id, label, items, selected, onToggle, labelKey = 'name', badgeKey, emptyHint }) {
+function MultiCheckbox({ id, label, items, selected, onToggle, labelKey = 'name', badgeKey, emptyHint, error }) {
   return (
     <div className="form-group">
       <label className="form-label" htmlFor={id}>{label}</label>
@@ -1024,6 +1118,7 @@ function MultiCheckbox({ id, label, items, selected, onToggle, labelKey = 'name'
           )
         })}
       </div>
+      {error && <div className="form-error">{error}</div>}
     </div>
   )
 }

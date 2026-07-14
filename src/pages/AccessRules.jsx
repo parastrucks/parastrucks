@@ -34,6 +34,7 @@ function RulesTab({ refreshAccessRules }) {
   const [showAdd, setShowAdd]       = useState(false)
   const [deleting, setDeleting]     = useState(null)
   const [error, setError]           = useState('')
+  const [errorField, setErrorField] = useState(null) // which field to flag red on validation
   const [refEntities, setRefEntities]   = useState([])
   const [refDepartments, setRefDepartments] = useState([])
   const [refDesignations, setRefDesignations] = useState([])
@@ -74,12 +75,20 @@ function RulesTab({ refreshAccessRules }) {
     [refDesignations, form.department_id],
   )
 
+  const focusEl = (id) => {
+    const el = document.getElementById(id)
+    if (!el) return
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    if (typeof el.focus === 'function') { try { el.focus({ preventScroll: true }) } catch { el.focus() } }
+  }
+
   async function handleAdd(e) {
     e.preventDefault()
     setError('')
-    if (!form.route)         { setError('Route is required.'); return }
-    if (!form.entity_id)     { setError('Entity is required.'); return }
-    if (!form.department_id) { setError('Department is required.'); return }
+    setErrorField(null)
+    if (!form.route)         { setError('Route is required.');      setErrorField('route');         focusEl('ar-route');      return }
+    if (!form.entity_id)     { setError('Entity is required.');     setErrorField('entity_id');     focusEl('ar-entity');     return }
+    if (!form.department_id) { setError('Department is required.'); setErrorField('department_id'); focusEl('ar-department'); return }
 
     try {
       await callEdge('admin-access-rules', 'createRule', {
@@ -94,7 +103,8 @@ function RulesTab({ refreshAccessRules }) {
       await loadAll()
       await refreshAccessRules()
     } catch (err) {
-      setError(err.message)
+      // No banner: the create failed server-side — surface it as a toast.
+      toast.error(err.message || 'Failed to add rule.')
     }
   }
 
@@ -113,7 +123,10 @@ function RulesTab({ refreshAccessRules }) {
 
   const F = field => ({
     value: form[field],
-    onChange: e => setForm(f => ({ ...f, [field]: e.target.value })),
+    onChange: e => {
+      setForm(f => ({ ...f, [field]: e.target.value }))
+      setErrorField(f => f === field ? null : f)
+    },
   })
 
   return (
@@ -122,12 +135,10 @@ function RulesTab({ refreshAccessRules }) {
         <p className="ar-section-desc" style={{ margin: 0 }}>
           Each rule grants route access to users matching all 3 required axes (permission level × entity × department). Designation is optional — NULL means "any designation in this department". Admin bypasses every rule.
         </p>
-        <button className="btn btn-primary btn-sm" onClick={() => { setShowAdd(true); setError('') }}>
+        <button className="btn btn-primary btn-sm" onClick={() => { setShowAdd(true); setError(''); setErrorField(null) }}>
           + Add Rule
         </button>
       </div>
-
-      {error && <div className="alert alert-error" style={{ marginBottom: 16 }}><span><Icon name="alert" size={15} /></span><span>{error}</span></div>}
 
       {showAdd && (
         <div className="ar-add-form">
@@ -136,10 +147,11 @@ function RulesTab({ refreshAccessRules }) {
             <div className="ar-form-grid">
               <div className="form-group">
                 <label className="form-label" htmlFor="ar-route">Route *</label>
-                <select id="ar-route" className="form-select" {...F('route')}>
+                <select id="ar-route" className={`form-select ${errorField === 'route' ? 'error' : ''}`} {...F('route')}>
                   <option value="">— Select route —</option>
                   {ALL_ROUTES.map(r => <option key={r.route} value={r.route}>{r.label} ({r.route})</option>)}
                 </select>
+                {errorField === 'route' && <div className="form-error">{error}</div>}
               </div>
               <div className="form-group">
                 <label className="form-label" htmlFor="ar-level">Permission Level *</label>
@@ -149,19 +161,24 @@ function RulesTab({ refreshAccessRules }) {
               </div>
               <div className="form-group">
                 <label className="form-label" htmlFor="ar-entity">Entity *</label>
-                <select id="ar-entity" className="form-select" {...F('entity_id')}>
+                <select id="ar-entity" className={`form-select ${errorField === 'entity_id' ? 'error' : ''}`} {...F('entity_id')}>
                   <option value="">— Select —</option>
                   {refEntities.map(e => <option key={e.id} value={e.id}>{e.code}</option>)}
                 </select>
+                {errorField === 'entity_id' && <div className="form-error">{error}</div>}
               </div>
               <div className="form-group">
                 <label className="form-label" htmlFor="ar-department">Department *</label>
-                <select id="ar-department" className="form-select"
+                <select id="ar-department" className={`form-select ${errorField === 'department_id' ? 'error' : ''}`}
                   value={form.department_id}
-                  onChange={e => setForm(f => ({ ...f, department_id: e.target.value, designation_id: '' }))}>
+                  onChange={e => {
+                    setForm(f => ({ ...f, department_id: e.target.value, designation_id: '' }))
+                    setErrorField(f => f === 'department_id' ? null : f)
+                  }}>
                   <option value="">— Select —</option>
                   {refDepartments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                 </select>
+                {errorField === 'department_id' && <div className="form-error">{error}</div>}
               </div>
               <div className="form-group">
                 <label className="form-label" htmlFor="ar-designation">Designation</label>
@@ -339,25 +356,25 @@ function GMPicker({ entity_id, field, current, options, onSave, saving }) {
    TAB 3 — CONFIGURATION (Brands / Roles / Locations / Departments)
 ══════════════════════════════════════════════════════════════ */
 function RefTable({ title, items, onAdd, onToggle, addPlaceholder, nameKey = 'name', labelKey = null, extraFields = null }) {
+  const toast = useToast()
   const [newName,  setNewName]  = useState('')
   const [newLabel, setNewLabel] = useState('')
   const [saving,   setSaving]   = useState(false)
-  const [error,    setError]    = useState('')
 
   async function handleAdd(e) {
     e.preventDefault()
     if (!newName.trim()) return
-    setSaving(true); setError('')
+    setSaving(true)
     const err = await onAdd(newName.trim(), newLabel.trim())
     setSaving(false)
-    if (err) { setError(err); return }
+    // Add failures are server-side (or a missing display name) — toast, no banner.
+    if (err) { toast.error(err); return }
     setNewName(''); setNewLabel('')
   }
 
   return (
     <div className="ar-ref-table">
       <h3 className="ar-ref-title">{title}</h3>
-      {error && <div className="alert alert-error" style={{ marginBottom: 10, padding: '6px 10px' }}><span><Icon name="alert" size={15} /></span><span style={{ fontSize: 12 }}>{error}</span></div>}
       <div className="table-wrap" style={{ marginBottom: 12 }}>
         <table>
           <thead>
@@ -510,12 +527,14 @@ function ConfigTab() {
 const OU_EMPTY = { brand: '', location: '', entity_code: '', full_name: '', address: '', gstin: '', bank_account: '', bank_name: '', bank_ifsc: '' }
 
 function OperatingUnits({ brands, locations }) {
+  const toast = useToast()
   const [units,   setUnits]   = useState([])
   const [loading, setLoading] = useState(true)
   const [modal,   setModal]   = useState(null)
   const [form,    setForm]    = useState(OU_EMPTY)
   const [saving,  setSaving]  = useState(false)
   const [error,   setError]   = useState('')
+  const [errorField, setErrorField] = useState(null) // which field to flag red on validation
   const trapRef = useFocusTrap(!!modal, closeModal)
 
   const load = useCallback(async () => {
@@ -527,19 +546,37 @@ function OperatingUnits({ brands, locations }) {
 
   useEffect(() => { load() }, [load])
 
-  function openAdd() { setForm(OU_EMPTY); setError(''); setModal('add') }
+  function openAdd() { setForm(OU_EMPTY); setError(''); setErrorField(null); setModal('add') }
   function openEdit(ou) {
     setForm({ brand: ou.brand, location: ou.location, entity_code: ou.entity_code || '', full_name: ou.full_name || '', address: ou.address || '', gstin: ou.gstin || '', bank_account: ou.bank_account || '', bank_name: ou.bank_name || '', bank_ifsc: ou.bank_ifsc || '' })
-    setError(''); setModal('edit')
+    setError(''); setErrorField(null); setModal('edit')
   }
-  function closeModal() { setModal(null); setError('') }
+  function closeModal() { setModal(null); setError(''); setErrorField(null) }
 
-  const F = field => ({ value: form[field], onChange: e => setForm(f => ({ ...f, [field]: e.target.value })) })
+  const F = field => ({
+    value: form[field],
+    onChange: e => {
+      setForm(f => ({ ...f, [field]: e.target.value }))
+      setErrorField(f => f === field ? null : f)
+    },
+  })
 
   async function handleSave(e) {
     e.preventDefault()
-    if (!form.brand || !form.location) { setError('Brand and Location are required.'); return }
-    setSaving(true); setError('')
+    setError('')
+    setErrorField(null)
+    if (!form.brand || !form.location) {
+      setError('Brand and Location are required.')
+      const field = !form.brand ? 'brand' : 'location'
+      setErrorField(field)
+      const el = document.getElementById(field === 'brand' ? 'ou-brand' : 'ou-location')
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        try { el.focus({ preventScroll: true }) } catch { el.focus() }
+      }
+      return
+    }
+    setSaving(true)
     const payload = {
       brand:        form.brand,
       location:     form.location,

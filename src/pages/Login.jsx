@@ -132,17 +132,6 @@ export default function Login() {
         <h1 className="login-title">Team Portal</h1>
         <p className="login-subtitle">Sign in to continue</p>
 
-        {error && (
-          <div className="alert alert-error">
-            <span><Icon name="alert" size={15} /></span>
-            <span>
-              {locked
-                ? `Too many failed attempts. Try again in ${remainingMin}:${String(remainingSec).padStart(2,'0')}.`
-                : error}
-            </span>
-          </div>
-        )}
-
         <form onSubmit={handleSubmit} noValidate>
           <div className="form-group">
             <label className="form-label" htmlFor="email">Email</label>
@@ -187,6 +176,15 @@ export default function Login() {
                 <Icon name={showPw ? 'eye-off' : 'eye'} size={18} color="currentColor" />
               </button>
             </div>
+            {/* The credential/lockout message lives at the field, not in a
+                banner above the card — nobody scrolls back up to read it. */}
+            {error && (
+              <div className="form-error">
+                {locked
+                  ? `Too many failed attempts. Try again in ${remainingMin}:${String(remainingSec).padStart(2, '0')}.`
+                  : error}
+              </div>
+            )}
           </div>
 
           <div className="form-group remember-row">
