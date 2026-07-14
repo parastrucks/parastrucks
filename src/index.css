@@ -479,7 +479,16 @@ img { max-width: 100%; display: block; }
   background: var(--white);
 }
 .form-input::placeholder { color: var(--gray-300); }
-.form-input.error { border-color: var(--red); }
+/* Error state must beat .form-input:focus (same specificity) — include :focus
+   and add a red ring so an invalid field reads clearly red even while focused. */
+.form-input.error,
+.form-input.error:focus,
+.form-select.error,
+.form-select.error:focus {
+  border-color: var(--red);
+  box-shadow: 0 0 0 3px rgba(180, 35, 24, .18);
+  background: var(--white);
+}
 .form-error {
   font-size: 12px;
   color: var(--red);

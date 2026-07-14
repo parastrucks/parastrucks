@@ -91,6 +91,7 @@ export default function Quotation() {
   // UI state
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [errorField, setErrorField] = useState(null) // which field to flag red on validation
   const toast = useToast()
 
   // Load catalog on mount
@@ -253,6 +254,7 @@ export default function Quotation() {
   async function handleSubmit(e) {
     e.preventDefault()
     setError('')
+    setErrorField(null)
 
     const focusEl = (el) => {
       if (!el) return
@@ -262,22 +264,26 @@ export default function Quotation() {
 
     if (!customer.name.trim()) {
       setError('Customer name is required.')
-      focusEl(document.querySelector('input[placeholder="Full name or company name"]'))
+      setErrorField('name')
+      focusEl(document.getElementById('q-cust-name'))
       return
     }
     if (customer.gstin.trim() && customer.gstin.trim().length !== 15) {
       setError('GSTIN must be exactly 15 characters.')
-      focusEl(document.querySelector('input[placeholder="22AAAAA0000A1Z5"]'))
+      setErrorField('gstin')
+      focusEl(document.getElementById('q-cust-gstin'))
       return
     }
     if (lineItems.length === 0) {
       setError('Add at least one vehicle.')
+      setErrorField('search')
       focusEl(searchRef.current?.querySelector('input') || searchRef.current)
       return
     }
     const emptyDescIdx = lineItems.findIndex(li => !String(li.description || '').trim())
     if (emptyDescIdx !== -1) {
       setError(`Vehicle #${emptyDescIdx + 1} description cannot be empty.`)
+      setErrorField(`desc-${emptyDescIdx}`)
       const card = document.querySelectorAll('.line-item-card')[emptyDescIdx]
       focusEl(card?.querySelector('textarea, input') || card)
       return
@@ -408,7 +414,9 @@ export default function Quotation() {
       setValidUntil(endOfMonth())
     } catch (err) {
       console.error(err)
-      setError(err.message || 'Failed to save quotation.')
+      // No banner: save failures surface as a toast (validation errors show
+      // inline at the offending field instead).
+      toast.error(err.message || 'Failed to save quotation.')
     } finally {
       setSaving(false)
     }
@@ -424,12 +432,6 @@ export default function Quotation() {
         </div>
       </div>
 
-      {error && (
-        <div className="alert alert-error" role="alert">
-          <span><Icon name="alert" size={15} /></span> {error}
-        </div>
-      )}
-
       <form onSubmit={handleSubmit} noValidate>
         <div className="q-layout">
           {/* ── LEFT COLUMN ─────────────────────────────────────── */}
@@ -443,11 +445,12 @@ export default function Quotation() {
                   <label className="form-label" htmlFor="q-cust-name">Customer Name *</label>
                   <input
                     id="q-cust-name"
-                    className="form-input"
+                    className={`form-input ${errorField === 'name' ? 'error' : ''}`}
                     value={customer.name}
-                    onChange={e => setCustomer(c => ({ ...c, name: e.target.value }))}
+                    onChange={e => { setCustomer(c => ({ ...c, name: e.target.value })); setErrorField(f => f === 'name' ? null : f) }}
                     placeholder="Full name or company name"
                   />
+                  {errorField === 'name' && <div className="form-error">{error}</div>}
                 </div>
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label" htmlFor="q-cust-mobile">Mobile</label>
@@ -464,12 +467,13 @@ export default function Quotation() {
                   <label className="form-label" htmlFor="q-cust-gstin">GSTIN</label>
                   <input
                     id="q-cust-gstin"
-                    className="form-input"
+                    className={`form-input ${errorField === 'gstin' ? 'error' : ''}`}
                     value={customer.gstin}
-                    onChange={e => setCustomer(c => ({ ...c, gstin: e.target.value.toUpperCase() }))}
+                    onChange={e => { setCustomer(c => ({ ...c, gstin: e.target.value.toUpperCase() })); setErrorField(f => f === 'gstin' ? null : f) }}
                     placeholder="22AAAAA0000A1Z5"
                     maxLength={15}
                   />
+                  {errorField === 'gstin' && <div className="form-error">{error}</div>}
                 </div>
                 <div className="form-group span-2" style={{ marginBottom: 0 }}>
                   <label className="form-label" htmlFor="q-cust-addr">Address</label>
@@ -542,7 +546,7 @@ export default function Quotation() {
                     ))}
                   </select>
                   <input
-                    className="form-input"
+                    className={`form-input ${errorField === 'search' ? 'error' : ''}`}
                     value={query}
                     onChange={handleQueryChange}
                     onFocus={() => results.length > 0 && setShowDropdown(true)}
@@ -551,6 +555,7 @@ export default function Quotation() {
                     autoComplete="off"
                   />
                 </div>
+                {errorField === 'search' && <div className="form-error">{error}</div>}
 
                 {showDropdown && (
                   <div className="search-dropdown">
@@ -594,11 +599,11 @@ export default function Quotation() {
                           <div className="li-card-name">
                             {canEditDescription ? (
                               <textarea
-                                className="form-input"
+                                className={`form-input ${errorField === `desc-${idx}` ? 'error' : ''}`}
                                 value={item.description || ''}
                                 rows={4}
                                 placeholder="Edit description for this quotation only…"
-                                onChange={e => updateItem(idx, 'description', e.target.value)}
+                                onChange={e => { updateItem(idx, 'description', e.target.value); setErrorField(f => f === `desc-${idx}` ? null : f) }}
                                 onInput={e => {
                                   e.currentTarget.style.height = 'auto'
                                   e.currentTarget.style.height = e.currentTarget.scrollHeight + 'px'
@@ -616,6 +621,7 @@ export default function Quotation() {
                             ) : (
                               <strong>{item.description}</strong>
                             )}
+                            {errorField === `desc-${idx}` && <div className="form-error">{error}</div>}
                             <span className="li-card-cbn">
                               {item.cbn}{item.tyres ? ` · ${item.tyres}` : ''}
                             </span>
@@ -624,7 +630,7 @@ export default function Quotation() {
                                 <span className="badge badge-amber">edited</span>
                                 <button
                                   type="button"
-                                  className="btn btn-sm"
+                                  className="btn btn-sm btn-secondary"
                                   onClick={() => resetDescription(idx)}
                                   title="Revert to the current catalog description"
                                 >
