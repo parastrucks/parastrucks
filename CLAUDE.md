@@ -35,10 +35,12 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   changes (Service/Spares require Brands; bus-calc sticky fix; gitignore `.env*`). CI + Vercel green.
 - **Built, NOT yet live — Phase 9.6 visual redesign** (Paras Group print-report language: paper/ink/
   hairline/one-blue-accent, Carlito, Lucide; 4-section sidebar; new mobile shell; PageHead; mobile
-  card tables). Branch **`9.6-portal-redesign`** (off `origin/portal`, **40 commits, all pushed**,
-  builds green). **Owner step-by-step localhost review IN PROGRESS (2026-07-14)** — resume by
-  finishing the banner→inline-field-error sweep (Catalog / ServiceJobs / TIV still pending); detail
-  in `memory/phase96_portal_redesign.md`. Previously:
+  card tables). Branch **`9.6-portal-redesign`** (off `origin/portal`, **43 commits, all pushed**,
+  builds green). **Owner step-by-step localhost review IN PROGRESS (2026-07-14)** — the
+  banner→inline-field-error sweep is **COMPLETE** (errors now show at the red field; only
+  `ErrorBoundary` keeps a banner). Resume by asking the owner for the next screen; still unchecked:
+  ERP gating as `svc.mgr`, list/log pages, Employees, Access Rules, TIV, Vendor Jobs, Profile, and
+  the 760px boundary. Detail in `memory/phase96_portal_redesign.md`. Previously:
   smoke-tested on staging + **red-teamed twice** (round 1 = 3 agents, round 2 = 4 Fable-5 agents; both
   ship-safe, all findings fixed) + **full local staging walkthrough passed** (mobile shell live: M3
   auto-expand, L2 focus-trap, drawer close-on-back, body scroll-lock, `?new=1` incl. already-on-page,
