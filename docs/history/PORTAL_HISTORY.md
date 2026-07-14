@@ -1492,3 +1492,18 @@ standing preference). Branch → **40 commits, all pushed**, build green. Fixes:
   path (Arimo — metric-compatible with Helvetica, so the hard-coded mm tax-invoice columns would not
   shift — subset via `subset-font`, base64 into jsPDF) was prototyped then reverted as not worth
   blocking the ship. Not a redesign regression: `pdfGenerator.js` is untouched by 9.6.
+
+**Banner sweep COMPLETE (2026-07-14, branch at 43 commits).** Every top-of-page/top-of-modal error
+banner in the app is gone; the only one left is `ErrorBoundary` (a full-page crash screen — there is
+no field to point at). **Inline-at-field** (offending input turns red, message renders directly
+beneath it, clears as the user types) for genuine field validation: Quotation, ProformaInvoice,
+FinancierCopy, Login (message under the password, both fields red on a credential failure), Profile,
+AccessRules, Employees, and Catalog's SubSegmentModal (Name / Segment). **Toast** for everything with
+no field to point at: Catalog ImportTab (header-row / CBN / MRP / brand / parse failures), Catalog
+brochure-file errors (these had *also* been feeding the banner and would otherwise have been silently
+dropped), ServiceJobs (load / create-job / action failures), TIV UploadPanel (size / not-xlsx / parse
+/ read / upload) and TivForecastPage (load). Verified: build green; `grep -rln "alert alert-error"
+src` returns ErrorBoundary only; zero orphaned `setError`/`parseError`; no error message lost.
+*Gotcha:* `ServiceJobs.jsx` already had a local success-pill state literally named `toast`
+(`.sj-toast`), so it was renamed to `pageToast` to free the name for `useToast()` — pill behaviour
+unchanged.
