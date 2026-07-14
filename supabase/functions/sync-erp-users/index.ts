@@ -6,8 +6,10 @@
 // Scope (owner decision): entity = PT (Paras Trucks Haryana), linked to the
 // HD Hyundai brand, department in {service, spares, accounts}.
 // Mapping:  permission_level → ERP tier (executive→executor); department → ERP
-//           function; a matching PT outlet → ERP branch (Hisar/Karnal/Rohtak/
-//           Charkhi Dadri). Role ownership is HYBRID: seeded from the portal,
+//           function; the user's PT outlet → ERP branch (Hisar/Karnal/Rohtak/
+//           Charkhi Dadri/Sirsa). The outlet is read from users.primary_outlet_id
+//           (the portal's compulsory field) with the legacy user_outlets join as a
+//           fallback. Role ownership is HYBRID: seeded from the portal,
 //           but the ERP sync leaves tier/func/branch alone once role_overridden.
 // Identity (email/name) and is_active always flow from the portal.
 //
@@ -65,6 +67,7 @@ Deno.serve(async (req: Request) => {
                ent:entities!entity_id!inner(code),
                dept:departments!department_id!inner(code),
                user_brands!inner(brands!inner(code)),
+               primary_outlet:outlets!primary_outlet_id(city),
                user_outlets(outlets(city))`)
       .eq("ent.code", "PT")
       .in("dept.code", ERP_FUNCS)
@@ -92,12 +95,25 @@ Deno.serve(async (req: Request) => {
       const tier = TIER[r.permission_level as string]
       const func = (r.dept as { code: string }).code
       if (!tier || !ERP_FUNCS.includes(func)) { skipped.push({ email, reason: `unmappable tier/func (${r.permission_level}/${func})` }); continue }
-      // branch: gm/admin ride all branches (null); manager/executor need a mapped outlet
+      // branch: gm/admin ride ALL branches (branch_id stays null — they are never
+      // pinned to one, even though they do have a home outlet in the portal);
+      // manager/executor MUST resolve to a mapped outlet or they are skipped.
+      //
+      // The outlet comes from users.primary_outlet_id — the portal employee form's
+      // COMPULSORY field. The legacy user_outlets join table is effectively never
+      // written (it held exactly ONE hand-inserted row in prod, which is what masked
+      // this bug and left 14 of 16 users unprovisioned). primary_outlet FIRST,
+      // user_outlets kept only as a fallback.
       let branch_code: string | null = null
-      const cities = (r.user_outlets ?? []).map((uo: { outlets?: { city?: string } }) => uo.outlets?.city).filter(Boolean) as string[]
-      for (const c of cities) { const code = cityToBranch(c); if (code) { branch_code = code; break } }
-      if (tier !== "gm" && tier !== "admin" && !branch_code) {
-        skipped.push({ email, reason: `no ERP-branch outlet for ${tier} (outlets: ${cities.join(", ") || "none"})` }); continue
+      if (tier !== "gm" && tier !== "admin") {
+        const cities = [
+          (r.primary_outlet as { city?: string } | null)?.city,
+          ...(r.user_outlets ?? []).map((uo: { outlets?: { city?: string } }) => uo.outlets?.city),
+        ].filter(Boolean) as string[]
+        for (const c of cities) { const code = cityToBranch(c); if (code) { branch_code = code; break } }
+        if (!branch_code) {
+          skipped.push({ email, reason: `no ERP-branch outlet for ${tier} (outlets: ${cities.join(", ") || "none"})` }); continue
+        }
       }
       mapped.push({ portal_id: r.id, email, full_name: r.full_name ?? email, is_active: r.is_active, tier, func, branch_code })
     }
