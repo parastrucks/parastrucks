@@ -986,11 +986,18 @@ function NewJobForm({ form, setForm, vendors, canManage, onReloadVendors, onSubm
   const [vendorName, setVendorName] = useState('')
   const [vendorOem, setVendorOem] = useState('')
   const [vendorErr, setVendorErr] = useState('')
+  const [errorField, setErrorField] = useState(null)
+  const [error, setError] = useState('')
   const aw = form.job_type === 'ancillary' && form.repair_type === 'warranty'
   // Ancillary work goes to an authorized OEM dealer (has an OEM); outside work goes
   // to a general (non-authorized) vendor. The vendor list + add-form follow this.
   const isAncillary = form.job_type === 'ancillary'
-  const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }))
+  const set = (k) => (e) => {
+    setForm(f => ({ ...f, [k]: e.target.value }))
+    setErrorField(f => (f === k ? null : f))
+  }
+  const err = (k) => (errorField === k ? ' error' : '')
+  const msg = (k) => (errorField === k ? <div className="form-error">{error}</div> : null)
 
   async function addVendor() {
     if (!vendorName.trim()) return
@@ -1008,6 +1015,40 @@ function NewJobForm({ form, setForm, vendors, canManage, onReloadVendors, onSubm
     } catch (e) { setVendorErr(e.message || 'Failed to add vendor') }
   }
 
+  // Validate in JS, not with the HTML `required` attribute — the browser's native
+  // bubble ("Please select an item in the list.") is off-design. Errors show at the
+  // offending field, matching the rest of the app.
+  function validate(e) {
+    e.preventDefault()
+    setError(''); setErrorField(null)
+    const fail = (key, message, id) => {
+      setError(message); setErrorField(key)
+      const el = document.getElementById(id)
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        try { el.focus({ preventScroll: true }) } catch { el.focus() }
+      }
+      return false
+    }
+    if (!form.vehicle_registration_no.trim())
+      return fail('vehicle_registration_no', 'Vehicle registration no is required.', 'sj-reg')
+    if (!form.customer_name.trim())
+      return fail('customer_name', 'Customer name is required.', 'sj-cust')
+    if (!form.vendor_id)
+      return fail('vendor_id', `Select ${isAncillary ? 'an authorized dealer' : 'a vendor'}.`, 'sj-vendor')
+    if (!form.material_out_date)
+      return fail('material_out_date', 'Material out date is required.', 'sj-mout')
+    if (aw) {
+      for (const key of reqLetter) {
+        if (!String(form[key] || '').trim()) {
+          const label = (LETTER_FIELDS.find(f => f[0] === key) || [, key])[1]
+          return fail(key, `${label} is required.`, `sj-lf-${key}`)
+        }
+      }
+    }
+    onSubmit(e)
+  }
+
   const pick = (k, v) => setForm(f => ({ ...f, [k]: v }))
   // Switching job type swaps the eligible vendor pool (authorized vs general),
   // so any previously-picked vendor no longer applies — clear it.
@@ -1016,7 +1057,7 @@ function NewJobForm({ form, setForm, vendors, canManage, onReloadVendors, onSubm
   const eligibleVendors = vendors.filter(v => v.is_active && !!v.is_authorized === isAncillary)
 
   return (
-    <form onSubmit={onSubmit} className="sj-form">
+    <form onSubmit={validate} className="sj-form" noValidate>
       {/* 1 — Classification */}
       <div className="sj-section">
         <div className="sj-section-title">Job classification</div>
@@ -1051,17 +1092,19 @@ function NewJobForm({ form, setForm, vendors, canManage, onReloadVendors, onSubm
         <div className="sj-grid-2">
           <div className="form-group">
             <label className="form-label" htmlFor="sj-reg">Vehicle registration no <span className="req">*</span></label>
-            <input id="sj-reg" className="form-input" required value={form.vehicle_registration_no} onChange={set('vehicle_registration_no')} placeholder="e.g. GJ01AB1234" />
+            <input id="sj-reg" className={`form-input${err('vehicle_registration_no')}`} value={form.vehicle_registration_no} onChange={set('vehicle_registration_no')} placeholder="e.g. GJ01AB1234" />
+            {msg('vehicle_registration_no')}
           </div>
           <div className="form-group">
             <label className="form-label" htmlFor="sj-cust">Customer name <span className="req">*</span></label>
-            <input id="sj-cust" className="form-input" required value={form.customer_name} onChange={set('customer_name')} placeholder="Vehicle owner" />
+            <input id="sj-cust" className={`form-input${err('customer_name')}`} value={form.customer_name} onChange={set('customer_name')} placeholder="Vehicle owner" />
+            {msg('customer_name')}
           </div>
         </div>
         <div className="form-group">
           <label className="form-label" htmlFor="sj-vendor">{isAncillary ? 'Authorized dealer' : 'Vendor'} <span className="req">*</span></label>
           <div className="sj-vendor-row">
-            <select id="sj-vendor" className="form-select" required value={form.vendor_id} onChange={set('vendor_id')}>
+            <select id="sj-vendor" className={`form-select${err('vendor_id')}`} value={form.vendor_id} onChange={set('vendor_id')}>
               <option value="">{isAncillary ? '— select authorized dealer —' : '— select vendor —'}</option>
               {eligibleVendors.map(v => <option key={v.id} value={v.id}>{v.name}{v.oem ? ` (${v.oem})` : ''}</option>)}
             </select>
@@ -1071,6 +1114,7 @@ function NewJobForm({ form, setForm, vendors, canManage, onReloadVendors, onSubm
               </button>
             )}
           </div>
+          {msg('vendor_id')}
           <p className="field-hint">
             {isAncillary
               ? 'Ancillary work goes to the OEM’s authorized dealer (e.g. Bosch Diesel Services).'
@@ -1103,7 +1147,8 @@ function NewJobForm({ form, setForm, vendors, canManage, onReloadVendors, onSubm
         )}
         <div className="form-group">
           <label className="form-label" htmlFor="sj-mout">Material out date <span className="req">*</span></label>
-          <input id="sj-mout" className="form-input" type="date" required value={form.material_out_date} onChange={set('material_out_date')} />
+          <input id="sj-mout" className={`form-input${err('material_out_date')}`} type="date" value={form.material_out_date} onChange={set('material_out_date')} />
+          {msg('material_out_date')}
           <p className="field-hint">Defaults to today. Material-returned is recorded automatically when work is marked completed; the ancillary portal ref is added later, after the AL-portal upload.</p>
         </div>
 
@@ -1114,8 +1159,9 @@ function NewJobForm({ form, setForm, vendors, canManage, onReloadVendors, onSubm
               {LETTER_FIELDS.map(([key, label, type]) => (
                 <div className="form-group" key={key}>
                   <label className="form-label" htmlFor={`sj-lf-${key}`}>{label}{reqLetter.includes(key) ? <span className="req"> *</span> : ''}</label>
-                  <input id={`sj-lf-${key}`} className="form-input" type={type === 'date' ? 'date' : 'text'}
-                    required={reqLetter.includes(key)} value={form[key]} onChange={set(key)} />
+                  <input id={`sj-lf-${key}`} className={`form-input${err(key)}`} type={type === 'date' ? 'date' : 'text'}
+                    value={form[key]} onChange={set(key)} />
+                  {msg(key)}
                 </div>
               ))}
             </div>
