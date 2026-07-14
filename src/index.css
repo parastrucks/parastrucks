@@ -802,7 +802,6 @@ tbody tr:hover td { background: var(--gray-50); }
   padding: 10px 14px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 700; margin-bottom: 12px;
 }
 .sj-radar-warn { background: #fff7e6; color: #92610a; border: 1px solid #ffe2a8; }
-.sj-radar-ok { background: var(--green-light); color: #166534; border: 1px solid #bbf7d0; }
 .sj-radar .btn { flex: 0 0 auto; }
 .sj-age {
   display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 10px;
@@ -829,23 +828,12 @@ tbody tr:hover td { background: var(--gray-50); }
 .sj-sort:hover { color: var(--blue); }
 .sj-sort.active { color: var(--blue); }
 .sj-sort .ind { font-size: 10px; color: var(--blue); min-width: 8px; }
-.sj-sortbar { display: none; align-items: center; gap: 8px; margin-bottom: 10px; }
-.sj-sortbar-lbl { font-size: 13px; color: var(--gray-600); white-space: nowrap; }
-.sj-sortbar .form-select { flex: 1; min-width: 0; }
-
-/* Mobile: the page chrome (two tab rows + radar + search + count + sort) was
-   pushing the first job card off the fold on a 360px screen. Compact every band
-   and fold the job count into the sort row. */
-@media (max-width: 759.98px) {
-  .sj-sortbar { display: flex; margin-bottom: 8px; }
-  .sj-sortbar .form-select { padding: 6px 10px; font-size: 13px; }
-  .sj-count { display: none; }                    /* now lives in .sj-sortbar */
-  .sj-tabs, .sj-modebar { margin-bottom: 8px; }
-  .sj-tabs .seg-btn, .sj-modebar .seg-btn { padding: 8px 11px; font-size: 13px; }
-  .sj-radar { padding: 7px 10px; font-size: 12.5px; margin-bottom: 8px; }
-  .sj-toolbar { gap: 8px; margin-bottom: 8px; }
-  .sj-toolbar .sj-search { padding: 8px 11px; }
-}
+/* Sort lives inside the Filters popover (mobile only — the desktop table sorts
+   via its column headers), so the list keeps its vertical space for jobs. */
+.sj-filter-sort { border-top: 1px solid var(--border-subtle); margin-top: 4px; padding-top: 12px; }
+.sj-filter-sort-row { display: flex; gap: 8px; align-items: center; }
+.sj-filter-sort-row .form-select { flex: 1; min-width: 0; }
+@media (min-width: 760px) { .sj-filter-sort { display: none; } }
 
 /* ─── Phase 9.5 — Role-aware "Needs you" view ───────────────────── */
 .sj-needs-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
@@ -2399,12 +2387,8 @@ tbody tr:hover td { background: var(--gray-50); }
 .page-head-sub { font-size: 14px; color: var(--text-secondary); margin-top: 6px; }
 .page-head-right { flex-shrink: 0; }
 @media (max-width: 759.98px) {
-  /* Stack, and give the header less of the fold — on a phone the content
-     below it matters more than the breathing room around the title. */
-  .page-head { flex-direction: column; align-items: flex-start; gap: 12px; padding-bottom: 12px; margin-bottom: 14px; }
+  .page-head { flex-direction: column; align-items: flex-start; gap: 14px; }
   .page-head-title { font-size: 26px; }
-  .page-head-crumb { margin-bottom: 5px; }
-  .page-head-sub { margin-top: 4px; }
 }
 
 /* Tag / chip — square, tracked uppercase, tone variants */

@@ -618,21 +618,19 @@ export default function ServiceJobs() {
         ))}
       </div>
 
-      {/* Parts-Out Clock — exception banner over all open jobs. */}
-      {tab !== 'past' && radar.open > 0 && (
-        (radar.overdueParts || radar.stuck) ? (
-          <div className="sj-radar sj-radar-warn">
-            <span><Icon name="clock" size={14} /> {[
-              radar.overdueParts ? `${plural(radar.overdueParts, 'part')} overdue` : null,
-              radar.stuck ? `${plural(radar.stuck, 'job')} idle 3+ days` : null,
-            ].filter(Boolean).join(' · ')}</span>
-            {radar.overdueParts > 0 && tab !== 'parts' && (
-              <button type="button" className="btn btn-sm btn-secondary" onClick={() => setTab('parts')}>View parts out</button>
-            )}
-          </div>
-        ) : (
-          <div className="sj-radar sj-radar-ok"><Icon name="check" size={14} /> All {plural(radar.open, 'active job')} on track{radar.partsOut ? ` · ${plural(radar.partsOut, 'part')} out` : ''}</div>
-        )
+      {/* Parts-Out Clock — exception banner only. The all-clear state used to render a
+          green "on track" line, but a banner nobody has to act on is just a row of the
+          list you can't see; silence now means everything is fine. */}
+      {tab !== 'past' && radar.open > 0 && (radar.overdueParts || radar.stuck) && (
+        <div className="sj-radar sj-radar-warn">
+          <span><Icon name="clock" size={14} /> {[
+            radar.overdueParts ? `${plural(radar.overdueParts, 'part')} overdue` : null,
+            radar.stuck ? `${plural(radar.stuck, 'job')} idle 3+ days` : null,
+          ].filter(Boolean).join(' · ')}</span>
+          {radar.overdueParts > 0 && tab !== 'parts' && (
+            <button type="button" className="btn btn-sm btn-secondary" onClick={() => setTab('parts')}>View parts out</button>
+          )}
+        </div>
       )}
 
       <div className="sj-toolbar">
@@ -665,6 +663,22 @@ export default function ServiceJobs() {
                   <option value="">All stages</option>{SPINE.map(s => <option key={s} value={s}>{STAGE_LABEL[s]}</option>)}
                 </select>
               </div>
+              {/* Mobile only — the desktop table sorts from its column headers. */}
+              <div className="sj-filter-sort">
+                <label className="form-label" htmlFor="sj-f-sort">Sort by</label>
+                <div className="sj-filter-sort-row">
+                  <select id="sj-f-sort" className="form-select" value={sort?.key || ''}
+                    onChange={e => setSort(e.target.value ? { key: e.target.value, dir: sort?.dir || 'asc' } : null)}>
+                    <option value="">Default order</option>
+                    {Object.entries(SORT_COLS).map(([k, c]) => <option key={k} value={k}>{c.label}</option>)}
+                  </select>
+                  <button type="button" className="btn btn-sm btn-secondary" disabled={!sort}
+                    aria-label="Toggle sort direction"
+                    onClick={() => setSort(s => s ? { ...s, dir: s.dir === 'asc' ? 'desc' : 'asc' } : s)}>
+                    {sort?.dir === 'desc' ? '↓ Desc' : '↑ Asc'}
+                  </button>
+                </div>
+              </div>
               <div className="sj-filter-pop-foot">
                 <button type="button" className="btn btn-sm btn-secondary" disabled={!dropdownCount}
                   onClick={() => setFilters(f => ({ ...f, job_type: '', repair_type: '', stage: '' }))}>Clear filters</button>
@@ -684,22 +698,6 @@ export default function ServiceJobs() {
         <div className="empty-state">{filtersActive ? 'No jobs match these filters.' : 'No jobs yet — create one with + New Job.'}</div>
       ) : (
         <>
-          {/* Mobile: sort control (the desktop table sorts via its headers). Carries the
-              job count too — on a phone a separate count row is a wasted line. */}
-          <div className="sj-sortbar">
-            <span className="sj-sortbar-lbl">{visible.length} {visible.length === 1 ? 'job' : 'jobs'}</span>
-            <select className="form-select" aria-label="Sort jobs by" value={sort?.key || ''}
-              onChange={e => setSort(e.target.value ? { key: e.target.value, dir: sort?.dir || 'asc' } : null)}>
-              <option value="">Default order</option>
-              {Object.entries(SORT_COLS).map(([k, c]) => <option key={k} value={k}>{c.label}</option>)}
-            </select>
-            <button type="button" className="btn btn-sm btn-secondary" disabled={!sort}
-              aria-label="Toggle sort direction"
-              onClick={() => setSort(s => s ? { ...s, dir: s.dir === 'asc' ? 'desc' : 'asc' } : s)}>
-              {sort?.dir === 'desc' ? '↓ Desc' : '↑ Asc'}
-            </button>
-          </div>
-
           {/* Desktop: table */}
           <div className="table-wrap sj-desktop-table">
             <table aria-label="Service jobs">
