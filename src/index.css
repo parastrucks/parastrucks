@@ -1685,15 +1685,23 @@ tbody tr:hover td { background: var(--gray-50); }
 .bc-dp-grp { margin-top: 4px; }
 .bc-dp-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
 .bc-dp-lbl { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; color: var(--gray-600); }
-.bc-dp-right { display: flex; align-items: center; gap: 5px; }
-.bc-dp-pfx { font-size: 13px; color: var(--gray-500); }
-.bc-numinput {
-  width: 130px; background: var(--white); border: 1.5px solid var(--gray-200);
-  border-radius: var(--radius-sm); padding: 6px 10px; font-size: 13px;
-  font-family: var(--font); font-weight: 700; color: var(--gray-800);
-  text-align: right; outline: none; transition: border-color var(--t);
+/* ₹ prefix + amount as ONE bordered control (was: ₹ outside a box with the
+   number right-aligned inside → a big gap that read as "uneven"). */
+.bc-dp-right {
+  display: flex; align-items: center;
+  border: 1px solid var(--border-default); border-radius: var(--radius-sm);
+  background: var(--white); padding-left: 11px;
+  transition: border-color var(--t), box-shadow var(--t);
 }
-.bc-numinput:focus { border-color: var(--blue); box-shadow: 0 0 0 3px var(--accent-ring); }
+.bc-dp-right:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-ring); }
+.bc-dp-pfx { font-size: 13px; color: var(--text-muted); }
+.bc-numinput {
+  width: 108px; background: transparent; border: 0;
+  padding: 7px 11px 7px 4px; font-size: 13px;
+  font-family: var(--font); font-weight: 700; color: var(--ink);
+  text-align: right; outline: none;
+}
+.bc-numinput:focus { box-shadow: none; }
 .bc-sl-ends { display: flex; justify-content: space-between; font-size: 11px; color: var(--gray-400); margin-top: 3px; }
 .bc-dp-chip {
   display: inline-flex; align-items: center; gap: 5px;

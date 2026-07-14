@@ -419,8 +419,8 @@ export default function BusCalculator() {
             <div className="q-section" style={{ marginBottom: 16 }}>
               <div className="q-section-title"><span className="bc-step-pill">STEP 2</span> Body Type</div>
               <div className="bc-rg">
-                <div className={`bc-rb${bodyT === 'school' ? ' on' : ''}`} onClick={() => handleSetBodyT('school')}>🏫 School</div>
-                <div className={`bc-rb${bodyT === 'staff' ? ' on' : ''}`} onClick={() => handleSetBodyT('staff')}>💼 Staff</div>
+                <div className={`bc-rb${bodyT === 'school' ? ' on' : ''}`} onClick={() => handleSetBodyT('school')}>School</div>
+                <div className={`bc-rb${bodyT === 'staff' ? ' on' : ''}`} onClick={() => handleSetBodyT('staff')}>Staff</div>
               </div>
               <div className="bc-dp-row" style={{ marginTop: 16 }}>
                 <span className="bc-dp-lbl">Body Price</span>
@@ -440,8 +440,8 @@ export default function BusCalculator() {
               <div className="q-section-title"><span className="bc-step-pill">STEP 3</span> Air Conditioning</div>
               {acNote && <div className={acNote.cls}>{acNote.text}</div>}
               <div className="bc-rg" style={{ marginTop: 12 }}>
-                <div className={`bc-rb${wantAC ? ' on' : ''}`} onClick={() => handleSetAC(true)}>❄ With AC</div>
-                <div className={`bc-rb${!wantAC ? ' on' : ''}`} onClick={() => handleSetAC(false)}>— Non-AC</div>
+                <div className={`bc-rb${wantAC ? ' on' : ''}`} onClick={() => handleSetAC(true)}>With AC</div>
+                <div className={`bc-rb${!wantAC ? ' on' : ''}`} onClick={() => handleSetAC(false)}>Non-AC</div>
               </div>
               {wantAC && (
                 <div style={{ marginTop: 16 }}>
