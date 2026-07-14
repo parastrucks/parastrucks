@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { callEdge } from '../lib/api'
-import Icon from '../components/Icon'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import Skeleton from '../components/Skeleton'
@@ -592,7 +591,7 @@ function OperatingUnits({ brands, locations }) {
       if (modal === 'add') await callEdge('admin-access-rules', 'createOperatingUnit', payload)
       else                 await callEdge('admin-access-rules', 'updateOperatingUnit', payload)
     } catch (e) {
-      setSaving(false); setError(e.message); return
+      setSaving(false); toast.error(e.message); return
     }
     setSaving(false); closeModal(); await load()
   }
@@ -658,22 +657,23 @@ function OperatingUnits({ brands, locations }) {
               <button className="modal-close" onClick={closeModal}>×</button>
             </div>
             <div className="modal-body">
-              {error && <div className="alert alert-error" style={{ marginBottom: 12 }}><span><Icon name="alert" size={15} /></span><span>{error}</span></div>}
               <form onSubmit={handleSave} noValidate>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
                   <div className="form-group">
                     <label className="form-label" htmlFor="ou-brand">Brand *</label>
-                    <select id="ou-brand" className="form-select" {...F('brand')} disabled={modal === 'edit'}>
+                    <select id="ou-brand" className={`form-select ${errorField === 'brand' ? 'error' : ''}`} {...F('brand')} disabled={modal === 'edit'}>
                       <option value="">— Select —</option>
                       {brands.map(b => <option key={b.code} value={b.code}>{b.name}</option>)}
                     </select>
+                    {errorField === 'brand' && <div className="form-error">{error}</div>}
                   </div>
                   <div className="form-group">
                     <label className="form-label" htmlFor="ou-location">Location *</label>
-                    <select id="ou-location" className="form-select" {...F('location')} disabled={modal === 'edit'}>
+                    <select id="ou-location" className={`form-select ${errorField === 'location' ? 'error' : ''}`} {...F('location')} disabled={modal === 'edit'}>
                       <option value="">— Select —</option>
                       {locations.map(l => <option key={l.name} value={l.name}>{l.name}</option>)}
                     </select>
+                    {errorField === 'location' && <div className="form-error">{error}</div>}
                   </div>
                   <div className="form-group">
                     <label className="form-label" htmlFor="ou-entity-code">Entity Code</label>

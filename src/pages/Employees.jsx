@@ -756,14 +756,13 @@ export default function Employees() {
               )}
               {confirmAction.type === 'delete' && (
                 <div>
-                  <div className="alert alert-error" style={{ marginBottom: 12 }}>
-                    <span><Icon name="alert" size={15} /></span>
-                    <span>This is permanent and cannot be undone.</span>
-                  </div>
                   <p style={{ fontSize: 14, color: 'var(--gray-600)', lineHeight: 1.6 }}>
                     Permanently deleting <strong>{confirmAction.employee.full_name}</strong> will remove their
                     account and all associated data. Consider deactivating instead.
                   </p>
+                  <div className="form-error" style={{ marginTop: 8, fontWeight: 600 }}>
+                    This is permanent and cannot be undone.
+                  </div>
                 </div>
               )}
               <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>

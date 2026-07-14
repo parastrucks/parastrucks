@@ -431,6 +431,7 @@ function VehicleModal({ mode, vehicle, subSegs, onClose, onSaved }) {
   )
   const [saving, setSaving] = useState(false)
   const [error,  setError]  = useState('')
+  const [errorField, setErrorField] = useState(null) // which field to flag red on validation
 
   const subCatOptions = useMemo(
     () => subSegs.filter(ss => ss.segment === form.segment).map(ss => ss.name),
@@ -440,13 +441,27 @@ function VehicleModal({ mode, vehicle, subSegs, onClose, onSaved }) {
   function set(field, value) {
     setForm(f => ({ ...f, [field]: value }))
     setError('')
+    setErrorField(null)
+  }
+
+  // Flag the offending field red, show the message under it, and scroll/focus it.
+  function fail(msg, field, elId) {
+    setError(msg)
+    setErrorField(field)
+    const el = document.getElementById(elId)
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      if (typeof el.focus === 'function') { try { el.focus({ preventScroll: true }) } catch { el.focus() } }
+    }
   }
 
   async function save() {
-    if (!form.cbn.trim())         { setError('CBN is required'); return }
-    if (!form.description.trim()) { setError('Description is required'); return }
-    if (!form.segment)            { setError('Segment is required'); return }
-    if (!form.mrp_incl_gst)       { setError('MRP is required'); return }
+    setError('')
+    setErrorField(null)
+    if (!form.cbn.trim())         { fail('CBN is required',         'cbn',          'vm-cbn');     return }
+    if (!form.description.trim()) { fail('Description is required', 'description',  'vm-desc');    return }
+    if (!form.segment)            { fail('Segment is required',     'segment',      'vm-segment'); return }
+    if (!form.mrp_incl_gst)       { fail('MRP is required',         'mrp_incl_gst', 'vm-mrp');     return }
 
     setSaving(true)
     const payload = {
@@ -486,30 +501,30 @@ function VehicleModal({ mode, vehicle, subSegs, onClose, onSaved }) {
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
         <div className="modal-body">
-          {error && <div className="alert alert-error">{error}</div>}
-
           <div className="vc-form-grid">
             <div className="form-group">
               <label className="form-label" htmlFor="vm-cbn">CBN *</label>
               <input
                 id="vm-cbn"
-                className="form-input"
+                className={`form-input ${errorField === 'cbn' ? 'error' : ''}`}
                 value={form.cbn}
                 onChange={e => set('cbn', e.target.value)}
                 disabled={mode === 'edit'}
                 placeholder="e.g. CDB111505C0004_YW"
               />
+              {errorField === 'cbn' && <div className="form-error">{error}</div>}
             </div>
             <div className="form-group">
               <label className="form-label" htmlFor="vm-mrp">MRP incl. GST (₹) *</label>
               <input
                 id="vm-mrp"
-                className="form-input"
+                className={`form-input ${errorField === 'mrp_incl_gst' ? 'error' : ''}`}
                 type="number"
                 value={form.mrp_incl_gst}
                 onChange={e => set('mrp_incl_gst', e.target.value)}
                 placeholder="e.g. 2147202"
               />
+              {errorField === 'mrp_incl_gst' && <div className="form-error">{error}</div>}
             </div>
           </div>
 
@@ -517,12 +532,13 @@ function VehicleModal({ mode, vehicle, subSegs, onClose, onSaved }) {
             <label className="form-label" htmlFor="vm-desc">Description *</label>
             <textarea
               id="vm-desc"
-              className="form-input"
+              className={`form-input ${errorField === 'description' ? 'error' : ''}`}
               rows={3}
               value={form.description}
               onChange={e => set('description', e.target.value)}
               placeholder="Full vehicle description as in price list"
             />
+            {errorField === 'description' && <div className="form-error">{error}</div>}
           </div>
 
           <div className="vc-form-grid">
