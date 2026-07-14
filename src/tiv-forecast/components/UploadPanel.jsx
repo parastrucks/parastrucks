@@ -1,6 +1,7 @@
 // TIV Forecast — Upload Panel (admin-only)
 import { useState, useCallback, useEffect } from 'react'
 import { useAuth } from '../../context/AuthContext'
+import { useToast } from '../../context/ToastContext'
 import { supabase } from '../../lib/supabase'
 import Icon from '../../components/Icon'
 import { parseExcelFile } from '../lib/parseExcel'
@@ -13,12 +14,12 @@ import {
 
 export default function UploadPanel({ onUploadComplete }) {
   const { profile, isAdmin } = useAuth()
+  const toast = useToast()   // file / parse / upload failures
   const [collapsed, setCollapsed]         = useState(true)
   const [file, setFile]                   = useState(null)
   const [preview, setPreview]             = useState(null)  // { monthsLoaded, lastDataMonth }
   const [uploading, setUploading]         = useState(false)
   const [progress, setProgress]           = useState(null)  // { pct: 0-100, step: 'label' }
-  const [parseError, setParseError]       = useState('')
   const [successMsg, setSuccessMsg]       = useState('')
   const [history, setHistory]             = useState(null)  // null = not loaded yet
   const [showHistory, setShowHistory]     = useState(false)
@@ -73,13 +74,12 @@ export default function UploadPanel({ onUploadComplete }) {
 
   function handleFileChange(e) {
     const f = e.target.files[0]
-    setParseError('')
     setSuccessMsg('')
     setPreview(null)
     if (!f) { setFile(null); return }
 
     if (f.size > 5 * 1024 * 1024) {
-      setParseError('File must be 5 MB or smaller')
+      toast.error('File must be 5 MB or smaller')
       setFile(null)
       e.target.value = ''
       return
@@ -93,7 +93,7 @@ export default function UploadPanel({ onUploadComplete }) {
         && bytes[0] === 0x50 && bytes[1] === 0x4B
         && bytes[2] === 0x03 && bytes[3] === 0x04
       if (!isZip) {
-        setParseError('File is not a valid .xlsx workbook')
+        toast.error('File is not a valid .xlsx workbook')
         setFile(null)
         e.target.value = ''
         return
@@ -106,14 +106,14 @@ export default function UploadPanel({ onUploadComplete }) {
           const parsed = parseExcelFile(evt.target.result)
           setPreview(parsed.summary)
         } catch (err) {
-          setParseError(`Parse error: ${err.message}`)
+          toast.error(`Parse error: ${err.message}`)
           setFile(null)
         }
       }
       reader.readAsArrayBuffer(f)
     }
     headerReader.onerror = () => {
-      setParseError('Could not read file')
+      toast.error('Could not read file')
       setFile(null)
     }
     headerReader.readAsArrayBuffer(f.slice(0, 4))
@@ -123,7 +123,6 @@ export default function UploadPanel({ onUploadComplete }) {
     if (!file || !preview || !entityId || !brandId) return
     setUploading(true)
     setProgress({ pct: 0, label: 'Starting…' })
-    setParseError('')
     setSuccessMsg('')
 
     const step = (s) => setProgress(UPLOAD_STEPS[s])
@@ -176,12 +175,12 @@ export default function UploadPanel({ onUploadComplete }) {
       if (onUploadComplete) onUploadComplete(params)
 
     } catch (err) {
-      setParseError(`Upload failed: ${err.message}`)
+      toast.error(`Upload failed: ${err.message}`)
     } finally {
       setUploading(false)
       setTimeout(() => setProgress(null), 1200)
     }
-  }, [file, preview, entityId, brandId, profile, onUploadComplete, showHistory])
+  }, [file, preview, entityId, brandId, profile, onUploadComplete, showHistory, toast])
 
   async function toggleHistory() {
     const next = !showHistory
@@ -212,11 +211,7 @@ export default function UploadPanel({ onUploadComplete }) {
 
       {!collapsed && (
         <div style={{ marginTop: 16 }}>
-          {parseError && (
-            <div className="alert alert-error" style={{ marginBottom: 12 }}>
-              <span><Icon name="alert" size={15} /></span><span>{parseError}</span>
-            </div>
-          )}
+          {/* File / parse / upload failures surface as a global toast (no banner). */}
           {successMsg && (
             <div className="alert alert-success" style={{ marginBottom: 12 }}>
               <span><Icon name="check" size={15} /></span><span>{successMsg}</span>

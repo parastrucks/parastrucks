@@ -818,6 +818,7 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
   const [saving,          setSaving]          = useState(false)
   const [uploadPct,       setUploadPct]       = useState(null)
   const [error,           setError]           = useState('')
+  const [errorField,      setErrorField]      = useState(null) // which field to flag red on validation
   const [allocatedCBNs,   setAllocatedCBNs]   = useState([])   // edit: vehicles in this sub-seg
   const [cbnOptions,      setCbnOptions]      = useState([])   // add:  all vehicles in segment/brand (carry current sub_category)
   const [selectedCBNs,    setSelectedCBNs]    = useState(new Set())
@@ -825,7 +826,11 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
   const [cbnLoading,      setCbnLoading]      = useState(false)
   const fileRef = useRef()
 
-  function set(field, value) { setForm(f => ({ ...f, [field]: value })); setError('') }
+  // Editing a field clears its own inline validation error (Quotation pattern).
+  function set(field, value) {
+    setForm(f => ({ ...f, [field]: value }))
+    setErrorField(f => (f === field ? null : f))
+  }
 
   // Edit mode: load CBNs belonging to this sub-segment (by name text match)
   useEffect(() => {
@@ -864,7 +869,7 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
     if (!f) { setBrochureFile(null); return }
 
     if (f.size > 10 * 1024 * 1024) {
-      setError('Brochure must be 10 MB or smaller')
+      toast.error('Brochure must be 10 MB or smaller')
       if (fileRef.current) fileRef.current.value = ''
       return
     }
@@ -882,23 +887,24 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
         reader.readAsArrayBuffer(f.slice(0, 5))
       })
       if (!header.startsWith('%PDF-')) {
-        setError('File is not a valid PDF')
+        toast.error('File is not a valid PDF')
         if (fileRef.current) fileRef.current.value = ''
         return
       }
     } catch {
-      setError('Could not read file')
+      toast.error('Could not read file')
       if (fileRef.current) fileRef.current.value = ''
       return
     }
 
-    setError('')
     setBrochureFile(f)
   }
 
   async function save() {
-    if (!form.name.trim()) { setError('Name is required'); return }
-    if (!form.segment)     { setError('Segment is required'); return }
+    setError('')
+    setErrorField(null)
+    if (!form.name.trim()) { setError('Name is required');    setErrorField('name');    return }
+    if (!form.segment)     { setError('Segment is required'); setErrorField('segment'); return }
 
     setSaving(true)
     let brochure_url      = form.brochure_url      || null
@@ -975,26 +981,31 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
         <div className="modal-body">
-          {error && <div className="alert alert-error">{error}</div>}
-
           <div className="form-group">
             <label className="form-label" htmlFor="ssm-name">Name *</label>
             <input
               id="ssm-name"
-              className="form-input"
+              className={`form-input ${errorField === 'name' ? 'error' : ''}`}
               value={form.name}
               onChange={e => set('name', e.target.value)}
               disabled={mode === 'edit'}
               placeholder="e.g. Boss 11T"
             />
+            {errorField === 'name' && <div className="form-error">{error}</div>}
           </div>
 
           <div className="vc-form-grid">
             <div className="form-group">
               <label className="form-label" htmlFor="ssm-segment">Segment *</label>
-              <select id="ssm-segment" className="form-select" value={form.segment} onChange={e => set('segment', e.target.value)}>
+              <select
+                id="ssm-segment"
+                className={`form-select ${errorField === 'segment' ? 'error' : ''}`}
+                value={form.segment}
+                onChange={e => set('segment', e.target.value)}
+              >
                 {SEGMENTS.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
+              {errorField === 'segment' && <div className="form-error">{error}</div>}
             </div>
             <div className="form-group">
               <label className="form-label" htmlFor="ssm-brand">Brand</label>
@@ -1238,7 +1249,6 @@ function ImportTab({ subSegs, onRefresh }) {
   const [priceCircular, setPriceCircular] = useState('')
   const [effectiveDate, setEffectiveDate] = useState('')
   const [importing,     setImporting]     = useState(false)
-  const [error,         setError]         = useState('')
   const fileRef = useRef()
 
   const subSegMap = useMemo(
@@ -1249,7 +1259,6 @@ function ImportTab({ subSegs, onRefresh }) {
   async function processFile(f) {
     setFile(f)
     setPreview(null)
-    setError('')
     try {
       const buffer = await f.arrayBuffer()
       const wb = XLSX.read(new Uint8Array(buffer), { type: 'array' })
@@ -1266,7 +1275,7 @@ function ImportTab({ subSegs, onRefresh }) {
         }
       }
       if (headerIdx < 0) {
-        setError('Could not find header row — make sure the file has a "CBN" column.')
+        toast.error('Could not find header row — make sure the file has a "CBN" column.')
         return
       }
 
@@ -1278,8 +1287,8 @@ function ImportTab({ subSegs, onRefresh }) {
       const mrpIdx  = findColIdx(headers, ['mrp incl', 'mrp', 'incl. gst', 'incl gst'])
       const segIdx  = findColIdx(headers, ['segment'])
 
-      if (cbnIdx  < 0) { setError('CBN column not found.'); return }
-      if (mrpIdx  < 0) { setError('MRP column not found.'); return }
+      if (cbnIdx  < 0) { toast.error('CBN column not found.'); return }
+      if (mrpIdx  < 0) { toast.error('MRP column not found.'); return }
 
       const dataRows = raw.slice(headerIdx + 1)
         .filter(row => String(row[cbnIdx] || '').trim())
@@ -1301,7 +1310,7 @@ function ImportTab({ subSegs, onRefresh }) {
         .eq('code', brand)
         .single()
       if (brandErr || !brandRow) {
-        setError(`Could not resolve brand "${brand}" — no matching row in the brands table.`)
+        toast.error(`Could not resolve brand "${brand}" — no matching row in the brands table.`)
         return
       }
       const brand_id = brandRow.id
@@ -1338,7 +1347,7 @@ function ImportTab({ subSegs, onRefresh }) {
         sheetName,
       })
     } catch (err) {
-      setError('Failed to parse file: ' + err.message)
+      toast.error('Failed to parse file: ' + err.message)
     }
   }
 
@@ -1351,7 +1360,6 @@ function ImportTab({ subSegs, onRefresh }) {
   async function runImport() {
     if (!preview) return
     setImporting(true)
-    setError('')
     const payload = preview.rows.map(({ _isNew, ...r }) => ({
       ...r,
       price_circular: priceCircular || null,
@@ -1379,8 +1387,6 @@ function ImportTab({ subSegs, onRefresh }) {
           Upload the Excel price list. Existing vehicles are updated by CBN; new CBNs are inserted.
           Expected columns: <strong>CBN, Description, Sub-Category, Tyres, MRP incl. 18% GST</strong>
         </p>
-
-        {error && <div className="alert alert-error">{error}</div>}
 
         <div className="form-group" style={{ maxWidth: 260, marginBottom: 16 }}>
           <label className="form-label" htmlFor="imp-brand">Brand *</label>

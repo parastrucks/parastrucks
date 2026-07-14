@@ -1,8 +1,8 @@
 // TIV Forecast — Main page
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useAuth } from '../../context/AuthContext'
+import { useToast } from '../../context/ToastContext'
 import { runForecast } from '../lib/forecastEngine'
-import Icon from '../../components/Icon'
 import { buildDefaultTriggerState } from '../lib/triggerDefs'
 import {
   fetchTivActuals, fetchPtbActuals, fetchAlActuals,
@@ -26,9 +26,9 @@ const DEBOUNCE_MS = 400
 
 export default function TivForecastPage() {
   const { profile } = useAuth()
+  const toast = useToast()   // load failures
   const [activeTab, setActiveTab]       = useState('forecast')
   const [loading, setLoading]           = useState(true)
-  const [error, setError]               = useState('')
 
   // Data
   const [tivActuals,   setTivActuals]   = useState([])
@@ -46,7 +46,6 @@ export default function TivForecastPage() {
   const loadData = useCallback(async () => {
     if (!profile) return
     setLoading(true)
-    setError('')
     try {
       const [tiv, ptb, al, jTiv, jPtb, params, savedTriggers] = await Promise.all([
         fetchTivActuals(),
@@ -67,11 +66,11 @@ export default function TivForecastPage() {
       const defaults = buildDefaultTriggerState()
       setTriggerState({ ...defaults, ...savedTriggers })
     } catch (e) {
-      setError(e.message || 'Failed to load data')
+      toast.error(e.message || 'Failed to load data')
     } finally {
       setLoading(false)
     }
-  }, [profile])
+  }, [profile, toast])
 
   useEffect(() => { loadData() }, [loadData])
 
@@ -125,11 +124,7 @@ export default function TivForecastPage() {
         </div>
       </div>
 
-      {error && (
-        <div className="alert alert-error mb-24">
-          <span><Icon name="alert" size={15} /></span><span>{error}</span>
-        </div>
-      )}
+      {/* Load failures surface as a global toast (no banner). */}
 
       {/* Upload panel — admin only */}
       <UploadPanel onUploadComplete={handleUploadComplete} />

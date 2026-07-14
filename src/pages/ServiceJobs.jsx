@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import Icon from '../components/Icon'
 import { useAuth } from '../context/AuthContext'
+import { useToast } from '../context/ToastContext'
 import { supabase } from '../lib/supabase'
 import { callEdge } from '../lib/api'
 import { generateServicePoPdf } from '../utils/pdfGenerator'
@@ -197,6 +198,7 @@ function LensDropdown({ value, onChange }) {
 
 export default function ServiceJobs() {
   const { profile } = useAuth()
+  const toast = useToast()   // global toast — load/create/action failures
   const [entity, setEntity] = useState(null)
   const [deptCode, setDeptCode] = useState(null)
   const [vendors, setVendors] = useState([])
@@ -204,7 +206,6 @@ export default function ServiceJobs() {
   const [tab, setTab] = useState('active')
   const [filters, setFilters] = useState({ q: '', job_type: '', repair_type: '', stage: '' })
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [showNew, setShowNew] = useState(false)
   const [form, setForm] = useState(blankForm())
@@ -223,7 +224,7 @@ export default function ServiceJobs() {
     }
   }, [searchParams]) // eslint-disable-line react-hooks/exhaustive-deps
   const [events, setEvents] = useState([])
-  const [toast, setToast] = useState(null) // { msg, kind }
+  const [pageToast, setPageToast] = useState(null) // in-page success pill — { msg, kind }
   const [showFilters, setShowFilters] = useState(false)
   const [sort, setSort] = useState(null) // { key, dir: 'asc'|'desc' } | null = default order
   const [mode, setMode] = useState('needs') // 'needs' | 'all'
@@ -233,12 +234,12 @@ export default function ServiceJobs() {
   const selectedRef = useRef(null)
   selectedRef.current = selected
 
-  const showToast = useCallback((msg, kind = 'success') => setToast({ msg, kind }), [])
+  const showToast = useCallback((msg, kind = 'success') => setPageToast({ msg, kind }), [])
   useEffect(() => {
-    if (!toast) return
-    const id = setTimeout(() => setToast(null), 3200)
+    if (!pageToast) return
+    const id = setTimeout(() => setPageToast(null), 3200)
     return () => clearTimeout(id)
-  }, [toast])
+  }, [pageToast])
 
   // Close the filter popover on outside-click / Esc.
   useEffect(() => {
@@ -290,10 +291,10 @@ export default function ServiceJobs() {
     setLoading(true)
     const { data, error: e } = await supabase.from('service_jobs')
       .select('*').order('created_at', { ascending: false })
-    if (e) setError(e.message)
+    if (e) toast.error(e.message)
     setJobs(data || [])
     setLoading(false)
-  }, [])
+  }, [toast])
 
   useEffect(() => { loadVendors(); loadJobs() }, [loadVendors, loadJobs])
 
@@ -335,8 +336,8 @@ export default function ServiceJobs() {
     setRecent(rows)
   }, [])
 
-  function openDetail(job) { setError(''); setSelected(job); loadEvents(job.id) }
-  function openNew() { setError(''); setForm(blankForm()); setShowNew(true) }
+  function openDetail(job) { setSelected(job); loadEvents(job.id) }
+  function openNew() { setForm(blankForm()); setShowNew(true) }
 
   async function refreshSelected(jobId) {
     await loadJobs()
@@ -436,7 +437,7 @@ export default function ServiceJobs() {
 
   async function handleCreate(e) {
     e.preventDefault()
-    setError(''); setBusy(true)
+    setBusy(true)
     try {
       const aw = form.job_type === 'ancillary' && form.repair_type === 'warranty'
       const payload = {
@@ -464,32 +465,32 @@ export default function ServiceJobs() {
       await loadJobs()
       showToast('Job created · PO downloaded')
     } catch (err) {
-      setError(err.message || 'Failed to create job')
+      toast.error(err.message || 'Failed to create job')
     } finally { setBusy(false) }
   }
 
   async function act(action, payload, jobId, successMsg) {
-    setError(''); setBusy(true)
+    setBusy(true)
     try {
       await callEdge('service-jobs', action, payload)
       await refreshSelected(jobId)
       if (successMsg) showToast(successMsg)
     } catch (err) {
-      setError(err.message || 'Action failed')
+      toast.error(err.message || 'Action failed')
     } finally { setBusy(false) }
   }
 
   // Inline action from a Needs-you card / feed row — no drawer; just refresh the
   // lists and toast. (The drawer's `act` refreshes the open job instead.)
   async function quickAct(action, payload, msg) {
-    setError(''); setBusy(true)
+    setBusy(true)
     try {
       await callEdge('service-jobs', action, payload)
       await loadJobs()
       if (viewCaps.canGm) await loadRecent()
       if (msg) showToast(msg)
     } catch (err) {
-      setError(err.message || 'Action failed')
+      toast.error(err.message || 'Action failed')
     } finally { setBusy(false) }
   }
 
@@ -516,8 +517,7 @@ export default function ServiceJobs() {
         <button className="btn btn-primary page-head-right" onClick={openNew}><Icon name="plus" size={15} /> New Job</button>
       </div>
 
-      {/* Load/page-level errors only when no modal is open (action errors render inside the modal). */}
-      {error && !showNew && !selected && <div className="alert alert-error" style={{ marginBottom: 12 }}>{error}</div>}
+      {/* Load / create / action failures surface as a global toast (no banner). */}
 
       {/* Top-level mode switch + (admin) lens dropdown. */}
       <div className="sj-needs-bar">
@@ -765,7 +765,7 @@ export default function ServiceJobs() {
       )}
 
       {showNew && (
-        <Modal wide error={error} onClose={() => { setError(''); setShowNew(false) }} title="New Service Job"
+        <Modal wide onClose={() => setShowNew(false)} title="New Service Job"
           subtitle="Generate a PO / warranty-request letter for outside-workshop work">
           <NewJobForm
             form={form} setForm={setForm} vendors={vendors} canManage={canManage}
@@ -775,7 +775,7 @@ export default function ServiceJobs() {
       )}
 
       {selected && (
-        <Modal error={error} onClose={() => { setError(''); setSelected(null) }} title={selected.po_number}
+        <Modal onClose={() => setSelected(null)} title={selected.po_number}
           subtitle={`Reg ${selected.vehicle_registration_no}`}
           headerExtra={(
             <div className="sj-badges">
@@ -791,8 +791,8 @@ export default function ServiceJobs() {
         </Modal>
       )}
 
-      {toast && (
-        <div className={`sj-toast sj-toast-${toast.kind}`} role="status" aria-live="polite">{toast.msg}</div>
+      {pageToast && (
+        <div className={`sj-toast sj-toast-${pageToast.kind}`} role="status" aria-live="polite">{pageToast.msg}</div>
       )}
     </div>
   )
@@ -929,7 +929,7 @@ function statusBadges(job) {
   return badges
 }
 
-function Modal({ title, subtitle, onClose, children, wide, headerExtra, error }) {
+function Modal({ title, subtitle, onClose, children, wide, headerExtra }) {
   const ref = useRef(null)
   const titleId = useRef('sj-modal-' + Math.random().toString(36).slice(2)).current
   // Keep the latest onClose in a ref so the focus-trap effect can run ONCE on
@@ -974,7 +974,6 @@ function Modal({ title, subtitle, onClose, children, wide, headerExtra, error })
           {headerExtra && <div className="modal-header-extra">{headerExtra}</div>}
         </div>
         <div className="modal-body">
-          {error && <div className="alert alert-error" style={{ marginBottom: 12 }}>{error}</div>}
           {children}
         </div>
       </div>
