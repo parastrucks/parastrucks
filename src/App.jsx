@@ -4,6 +4,7 @@ import { useAuth } from './context/AuthContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import AppLayout from './components/layout/AppLayout'
 import ErrorBoundary from './components/ErrorBoundary'
+import Icon from './components/Icon'
 
 // Landing pages — eagerly imported so there's no lazy-chunk waterfall on
 // the first screen users see after login. The bundle cost is small and the
@@ -33,7 +34,7 @@ const ServiceJobs      = lazy(() => import('./pages/ServiceJobs'))
 // Placeholder for pages not yet built
 const Soon = ({ name }) => (
   <div className="page-soon">
-    <div className="soon-icon">🔧</div>
+    <div className="soon-icon"><Icon name="wrench" size={36} color="var(--text-muted)" /></div>
     <h2>{name}</h2>
     <p>Coming soon — this module is under construction.</p>
   </div>

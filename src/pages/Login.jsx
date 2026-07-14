@@ -134,7 +134,7 @@ export default function Login() {
 
         {error && (
           <div className="alert alert-error">
-            <span>⚠</span>
+            <span><Icon name="alert" size={15} /></span>
             <span>
               {locked
                 ? `Too many failed attempts. Try again in ${remainingMin}:${String(remainingSec).padStart(2,'0')}.`

@@ -573,7 +573,7 @@ export default function ServiceJobs() {
 
               {needCount === 0 && !(viewCaps.canGm && recent.length > 0) && (
                 <div className="sj-caughtup">
-                  <div className="sj-caughtup-mark" aria-hidden="true">✓</div>
+                  <div className="sj-caughtup-mark" aria-hidden="true"><Icon name="check" size={16} /></div>
                   <div className="sj-caughtup-title">You’re all caught up</div>
                   <div className="sj-caughtup-sub">
                     {openJobs.length ? `${plural(openJobs.length, 'job')} in progress — nothing needs you right now.` : 'No active jobs right now.'}
@@ -622,7 +622,7 @@ export default function ServiceJobs() {
       {tab !== 'past' && radar.open > 0 && (
         (radar.overdueParts || radar.stuck) ? (
           <div className="sj-radar sj-radar-warn">
-            <span>⏰ {[
+            <span><Icon name="clock" size={14} /> {[
               radar.overdueParts ? `${plural(radar.overdueParts, 'part')} overdue` : null,
               radar.stuck ? `${plural(radar.stuck, 'job')} idle 3+ days` : null,
             ].filter(Boolean).join(' · ')}</span>
@@ -631,7 +631,7 @@ export default function ServiceJobs() {
             )}
           </div>
         ) : (
-          <div className="sj-radar sj-radar-ok">✓ All {plural(radar.open, 'active job')} on track{radar.partsOut ? ` · ${plural(radar.partsOut, 'part')} out` : ''}</div>
+          <div className="sj-radar sj-radar-ok"><Icon name="check" size={14} /> All {plural(radar.open, 'active job')} on track{radar.partsOut ? ` · ${plural(radar.partsOut, 'part')} out` : ''}</div>
         )
       )}
 
@@ -642,7 +642,7 @@ export default function ServiceJobs() {
         <div className="sj-filter-wrap" ref={filterRef}>
           <button type="button" className={`btn btn-secondary sj-filter-btn${dropdownCount ? ' has-active' : ''}`}
             aria-haspopup="dialog" aria-expanded={showFilters} onClick={() => setShowFilters(s => !s)}>
-            <span aria-hidden="true">⚙</span> Filters
+            <Icon name="filter-alt" size={15} /> Filters
             {dropdownCount > 0 && <span className="sj-filter-badge">{dropdownCount}</span>}
           </button>
           {showFilters && (
@@ -887,7 +887,7 @@ function OverviewDash({ overview, onOpen, onJumpParts, onJumpAccounts }) {
       </div>
       <div className="sj-ov-row">
         <section className="sj-ov-card">
-          <div className="sj-ov-card-head"><span className="sj-ov-card-title">⚠ Bottlenecks</span></div>
+          <div className="sj-ov-card-head"><span className="sj-ov-card-title"><Icon name="alert" size={15} /> Bottlenecks</span></div>
           {overview.top.length ? (
             <div className="sj-ov-list">
               {overview.top.map(({ j, a }) => (
@@ -969,7 +969,7 @@ function Modal({ title, subtitle, onClose, children, wide, headerExtra, error })
               <h2 id={titleId}>{title}</h2>
               {subtitle && <p style={{ margin: '2px 0 0', fontSize: 13, color: 'var(--gray-500)' }}>{subtitle}</p>}
             </div>
-            <button className="modal-close" onClick={onClose} aria-label="Close">✕</button>
+            <button className="modal-close" onClick={onClose} aria-label="Close"><Icon name="x" size={18} /></button>
           </div>
           {headerExtra && <div className="modal-header-extra">{headerExtra}</div>}
         </div>

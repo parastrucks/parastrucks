@@ -3,12 +3,13 @@ import {
   ResponsiveContainer, LineChart, BarChart, Line, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine,
 } from 'recharts'
+import Icon from '../../components/Icon'
 
 export default function SegmentChart({ type = 'line', data = [], xKey = 'month', series = [], height = 300, referenceLines = [] }) {
   if (!data.length || !series.length) {
     return (
       <div className="empty-state" style={{ height }}>
-        <div className="empty-icon">📈</div>
+        <div className="empty-icon"><Icon name="trending" size={34} color="var(--text-muted)" /></div>
         <div className="empty-title">No data</div>
       </div>
     )

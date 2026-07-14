@@ -647,7 +647,7 @@ export default function Employees() {
               <button className="modal-close" onClick={closeModal}>×</button>
             </div>
             <div className="modal-body">
-              {error && <div className="alert alert-error"><span>⚠</span><span>{error}</span></div>}
+              {error && <div className="alert alert-error"><span><Icon name="alert" size={15} /></span><span>{error}</span></div>}
               <form onSubmit={handleResetPassword} noValidate>
                 <div className="form-group">
                   <label className="form-label" htmlFor="pw-new">New Password</label>
@@ -684,7 +684,7 @@ export default function Employees() {
               <button className="modal-close" onClick={closeModal}>×</button>
             </div>
             <div className="modal-body">
-              {error && <div className="alert alert-error"><span>⚠</span><span>{error}</span></div>}
+              {error && <div className="alert alert-error"><span><Icon name="alert" size={15} /></span><span>{error}</span></div>}
               {confirmAction.type === 'deactivate' && (
                 <p style={{ fontSize: 14, color: 'var(--gray-600)', lineHeight: 1.6 }}>
                   Deactivating <strong>{confirmAction.employee.full_name}</strong> will prevent them from logging in.
@@ -699,7 +699,7 @@ export default function Employees() {
               {confirmAction.type === 'delete' && (
                 <div>
                   <div className="alert alert-error" style={{ marginBottom: 12 }}>
-                    <span>⚠</span>
+                    <span><Icon name="alert" size={15} /></span>
                     <span>This is permanent and cannot be undone.</span>
                   </div>
                   <p style={{ fontSize: 14, color: 'var(--gray-600)', lineHeight: 1.6 }}>
@@ -778,7 +778,7 @@ function EmployeeFormModal({
           <button className="modal-close" onClick={closeModal}>×</button>
         </div>
         <div className="modal-body">
-          {error && <div className="alert alert-error"><span>⚠</span><span>{error}</span></div>}
+          {error && <div className="alert alert-error"><span><Icon name="alert" size={15} /></span><span>{error}</span></div>}
           <form onSubmit={onSubmit} noValidate>
             {/* Identity */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import Fuse from 'fuse.js'
 import { supabase } from '../lib/supabase'
 import { useDebounce } from '../lib/useDebounce'
+import Icon from '../components/Icon'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import { generateProformaPdf } from '../utils/pdfGenerator'
@@ -339,7 +340,7 @@ export default function ProformaInvoice() {
 
       {error && (
         <div className="alert alert-error" role="alert">
-          <span>⚠</span> {error}
+          <span><Icon name="alert" size={15} /></span> {error}
         </div>
       )}
 
@@ -441,7 +442,7 @@ export default function ProformaInvoice() {
                   <button type="button" className="btn btn-ghost btn-sm"
                     onClick={() => removeModel(model.id)}
                     aria-label={`Remove model ${mi + 1}`}>
-                    ✕
+                    <Icon name="x" size={18} />
                   </button>
                 </div>
 
@@ -468,7 +469,7 @@ export default function ProformaInvoice() {
                           style={{ color: 'var(--red)', padding: '4px 8px' }}
                           onClick={() => removeRow(model.id, row.id)}
                           aria-label={`Remove row ${ri + 1}`}>
-                          ✕
+                          <Icon name="x" size={18} />
                         </button>
                       </div>
 

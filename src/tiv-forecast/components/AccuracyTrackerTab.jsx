@@ -1,6 +1,7 @@
 // TIV Forecast — Accuracy Tracker Tab
 // Pivot: rows = months, columns = segment × (MDL | JDG) as separate <td> columns
 import { useMemo } from 'react'
+import Icon from '../../components/Icon'
 import { SEGMENTS, SEG_COL, AL_TOLERANCE } from '../constants'
 import SegmentChart from './SegmentChart'
 
@@ -126,7 +127,7 @@ export default function AccuracyTrackerTab({ tivActuals, judgmentTiv, modelParam
   if (!hasJdg && !hasMdl) {
     return (
       <div className="empty-state">
-        <div className="empty-icon">🎯</div>
+        <div className="empty-icon"><Icon name="chart" size={34} color="var(--text-muted)" /></div>
         <div className="empty-title">No accuracy data yet</div>
         <div className="empty-desc">
           Upload data to see model accuracy. Judgment accuracy appears once recorded predictions have matching actuals.

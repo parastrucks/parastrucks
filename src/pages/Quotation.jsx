@@ -426,7 +426,7 @@ export default function Quotation() {
 
       {error && (
         <div className="alert alert-error" role="alert">
-          <span>⚠</span> {error}
+          <span><Icon name="alert" size={15} /></span> {error}
         </div>
       )}
 

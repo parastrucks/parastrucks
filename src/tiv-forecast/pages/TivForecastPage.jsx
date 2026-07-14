@@ -2,6 +2,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { runForecast } from '../lib/forecastEngine'
+import Icon from '../../components/Icon'
 import { buildDefaultTriggerState } from '../lib/triggerDefs'
 import {
   fetchTivActuals, fetchPtbActuals, fetchAlActuals,
@@ -126,7 +127,7 @@ export default function TivForecastPage() {
 
       {error && (
         <div className="alert alert-error mb-24">
-          <span>⚠</span><span>{error}</span>
+          <span><Icon name="alert" size={15} /></span><span>{error}</span>
         </div>
       )}
 

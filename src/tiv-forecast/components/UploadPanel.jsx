@@ -2,6 +2,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabase'
+import Icon from '../../components/Icon'
 import { parseExcelFile } from '../lib/parseExcel'
 import { retrainModel } from '../lib/retrainModel'
 import {
@@ -213,12 +214,12 @@ export default function UploadPanel({ onUploadComplete }) {
         <div style={{ marginTop: 16 }}>
           {parseError && (
             <div className="alert alert-error" style={{ marginBottom: 12 }}>
-              <span>⚠</span><span>{parseError}</span>
+              <span><Icon name="alert" size={15} /></span><span>{parseError}</span>
             </div>
           )}
           {successMsg && (
             <div className="alert alert-success" style={{ marginBottom: 12 }}>
-              <span>✓</span><span>{successMsg}</span>
+              <span><Icon name="check" size={15} /></span><span>{successMsg}</span>
             </div>
           )}
 

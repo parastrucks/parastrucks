@@ -254,7 +254,7 @@ function VehiclesTab({ vehicles, subSegs, loading, onRefresh }) {
         <Skeleton variant="row" count={4} />
       ) : filtered.length === 0 ? (
         <div className="empty-state">
-          <div className="empty-state-icon">🚛</div>
+          <div className="empty-state-icon"><Icon name="truck" size={36} color="var(--text-muted)" /></div>
           <h3>No vehicles found</h3>
           <p>Try adjusting your search or filters</p>
         </div>
@@ -736,7 +736,7 @@ function SubSegmentsTab({ subSegs, loading, onRefresh }) {
                   <tr>
                     <td colSpan={6}>
                       <div className="empty-state" style={{ padding: '32px 24px' }}>
-                        <div className="empty-state-icon">📁</div>
+                        <div className="empty-state-icon"><Icon name="folder" size={36} color="var(--text-muted)" /></div>
                         <h3>No sub-segments found</h3>
                       </div>
                     </td>
@@ -1013,14 +1013,14 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
             />
             {form.brochure_url && !brochureFile ? (
               <div className="vc-current-brochure">
-                <span>📎 {form.brochure_filename || 'Brochure uploaded'}</span>
+                <span><Icon name="file" size={14} /> {form.brochure_filename || 'Brochure uploaded'}</span>
                 <button className="btn btn-ghost btn-sm" onClick={() => fileRef.current.click()}>
                   Replace
                 </button>
               </div>
             ) : (
               <button className="btn btn-secondary btn-sm" onClick={() => fileRef.current.click()}>
-                {brochureFile ? `📎 ${brochureFile.name}` : '+ Upload PDF'}
+                {brochureFile ? <><Icon name="file" size={14} /> {brochureFile.name}</> : '+ Upload PDF'}
               </button>
             )}
             {/* Progress bar appears directly below the file button so the user
@@ -1200,7 +1200,7 @@ function BrochureDownload({ path, filename }) {
 
   return (
     <button className="btn btn-ghost btn-sm" onClick={download} disabled={loading}>
-      {loading ? <span className="spinner spinner-sm" /> : `📎 ${filename || 'Download'}`}
+      {loading ? <span className="spinner spinner-sm" /> : <><Icon name="file" size={14} /> {filename || 'Download'}</>}
     </button>
   )
 }
@@ -1661,7 +1661,7 @@ function SalesCatalog({ profile }) {
         <Skeleton variant="card" count={3} />
       ) : cards.length === 0 ? (
         <div className="empty-state">
-          <div className="empty-state-icon">🚛</div>
+          <div className="empty-state-icon"><Icon name="truck" size={36} color="var(--text-muted)" /></div>
           <h3>No vehicles available</h3>
           <p>No catalog data for your assigned brand / product range</p>
         </div>

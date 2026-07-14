@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { callEdge } from '../lib/api'
+import Icon from '../components/Icon'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import Skeleton from '../components/Skeleton'
@@ -126,7 +127,7 @@ function RulesTab({ refreshAccessRules }) {
         </button>
       </div>
 
-      {error && <div className="alert alert-error" style={{ marginBottom: 16 }}><span>⚠</span><span>{error}</span></div>}
+      {error && <div className="alert alert-error" style={{ marginBottom: 16 }}><span><Icon name="alert" size={15} /></span><span>{error}</span></div>}
 
       {showAdd && (
         <div className="ar-add-form">
@@ -356,7 +357,7 @@ function RefTable({ title, items, onAdd, onToggle, addPlaceholder, nameKey = 'na
   return (
     <div className="ar-ref-table">
       <h3 className="ar-ref-title">{title}</h3>
-      {error && <div className="alert alert-error" style={{ marginBottom: 10, padding: '6px 10px' }}><span>⚠</span><span style={{ fontSize: 12 }}>{error}</span></div>}
+      {error && <div className="alert alert-error" style={{ marginBottom: 10, padding: '6px 10px' }}><span><Icon name="alert" size={15} /></span><span style={{ fontSize: 12 }}>{error}</span></div>}
       <div className="table-wrap" style={{ marginBottom: 12 }}>
         <table>
           <thead>
@@ -620,7 +621,7 @@ function OperatingUnits({ brands, locations }) {
               <button className="modal-close" onClick={closeModal}>×</button>
             </div>
             <div className="modal-body">
-              {error && <div className="alert alert-error" style={{ marginBottom: 12 }}><span>⚠</span><span>{error}</span></div>}
+              {error && <div className="alert alert-error" style={{ marginBottom: 12 }}><span><Icon name="alert" size={15} /></span><span>{error}</span></div>}
               <form onSubmit={handleSave} noValidate>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
                   <div className="form-group">

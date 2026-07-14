@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
+import Icon from '../components/Icon'
 import { supabase } from '../lib/supabase'
 import useAsyncAction from '../hooks/useAsyncAction'
 
@@ -126,7 +127,7 @@ export default function Profile() {
           )}
         </div>
 
-        {pwError && <div className="alert alert-error"><span>⚠</span><span>{pwError}</span></div>}
+        {pwError && <div className="alert alert-error"><span><Icon name="alert" size={15} /></span><span>{pwError}</span></div>}
 
         {changingPw && (
           <form onSubmit={handleChangePw}>
