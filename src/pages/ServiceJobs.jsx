@@ -684,9 +684,10 @@ export default function ServiceJobs() {
         <div className="empty-state">{filtersActive ? 'No jobs match these filters.' : 'No jobs yet — create one with + New Job.'}</div>
       ) : (
         <>
-          {/* Mobile: sort control (the desktop table sorts via its headers). */}
+          {/* Mobile: sort control (the desktop table sorts via its headers). Carries the
+              job count too — on a phone a separate count row is a wasted line. */}
           <div className="sj-sortbar">
-            <span className="sj-sortbar-lbl">Sort</span>
+            <span className="sj-sortbar-lbl">{visible.length} {visible.length === 1 ? 'job' : 'jobs'}</span>
             <select className="form-select" aria-label="Sort jobs by" value={sort?.key || ''}
               onChange={e => setSort(e.target.value ? { key: e.target.value, dir: sort?.dir || 'asc' } : null)}>
               <option value="">Default order</option>
