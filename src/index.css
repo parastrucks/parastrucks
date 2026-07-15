@@ -649,14 +649,25 @@ tbody tr:hover td { background: var(--gray-50); }
   padding: 16px 24px 12px;
   border-bottom: 1px solid var(--gray-100);
   border-radius: var(--radius) var(--radius) 0 0;
+  /* Lay the title and the ✕ on one row. Simple modals put <h2> + .modal-close
+     directly here; the ServiceJobs modal nests them in .modal-header-main and
+     adds .modal-header-extra below — both handled by the flex-basis rules. */
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
 }
+.modal-header > h2 { flex: 1; min-width: 0; }
 .modal-header-main {
+  flex-basis: 100%;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
 }
-.modal-header-extra { margin-top: 10px; }
+.modal-header-extra { flex-basis: 100%; margin-top: 10px; }
+.modal-close { flex: 0 0 auto; }
 .modal-header h2 {
   font-size: 17px;
   font-weight: 700;
@@ -672,6 +683,16 @@ tbody tr:hover td { background: var(--gray-50); }
 }
 .modal-close:hover { background: var(--gray-200); }
 .modal-body { padding: 20px 24px 24px; }
+
+/* Modal footer buttons — a destructive action sits to the far right on desktop;
+   on a phone the three buttons can't share a row, so they wrap and Delete drops
+   to its own full-width line. */
+.modal-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+.modal-actions-end { margin-left: auto; }
+@media (max-width: 480px) {
+  .modal-actions .btn { flex: 1 1 auto; }
+  .modal-actions-end { margin-left: 0; flex-basis: 100%; }
+}
 
 /* Phase 9.5 — scroll inside the body so the scrollbar doesn't square off the
    modal's rounded corners (the outer .modal clips to its border-radius). */
