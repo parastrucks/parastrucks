@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { callEdge } from '../lib/api'
 import { useToast } from '../context/ToastContext'
@@ -61,6 +61,8 @@ export default function Employees() {
   const [filterDeptId, setFilterDeptId]       = useState('')
   const [filterTier, setFilterTier]           = useState('')
   const [filterStatus, setFilterStatus]       = useState('active')
+  const [showFilters, setShowFilters]         = useState(false)
+  const filterRef = useRef(null)
 
   // Reference data
   const [refEntities,    setRefEntities]    = useState([]) // {id, code}
@@ -204,6 +206,19 @@ export default function Employees() {
   // Non-admin callers are entity-locked — they can only manage their own entity.
   // Pre-fill the entity on modal open and disable the dropdown.
   const callerEntityLocked = !isAdmin && !!caller?.entity_id
+
+  // Count of non-default filters, for the Filters button badge (search is separate).
+  const activeFilterCount =
+    (filterEntityId ? 1 : 0) + (filterDeptId ? 1 : 0) +
+    (filterTier ? 1 : 0) + (filterStatus !== 'active' ? 1 : 0)
+
+  // Close the filter popover on an outside click.
+  useEffect(() => {
+    if (!showFilters) return
+    const onDown = (e) => { if (filterRef.current && !filterRef.current.contains(e.target)) setShowFilters(false) }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [showFilters])
 
   /* ── filtered list ──────────────────────────────────────────────────── */
   const filtered = employees.filter(e => {
@@ -529,37 +544,68 @@ export default function Employees() {
         </div>
       </div>
 
-      {/* Filters */}
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
+      {/* Search inline; the four filters collapse behind a Filters button + popover
+          so the toolbar stays one row (they used to stack into a 4-row block on mobile). */}
+      <div className="sj-toolbar" style={{ marginBottom: 16 }}>
         <input
-          className="form-input"
-          style={{ maxWidth: 240, marginBottom: 0 }}
+          className="form-input sj-search"
+          style={{ marginBottom: 0 }}
           placeholder="Search name or email…"
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
-        <select className="form-select" style={{ maxWidth: 150 }}
-          value={filterEntityId} onChange={e => setFilterEntityId(e.target.value)}>
-          <option value="">All Entities</option>
-          {refEntities.map(e => <option key={e.id} value={e.id}>{e.code}</option>)}
-        </select>
-        <select className="form-select" style={{ maxWidth: 170 }}
-          value={filterDeptId} onChange={e => setFilterDeptId(e.target.value)}>
-          <option value="">All Departments</option>
-          {refDepartments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-        </select>
-        <select className="form-select" style={{ maxWidth: 160 }}
-          value={filterTier} onChange={e => setFilterTier(e.target.value)}>
-          <option value="">All Levels</option>
-          <option value="admin">{PERM_LABEL.admin}</option>
-          {PERM_TIERS.map(r => <option key={r} value={r}>{PERM_LABEL[r]}</option>)}
-        </select>
-        <select className="form-select" style={{ maxWidth: 140 }}
-          value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
-          <option value="active">Active only</option>
-          <option value="inactive">Inactive only</option>
-          <option value="">All</option>
-        </select>
+        <div className="sj-filter-wrap" ref={filterRef}>
+          <button type="button" className={`btn btn-secondary sj-filter-btn${activeFilterCount ? ' has-active' : ''}`}
+            aria-haspopup="dialog" aria-expanded={showFilters} onClick={() => setShowFilters(s => !s)}>
+            <Icon name="filter-alt" size={15} /> Filters
+            {activeFilterCount > 0 && <span className="sj-filter-badge">{activeFilterCount}</span>}
+          </button>
+          {showFilters && (
+            <div className="sj-filter-pop" role="dialog" aria-label="Filter employees">
+              <div className="form-group">
+                <label className="form-label" htmlFor="emp-f-entity">Entity</label>
+                <select id="emp-f-entity" className="form-select"
+                  value={filterEntityId} onChange={e => setFilterEntityId(e.target.value)}>
+                  <option value="">All Entities</option>
+                  {refEntities.map(e => <option key={e.id} value={e.id}>{e.code}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label" htmlFor="emp-f-dept">Department</label>
+                <select id="emp-f-dept" className="form-select"
+                  value={filterDeptId} onChange={e => setFilterDeptId(e.target.value)}>
+                  <option value="">All Departments</option>
+                  {refDepartments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label" htmlFor="emp-f-tier">Permission level</label>
+                <select id="emp-f-tier" className="form-select"
+                  value={filterTier} onChange={e => setFilterTier(e.target.value)}>
+                  <option value="">All Levels</option>
+                  <option value="admin">{PERM_LABEL.admin}</option>
+                  {PERM_TIERS.map(r => <option key={r} value={r}>{PERM_LABEL[r]}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label" htmlFor="emp-f-status">Status</label>
+                <select id="emp-f-status" className="form-select"
+                  value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+                  <option value="active">Active only</option>
+                  <option value="inactive">Inactive only</option>
+                  <option value="">All</option>
+                </select>
+              </div>
+              <div className="sj-filter-pop-foot">
+                <button type="button" className="btn btn-sm btn-secondary" disabled={!activeFilterCount}
+                  onClick={() => { setFilterEntityId(''); setFilterDeptId(''); setFilterTier(''); setFilterStatus('active') }}>
+                  Clear filters
+                </button>
+                <button type="button" className="btn btn-sm btn-primary" onClick={() => setShowFilters(false)}>Done</button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Table */}
@@ -1053,13 +1099,13 @@ function EmployeeFormModal({
             </div>
 
             {/* Actions */}
-            <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+            <div className="modal-actions">
               <button type="submit" className="btn btn-primary" disabled={saving}>
                 {saving ? <span className="spinner spinner-sm" /> : (mode === 'add' ? 'Create Employee' : 'Save Changes')}
               </button>
               <button type="button" className="btn btn-secondary" onClick={closeModal}>Cancel</button>
               {canDelete && (
-                <button type="button" className="btn btn-danger" style={{ marginLeft: 'auto' }} onClick={onDelete}>
+                <button type="button" className="btn btn-danger modal-actions-end" onClick={onDelete}>
                   Delete Permanently
                 </button>
               )}
