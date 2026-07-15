@@ -2323,9 +2323,12 @@ tbody tr:hover td { background: var(--gray-50); }
   from { opacity: 0; transform: translateY(12px) scale(.96); }
   to   { opacity: 1; transform: translateY(0) scale(1); }
 }
-.toast--success { background: var(--green-light); color: var(--green); }
-.toast--error   { background: var(--red-light);   color: var(--red); }
-.toast--info    { background: var(--blue-light);  color: var(--blue); }
+/* Solid saturated fill + white text — the pale-wash version (red text on a
+   near-white pink) read as low-contrast and barely lifted off the page. White
+   on each of these passes WCAG AA. */
+.toast--success { background: var(--green); color: var(--white); }
+.toast--error   { background: var(--red);   color: var(--white); }
+.toast--info    { background: var(--blue);  color: var(--white); }
 .toast__icon    { font-size: 16px; flex-shrink: 0; }
 .toast__message { flex: 1; line-height: 1.4; }
 .toast__close {
@@ -2333,7 +2336,7 @@ tbody tr:hover td { background: var(--gray-50); }
   border: none;
   font-size: 18px;
   cursor: pointer;
-  opacity: .5;
+  opacity: .8;
   padding: 0 2px;
   color: inherit;
 }

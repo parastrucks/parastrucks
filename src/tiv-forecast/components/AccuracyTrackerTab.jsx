@@ -1,6 +1,6 @@
 // TIV Forecast — Accuracy Tracker Tab
 // Pivot: rows = months, columns = segment × (MDL | JDG) as separate <td> columns
-import { useMemo } from 'react'
+import { useMemo, Fragment } from 'react'
 import Icon from '../../components/Icon'
 import { SEGMENTS, SEG_COL, AL_TOLERANCE } from '../constants'
 import SegmentChart from './SegmentChart'
@@ -226,9 +226,8 @@ export default function AccuracyTrackerTab({ tivActuals, judgmentTiv, modelParam
                 <tr style={{ borderBottom: '2px solid var(--gray-200)', background: 'var(--gray-50)' }}>
                   <th style={{ padding: '3px 8px' }} />
                   {SEGMENTS.map(seg => (
-                    <>
+                    <Fragment key={seg}>
                       <th
-                        key={`${seg}-mdl`}
                         style={{
                           textAlign: 'center',
                           fontWeight: 600,
@@ -241,7 +240,6 @@ export default function AccuracyTrackerTab({ tivActuals, judgmentTiv, modelParam
                         MDL
                       </th>
                       <th
-                        key={`${seg}-jdg`}
                         style={{
                           textAlign: 'center',
                           fontWeight: 600,
@@ -252,7 +250,7 @@ export default function AccuracyTrackerTab({ tivActuals, judgmentTiv, modelParam
                       >
                         JDG
                       </th>
-                    </>
+                    </Fragment>
                   ))}
                   {/* Total sub-headers */}
                   <th style={{ textAlign: 'center', fontWeight: 600, fontSize: 11, color: 'var(--blue)', padding: '3px 6px', borderLeft: '2px solid var(--gray-300)' }}>MDL</th>
