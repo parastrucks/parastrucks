@@ -743,12 +743,23 @@ function ErrorsTab() {
       try {
         const { data, error: err } = await supabase
           .from('error_log')
-          .select('id, created_at, user_id, url, message, stack, context, user:users(full_name, email)')
+          .select('id, created_at, user_id, url, message, stack, context')
           .order('created_at', { ascending: false })
           .limit(100)
         if (cancelled) return
-        if (err) toast.error(err.message)
-        else setRows(data || [])
+        if (err) { toast.error(err.message); return }
+        // error_log.user_id's FK targets auth.users, not public.users, so
+        // PostgREST can't embed user:users(...) (400 "no relationship in cache").
+        // Resolve display names with a second lookup keyed on the distinct ids.
+        const rows = data || []
+        const ids = [...new Set(rows.map(r => r.user_id).filter(Boolean))]
+        let userMap = {}
+        if (ids.length) {
+          const { data: us } = await supabase.from('users').select('id, full_name, email').in('id', ids)
+          if (cancelled) return
+          userMap = Object.fromEntries((us || []).map(u => [u.id, u]))
+        }
+        setRows(rows.map(r => ({ ...r, user: userMap[r.user_id] || null })))
       } catch (e) {
         if (!cancelled) toast.error('Failed to load errors: ' + e.message)
       } finally {
