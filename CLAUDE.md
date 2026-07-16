@@ -35,11 +35,13 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   changes (Service/Spares require Brands; bus-calc sticky fix; gitignore `.env*`). CI + Vercel green.
 - **Built + fully reviewed, NOT yet live — Phase 9.6 visual redesign** (Paras Group print-report
   language: paper/ink/hairline/one-blue-accent, Carlito, Lucide; 4-section sidebar; new mobile shell;
-  PageHead; mobile card tables). Branch **`9.6-portal-redesign`** (off `origin/portal`, **53 commits,
+  PageHead; mobile card tables). Branch **`9.6-portal-redesign`** (off `origin/portal`, **58 commits,
   all pushed**, builds green). **🟢 Owner screen-by-screen localhost review COMPLETE (2026-07-16) —
   every screen passed**, including the 760px shell boundary (swept 386→768: exactly one shell at
-  every width, no dead zone). Visual/structural only. **NEXT = open PR → CI green + Vercel READY →
-  owner one-shot merge to `portal` → verify prod + CSP.**
+  every width, no dead zone). Late riders (owner-directed): **Excel templates on both upload
+  surfaces**, the **duplicate brochure-upload-progress fix** (prod bug), and **full variant
+  descriptions** in the family modal. **NEXT = open PR → CI green + Vercel READY → owner one-shot
+  merge to `portal` → verify prod + CSP — owner wants the deploy TONIGHT (2026-07-16).**
   Prior: smoke-tested on staging + **red-teamed twice** (both ship-safe, all findings fixed) + all
   owner design-decisions resolved; **accounts + HR got their missing `user_brands` rows on prod**
   (PTB→`al`). Review round 2 (2026-07-16) landed 8 commits: Vendor Jobs native-Chrome-bubble →
@@ -51,7 +53,9 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   (saturated rainbow → muted categorical; Judgment orange → ink). Detail:
   `memory/phase96_portal_redesign.md`; decisions + fixed-item log in `memory/known_issues.md`.
   Old-portal designer handoff on the branch: `docs/PORTAL_UI_HANDOFF.md`.
-- **Planned, not started:** **Phase 10 — Vehicle Tracker** (`/tracker`) — see `docs/backlog/phase10-vehicle-tracker.md`.
+- **Planned, not started:** **Phase 9.7 — Catalog UX rework** (owner-approved 2026-07-16; builds
+  AFTER 9.6 is live) — see `docs/backlog/phase97-catalog-ux.md`. **Phase 10 — Vehicle Tracker**
+  (`/tracker`) — see `docs/backlog/phase10-vehicle-tracker.md`.
 - **Separate project (not this repo):** the HD Hyundai **ERP** (`erp.parastrucks.in`, repo `erp-parastrucks`) — see `memory/project_hd_hyundai_vertical.md`.
 
 ## Next actions

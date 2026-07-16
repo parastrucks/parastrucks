@@ -1576,3 +1576,36 @@ Eight commits landed this round (each committed as the owner found it, per the c
 
 *Note:* the two console warnings present on every page (React Router v7 `startTransition` /
 `relativeSplatPath` future flags) are **also on production** — not redesign noise.
+
+**Session 2026-07-16 (evening) — Excel templates, two catalog fixes, and the Phase 9.7 plan.
+Branch at 58 commits, all pushed; owner set the 9.6 deploy for TONIGHT.**
+
+- **Excel templates on both upload surfaces** (`cadd116`, owner-directed): "Download template" on
+  Catalog→Import (Price_Circular_Template.xlsx — instruction row ABOVE the header row so the CBN
+  header-finder skips it; deliberately NO example data rows, so an unedited upload imports zero
+  vehicles) and TIV→Data Upload (Market_Data_Template.xlsx). The TIV generator
+  (`downloadMarketDataTemplate`) lives in `parseExcel.js` next to the parser and is built from the
+  SAME constants the parser reads (6-sheet order, month format, RAW_SEGMENT_ROWS row indices), so
+  template and import can never drift apart; the Raw-Data month placeholder `<Apr-22>` is
+  angle-bracketed so `parseMonthLabel()` ignores it until replaced. Client-side via the bundled
+  `xlsx` lib — no static assets, no new dependencies.
+- **Sub-segment modal showed the brochure upload progress twice** (`4ec8b32`) — owner spotted it on
+  prod: "Uploading… 0%" under the file button AND a leftover "Uploading brochure… 0%" under the
+  Active checkbox. Second block removed; the save button still mirrors the percentage (intentional).
+- **Family variant list shows the full price-list description** (`83d088e`) — `.vc-desc` truncated
+  at 320px with an ellipsis, hiding exactly the load-span/cabin/fuel details that distinguish CBNs
+  within a family. Scoped override on `.vc-wide-modal .vc-desc` wraps it in full; the main Vehicles
+  table keeps its ellipsis. (Tyres was already a column.) Fast-tracked from the 9.7 F3 spec.
+- **Catalog UX brainstorm → Phase 9.7 plan** (`fdbb562` → `docs/backlog/phase97-catalog-ux.md`).
+  Two rounds of interactive visual prototypes (artifact `aa2a498e-8d7f-46ad-ad71-9b927eb79d1f`);
+  core reframe: **brochures are the catalog's primary job, one brochure ↔ many CBNs, the
+  sub-segment (family) is the unit**. Owner approved: F1 search-first landing + per-user shelf ·
+  F2 brochure wall (covers pre-rendered once at upload — never live PDF rendering) · F3 hierarchy
+  fallback · S1 family-level WhatsApp share landing as an editable draft · A1 four-tab admin
+  workbench (reshuffle with inline "+ new sub-segment", import triage queue, rules with NOT-terms,
+  Families retire/reactivate lifecycle). Keystone: additive `vehicle_catalog.sub_segment_id` FK
+  replacing the name-text linkage — which is also why the sub-segment Name/Segment edit fields are
+  disabled today (BY DESIGN, not a bug; owner hit this on prod). Owner rejected: WhatsApp bot,
+  QR-on-print, and all price-first ideas (price card / compare / quote-this / circular history /
+  price book). 9.7 builds after 9.6 is live, own branch and PRs — only the two safe presentational
+  pieces above rode the 9.6 release.
