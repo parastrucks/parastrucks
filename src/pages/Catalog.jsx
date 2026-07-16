@@ -149,7 +149,11 @@ function AdminCatalog() {
         <SubSegmentsTab
           subSegs={subSegs}
           loading={ssLoading}
-          onRefresh={fetchSubSegs}
+          // Phase 9.7a: saving a sub-segment can now write vehicle_catalog too —
+          // a rename rewrites sub_category on every linked CBN, and add-mode
+          // assignment sets sub_segment_id. Refetching only sub_segments left the
+          // Vehicles tab showing the old family name until a manual reload.
+          onRefresh={() => { fetchSubSegs(); fetchVehicles() }}
         />
       )}
       {tab === 'import' && (
