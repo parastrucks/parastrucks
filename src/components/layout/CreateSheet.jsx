@@ -1,0 +1,43 @@
+import { useNavigate } from 'react-router-dom'
+import { useEffect } from 'react'
+import useFocusTrap from '../../hooks/useFocusTrap'
+import Icon from '../Icon'
+
+/* "Create new" bottom sheet, opened by the raised (+) in the mobile dock.
+   `actions` is already canAccess-filtered by the caller. */
+export default function CreateSheet({ open, onClose, actions }) {
+  const navigate = useNavigate()
+  // Trap Tab focus inside the sheet + handle Escape → close (buttons only, no
+  // text inputs, so the historical per-keystroke focus-steal bug can't apply).
+  const trapRef = useFocusTrap(open, onClose)
+
+  useEffect(() => {
+    if (!open) return
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden' // lock the page behind the sheet
+    return () => { document.body.style.overflow = prevOverflow }
+  }, [open])
+
+  if (!open) return null
+
+  return (
+    <div className="sheet-backdrop" onClick={onClose}>
+      <div className="sheet-panel" ref={trapRef} onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Create new">
+        <div className="sheet-head">
+          <span className="sheet-title">Create new</span>
+          <button className="sheet-close" onClick={onClose} aria-label="Close"><Icon name="x" size={20} /></button>
+        </div>
+        {actions.map(a => (
+          <button key={a.to} type="button" className="sheet-row" onClick={() => { onClose(); navigate(a.openNew ? `${a.to}?new=1` : a.to) }}>
+            <span className="sheet-row-icon"><Icon name={a.icon} size={19} color="var(--ink)" /></span>
+            <span className="sheet-row-text">
+              <span className="sheet-row-label">{a.label}</span>
+              <span className="sheet-row-desc">{a.desc}</span>
+            </span>
+            <Icon name="arrow-right" size={16} color="var(--text-muted)" />
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}

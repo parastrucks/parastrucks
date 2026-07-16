@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import { generateQuotationPDF } from '../utils/pdfGenerator'
 import Skeleton from '../components/Skeleton'
+import Icon from '../components/Icon'
 
 function fmtINR(n) {
   if (!n && n !== 0) return '—'
-  return '₹\u00a0' + Number(n).toLocaleString('en-IN')
+  return '₹ ' + Number(n).toLocaleString('en-IN')
 }
 function fmtDate(iso) {
   if (!iso) return '—'
@@ -15,7 +17,7 @@ function fmtDate(iso) {
 }
 
 export default function MyQuotations() {
-  const { profile } = useAuth()
+  const { profile, canAccess } = useAuth()
   const [quotations, setQuotations] = useState([])
   const [loading, setLoading] = useState(true)
   const [downloadingId, setDownloadingId] = useState(null)
@@ -89,11 +91,31 @@ export default function MyQuotations() {
   const vehicleCount = (q) =>
     (q.line_items || []).reduce((s, i) => s + (i.qty || 1), 0)
 
+  const pdfBtn = (q) => (
+    <button
+      className="btn btn-secondary btn-sm"
+      onClick={() => handleRedownload(q)}
+      disabled={downloadingId === q.id}
+    >
+      {downloadingId === q.id
+        ? <><span className="spinner spinner-sm" /> Generating…</>
+        : <><Icon name="download" size={15} /> PDF</>}
+    </button>
+  )
+
+  const units = (q) => `${vehicleCount(q)} unit${vehicleCount(q) !== 1 ? 's' : ''}`
+
   return (
     <div>
-      <div className="page-header">
-        <h1>My Quotations</h1>
-        <p>Your quotation history — re-download any PDF</p>
+      <div className="page-head">
+        <div>
+          <div className="page-head-crumb">Quotations</div>
+          <h1 className="page-head-title">My Quotations<span className="period-accent">.</span></h1>
+          <div className="page-head-sub">Your quotation history — re-download any PDF</div>
+        </div>
+        {canAccess('/quotation') && (
+          <Link to="/quotation" className="btn btn-primary page-head-right"><Icon name="plus" size={15} /> New Quotation</Link>
+        )}
       </div>
 
       {loading ? (
@@ -102,56 +124,62 @@ export default function MyQuotations() {
         </div>
       ) : quotations.length === 0 ? (
         <div className="empty-state">
-          <div className="empty-state-icon">📄</div>
+          <div className="empty-state-icon"><Icon name="file" size={40} color="var(--text-muted)" /></div>
           <h3>No quotations yet</h3>
           <p>Quotations you create will appear here.</p>
         </div>
       ) : (
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Quotation No.</th>
-                <th>Date</th>
-                <th>Customer</th>
-                <th>Vehicles</th>
-                <th className="text-right">Grand Total</th>
-                <th>Valid Until</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {quotations.map(q => (
-                <tr key={q.id}>
-                  <td><span className="q-number">{q.quotation_number}</span></td>
-                  <td>{fmtDate(q.created_at)}</td>
-                  <td>
-                    <div className="q-customer">{q.customer_name}</div>
-                    {q.customer_mobile && (
-                      <div className="q-customer-sub">{q.customer_mobile}</div>
-                    )}
-                  </td>
-                  <td>
-                    <span className="badge badge-blue">{vehicleCount(q)} unit{vehicleCount(q) !== 1 ? 's' : ''}</span>
-                  </td>
-                  <td style={{ textAlign: 'right', fontWeight: 700 }}>{fmtINR(q.grand_total)}</td>
-                  <td>{fmtDate(q.valid_until)}</td>
-                  <td>
-                    <button
-                      className="btn btn-secondary btn-sm"
-                      onClick={() => handleRedownload(q)}
-                      disabled={downloadingId === q.id}
-                    >
-                      {downloadingId === q.id
-                        ? <><span className="spinner spinner-sm" /> Generating…</>
-                        : '↓ PDF'}
-                    </button>
-                  </td>
+        <>
+          <div className="table-wrap only-desktop">
+            <table>
+              <thead>
+                <tr>
+                  <th>Quotation No.</th>
+                  <th>Date</th>
+                  <th>Customer</th>
+                  <th>Vehicles</th>
+                  <th className="text-right">Grand Total</th>
+                  <th>Valid Until</th>
+                  <th></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {quotations.map(q => (
+                  <tr key={q.id}>
+                    <td><span className="q-number">{q.quotation_number}</span></td>
+                    <td>{fmtDate(q.created_at)}</td>
+                    <td>
+                      <div className="q-customer">{q.customer_name}</div>
+                      {q.customer_mobile && <div className="q-customer-sub">{q.customer_mobile}</div>}
+                    </td>
+                    <td><span className="badge badge-blue">{units(q)}</span></td>
+                    <td style={{ textAlign: 'right', fontWeight: 700 }}>{fmtINR(q.grand_total)}</td>
+                    <td>{fmtDate(q.valid_until)}</td>
+                    <td>{pdfBtn(q)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="only-mobile mobile-cards">
+            {quotations.map(q => (
+              <div className="m-card" key={q.id}>
+                <div className="m-card-top">
+                  <span className="q-number">{q.quotation_number}</span>
+                  <span className="badge badge-blue">{units(q)}</span>
+                </div>
+                <div className="q-customer">{q.customer_name}</div>
+                <div className="q-customer-sub">{q.customer_mobile ? `${q.customer_mobile} · ` : ''}{fmtDate(q.created_at)}</div>
+                <div className="m-card-kvs">
+                  <div><div className="m-kv-label">Grand Total</div><div className="m-kv-val">{fmtINR(q.grand_total)}</div></div>
+                  <div><div className="m-kv-label">Valid Until</div><div className="m-kv-val">{fmtDate(q.valid_until)}</div></div>
+                </div>
+                <div style={{ marginTop: 12 }}>{pdfBtn(q)}</div>
+              </div>
+            ))}
+          </div>
+        </>
       )}
     </div>
   )

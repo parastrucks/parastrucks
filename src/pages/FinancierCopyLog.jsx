@@ -4,10 +4,11 @@ import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import { generateFinancierCopyPdf, buildFinancierCopyPdfArgs } from '../utils/pdfGenerator'
 import Skeleton from '../components/Skeleton'
+import Icon from '../components/Icon'
 
 function fmtINR(n) {
   if (!n && n !== 0) return '—'
-  return '₹\u00a0' + Number(n).toLocaleString('en-IN')
+  return '₹ ' + Number(n).toLocaleString('en-IN')
 }
 function fmtDate(iso) {
   if (!iso) return '—'
@@ -114,15 +115,24 @@ export default function FinancierCopyLog() {
   const hasPrev = page > 0
   const hasNext = (page + 1) * PAGE_SIZE < totalCount
 
+  const pdfBtn = (p) => (
+    <button className="btn btn-secondary btn-sm" onClick={() => handleRedownload(p)} disabled={downloadingId === p.id}>
+      {downloadingId === p.id
+        ? <><span className="spinner spinner-sm" /> Generating…</>
+        : <><Icon name="download" size={15} /> PDF</>}
+    </button>
+  )
+
   return (
     <div>
-      <div className="page-header flex-between" style={{ flexWrap: 'wrap', gap: 12 }}>
+      <div className="page-head">
         <div>
-          <h1>Financier's Copy Log</h1>
-          <p>All financier's copies across all users</p>
+          <div className="page-head-crumb">Financier's Copies</div>
+          <h1 className="page-head-title">Financier's Copy Log<span className="period-accent">.</span></h1>
+          <div className="page-head-sub">All financier's copies across all users</div>
         </div>
         <input
-          className="form-input"
+          className="form-input page-head-right"
           style={{ maxWidth: 300 }}
           placeholder="Search FC no., customer, chassis, engine…"
           aria-label="Search financier's copies"
@@ -137,17 +147,18 @@ export default function FinancierCopyLog() {
         </div>
       ) : copies.length === 0 ? (
         <div className="empty-state">
-          <div className="empty-state-icon">📋</div>
+          <div className="empty-state-icon"><Icon name="clipboard" size={40} color="var(--text-muted)" /></div>
           <h3>{debouncedSearch ? 'No results found' : "No financier's copies yet"}</h3>
           <p>{debouncedSearch ? 'Try a different search term.' : "Financier's copies created by the team will appear here."}</p>
         </div>
       ) : (
         <>
-          <div style={{ marginBottom: 10, fontSize: 13, color: 'var(--gray-500)' }}>
+          <div className="eyebrow" style={{ marginBottom: 12 }}>
             {totalCount} financier's cop{totalCount !== 1 ? 'ies' : 'y'}
             {debouncedSearch && ` matching "${debouncedSearch}"`}
           </div>
-          <div className="table-wrap">
+
+          <div className="table-wrap only-desktop">
             <table>
               <thead>
                 <tr>
@@ -166,59 +177,53 @@ export default function FinancierCopyLog() {
                     <td><span className="q-number">{p.fc_number}</span></td>
                     <td>{fmtDate(p.created_at)}</td>
                     <td>
-                      <div style={{ fontWeight: 600, color: 'var(--gray-900)', fontSize: 13 }}>
-                        {p.users?.full_name || '—'}
-                      </div>
+                      <div style={{ fontWeight: 600, color: 'var(--ink)', fontSize: 13 }}>{p.users?.full_name || '—'}</div>
                       {p.users?.designations?.name && (
-                        <div style={{ fontSize: 11.5, color: 'var(--gray-400)' }}>
-                          {p.users.designations.name}
-                        </div>
+                        <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{p.users.designations.name}</div>
                       )}
                     </td>
                     <td>
                       <div className="q-customer">{p.customer_name}</div>
-                      {p.customer_mobile && (
-                        <div className="q-customer-sub">{p.customer_mobile}</div>
-                      )}
+                      {p.customer_mobile && <div className="q-customer-sub">{p.customer_mobile}</div>}
                     </td>
                     <td>
                       <div style={{ fontFamily: 'monospace', fontSize: 12 }}>{p.chassis_no}</div>
-                      <div style={{ fontSize: 11, color: 'var(--gray-400)', fontFamily: 'monospace' }}>{p.engine_no}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>{p.engine_no}</div>
                     </td>
                     <td style={{ textAlign: 'right', fontWeight: 700 }}>{fmtINR(p.grand_total)}</td>
-                    <td>
-                      <button
-                        className="btn btn-secondary btn-sm"
-                        onClick={() => handleRedownload(p)}
-                        disabled={downloadingId === p.id}
-                      >
-                        {downloadingId === p.id
-                          ? <><span className="spinner spinner-sm" /> Generating…</>
-                          : '↓ PDF'}
-                      </button>
-                    </td>
+                    <td>{pdfBtn(p)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+
+          <div className="only-mobile mobile-cards">
+            {copies.map(p => (
+              <div className="m-card" key={p.id}>
+                <div className="m-card-top">
+                  <span className="q-number">{p.fc_number}</span>
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{fmtDate(p.created_at)}</span>
+                </div>
+                <div className="q-customer">{p.customer_name}</div>
+                {p.customer_mobile && <div className="q-customer-sub">{p.customer_mobile}</div>}
+                <div className="m-card-kvs">
+                  <div><div className="m-kv-label">Grand Total</div><div className="m-kv-val">{fmtINR(p.grand_total)}</div></div>
+                  <div><div className="m-kv-label">Prepared By</div><div className="m-kv-val">{p.users?.full_name || '—'}</div></div>
+                  <div><div className="m-kv-label">Chassis / Engine</div><div className="m-kv-val" style={{ fontFamily: 'monospace', fontSize: 11.5 }}>{p.chassis_no}{p.engine_no ? ` / ${p.engine_no}` : ''}</div></div>
+                  <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'flex-end' }}>{pdfBtn(p)}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+
           <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 16 }}>
-            <button
-              className="btn btn-ghost btn-sm"
-              onClick={() => setPage(p => Math.max(0, p - 1))}
-              disabled={!hasPrev}
-            >
-              ← Previous
+            <button className="btn btn-ghost btn-sm" onClick={() => setPage(p => Math.max(0, p - 1))} disabled={!hasPrev}>
+              <Icon name="chevron-left" size={15} /> Previous
             </button>
-            <span style={{ fontSize: 13, color: 'var(--gray-500)' }}>
-              Page {page + 1} of {totalPages}
-            </span>
-            <button
-              className="btn btn-ghost btn-sm"
-              onClick={() => setPage(p => p + 1)}
-              disabled={!hasNext}
-            >
-              Next →
+            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Page {page + 1} of {totalPages}</span>
+            <button className="btn btn-ghost btn-sm" onClick={() => setPage(p => p + 1)} disabled={!hasNext}>
+              Next <Icon name="chevron-right" size={15} />
             </button>
           </div>
         </>

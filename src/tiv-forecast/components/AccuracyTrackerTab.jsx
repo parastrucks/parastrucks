@@ -1,6 +1,7 @@
 // TIV Forecast — Accuracy Tracker Tab
 // Pivot: rows = months, columns = segment × (MDL | JDG) as separate <td> columns
-import { useMemo } from 'react'
+import { useMemo, Fragment } from 'react'
+import Icon from '../../components/Icon'
 import { SEGMENTS, SEG_COL, AL_TOLERANCE } from '../constants'
 import SegmentChart from './SegmentChart'
 
@@ -12,7 +13,7 @@ function absErr(forecast, actual) {
 function errColor(ae) {
   if (ae === null) return 'var(--gray-300)'
   if (ae <= AL_TOLERANCE) return 'var(--green)'
-  if (ae <= 0.25) return '#F59E0B'
+  if (ae <= 0.25) return 'var(--amber)'
   return 'var(--red)'
 }
 
@@ -126,7 +127,7 @@ export default function AccuracyTrackerTab({ tivActuals, judgmentTiv, modelParam
   if (!hasJdg && !hasMdl) {
     return (
       <div className="empty-state">
-        <div className="empty-icon">🎯</div>
+        <div className="empty-icon"><Icon name="chart" size={34} color="var(--text-muted)" /></div>
         <div className="empty-title">No accuracy data yet</div>
         <div className="empty-desc">
           Upload data to see model accuracy. Judgment accuracy appears once recorded predictions have matching actuals.
@@ -153,7 +154,7 @@ export default function AccuracyTrackerTab({ tivActuals, judgmentTiv, modelParam
             xKey="segment"
             series={[
               ...(hasMdl ? [{ key: 'Model MAPE',    name: 'Model MAPE %',    color: 'var(--blue)' }] : []),
-              ...(hasJdg ? [{ key: 'Judgment MAPE', name: 'Judgment MAPE %', color: '#F59E0B' }] : []),
+              ...(hasJdg ? [{ key: 'Judgment MAPE', name: 'Judgment MAPE %', color: 'var(--ink)' }] : []),
             ]}
             referenceLines={[{ value: 15, color: 'var(--green)', label: '15% AL tolerance' }]}
             height={200}
@@ -171,12 +172,12 @@ export default function AccuracyTrackerTab({ tivActuals, judgmentTiv, modelParam
           <div style={{ color: 'var(--gray-500)' }}>
             {hasMdl && <span style={{ color: 'var(--blue)', fontWeight: 600 }}>● Model</span>}
             {hasBoth && <span style={{ color: 'var(--gray-300)' }}> · </span>}
-            {hasJdg && <span style={{ color: '#F59E0B', fontWeight: 600 }}>● Judgment</span>}
+            {hasJdg && <span style={{ color: 'var(--ink)', fontWeight: 600 }}>● Judgment</span>}
           </div>
           <div style={{ color: 'var(--gray-500)' }}>
             <span style={{ color: 'var(--green)', fontWeight: 600 }}>● ≤15%</span>
             {' · '}
-            <span style={{ color: '#F59E0B', fontWeight: 600 }}>● ≤25%</span>
+            <span style={{ color: 'var(--amber)', fontWeight: 600 }}>● ≤25%</span>
             {' · '}
             <span style={{ color: 'var(--red)', fontWeight: 600 }}>● &gt;25%</span>
           </div>
@@ -225,9 +226,8 @@ export default function AccuracyTrackerTab({ tivActuals, judgmentTiv, modelParam
                 <tr style={{ borderBottom: '2px solid var(--gray-200)', background: 'var(--gray-50)' }}>
                   <th style={{ padding: '3px 8px' }} />
                   {SEGMENTS.map(seg => (
-                    <>
+                    <Fragment key={seg}>
                       <th
-                        key={`${seg}-mdl`}
                         style={{
                           textAlign: 'center',
                           fontWeight: 600,
@@ -240,22 +240,21 @@ export default function AccuracyTrackerTab({ tivActuals, judgmentTiv, modelParam
                         MDL
                       </th>
                       <th
-                        key={`${seg}-jdg`}
                         style={{
                           textAlign: 'center',
                           fontWeight: 600,
                           fontSize: 11,
-                          color: '#F59E0B',
+                          color: 'var(--ink)',
                           padding: '3px 6px',
                         }}
                       >
                         JDG
                       </th>
-                    </>
+                    </Fragment>
                   ))}
                   {/* Total sub-headers */}
                   <th style={{ textAlign: 'center', fontWeight: 600, fontSize: 11, color: 'var(--blue)', padding: '3px 6px', borderLeft: '2px solid var(--gray-300)' }}>MDL</th>
-                  <th style={{ textAlign: 'center', fontWeight: 600, fontSize: 11, color: '#F59E0B', padding: '3px 6px' }}>JDG</th>
+                  <th style={{ textAlign: 'center', fontWeight: 600, fontSize: 11, color: 'var(--ink)', padding: '3px 6px' }}>JDG</th>
                 </tr>
               )}
             </thead>

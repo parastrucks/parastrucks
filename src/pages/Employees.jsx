@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { callEdge } from '../lib/api'
 import { useToast } from '../context/ToastContext'
 import useAsyncAction from '../hooks/useAsyncAction'
 import useFocusTrap from '../hooks/useFocusTrap'
 import Skeleton from '../components/Skeleton'
+import Icon from '../components/Icon'
 import { useAuth } from '../context/AuthContext'
 
 /* ── Permission-level tiers shown in the UI ──────────────────────────────
@@ -60,6 +61,8 @@ export default function Employees() {
   const [filterDeptId, setFilterDeptId]       = useState('')
   const [filterTier, setFilterTier]           = useState('')
   const [filterStatus, setFilterStatus]       = useState('active')
+  const [showFilters, setShowFilters]         = useState(false)
+  const filterRef = useRef(null)
 
   // Reference data
   const [refEntities,    setRefEntities]    = useState([]) // {id, code}
@@ -76,8 +79,36 @@ export default function Employees() {
   const [selected, setSelected] = useState(null)
   const [form, setForm]         = useState(EMPTY_FORM)
   const { run: runSave, loading: saving, error, setError, clearError } = useAsyncAction()
+  const [errorField, setErrorField] = useState(null) // which field to flag red on validation
   const toast = useToast()
   const trapRef = useFocusTrap(!!modal, closeModal)
+
+  // Server/EF failures never get a banner — they surface as a toast. Validation
+  // errors are rendered inline at the offending field instead.
+  const toastOnError = { onError: e => toast.error(e?.message || 'Something went wrong.') }
+
+  // Map a validation field key → the DOM id of the control to scroll/focus.
+  const FIELD_EL_ID = {
+    full_name: 'emp-name',
+    email: 'emp-email',
+    password: 'emp-pw',
+    entity_id: 'emp-entity',
+    department_id: 'emp-dept',
+    designation_id: 'emp-desig',
+    permission_level: 'emp-tier',
+    primary_outlet_id: 'emp-outlet',
+    subdept_id: 'emp-subdept',
+    brand_ids: 'emp-brands',
+    sales_vertical_ids: 'sales-verticals',
+    'new-pw': 'pw-new',
+    'confirm-pw': 'pw-confirm',
+  }
+  function focusField(field) {
+    const el = document.getElementById(FIELD_EL_ID[field] || '')
+    if (!el) return
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    if (typeof el.focus === 'function') { try { el.focus({ preventScroll: true }) } catch { el.focus() } }
+  }
 
   // Password reset state
   const [newPassword, setNewPassword]         = useState('')
@@ -176,6 +207,19 @@ export default function Employees() {
   // Pre-fill the entity on modal open and disable the dropdown.
   const callerEntityLocked = !isAdmin && !!caller?.entity_id
 
+  // Count of non-default filters, for the Filters button badge (search is separate).
+  const activeFilterCount =
+    (filterEntityId ? 1 : 0) + (filterDeptId ? 1 : 0) +
+    (filterTier ? 1 : 0) + (filterStatus !== 'active' ? 1 : 0)
+
+  // Close the filter popover on an outside click.
+  useEffect(() => {
+    if (!showFilters) return
+    const onDown = (e) => { if (filterRef.current && !filterRef.current.contains(e.target)) setShowFilters(false) }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [showFilters])
+
   /* ── filtered list ──────────────────────────────────────────────────── */
   const filtered = employees.filter(e => {
     const q = search.toLowerCase()
@@ -206,12 +250,14 @@ export default function Employees() {
     // Pre-fill entity for non-admin callers (entity-locked)
     setForm({ ...EMPTY_FORM, entity_id: callerEntityLocked ? caller.entity_id : '' })
     setError('')
+    setErrorField(null)
     setModal('add')
   }
 
   async function openEdit(emp) {
     setSelected(emp)
     setError('')
+    setErrorField(null)
     // Load current join-table rows for this user. RLS allows admin/HR/BO + self.
     const [brandRes, vertRes, outletRes] = await Promise.all([
       supabase.from('user_brands').select('brand_id').eq('user_id', emp.id),
@@ -240,6 +286,7 @@ export default function Employees() {
     setNewPassword('')
     setConfirmPassword('')
     setError('')
+    setErrorField(null)
     setModal('password')
   }
 
@@ -252,6 +299,7 @@ export default function Employees() {
     setModal(null)
     setSelected(null)
     clearError()
+    setErrorField(null)
     setConfirmAction(null)
   }
 
@@ -260,10 +308,12 @@ export default function Employees() {
   // When entity changes, clear outlet + brand selections (both are entity-scoped)
   function onEntityChange(entity_id) {
     setForm(f => ({ ...f, entity_id, primary_outlet_id: '', brand_ids: [], sales_vertical_ids: [] }))
+    setErrorField(f => f === 'entity_id' ? null : f)
   }
 
   // When department changes, clear designation + dept-specific fields.
   function onDepartmentChange(department_id) {
+    setErrorField(f => f === 'department_id' ? null : f)
     setForm(f => ({
       ...f,
       department_id,
@@ -280,6 +330,7 @@ export default function Employees() {
   // default_permission_tier (admin never appears — designation table has no
   // admin rows). The admin can still override manually via the dropdown.
   function onDesignationChange(designation_id) {
+    setErrorField(f => f === 'designation_id' ? null : f)
     setForm(f => {
       const d = designationById[designation_id]
       const next = { ...f, designation_id }
@@ -293,34 +344,36 @@ export default function Employees() {
   }
 
   /* ── form-field validation ──────────────────────────────────────────── */
+  // Returns null when valid, else { message, field } — the message is rendered
+  // inline under `field` and that control is flagged red.
   function validateForm({ requirePassword }) {
-    if (!form.full_name.trim()) return 'Full name is required.'
-    if (!form.email.trim())     return 'Email is required.'
+    if (!form.full_name.trim()) return { message: 'Full name is required.', field: 'full_name' }
+    if (!form.email.trim())     return { message: 'Email is required.', field: 'email' }
     if (requirePassword && form.password.length < 8) {
-      return 'Password must be at least 8 characters.'
+      return { message: 'Password must be at least 8 characters.', field: 'password' }
     }
-    if (!form.entity_id)        return 'Entity is required.'
-    if (!form.department_id)    return 'Department is required.'
-    if (!form.designation_id)   return 'Designation is required.'
+    if (!form.entity_id)        return { message: 'Entity is required.', field: 'entity_id' }
+    if (!form.department_id)    return { message: 'Department is required.', field: 'department_id' }
+    if (!form.designation_id)   return { message: 'Designation is required.', field: 'designation_id' }
     if (!form.permission_level || !PERM_TIERS.includes(form.permission_level)) {
-      return 'Permission level is required.'
+      return { message: 'Permission level is required.', field: 'permission_level' }
     }
 
     const deptCode = deptById[form.department_id]?.code
     if (deptCode === DEPT_SALES && form.brand_ids.length === 0) {
-      return 'Select at least one brand for Sales users.'
+      return { message: 'Select at least one brand for Sales users.', field: 'brand_ids' }
     }
     if (deptCode === DEPT_SALES && form.sales_vertical_ids.length === 0) {
-      return 'Select at least one sales vertical for Sales users.'
+      return { message: 'Select at least one sales vertical for Sales users.', field: 'sales_vertical_ids' }
     }
     if ((deptCode === DEPT_SERVICE || deptCode === DEPT_SPARES) && !form.primary_outlet_id) {
-      return 'Primary outlet is required for Service/Spares users.'
+      return { message: 'Primary outlet is required for Service/Spares users.', field: 'primary_outlet_id' }
     }
     if ((deptCode === DEPT_SERVICE || deptCode === DEPT_SPARES) && form.brand_ids.length === 0) {
-      return 'Select at least one brand for Service/Spares users.'
+      return { message: 'Select at least one brand for Service/Spares users.', field: 'brand_ids' }
     }
     if (deptCode === DEPT_BACK_OFFICE && form.permission_level !== 'gm' && !form.subdept_id) {
-      return 'Sub-department is required for Back Office users.'
+      return { message: 'Sub-department is required for Back Office users.', field: 'subdept_id' }
     }
     return null
   }
@@ -373,22 +426,26 @@ export default function Employees() {
   /* ── CREATE employee ────────────────────────────────────────────────── */
   async function handleCreate(e) {
     e.preventDefault()
+    setError('')
+    setErrorField(null)
     const err = validateForm({ requirePassword: true })
-    if (err) { setError(err); return }
+    if (err) { setError(err.message); setErrorField(err.field); focusField(err.field); return }
 
     await runSave(async () => {
       await callEdge('admin-users', 'create', buildCreatePayload())
       toast.success(`${form.full_name} added successfully.`)
       await fetchEmployees()
       closeModal()
-    }).catch(() => {})
+    }, toastOnError).catch(() => {})
   }
 
   /* ── UPDATE employee ────────────────────────────────────────────────── */
   async function handleUpdate(e) {
     e.preventDefault()
+    setError('')
+    setErrorField(null)
     const err = validateForm({ requirePassword: false })
-    if (err) { setError(err); return }
+    if (err) { setError(err.message); setErrorField(err.field); focusField(err.field); return }
 
     await runSave(async () => {
       await callEdge('admin-users', 'updateProfile', {
@@ -398,14 +455,26 @@ export default function Employees() {
       toast.success('Employee updated.')
       await fetchEmployees()
       closeModal()
-    }).catch(() => {})
+    }, toastOnError).catch(() => {})
   }
 
   /* ── RESET PASSWORD ─────────────────────────────────────────────────── */
   async function handleResetPassword(e) {
     e.preventDefault()
-    if (newPassword.length < 8)          { setError('Password must be at least 8 characters.'); return }
-    if (newPassword !== confirmPassword) { setError('Passwords do not match.'); return }
+    setError('')
+    setErrorField(null)
+    if (newPassword.length < 8) {
+      setError('Password must be at least 8 characters.')
+      setErrorField('new-pw')
+      focusField('new-pw')
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setError('Passwords do not match.')
+      setErrorField('confirm-pw')
+      focusField('confirm-pw')
+      return
+    }
 
     await runSave(async () => {
       await callEdge('admin-users', 'resetPassword', {
@@ -414,7 +483,7 @@ export default function Employees() {
       })
       toast.success(`Password updated for ${selected.full_name}.`)
       closeModal()
-    }).catch(() => {})
+    }, toastOnError).catch(() => {})
   }
 
   /* ── DEACTIVATE / ACTIVATE ──────────────────────────────────────────── */
@@ -426,7 +495,7 @@ export default function Employees() {
       toast.success(`${emp.full_name} ${newStatus ? 'activated' : 'deactivated'}.`)
       await fetchEmployees()
       closeModal()
-    }).catch(() => {})
+    }, toastOnError).catch(() => {})
   }
 
   /* ── DELETE (permanent) ─────────────────────────────────────────────── */
@@ -437,74 +506,106 @@ export default function Employees() {
       toast.success(`${emp.full_name} deleted.`)
       await fetchEmployees()
       closeModal()
-    }).catch(() => {})
+    }, toastOnError).catch(() => {})
   }
 
   /* ══ RENDER ═════════════════════════════════════════════════════════ */
   return (
     <div>
       {/* Page header */}
-      <div className="flex-between mb-24" style={{ flexWrap: 'wrap', gap: 12 }}>
-        <div className="page-header" style={{ marginBottom: 0 }}>
-          <h1>Employees</h1>
-          <p>Manage team accounts, departments, designations, and access.</p>
+      <div className="page-head">
+        <div>
+          <div className="page-head-crumb">Operations Tools</div>
+          <h1 className="page-head-title">Employees<span className="period-accent">.</span></h1>
+          <div className="page-head-sub">Manage team accounts, departments, designations, and access.</div>
         </div>
-        <button className="btn btn-primary" onClick={openAdd}>
-          + Add Employee
+        <button className="btn btn-primary page-head-right" onClick={openAdd}>
+          <Icon name="plus" size={15} /> Add Employee
         </button>
       </div>
 
-      {/* Stat cards */}
-      <div className="stat-grid">
-        <div className="stat-card">
-          <div className="stat-label">Total</div>
-          <div className="stat-value">{stats.total}</div>
+      {/* Stat strip */}
+      <div className="stat-strip">
+        <div className="stat-block">
+          <div className="stat-block-label">Total</div>
+          <div className="stat-block-value stat-block-value--accent">{stats.total}</div>
         </div>
-        <div className="stat-card">
-          <div className="stat-label">Active</div>
-          <div className="stat-value" style={{ color: 'var(--green)' }}>{stats.active}</div>
+        <div className="stat-block">
+          <div className="stat-block-label">Active</div>
+          <div className="stat-block-value" style={{ color: 'var(--green)' }}>{stats.active}</div>
         </div>
-        <div className="stat-card">
-          <div className="stat-label">PTB · Gujarat</div>
-          <div className="stat-value">{stats.ptb}</div>
+        <div className="stat-block">
+          <div className="stat-block-label">PTB · Gujarat</div>
+          <div className="stat-block-value">{stats.ptb}</div>
         </div>
-        <div className="stat-card">
-          <div className="stat-label">PT · Haryana</div>
-          <div className="stat-value">{stats.pt}</div>
+        <div className="stat-block">
+          <div className="stat-block-label">PT · Haryana</div>
+          <div className="stat-block-value">{stats.pt}</div>
         </div>
       </div>
 
-      {/* Filters */}
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
+      {/* Search inline; the four filters collapse behind a Filters button + popover
+          so the toolbar stays one row (they used to stack into a 4-row block on mobile). */}
+      <div className="sj-toolbar" style={{ marginBottom: 16 }}>
         <input
-          className="form-input"
-          style={{ maxWidth: 240, marginBottom: 0 }}
+          className="form-input sj-search"
+          style={{ marginBottom: 0 }}
           placeholder="Search name or email…"
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
-        <select className="form-select" style={{ maxWidth: 150 }}
-          value={filterEntityId} onChange={e => setFilterEntityId(e.target.value)}>
-          <option value="">All Entities</option>
-          {refEntities.map(e => <option key={e.id} value={e.id}>{e.code}</option>)}
-        </select>
-        <select className="form-select" style={{ maxWidth: 170 }}
-          value={filterDeptId} onChange={e => setFilterDeptId(e.target.value)}>
-          <option value="">All Departments</option>
-          {refDepartments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-        </select>
-        <select className="form-select" style={{ maxWidth: 160 }}
-          value={filterTier} onChange={e => setFilterTier(e.target.value)}>
-          <option value="">All Levels</option>
-          <option value="admin">{PERM_LABEL.admin}</option>
-          {PERM_TIERS.map(r => <option key={r} value={r}>{PERM_LABEL[r]}</option>)}
-        </select>
-        <select className="form-select" style={{ maxWidth: 140 }}
-          value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
-          <option value="active">Active only</option>
-          <option value="inactive">Inactive only</option>
-          <option value="">All</option>
-        </select>
+        <div className="sj-filter-wrap" ref={filterRef}>
+          <button type="button" className={`btn btn-secondary sj-filter-btn${activeFilterCount ? ' has-active' : ''}`}
+            aria-haspopup="dialog" aria-expanded={showFilters} onClick={() => setShowFilters(s => !s)}>
+            <Icon name="filter-alt" size={15} /> Filters
+            {activeFilterCount > 0 && <span className="sj-filter-badge">{activeFilterCount}</span>}
+          </button>
+          {showFilters && (
+            <div className="sj-filter-pop" role="dialog" aria-label="Filter employees">
+              <div className="form-group">
+                <label className="form-label" htmlFor="emp-f-entity">Entity</label>
+                <select id="emp-f-entity" className="form-select"
+                  value={filterEntityId} onChange={e => setFilterEntityId(e.target.value)}>
+                  <option value="">All Entities</option>
+                  {refEntities.map(e => <option key={e.id} value={e.id}>{e.code}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label" htmlFor="emp-f-dept">Department</label>
+                <select id="emp-f-dept" className="form-select"
+                  value={filterDeptId} onChange={e => setFilterDeptId(e.target.value)}>
+                  <option value="">All Departments</option>
+                  {refDepartments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label" htmlFor="emp-f-tier">Permission level</label>
+                <select id="emp-f-tier" className="form-select"
+                  value={filterTier} onChange={e => setFilterTier(e.target.value)}>
+                  <option value="">All Levels</option>
+                  <option value="admin">{PERM_LABEL.admin}</option>
+                  {PERM_TIERS.map(r => <option key={r} value={r}>{PERM_LABEL[r]}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label" htmlFor="emp-f-status">Status</label>
+                <select id="emp-f-status" className="form-select"
+                  value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+                  <option value="active">Active only</option>
+                  <option value="inactive">Inactive only</option>
+                  <option value="">All</option>
+                </select>
+              </div>
+              <div className="sj-filter-pop-foot">
+                <button type="button" className="btn btn-sm btn-secondary" disabled={!activeFilterCount}
+                  onClick={() => { setFilterEntityId(''); setFilterDeptId(''); setFilterTier(''); setFilterStatus('active') }}>
+                  Clear filters
+                </button>
+                <button type="button" className="btn btn-sm btn-primary" onClick={() => setShowFilters(false)}>Done</button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Table */}
@@ -514,58 +615,94 @@ export default function Employees() {
         </div>
       ) : filtered.length === 0 ? (
         <div className="empty-state">
-          <div className="empty-state-icon">👥</div>
+          <div className="empty-state-icon"><Icon name="users" size={40} color="var(--text-muted)" /></div>
           <h3>No employees found</h3>
           <p>Try adjusting the filters or add a new employee.</p>
         </div>
       ) : (
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Entity</th>
-                <th>Department · Designation</th>
-                <th>Permission</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(emp => {
-                const dept = deptById[emp.department_id]
-                const desig = designationById[emp.designation_id]
-                const ent = entityById[emp.entity_id]
-                return (
-                  <tr key={emp.id}>
-                    <td style={{ fontWeight: 600, color: 'var(--gray-900)' }}>{emp.full_name}</td>
-                    <td style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--gray-500)' }}>{emp.email}</td>
-                    <td><span className="badge badge-blue">{ent?.code || '—'}</span></td>
-                    <td>
-                      <div style={{ fontSize: 13 }}>{dept?.name || '—'}</div>
-                      {desig?.name && <div style={{ fontSize: 11, color: 'var(--gray-400)', marginTop: 2 }}>{desig.name}</div>}
-                    </td>
-                    <td><Badge tier={emp.permission_level} /></td>
-                    <td><StatusBadge active={emp.is_active} /></td>
-                    <td>
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        <button className="btn btn-secondary btn-sm" onClick={() => openEdit(emp)}>Edit</button>
-                        <button className="btn btn-secondary btn-sm" onClick={() => openPassword(emp)}>Reset PW</button>
-                        <button
-                          className={`btn btn-sm ${emp.is_active ? 'btn-danger' : 'btn-secondary'}`}
-                          onClick={() => openConfirm(emp.is_active ? 'deactivate' : 'activate', emp)}
-                        >
-                          {emp.is_active ? 'Deactivate' : 'Activate'}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+        <>
+          <div className="table-wrap only-desktop">
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Entity</th>
+                  <th>Department · Designation</th>
+                  <th>Permission</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(emp => {
+                  const dept = deptById[emp.department_id]
+                  const desig = designationById[emp.designation_id]
+                  const ent = entityById[emp.entity_id]
+                  return (
+                    <tr key={emp.id}>
+                      <td style={{ fontWeight: 600, color: 'var(--ink)' }}>{emp.full_name}</td>
+                      <td style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--text-secondary)' }}>{emp.email}</td>
+                      <td><span className="badge badge-blue">{ent?.code || '—'}</span></td>
+                      <td>
+                        <div style={{ fontSize: 13 }}>{dept?.name || '—'}</div>
+                        {desig?.name && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{desig.name}</div>}
+                      </td>
+                      <td><Badge tier={emp.permission_level} /></td>
+                      <td><StatusBadge active={emp.is_active} /></td>
+                      <td>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                          <button className="btn btn-secondary btn-sm" onClick={() => openEdit(emp)}>Edit</button>
+                          <button className="btn btn-secondary btn-sm" onClick={() => openPassword(emp)}>Reset PW</button>
+                          <button
+                            className={`btn btn-sm ${emp.is_active ? 'btn-danger' : 'btn-secondary'}`}
+                            onClick={() => openConfirm(emp.is_active ? 'deactivate' : 'activate', emp)}
+                          >
+                            {emp.is_active ? 'Deactivate' : 'Activate'}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="only-mobile mobile-cards">
+            {filtered.map(emp => {
+              const dept = deptById[emp.department_id]
+              const desig = designationById[emp.designation_id]
+              const ent = entityById[emp.entity_id]
+              return (
+                <div className="m-card" key={emp.id}>
+                  <div className="m-card-top">
+                    <span style={{ fontWeight: 700 }}>{emp.full_name}</span>
+                    <Badge tier={emp.permission_level} />
+                  </div>
+                  <div style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--text-secondary)', wordBreak: 'break-all' }}>{emp.email}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                    <span className="badge badge-blue">{ent?.code || '—'}</span>
+                    <span style={{ fontSize: 12.5 }}>{dept?.name || '—'}{desig?.name ? <span style={{ color: 'var(--text-secondary)' }}> · {desig.name}</span> : null}</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border-faint)', gap: 8, flexWrap: 'wrap' }}>
+                    <StatusBadge active={emp.is_active} />
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <button className="btn btn-secondary btn-sm" onClick={() => openEdit(emp)}>Edit</button>
+                      <button className="btn btn-secondary btn-sm" onClick={() => openPassword(emp)}>Reset PW</button>
+                      <button
+                        className={`btn btn-sm ${emp.is_active ? 'btn-danger' : 'btn-secondary'}`}
+                        onClick={() => openConfirm(emp.is_active ? 'deactivate' : 'activate', emp)}
+                      >
+                        {emp.is_active ? 'Deactivate' : 'Activate'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </>
       )}
 
       {/* ── ADD / EDIT MODAL ─────────────────────────────────────────── */}
@@ -578,6 +715,8 @@ export default function Employees() {
           form={form}
           setForm={setForm}
           error={error}
+          errorField={errorField}
+          setErrorField={setErrorField}
           saving={saving}
           refEntities={refEntities}
           refDepartments={refDepartments}
@@ -609,17 +748,21 @@ export default function Employees() {
               <button className="modal-close" onClick={closeModal}>×</button>
             </div>
             <div className="modal-body">
-              {error && <div className="alert alert-error"><span>⚠</span><span>{error}</span></div>}
               <form onSubmit={handleResetPassword} noValidate>
                 <div className="form-group">
                   <label className="form-label" htmlFor="pw-new">New Password</label>
-                  <input id="pw-new" className="form-input" type="password" placeholder="Min. 8 characters"
-                    value={newPassword} onChange={e => setNewPassword(e.target.value)} autoFocus />
+                  <input id="pw-new" className={`form-input ${errorField === 'new-pw' ? 'error' : ''}`} type="password" placeholder="Min. 8 characters"
+                    value={newPassword}
+                    onChange={e => { setNewPassword(e.target.value); setErrorField(f => f === 'new-pw' ? null : f) }}
+                    autoFocus />
+                  {errorField === 'new-pw' && <div className="form-error">{error}</div>}
                 </div>
                 <div className="form-group">
                   <label className="form-label" htmlFor="pw-confirm">Confirm Password</label>
-                  <input id="pw-confirm" className="form-input" type="password" placeholder="Re-enter password"
-                    value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} />
+                  <input id="pw-confirm" className={`form-input ${errorField === 'confirm-pw' ? 'error' : ''}`} type="password" placeholder="Re-enter password"
+                    value={confirmPassword}
+                    onChange={e => { setConfirmPassword(e.target.value); setErrorField(f => f === 'confirm-pw' ? null : f) }} />
+                  {errorField === 'confirm-pw' && <div className="form-error">{error}</div>}
                 </div>
                 <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
                   <button type="submit" className="btn btn-primary" disabled={saving}>
@@ -646,7 +789,6 @@ export default function Employees() {
               <button className="modal-close" onClick={closeModal}>×</button>
             </div>
             <div className="modal-body">
-              {error && <div className="alert alert-error"><span>⚠</span><span>{error}</span></div>}
               {confirmAction.type === 'deactivate' && (
                 <p style={{ fontSize: 14, color: 'var(--gray-600)', lineHeight: 1.6 }}>
                   Deactivating <strong>{confirmAction.employee.full_name}</strong> will prevent them from logging in.
@@ -660,14 +802,13 @@ export default function Employees() {
               )}
               {confirmAction.type === 'delete' && (
                 <div>
-                  <div className="alert alert-error" style={{ marginBottom: 12 }}>
-                    <span>⚠</span>
-                    <span>This is permanent and cannot be undone.</span>
-                  </div>
                   <p style={{ fontSize: 14, color: 'var(--gray-600)', lineHeight: 1.6 }}>
                     Permanently deleting <strong>{confirmAction.employee.full_name}</strong> will remove their
                     account and all associated data. Consider deactivating instead.
                   </p>
+                  <div className="form-error" style={{ marginTop: 8, fontWeight: 600 }}>
+                    This is permanent and cannot be undone.
+                  </div>
                 </div>
               )}
               <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
@@ -704,6 +845,8 @@ function EmployeeFormModal({
   form,
   setForm,
   error,
+  errorField,
+  setErrorField,
   saving,
   refEntities,
   refDepartments,
@@ -727,8 +870,16 @@ function EmployeeFormModal({
   const deptCode = selectedDept?.code
   const F = (field) => ({
     value: form[field],
-    onChange: e => setForm(f => ({ ...f, [field]: e.target.value })),
+    onChange: e => {
+      setForm(f => ({ ...f, [field]: e.target.value }))
+      setErrorField(f => f === field ? null : f)
+    },
   })
+  // Red-border helper + the inline message rendered right under the control.
+  const cls = (base, field) => `${base} ${errorField === field ? 'error' : ''}`
+  const FieldError = ({ field }) => (
+    errorField === field ? <div className="form-error">{error}</div> : null
+  )
 
   const title = mode === 'add' ? 'Add Employee' : `Edit — ${selected?.full_name}`
 
@@ -740,29 +891,31 @@ function EmployeeFormModal({
           <button className="modal-close" onClick={closeModal}>×</button>
         </div>
         <div className="modal-body">
-          {error && <div className="alert alert-error"><span>⚠</span><span>{error}</span></div>}
           <form onSubmit={onSubmit} noValidate>
             {/* Identity */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
               <div className="form-group">
                 <label className="form-label" htmlFor="emp-name">Full Name *</label>
-                <input id="emp-name" className="form-input" placeholder="Ramesh Kumar" {...F('full_name')} />
+                <input id="emp-name" className={cls('form-input', 'full_name')} placeholder="Ramesh Kumar" {...F('full_name')} />
+                <FieldError field="full_name" />
               </div>
               <div className="form-group">
                 <label className="form-label" htmlFor="emp-email">Email *</label>
                 <input
-                  id="emp-email" className="form-input" type="email"
+                  id="emp-email" className={cls('form-input', 'email')} type="email"
                   placeholder="ramesh@parastrucks.in"
                   value={form.email}
-                  onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+                  onChange={e => { setForm(f => ({ ...f, email: e.target.value })); setErrorField(f => f === 'email' ? null : f) }}
                   disabled={mode === 'edit'}
                   style={mode === 'edit' ? { opacity: 0.6 } : undefined}
                 />
+                <FieldError field="email" />
               </div>
               {mode === 'add' && (
                 <div className="form-group">
                   <label className="form-label" htmlFor="emp-pw">Temporary Password *</label>
-                  <input id="emp-pw" className="form-input" type="password" placeholder="Min. 8 characters" {...F('password')} />
+                  <input id="emp-pw" className={cls('form-input', 'password')} type="password" placeholder="Min. 8 characters" {...F('password')} />
+                  <FieldError field="password" />
                 </div>
               )}
             </div>
@@ -772,7 +925,7 @@ function EmployeeFormModal({
               <div className="form-group">
                 <label className="form-label" htmlFor="emp-entity">Entity *</label>
                 <select
-                  id="emp-entity" className="form-select"
+                  id="emp-entity" className={cls('form-select', 'entity_id')}
                   value={form.entity_id}
                   onChange={e => onEntityChange(e.target.value)}
                   disabled={callerEntityLocked}
@@ -781,6 +934,7 @@ function EmployeeFormModal({
                   <option value="">— Select —</option>
                   {refEntities.map(en => <option key={en.id} value={en.id}>{en.code}</option>)}
                 </select>
+                <FieldError field="entity_id" />
                 {callerEntityLocked && (
                   <div style={{ fontSize: 11, color: 'var(--gray-500)', marginTop: 4 }}>
                     Locked to your entity. Admin can create cross-entity users.
@@ -790,18 +944,19 @@ function EmployeeFormModal({
               <div className="form-group">
                 <label className="form-label" htmlFor="emp-dept">Department *</label>
                 <select
-                  id="emp-dept" className="form-select"
+                  id="emp-dept" className={cls('form-select', 'department_id')}
                   value={form.department_id}
                   onChange={e => onDepartmentChange(e.target.value)}
                 >
                   <option value="">— Select —</option>
                   {refDepartments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                 </select>
+                <FieldError field="department_id" />
               </div>
               <div className="form-group">
                 <label className="form-label" htmlFor="emp-desig">Designation *</label>
                 <select
-                  id="emp-desig" className="form-select"
+                  id="emp-desig" className={cls('form-select', 'designation_id')}
                   value={form.designation_id}
                   onChange={e => onDesignationChange(e.target.value)}
                   disabled={!form.department_id}
@@ -811,12 +966,14 @@ function EmployeeFormModal({
                     <option key={d.id} value={d.id}>{d.name}</option>
                   ))}
                 </select>
+                <FieldError field="designation_id" />
               </div>
               <div className="form-group">
                 <label className="form-label" htmlFor="emp-tier">Permission Level *</label>
-                <select id="emp-tier" className="form-select" {...F('permission_level')}>
+                <select id="emp-tier" className={cls('form-select', 'permission_level')} {...F('permission_level')}>
                   {PERM_TIERS.map(t => <option key={t} value={t}>{PERM_LABEL[t]}</option>)}
                 </select>
+                <FieldError field="permission_level" />
                 <div style={{ fontSize: 11, color: 'var(--gray-500)', marginTop: 4 }}>
                   Auto-filled from designation. Admin tier never offered.
                 </div>
@@ -827,32 +984,40 @@ function EmployeeFormModal({
             {deptCode === 'sales' && (
               <DeptSection title="Sales details">
                 <MultiCheckbox
-                  id="sales-brands"
+                  id="emp-brands"
                   label="Brands *"
                   items={refBrands}
                   selected={form.brand_ids}
-                  onToggle={id => setForm(f => {
-                    const nextBrands = toggleId(f.brand_ids, id)
-                    // Prune any selected verticals whose brand is no longer checked.
-                    // Uses the full sales_verticals list so we compare against
-                    // ground truth, not the currently-rendered subset.
-                    const nextVerts = f.sales_vertical_ids.filter(vId => {
-                      const row = refSalesVert.find(v => v.id === vId)
-                      return row && nextBrands.includes(row.brand_id)
+                  onToggle={id => {
+                    setErrorField(f => f === 'brand_ids' ? null : f)
+                    setForm(f => {
+                      const nextBrands = toggleId(f.brand_ids, id)
+                      // Prune any selected verticals whose brand is no longer checked.
+                      // Uses the full sales_verticals list so we compare against
+                      // ground truth, not the currently-rendered subset.
+                      const nextVerts = f.sales_vertical_ids.filter(vId => {
+                        const row = refSalesVert.find(v => v.id === vId)
+                        return row && nextBrands.includes(row.brand_id)
+                      })
+                      return { ...f, brand_ids: nextBrands, sales_vertical_ids: nextVerts }
                     })
-                    return { ...f, brand_ids: nextBrands, sales_vertical_ids: nextVerts }
-                  })}
+                  }}
                   labelKey="name"
                   badgeKey="code"
+                  error={errorField === 'brand_ids' ? error : null}
                 />
                 <MultiCheckbox
                   id="sales-verticals"
                   label="Sales verticals *"
                   items={verticalsForBrands}
                   selected={form.sales_vertical_ids}
-                  onToggle={id => setForm(f => ({ ...f, sales_vertical_ids: toggleId(f.sales_vertical_ids, id) }))}
+                  onToggle={id => {
+                    setErrorField(f => f === 'sales_vertical_ids' ? null : f)
+                    setForm(f => ({ ...f, sales_vertical_ids: toggleId(f.sales_vertical_ids, id) }))
+                  }}
                   labelKey="name"
                   emptyHint={form.brand_ids.length === 0 ? 'Select one or more brands first.' : null}
+                  error={errorField === 'sales_vertical_ids' ? error : null}
                 />
               </DeptSection>
             )}
@@ -862,9 +1027,12 @@ function EmployeeFormModal({
                 <div className="form-group">
                   <label className="form-label" htmlFor="emp-outlet">Primary outlet *</label>
                   <select
-                    id="emp-outlet" className="form-select"
+                    id="emp-outlet" className={cls('form-select', 'primary_outlet_id')}
                     value={form.primary_outlet_id}
-                    onChange={e => setForm(f => ({ ...f, primary_outlet_id: e.target.value }))}
+                    onChange={e => {
+                      setForm(f => ({ ...f, primary_outlet_id: e.target.value }))
+                      setErrorField(f => f === 'primary_outlet_id' ? null : f)
+                    }}
                     disabled={!form.entity_id}
                   >
                     <option value="">— Select —</option>
@@ -872,15 +1040,20 @@ function EmployeeFormModal({
                       <option key={o.id} value={o.id}>{o.city} ({o.facility_type})</option>
                     ))}
                   </select>
+                  <FieldError field="primary_outlet_id" />
                 </div>
                 <MultiCheckbox
-                  id="svc-brands"
+                  id="emp-brands"
                   label="Brands *"
                   items={refBrands}
                   selected={form.brand_ids}
-                  onToggle={id => setForm(f => ({ ...f, brand_ids: toggleId(f.brand_ids, id) }))}
+                  onToggle={id => {
+                    setErrorField(f => f === 'brand_ids' ? null : f)
+                    setForm(f => ({ ...f, brand_ids: toggleId(f.brand_ids, id) }))
+                  }}
                   labelKey="name"
                   badgeKey="code"
+                  error={errorField === 'brand_ids' ? error : null}
                 />
               </DeptSection>
             )}
@@ -891,17 +1064,21 @@ function EmployeeFormModal({
                   <div className="form-group">
                     <label className="form-label" htmlFor="emp-subdept">Sub-department *</label>
                     <select
-                      id="emp-subdept" className="form-select"
+                      id="emp-subdept" className={cls('form-select', 'subdept_id')}
                       value={form.subdept_id}
-                      onChange={e => setForm(f => ({ ...f, subdept_id: e.target.value }))}
+                      onChange={e => {
+                        setForm(f => ({ ...f, subdept_id: e.target.value }))
+                        setErrorField(f => f === 'subdept_id' ? null : f)
+                      }}
                     >
                       <option value="">— Select —</option>
                       {refSubdepts.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                     </select>
+                    <FieldError field="subdept_id" />
                   </div>
                 )}
                 <MultiCheckbox
-                  id="bo-brands"
+                  id="emp-brands"
                   label="Brands (for quotation log scope)"
                   items={refBrands}
                   selected={form.brand_ids}
@@ -922,13 +1099,13 @@ function EmployeeFormModal({
             </div>
 
             {/* Actions */}
-            <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+            <div className="modal-actions">
               <button type="submit" className="btn btn-primary" disabled={saving}>
                 {saving ? <span className="spinner spinner-sm" /> : (mode === 'add' ? 'Create Employee' : 'Save Changes')}
               </button>
               <button type="button" className="btn btn-secondary" onClick={closeModal}>Cancel</button>
               {canDelete && (
-                <button type="button" className="btn btn-danger" style={{ marginLeft: 'auto' }} onClick={onDelete}>
+                <button type="button" className="btn btn-danger modal-actions-end" onClick={onDelete}>
                   Delete Permanently
                 </button>
               )}
@@ -951,7 +1128,7 @@ function DeptSection({ title, children }) {
 }
 
 /* Reusable multi-checkbox group — used for brands and sales verticals. */
-function MultiCheckbox({ id, label, items, selected, onToggle, labelKey = 'name', badgeKey, emptyHint }) {
+function MultiCheckbox({ id, label, items, selected, onToggle, labelKey = 'name', badgeKey, emptyHint, error }) {
   return (
     <div className="form-group">
       <label className="form-label" htmlFor={id}>{label}</label>
@@ -986,6 +1163,7 @@ function MultiCheckbox({ id, label, items, selected, onToggle, labelKey = 'name'
           )
         })}
       </div>
+      {error && <div className="form-error">{error}</div>}
     </div>
   )
 }

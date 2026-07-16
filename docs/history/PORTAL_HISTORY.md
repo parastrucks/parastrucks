@@ -1354,3 +1354,258 @@ deferred engineering backlog) is kept here for the record.*
 - Never delete DB rows/columns/tables without explicit permission.
 - Platform: Windows, bash via git-bash, no Python.
 - Hotfixes vs features: small UI/data fixes can go direct to `portal` branch + push + redeploy. FC-scale work uses feature branch + PR + squash-merge.
+
+---
+
+## Phase 9.6 — Portal visual redesign (Paras Group print-report language) — REVIEW COMPLETE, NOT YET LIVE (2026-07-16)
+
+Full **visual/structural redesign** of the whole portal to the Paras Group print-report design
+language. Zero behavioural change intended — routing, Supabase, edge-fn calls, `canAccess`, and all
+business logic preserved. On branch **`9.6-portal-redesign`** (off `origin/portal`, 21 commits,
+every `npm run build` green). Smoke-tested on staging + 3-agent red-team (ship-safe). **Not yet
+merged — PR + one-shot merge to `portal` pending owner go-ahead.** Live working state:
+`memory/phase96_portal_redesign.md`; open owner decisions: `memory/known_issues.md`.
+
+**Design language:** paper `#F4F4F4` ground · ink `#000` · `#D4D4D4` hairline-rule tables · square
+corners (2px only on inputs/buttons) · ONE blue accent `#2563EB` · **Carlito** font (Google Fonts,
+metric Calibri substitute) · thin-line **Lucide** icons. Source of truth = the design handoff at
+`D:\PTB\Website\Website redesign guidance\design_handoff_portal_redesign\`. Plan
+`~/.claude/plans/buzzing-popping-fairy.md`.
+
+**Build (phased):** (0) `lucide-react` npm dep + Inter→Carlito. (1) rewrote `src/index.css` `:root`
+tokens keeping the old names so ~400 `var()` refs cascade, retuned every family, appended
+print-report primitives (`.page-head`, `.eyebrow`, `.tag`, `.stat-block`/`.stat-strip`,
+`.table-card`/`.rowlink`, `.mobile-cards`/`.m-card`, `.panel`, `.only-desktop`/`.only-mobile`).
+(2) `Icon.jsx` Lucide wrapper. (3) `Sidebar.jsx` → 4 labelled sections + pinned Dashboard + HD
+Hyundai ERP item; shared `navConfig.js` + `lib/erp.js`; groups collapsed by default. (4) new mobile
+shell — `TopBar.jsx` + `MobileDrawer.jsx` + hybrid `BottomNav.jsx` (dept tabs + centered Create(+)
+→ `CreateSheet.jsx`, incl. New Vendor Job → `/vendor-jobs?new=1`); shell breakpoint 900→760.
+(5) `Dashboard.jsx` → section eyebrows + `.dcard` link/group/inverted cards + MORE OPTIONS expander.
+(6) PageHead on all pages + mobile stacked-card tables for customer-facing lists; dense admin tables
+(Access Rules, TIV) stay h-scroll; Login dark→paper.
+
+**Owner review fixes (staging walkthrough):** bottom nav capped ≤4 icons + centered create; New
+Vendor Job in the + sheet; late-night greeting; removed doubled dashboard rule; **fixed mobile cards
+leaking onto the desktop table**; vehicle search shows description + `ignoreLocation` + validation
+focus (Quotation/Proforma/Financier); **HD Hyundai ERP entry brand-gated (hdh) so PTB users don't
+see it** (`useErpVisible`, admin override, fails open on error). Residual polish: emoji→Lucide on the
+last buttons; removed ~187 lines of dead `.tool-card*`/`.stat-*` CSS; fixed the long-broken favicon
+(`public/favicon.svg`).
+
+**Red-team (assumed pre-redesign portal was perfect) — regressions found & FIXED:** (H1)
+`useErpVisible` failed CLOSED → fails OPEN on read error (pre-redesign the ERP card was always shown,
+server-gated); (Med) `.badge-gray`/`.tag--inactive` text on grey ~2.4:1 → `--text-secondary` ~4.5:1;
+(Med) six list-page `fmtINR` had lost the ₹ non-breaking space → restored; hardening —
+`navConfig.itemVisible` erp→false. Verified clean: all `.select()` columns, PDF args, re-download
+guards, pagination/search, `canAccess`, icon names, desktop↔mobile flip.
+
+**Open owner decisions (flagged, not actioned):** M2 mobile bottom nav drops Profile tab for
+Service/Accounts (Profile via top-bar avatar); M3 sidebar groups no longer auto-expand on active
+route (per handoff); L2 drawer/sheet lack a focus-trap (net-new); LOW-1 log mobile cards omit the
+preparer designation. All in `memory/known_issues.md`.
+
+**Session 2 (2026-07-05) — red-team round 2 (4 Fable-5 agents) + fixes + prod brand provisioning.**
+Re-ran the red-team with 4 parallel Fable-5 reviewers (data-integrity / access-control /
+CSS-responsive / runtime-build) vs `origin/portal` as the "known-good" baseline. Verdict again
+**SHIP-SAFE, no CRITICAL/HIGH**; build green, `npm audit` 0, all 51 Icon names resolve, zero orphaned
+CSS, route/`canAccess` parity confirmed. Six fixes across two commits:
+- `dff4211` — (1) `ServiceJobs` `?new=1` auto-open effect keyed on `searchParams` so Create (+) →
+  New Vendor Job opens the form even when already on `/vendor-jobs` (was a mount-only no-op that also
+  left the param in the URL); (2) hooks hoisted above the accessible-items early return in
+  `Sidebar.NavGroup` + `Dashboard.GroupCard` (rules-of-hooks latent-crash guard); (3) shell mobile
+  media queries `759px`→`759.98px` (closes the 759–760 fractional-viewport dead-zone under 125/150%
+  display scaling); (4) drawer/sheet backdrops+panels hidden `@media (min-width:760px)` so a resize
+  into desktop can't leave them overlaying the sidebar.
+- `96d8f65` — (5) MED-2: normalized all 58 off-grid `font-weight` declarations (500/600/800) in
+  `index.css`/`Login.css` to Carlito's real 400/700 grid — pixel-identical (browser already snapped
+  them) but honest CSS + documented at the `--font` token; true 5-weight hierarchy would need a font
+  swap away from the Calibri-metric Carlito (owner call, not done). (6) LOW: gated the "New …" CTAs on
+  My Quotations / My Proformas / My Financier Copies behind `canAccess(route)`.
+- **Resolved not-a-bug:** the "ERP-card gating changed" flag — prod audit confirmed the only
+  `hdh`-branded user is in Service (keeps the card); nobody loses ERP access under the redesign.
+- **Prod data fix (`user_brands`):** owner asked whether accounts/back-office/HR have brand
+  provisioning "like sales/service/spares". Prod audit of all 36 users: sales (22 `al`), service
+  (6, `al`+1`hdh`+1`switch`), back_office (3 `al`) were provisioned; **accounts (3) + hr (1) had
+  zero brand rows**; owner (admin, no dept) bypasses. No `spares` department exists in prod. Owner
+  rule = PTB→`al`, PT→all three; all 4 gaps are PTB → each got `al` (brand `1e7ab9db-…`). Inserted 4
+  rows on prod `mmmxvjaavdtwlpcnjgzy` (merge-duplicates, no deletes) via the `.env .prod .bak`
+  service-role key; re-verified accounts 3/3, hr 1/1, 0 remaining. Users: Pradeep Chavda (hr),
+  Bhadresh Thakor / Mahir Makwana / Bhavesh Solanki (accounts).
+- Cosmetic LOWs then addressed (commit `e992c17`): drawer closes on route change (browser back),
+  drawer+sheet lock body scroll, bottom-nav no longer flashes the wrong FALLBACK tabs (`deptResolved`
+  gate). Only the non-visual 3×-dup-`user_brands` ERP read left deferred.
+- **All four owner design-decisions then resolved (2026-07-05):** M2 — accepted as-is (owner
+  "reducing the tab is ok"; bottom nav keeps dropping the Profile tab on odd-count depts, Profile via
+  top-bar avatar). M3 — **restored sidebar auto-expand** on the active route (`NavGroup` seeds
+  `useState` from `isGroupActive` + effect; still collapsible). L2 — **wired `useFocusTrap` into
+  MobileDrawer + CreateSheet** (Tab-cycle, Escape-close, `role=dialog aria-modal`); safe re the PR #42
+  keystroke focus-steal (hook hardened to deps `[active]` + no text inputs in either overlay). LOW-1
+  — declined (owner "no need").
+- **Full local staging walkthrough (2026-07-07) — PASSED, zero console errors.** Dev server on
+  `:5173` vs staging; logged in as `admin@` and `svc.mgr@parastrucks.test`. The preview harness has no
+  layout viewport (`innerWidth` 0) so it renders the mobile shell — used that to verify live: M3
+  sidebar auto-expand (group opens + active sub highlighted on nav, still collapsible); L2 focus-trap
+  on drawer (18 focusables) + create-sheet (5) with Tab/Shift-Tab wrap + `aria-modal`; body scroll-lock
+  engages+restores; drawer closes on link-nav AND browser-back; `?new=1` opens the New Job form from
+  another page AND when already on `/vendor-jobs` (round-2 fix) with the param stripped; **ERP hidden
+  on dashboard+sidebar+drawer for the PTB service manager** (owner requirement) while admin sees it;
+  create-sheet `canAccess`-filtered (admin = 4 actions, service = New Vendor Job only); mobile cards
+  render full data. **One residual emoji found + fixed** — login show-password toggle `👁`/`🙈` →
+  Lucide `eye`/`eye-off` (`Icon` wrapper), verified live. Desktop *rendering* (sidebar-visible view,
+  desktop tables, 759.98 fractional fix) still wants one real-browser eyeball — not renderable in this
+  harness. Branch now **31 commits** ahead of `origin/portal`, all pushed, build green. PR → one-shot
+  merge still pending owner go-ahead.
+
+**Session 2026-07-14 — owner step-by-step localhost review (Phase 9.6).** Owner reviewed the
+redesign screen-by-screen on `localhost:5173` (staging DB); each fix committed as it landed (new
+standing preference). Branch → **40 commits, all pushed**, build green. Fixes:
+- **Catalog stray vertical scrollbar** — `.vc-tabs` / `.table-wrap` set `overflow-x:auto`, which per
+  CSS spec makes `overflow-y` compute to `auto`; the tab row was 2px taller than its box, so a
+  phantom scrollbar appeared. Pinned `overflow-y:hidden` on both.
+- **Mobile drawer, mweb-first** (owner: "sidebar menu looks too tiny on mweb") — 50px touch targets,
+  16px text, larger section labels, and **collapsible groups with chevrons that auto-expand the
+  active group** — restoring the dropdown chevron that had "disappeared" on mobile vs desktop.
+- **Bus Calculator re-skin** (owner: "has not been redesigned") — it had only received the PageHead +
+  token cascade. Swapped the ⌕/🚌 and School/Staff/With-AC emoji for Lucide (toggles now text-only,
+  matching the seating buttons); gradient summary header → solid ink; multi-colour spec tags →
+  monochrome with length as the one accent; blue-washed chassis card / dropdown / notes / formula →
+  white + hairline + ink top-rule; **₹ and the amount unified into one bordered control** (the ₹ had
+  sat outside a box with the number right-aligned, leaving a gap that read as "uneven"); sticky
+  summary `top` 80→24px.
+- **Lining figures, app-wide** (owner: "the 8 is larger") — Carlito/Calibri default to **old-style
+  numerals**; a canvas measurement confirmed "8" ink-ascent **139px vs 131px** for "0"/"1", so 6 and
+  8 ride tall. Added `font-variant-numeric: lining-nums` on `body` and folded it into the existing
+  `tabular-nums` declarations. Fixes every number in the app.
+- **Full emoji → Lucide sweep** — 37 glyphs across 17 files: empty-state icons, brochure paperclips,
+  Coming-Soon wrench, overdue clock, Filters gear, the **⚠ in every alert box**, ✕ modal-close, and
+  ✓/ℹ toast marks. Residual scan clean — no UI-facing emoji remain.
+- **Validation errors moved to the field** (owner: *"banners are not intuitive. Nobody will scroll
+  up."*) — `errorField` state flags the offending input red (`.error`, strengthened to beat `:focus`)
+  and renders the message inline under it (`.form-error`), clearing as the user types. The top alert
+  banner is **deleted**; save/server failures become toasts. Done on Quotation, then rolled to
+  Proforma, Financier, Login, Profile (AccessRules/Employees part-done; Catalog, ServiceJobs and TIV
+  still pending). `ErrorBoundary` keeps its banner by design — a full-page crash has no field to
+  point at. Also gave "Reset to catalog" `btn-secondary` (a bare `.btn` has no fill/border in the new
+  design and read as plain text).
+- **DECIDED: PDFs keep "Rs.", not ₹.** jsPDF's built-in fonts are WinAnsi-encoded and have no glyph
+  for U+20B9, so the code prints "Rs." deliberately. The only fix is embedding a TTF; the verified
+  path (Arimo — metric-compatible with Helvetica, so the hard-coded mm tax-invoice columns would not
+  shift — subset via `subset-font`, base64 into jsPDF) was prototyped then reverted as not worth
+  blocking the ship. Not a redesign regression: `pdfGenerator.js` is untouched by 9.6.
+
+**Banner sweep COMPLETE (2026-07-14, branch at 43 commits).** Every top-of-page/top-of-modal error
+banner in the app is gone; the only one left is `ErrorBoundary` (a full-page crash screen — there is
+no field to point at). **Inline-at-field** (offending input turns red, message renders directly
+beneath it, clears as the user types) for genuine field validation: Quotation, ProformaInvoice,
+FinancierCopy, Login (message under the password, both fields red on a credential failure), Profile,
+AccessRules, Employees, and Catalog's SubSegmentModal (Name / Segment). **Toast** for everything with
+no field to point at: Catalog ImportTab (header-row / CBN / MRP / brand / parse failures), Catalog
+brochure-file errors (these had *also* been feeding the banner and would otherwise have been silently
+dropped), ServiceJobs (load / create-job / action failures), TIV UploadPanel (size / not-xlsx / parse
+/ read / upload) and TivForecastPage (load). Verified: build green; `grep -rln "alert alert-error"
+src` returns ErrorBoundary only; zero orphaned `setError`/`parseError`; no error message lost.
+*Gotcha:* `ServiceJobs.jsx` already had a local success-pill state literally named `toast`
+(`.sj-toast`), so it was renamed to `pageToast` to free the name for `useToast()` — pill behaviour
+unchanged.
+
+**Session 2026-07-16 — owner screen-by-screen review COMPLETE (Phase 9.6). Branch at 53 commits, all
+pushed, build green. Every screen passed; opening the PR to `portal` is the only step left.**
+Eight commits landed this round (each committed as the owner found it, per the commit-each-fix rule):
+
+- **ERP gating as `svc.mgr`** — PASS. HD Hyundai ERP correctly hidden on the dashboard, sidebar *and*
+  drawer for a PTB service manager; visible again for admin. (The R1 red-team fail-open fix holds.)
+- **Vendor Jobs — native Chrome validation bubble** (`d55c180`). The New Service Job form still used
+  the HTML `required` attribute, so Chrome intercepted submit and drew its own off-design bubble
+  ("Please select an item in the list.") before our code ran. Fixed with `noValidate` + JS validation
+  → red field + `.form-error` beneath, clearing as the user types. Covers reg-no, customer, vendor,
+  material-out date and the three required warranty-letter fields.
+- **Vendor Jobs — mobile fold** (`d9e5ba0`, superseded by `d274bb4`). The first attempt compacted
+  every band; the owner rejected it ("rather than resizing to make it look awkward, remove the green
+  line and merge sort into the filter button"). Final: the **green all-clear radar banner is deleted**
+  (the bar is exception-only now — silence means everything is on track) and the standalone mobile
+  **sort bar moved into the Filters popover** (mobile-only; desktop still sorts from table headers).
+  The app-wide page-head margin trim from the first attempt was reverted. Net ≈90px reclaimed with
+  nothing resized. Verified end-to-end: job create → `PO-PTB-2026-27-0001` generated + downloaded,
+  green "Job created · PO downloaded" pill (the renamed `pageToast`), mobile (+) → New Vendor Job.
+- **Employees** (`d2f28be`). The four always-open filter selects (entity / department / level /
+  status) stacked into a four-row block on mobile → collapsed behind a **Filters button + popover**
+  (the Vendor Jobs pattern; count badge + Clear/Done, search stays inline). Edit-modal footer tagged
+  `.modal-actions` so the buttons wrap on a phone — **"Delete Permanently" was cut off the edge**.
+- **🔴 GLOBAL modal-header regression** (`bd51070`). The redesign had moved the header's flex layout
+  onto a new `.modal-header-main` wrapper that **only the ServiceJobs modal uses**, so **all 8 simple
+  modals** (Employees edit / reset-pw / confirm, AccessRules ×2, Catalog ×3) lost their row layout and
+  stacked the ✕ as a grey circle *below* the title. Fixed by restoring flex on `.modal-header` itself,
+  with `flex-basis:100%` on `.modal-header-main` / `.modal-header-extra` so ServiceJobs keeps stacking
+  its subtitle + badge row. **All 10 modal-header call-sites audited: 8 fixed, 2 pixel-identical** —
+  the ServiceJobs job-detail modal (the only one that actually passes `headerExtra`, a `.sj-badges`
+  row) and the Catalog sub-segment detail modal (`<div>` title + `<div>` actions, handled by
+  `space-between`). Owner eyeballed both.
+- **Access Rules → Errors tab 400** (`096cef1`) — **a pre-existing, prod-affecting bug, not a redesign
+  regression** (the query was byte-identical to `origin/portal`). The tab embedded
+  `user:users(full_name,email)` on `error_log`, but `error_log.user_id`'s FK targets **`auth.users`**,
+  not `public.users`; PostgREST only exposes `public`, so it could never resolve the relationship —
+  400 *"Could not find a relationship between 'error_log' and 'users' in the schema cache"*, and the
+  tab silently showed "No errors logged" even with rows present. Fixed app-side (no schema change):
+  drop the embed, resolve display names with a second `users` lookup on the distinct ids.
+  *Lesson:* a PostgREST embed needs a **declared FK on the exposed schema** — a matching id column is
+  not enough.
+- **TIV — key-prop warnings** (`6df6135`). `.map()` returning a bare `<>…</>` fragment, which **cannot
+  carry a key** (the inner `<th>`/`<td>` keys don't count — React needs it on the top-level mapped
+  node). ForecastTable ×3 + AccuracyTrackerTab ×1 → keyed `<Fragment>`.
+- **Toast contrast** (`6df6135`) — owner: *"not visible"*. Toasts were a pale wash (dark-red text on a
+  near-white pink) that barely lifted off the page. Now **solid saturated fills with white text**
+  (success / error / info, all passing WCAG AA) and the ✕ went .5→.8 opacity. **Global** — every toast
+  in the app. Confirmed live on Profile's "Password updated successfully." (solid green).
+- **TIV charts** (`31990e1`) — owner: *"graphs have not been redesigned"*, and they were right: the
+  charts still carried the pre-redesign colours. `SEG_COLORS`' saturated rainbow
+  (`#E67E22`/`#2ECC71`/`#9B59B6`/`#E74C3C`/`#1ABC9C`) → a **muted categorical set** at the design
+  tokens' own saturation, led by the accent blue. **Six distinct hues were kept deliberately** — the
+  "TIV Forecast by Segment (all segments)" **stacked bar** genuinely needs them; collapsing to one
+  blue would have made it unreadable. On the Accuracy chart the **"Judgment" series identity was
+  `#F59E0B`, which collided with the semantic amber ≤25% threshold** (one colour, two meanings) →
+  identity is now **ink** (blue vs ink reads cleanly and is on-language). Chrome: tooltip → a
+  print-report card (hairline, 2px radius, soft lift), axis ticks/lines → secondary/hairline,
+  recharts' default `#8884d8` purple fallback → accent, active-trigger banner radius 6px→2px.
+  **Deliberately unchanged:** the accuracy **threshold** colours (green ≤15% / amber ≤25% / red >25%)
+  encode meaning, not decoration — they only moved from a raw hex onto the `--amber` token.
+- **Profile** — PASS. Inline validation ("Password must be at least 8 characters." at the red field),
+  the new solid-green success toast, clean mobile stacking, clean console.
+- **760px shell boundary** — PASS. Swept 386 / 700 / 759 (mobile shell) → 760 / 761 / 768 (desktop
+  shell): exactly one shell at every width, a clean single switch, no flicker, **no dead zone, and
+  768px iPad-portrait lands correctly on desktop**. The R2 `759.98px` fractional-viewport fix holds.
+
+*Note:* the two console warnings present on every page (React Router v7 `startTransition` /
+`relativeSplatPath` future flags) are **also on production** — not redesign noise.
+
+**Session 2026-07-16 (evening) — Excel templates, two catalog fixes, and the Phase 9.7 plan.
+Branch at 58 commits, all pushed; owner set the 9.6 deploy for TONIGHT.**
+
+- **Excel templates on both upload surfaces** (`cadd116`, owner-directed): "Download template" on
+  Catalog→Import (Price_Circular_Template.xlsx — instruction row ABOVE the header row so the CBN
+  header-finder skips it; deliberately NO example data rows, so an unedited upload imports zero
+  vehicles) and TIV→Data Upload (Market_Data_Template.xlsx). The TIV generator
+  (`downloadMarketDataTemplate`) lives in `parseExcel.js` next to the parser and is built from the
+  SAME constants the parser reads (6-sheet order, month format, RAW_SEGMENT_ROWS row indices), so
+  template and import can never drift apart; the Raw-Data month placeholder `<Apr-22>` is
+  angle-bracketed so `parseMonthLabel()` ignores it until replaced. Client-side via the bundled
+  `xlsx` lib — no static assets, no new dependencies.
+- **Sub-segment modal showed the brochure upload progress twice** (`4ec8b32`) — owner spotted it on
+  prod: "Uploading… 0%" under the file button AND a leftover "Uploading brochure… 0%" under the
+  Active checkbox. Second block removed; the save button still mirrors the percentage (intentional).
+- **Family variant list shows the full price-list description** (`83d088e`) — `.vc-desc` truncated
+  at 320px with an ellipsis, hiding exactly the load-span/cabin/fuel details that distinguish CBNs
+  within a family. Scoped override on `.vc-wide-modal .vc-desc` wraps it in full; the main Vehicles
+  table keeps its ellipsis. (Tyres was already a column.) Fast-tracked from the 9.7 F3 spec.
+- **Catalog UX brainstorm → Phase 9.7 plan** (`fdbb562` → `docs/backlog/phase97-catalog-ux.md`).
+  Two rounds of interactive visual prototypes (artifact `aa2a498e-8d7f-46ad-ad71-9b927eb79d1f`);
+  core reframe: **brochures are the catalog's primary job, one brochure ↔ many CBNs, the
+  sub-segment (family) is the unit**. Owner approved: F1 search-first landing + per-user shelf ·
+  F2 brochure wall (covers pre-rendered once at upload — never live PDF rendering) · F3 hierarchy
+  fallback · S1 family-level WhatsApp share landing as an editable draft · A1 four-tab admin
+  workbench (reshuffle with inline "+ new sub-segment", import triage queue, rules with NOT-terms,
+  Families retire/reactivate lifecycle). Keystone: additive `vehicle_catalog.sub_segment_id` FK
+  replacing the name-text linkage — which is also why the sub-segment Name/Segment edit fields are
+  disabled today (BY DESIGN, not a bug; owner hit this on prod). Owner rejected: WhatsApp bot,
+  QR-on-print, and all price-first ideas (price card / compare / quote-this / circular history /
+  price book). 9.7 builds after 9.6 is live, own branch and PRs — only the two safe presentational
+  pieces above rode the 9.6 release.

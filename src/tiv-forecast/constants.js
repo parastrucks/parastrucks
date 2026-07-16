@@ -4,13 +4,16 @@ export const SEGMENTS = [
   'Bus PVT', 'Haulage', 'MAV', 'Tractor', 'Tipper', 'ICV Trucks',
 ]
 
+// Muted categorical palette — distinct hues at the design tokens' (low) saturation
+// so multi-segment charts stay legible without the old saturated-rainbow look.
+// Bus PVT leads on the accent blue; the rest are spaced, deep, print-report tones.
 export const SEG_COLORS = {
-  'Bus PVT':   '#0080C9',
-  'Haulage':   '#E67E22',
-  'MAV':       '#2ECC71',
-  'Tractor':   '#9B59B6',
-  'Tipper':    '#E74C3C',
-  'ICV Trucks':'#1ABC9C',
+  'Bus PVT':   '#2563EB', // accent blue
+  'Haulage':   '#0E7490', // teal
+  'MAV':       '#7C3AED', // violet
+  'Tractor':   '#B45309', // amber
+  'Tipper':    '#475569', // slate
+  'ICV Trucks':'#9D174D', // rose (kept clear of the semantic red)
 }
 
 // DB column names for each segment (snake_case mapping)

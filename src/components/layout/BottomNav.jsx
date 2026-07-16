@@ -2,85 +2,113 @@ import { NavLink } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabase'
+import Icon from '../Icon'
+import CreateSheet from './CreateSheet'
+import { CREATE_ACTIONS } from './navConfig'
 
-// Department-code-keyed tab bars. Admin gets the broad tab set based on
-// permission_level; everyone else on their department. Phase 6c.3: legacy
-// profile.role is gone, so unknown department codes fall back to the
-// minimal home+profile bar (safe default for dept like accounts/service/pdi
-// that don't yet have a custom tab set).
+// Department-code-keyed tab bars (icons are Lucide names). Admin gets the broad
+// set; everyone else on their department; unknown codes fall back to home+profile.
 const DEPT_TABS = {
   sales: [
-    { to: '/',               icon: '⊞', label: 'Home' },
-    { to: '/quotation',      icon: '📄', label: 'Quote' },
-    { to: '/my-quotations',  icon: '🗂', label: 'History' },
-    { to: '/profile',        icon: '👤', label: 'Profile' },
+    { to: '/',              icon: 'dashboard', label: 'Home' },
+    { to: '/quotation',     icon: 'file',      label: 'Quote' },
+    { to: '/my-quotations', icon: 'clipboard', label: 'History' },
+    { to: '/profile',       icon: 'user',      label: 'Profile' },
   ],
   back_office: [
-    { to: '/',               icon: '⊞', label: 'Home' },
-    { to: '/quotation',      icon: '📄', label: 'Quote' },
-    { to: '/tiv-forecast',   icon: '📈', label: 'TIV' },
-    { to: '/profile',        icon: '👤', label: 'Profile' },
+    { to: '/',             icon: 'dashboard', label: 'Home' },
+    { to: '/quotation',    icon: 'file',      label: 'Quote' },
+    { to: '/tiv-forecast', icon: 'trending',  label: 'TIV' },
+    { to: '/profile',      icon: 'user',      label: 'Profile' },
   ],
   hr: [
-    { to: '/',               icon: '⊞', label: 'Home' },
-    { to: '/employees',      icon: '👥', label: 'Employees' },
-    { to: '/profile',        icon: '👤', label: 'Profile' },
+    { to: '/',          icon: 'dashboard', label: 'Home' },
+    { to: '/employees', icon: 'users',     label: 'Employees' },
+    { to: '/profile',   icon: 'user',      label: 'Profile' },
   ],
   service: [
-    { to: '/',               icon: '⊞', label: 'Home' },
-    { to: '/vendor-jobs',    icon: '🔧', label: 'Jobs' },
-    { to: '/profile',        icon: '👤', label: 'Profile' },
+    { to: '/',            icon: 'dashboard', label: 'Home' },
+    { to: '/vendor-jobs', icon: 'wrench',    label: 'Jobs' },
+    { to: '/profile',     icon: 'user',      label: 'Profile' },
   ],
   accounts: [
-    { to: '/',               icon: '⊞', label: 'Home' },
-    { to: '/vendor-jobs',    icon: '🔧', label: 'Jobs' },
-    { to: '/profile',        icon: '👤', label: 'Profile' },
+    { to: '/',            icon: 'dashboard', label: 'Home' },
+    { to: '/vendor-jobs', icon: 'wrench',    label: 'Jobs' },
+    { to: '/profile',     icon: 'user',      label: 'Profile' },
   ],
 }
 
+// 4 icons + the raised center Create (+) = 5 slots. "Quote" is omitted here
+// because New Quotation is already the first action in the Create sheet.
 const ADMIN_TABS = [
-  { to: '/',               icon: '⊞', label: 'Home' },
-  { to: '/quotation',      icon: '📄', label: 'Quote' },
-  { to: '/tiv-forecast',   icon: '📈', label: 'TIV' },
-  { to: '/employees',      icon: '👥', label: 'Team' },
-  { to: '/profile',        icon: '👤', label: 'Profile' },
+  { to: '/',             icon: 'dashboard', label: 'Home' },
+  { to: '/tiv-forecast', icon: 'trending',  label: 'TIV' },
+  { to: '/employees',    icon: 'users',     label: 'Team' },
+  { to: '/profile',      icon: 'user',      label: 'Profile' },
 ]
 
 const FALLBACK_TABS = [
-  { to: '/',         icon: '⊞', label: 'Home' },
-  { to: '/profile',  icon: '👤', label: 'Profile' },
+  { to: '/',        icon: 'dashboard', label: 'Home' },
+  { to: '/profile', icon: 'user',      label: 'Profile' },
 ]
 
-export default function BottomNav() {
-  const { profile, isAdmin } = useAuth()
+function Tab({ tab }) {
+  return (
+    <NavLink to={tab.to} end={tab.to === '/'} className={({ isActive }) => `bottom-tab${isActive ? ' active' : ''}`}>
+      {({ isActive }) => (
+        <>
+          <Icon name={tab.icon} size={21} color={isActive ? 'var(--accent)' : 'var(--text-muted)'} className="bottom-tab-icon" />
+          <span className="bottom-tab-label">{tab.label}</span>
+        </>
+      )}
+    </NavLink>
+  )
+}
 
-  // Resolve department code from department_id. Legacy role value is the
-  // fallback during the 6c.1 transition window.
+export default function BottomNav() {
+  const { profile, isAdmin, canAccess } = useAuth()
   const [deptCode, setDeptCode] = useState(null)
+  const [deptResolved, setDeptResolved] = useState(false)
+  const [createOpen, setCreateOpen] = useState(false)
+
   useEffect(() => {
     let cancelled = false
-    if (!profile?.department_id) { setDeptCode(null); return }
+    if (!profile?.department_id) { setDeptCode(null); setDeptResolved(true); return }
+    setDeptResolved(false)
     supabase.from('departments').select('code').eq('id', profile.department_id).maybeSingle()
-      .then(({ data }) => { if (!cancelled) setDeptCode(data?.code ?? null) })
+      .then(({ data }) => { if (!cancelled) { setDeptCode(data?.code ?? null); setDeptResolved(true) } })
     return () => { cancelled = true }
   }, [profile?.department_id])
 
   if (!profile) return null
-  const tabs = isAdmin ? ADMIN_TABS : (DEPT_TABS[deptCode] || FALLBACK_TABS)
+  // A non-admin with a department whose code is still resolving: render nothing
+  // for that one fetch round-trip rather than flashing the wrong FALLBACK tabs.
+  if (!isAdmin && profile.department_id && !deptResolved) return null
+
+  let tabs = isAdmin ? ADMIN_TABS : (DEPT_TABS[deptCode] || FALLBACK_TABS)
+  const createActions = CREATE_ACTIONS.filter(a => canAccess(a.to))
+  const hasCreate = createActions.length > 0
+
+  // Keep the raised Create (+) visually centred by splitting an EVEN number of
+  // tabs around it (equal on both sides). If the count is odd, drop the last
+  // tab (Profile — still reachable via the top-bar avatar and the drawer).
+  if (hasCreate && tabs.length % 2 === 1) tabs = tabs.slice(0, -1)
+  const mid = tabs.length / 2
+  const left = hasCreate ? tabs.slice(0, mid) : tabs
+  const right = hasCreate ? tabs.slice(mid) : []
 
   return (
-    <nav className="bottom-nav">
-      {tabs.map(tab => (
-        <NavLink
-          key={tab.to}
-          to={tab.to}
-          end={tab.to === '/'}
-          className={({ isActive }) => `bottom-tab ${isActive ? 'active' : ''}`}
-        >
-          <span className="bottom-tab-icon">{tab.icon}</span>
-          <span className="bottom-tab-label">{tab.label}</span>
-        </NavLink>
-      ))}
-    </nav>
+    <>
+      <nav className="bottom-nav">
+        {left.map(t => <Tab key={t.to} tab={t} />)}
+        {hasCreate && (
+          <button type="button" className="bottom-nav-create" onClick={() => setCreateOpen(true)} aria-label="Create new">
+            <Icon name="plus" size={26} color="#fff" />
+          </button>
+        )}
+        {right.map(t => <Tab key={t.to} tab={t} />)}
+      </nav>
+      <CreateSheet open={createOpen} onClose={() => setCreateOpen(false)} actions={createActions} />
+    </>
   )
 }

@@ -1,5 +1,6 @@
 // TIV Forecast — reusable segment × month forecast table
 // forecastMonths items have { label, month_num, horizon } — use fm.label, NOT fm.month
+import { Fragment } from 'react'
 import { SEGMENTS } from '../constants'
 
 function fmtSharePct(val) {
@@ -39,10 +40,10 @@ export default function ForecastTable({ title, subtitle, showTitle = true, forec
                 {forecastMonths.map(fm =>
                   judgmentRows[fm.label]
                     ? (
-                      <>
-                        <th key={`${fm.label}-m`} style={{ textAlign: 'center', fontWeight: 500, padding: '4px 8px' }}>Model</th>
-                        <th key={`${fm.label}-j`} style={{ textAlign: 'center', fontWeight: 500, color: 'var(--amber)', padding: '4px 8px' }}>Judg</th>
-                      </>
+                      <Fragment key={fm.label}>
+                        <th style={{ textAlign: 'center', fontWeight: 500, padding: '4px 8px' }}>Model</th>
+                        <th style={{ textAlign: 'center', fontWeight: 500, color: 'var(--amber)', padding: '4px 8px' }}>Judg</th>
+                      </Fragment>
                     )
                     : <th key={fm.label}></th>
                 )}
@@ -67,10 +68,10 @@ export default function ForecastTable({ title, subtitle, showTitle = true, forec
 
                   if (jRow) {
                     return (
-                      <>
-                        <td key={`${fm.label}-m`} style={{ textAlign: 'right', padding: '7px 10px', fontSize: 13 }}>{dispVal ?? '—'}</td>
-                        <td key={`${fm.label}-j`} style={{ textAlign: 'right', padding: '7px 10px', fontSize: 13, color: 'var(--amber)' }}>{jVal ?? '—'}</td>
-                      </>
+                      <Fragment key={fm.label}>
+                        <td style={{ textAlign: 'right', padding: '7px 10px', fontSize: 13 }}>{dispVal ?? '—'}</td>
+                        <td style={{ textAlign: 'right', padding: '7px 10px', fontSize: 13, color: 'var(--amber)' }}>{jVal ?? '—'}</td>
+                      </Fragment>
                     )
                   }
                   return (
@@ -103,10 +104,10 @@ export default function ForecastTable({ title, subtitle, showTitle = true, forec
                 if (jRow) {
                   const jTotal = SEGMENTS.reduce((s, seg) => s + (jRow[seg] || 0), 0)
                   return (
-                    <>
-                      <td key={`${fm.label}-m`} style={{ textAlign: 'right', padding: '7px 10px', fontSize: 13 }}>{total || '—'}</td>
-                      <td key={`${fm.label}-j`} style={{ textAlign: 'right', padding: '7px 10px', fontSize: 13, color: 'var(--amber)' }}>{jTotal || '—'}</td>
-                    </>
+                    <Fragment key={fm.label}>
+                      <td style={{ textAlign: 'right', padding: '7px 10px', fontSize: 13 }}>{total || '—'}</td>
+                      <td style={{ textAlign: 'right', padding: '7px 10px', fontSize: 13, color: 'var(--amber)' }}>{jTotal || '—'}</td>
+                    </Fragment>
                   )
                 }
                 return <td key={fm.label} style={{ textAlign: 'right', padding: '7px 10px', fontSize: 13 }}>{total || '—'}</td>

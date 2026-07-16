@@ -5,6 +5,7 @@ import { callEdge } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import Skeleton from '../components/Skeleton'
+import Icon from '../components/Icon'
 import useFocusTrap from '../hooks/useFocusTrap'
 
 /* ── CONSTANTS ───────────────────────────────────────────────── */
@@ -106,9 +107,12 @@ function AdminCatalog() {
 
   return (
     <div>
-      <div className="page-header">
-        <h1>Vehicle Catalog</h1>
-        <p>Manage vehicles, sub-segments and import price circulars</p>
+      <div className="page-head">
+        <div>
+          <div className="page-head-crumb">Sales Tools</div>
+          <h1 className="page-head-title">Vehicle Catalog<span className="period-accent">.</span></h1>
+          <div className="page-head-sub">Manage vehicles, sub-segments and import price circulars</div>
+        </div>
       </div>
 
       <div className="vc-tabs">
@@ -250,7 +254,7 @@ function VehiclesTab({ vehicles, subSegs, loading, onRefresh }) {
         <Skeleton variant="row" count={4} />
       ) : filtered.length === 0 ? (
         <div className="empty-state">
-          <div className="empty-state-icon">🚛</div>
+          <div className="empty-state-icon"><Icon name="truck" size={36} color="var(--text-muted)" /></div>
           <h3>No vehicles found</h3>
           <p>Try adjusting your search or filters</p>
         </div>
@@ -427,6 +431,7 @@ function VehicleModal({ mode, vehicle, subSegs, onClose, onSaved }) {
   )
   const [saving, setSaving] = useState(false)
   const [error,  setError]  = useState('')
+  const [errorField, setErrorField] = useState(null) // which field to flag red on validation
 
   const subCatOptions = useMemo(
     () => subSegs.filter(ss => ss.segment === form.segment).map(ss => ss.name),
@@ -436,13 +441,27 @@ function VehicleModal({ mode, vehicle, subSegs, onClose, onSaved }) {
   function set(field, value) {
     setForm(f => ({ ...f, [field]: value }))
     setError('')
+    setErrorField(null)
+  }
+
+  // Flag the offending field red, show the message under it, and scroll/focus it.
+  function fail(msg, field, elId) {
+    setError(msg)
+    setErrorField(field)
+    const el = document.getElementById(elId)
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      if (typeof el.focus === 'function') { try { el.focus({ preventScroll: true }) } catch { el.focus() } }
+    }
   }
 
   async function save() {
-    if (!form.cbn.trim())         { setError('CBN is required'); return }
-    if (!form.description.trim()) { setError('Description is required'); return }
-    if (!form.segment)            { setError('Segment is required'); return }
-    if (!form.mrp_incl_gst)       { setError('MRP is required'); return }
+    setError('')
+    setErrorField(null)
+    if (!form.cbn.trim())         { fail('CBN is required',         'cbn',          'vm-cbn');     return }
+    if (!form.description.trim()) { fail('Description is required', 'description',  'vm-desc');    return }
+    if (!form.segment)            { fail('Segment is required',     'segment',      'vm-segment'); return }
+    if (!form.mrp_incl_gst)       { fail('MRP is required',         'mrp_incl_gst', 'vm-mrp');     return }
 
     setSaving(true)
     const payload = {
@@ -482,30 +501,30 @@ function VehicleModal({ mode, vehicle, subSegs, onClose, onSaved }) {
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
         <div className="modal-body">
-          {error && <div className="alert alert-error">{error}</div>}
-
           <div className="vc-form-grid">
             <div className="form-group">
               <label className="form-label" htmlFor="vm-cbn">CBN *</label>
               <input
                 id="vm-cbn"
-                className="form-input"
+                className={`form-input ${errorField === 'cbn' ? 'error' : ''}`}
                 value={form.cbn}
                 onChange={e => set('cbn', e.target.value)}
                 disabled={mode === 'edit'}
                 placeholder="e.g. CDB111505C0004_YW"
               />
+              {errorField === 'cbn' && <div className="form-error">{error}</div>}
             </div>
             <div className="form-group">
               <label className="form-label" htmlFor="vm-mrp">MRP incl. GST (₹) *</label>
               <input
                 id="vm-mrp"
-                className="form-input"
+                className={`form-input ${errorField === 'mrp_incl_gst' ? 'error' : ''}`}
                 type="number"
                 value={form.mrp_incl_gst}
                 onChange={e => set('mrp_incl_gst', e.target.value)}
                 placeholder="e.g. 2147202"
               />
+              {errorField === 'mrp_incl_gst' && <div className="form-error">{error}</div>}
             </div>
           </div>
 
@@ -513,12 +532,13 @@ function VehicleModal({ mode, vehicle, subSegs, onClose, onSaved }) {
             <label className="form-label" htmlFor="vm-desc">Description *</label>
             <textarea
               id="vm-desc"
-              className="form-input"
+              className={`form-input ${errorField === 'description' ? 'error' : ''}`}
               rows={3}
               value={form.description}
               onChange={e => set('description', e.target.value)}
               placeholder="Full vehicle description as in price list"
             />
+            {errorField === 'description' && <div className="form-error">{error}</div>}
           </div>
 
           <div className="vc-form-grid">
@@ -732,7 +752,7 @@ function SubSegmentsTab({ subSegs, loading, onRefresh }) {
                   <tr>
                     <td colSpan={6}>
                       <div className="empty-state" style={{ padding: '32px 24px' }}>
-                        <div className="empty-state-icon">📁</div>
+                        <div className="empty-state-icon"><Icon name="folder" size={36} color="var(--text-muted)" /></div>
                         <h3>No sub-segments found</h3>
                       </div>
                     </td>
@@ -798,6 +818,7 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
   const [saving,          setSaving]          = useState(false)
   const [uploadPct,       setUploadPct]       = useState(null)
   const [error,           setError]           = useState('')
+  const [errorField,      setErrorField]      = useState(null) // which field to flag red on validation
   const [allocatedCBNs,   setAllocatedCBNs]   = useState([])   // edit: vehicles in this sub-seg
   const [cbnOptions,      setCbnOptions]      = useState([])   // add:  all vehicles in segment/brand (carry current sub_category)
   const [selectedCBNs,    setSelectedCBNs]    = useState(new Set())
@@ -805,7 +826,11 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
   const [cbnLoading,      setCbnLoading]      = useState(false)
   const fileRef = useRef()
 
-  function set(field, value) { setForm(f => ({ ...f, [field]: value })); setError('') }
+  // Editing a field clears its own inline validation error (Quotation pattern).
+  function set(field, value) {
+    setForm(f => ({ ...f, [field]: value }))
+    setErrorField(f => (f === field ? null : f))
+  }
 
   // Edit mode: load CBNs belonging to this sub-segment (by name text match)
   useEffect(() => {
@@ -844,7 +869,7 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
     if (!f) { setBrochureFile(null); return }
 
     if (f.size > 10 * 1024 * 1024) {
-      setError('Brochure must be 10 MB or smaller')
+      toast.error('Brochure must be 10 MB or smaller')
       if (fileRef.current) fileRef.current.value = ''
       return
     }
@@ -862,23 +887,24 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
         reader.readAsArrayBuffer(f.slice(0, 5))
       })
       if (!header.startsWith('%PDF-')) {
-        setError('File is not a valid PDF')
+        toast.error('File is not a valid PDF')
         if (fileRef.current) fileRef.current.value = ''
         return
       }
     } catch {
-      setError('Could not read file')
+      toast.error('Could not read file')
       if (fileRef.current) fileRef.current.value = ''
       return
     }
 
-    setError('')
     setBrochureFile(f)
   }
 
   async function save() {
-    if (!form.name.trim()) { setError('Name is required'); return }
-    if (!form.segment)     { setError('Segment is required'); return }
+    setError('')
+    setErrorField(null)
+    if (!form.name.trim()) { setError('Name is required');    setErrorField('name');    return }
+    if (!form.segment)     { setError('Segment is required'); setErrorField('segment'); return }
 
     setSaving(true)
     let brochure_url      = form.brochure_url      || null
@@ -955,26 +981,31 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
         <div className="modal-body">
-          {error && <div className="alert alert-error">{error}</div>}
-
           <div className="form-group">
             <label className="form-label" htmlFor="ssm-name">Name *</label>
             <input
               id="ssm-name"
-              className="form-input"
+              className={`form-input ${errorField === 'name' ? 'error' : ''}`}
               value={form.name}
               onChange={e => set('name', e.target.value)}
               disabled={mode === 'edit'}
               placeholder="e.g. Boss 11T"
             />
+            {errorField === 'name' && <div className="form-error">{error}</div>}
           </div>
 
           <div className="vc-form-grid">
             <div className="form-group">
               <label className="form-label" htmlFor="ssm-segment">Segment *</label>
-              <select id="ssm-segment" className="form-select" value={form.segment} onChange={e => set('segment', e.target.value)}>
+              <select
+                id="ssm-segment"
+                className={`form-select ${errorField === 'segment' ? 'error' : ''}`}
+                value={form.segment}
+                onChange={e => set('segment', e.target.value)}
+              >
                 {SEGMENTS.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
+              {errorField === 'segment' && <div className="form-error">{error}</div>}
             </div>
             <div className="form-group">
               <label className="form-label" htmlFor="ssm-brand">Brand</label>
@@ -1009,14 +1040,14 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
             />
             {form.brochure_url && !brochureFile ? (
               <div className="vc-current-brochure">
-                <span>📎 {form.brochure_filename || 'Brochure uploaded'}</span>
+                <span><Icon name="file" size={14} /> {form.brochure_filename || 'Brochure uploaded'}</span>
                 <button className="btn btn-ghost btn-sm" onClick={() => fileRef.current.click()}>
                   Replace
                 </button>
               </div>
             ) : (
               <button className="btn btn-secondary btn-sm" onClick={() => fileRef.current.click()}>
-                {brochureFile ? `📎 ${brochureFile.name}` : '+ Upload PDF'}
+                {brochureFile ? <><Icon name="file" size={14} /> {brochureFile.name}</> : '+ Upload PDF'}
               </button>
             )}
             {/* Progress bar appears directly below the file button so the user
@@ -1043,16 +1074,6 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
             <label htmlFor="ss-active" style={{ fontSize: 14, cursor: 'pointer' }}>Active</label>
           </div>
 
-          {uploadPct !== null && (
-            <div className="form-group">
-              <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 4 }}>
-                Uploading brochure… {uploadPct}%
-              </div>
-              <div style={{ height: 6, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${uploadPct}%`, background: 'var(--accent)', transition: 'width 0.2s ease' }} />
-              </div>
-            </div>
-          )}
 
           {/* Edit mode: read-only list of CBNs in this sub-segment */}
           {mode === 'edit' && (
@@ -1196,7 +1217,7 @@ function BrochureDownload({ path, filename }) {
 
   return (
     <button className="btn btn-ghost btn-sm" onClick={download} disabled={loading}>
-      {loading ? <span className="spinner spinner-sm" /> : `📎 ${filename || 'Download'}`}
+      {loading ? <span className="spinner spinner-sm" /> : <><Icon name="file" size={14} /> {filename || 'Download'}</>}
     </button>
   )
 }
@@ -1218,7 +1239,6 @@ function ImportTab({ subSegs, onRefresh }) {
   const [priceCircular, setPriceCircular] = useState('')
   const [effectiveDate, setEffectiveDate] = useState('')
   const [importing,     setImporting]     = useState(false)
-  const [error,         setError]         = useState('')
   const fileRef = useRef()
 
   const subSegMap = useMemo(
@@ -1229,7 +1249,6 @@ function ImportTab({ subSegs, onRefresh }) {
   async function processFile(f) {
     setFile(f)
     setPreview(null)
-    setError('')
     try {
       const buffer = await f.arrayBuffer()
       const wb = XLSX.read(new Uint8Array(buffer), { type: 'array' })
@@ -1246,7 +1265,7 @@ function ImportTab({ subSegs, onRefresh }) {
         }
       }
       if (headerIdx < 0) {
-        setError('Could not find header row — make sure the file has a "CBN" column.')
+        toast.error('Could not find header row — make sure the file has a "CBN" column.')
         return
       }
 
@@ -1258,8 +1277,8 @@ function ImportTab({ subSegs, onRefresh }) {
       const mrpIdx  = findColIdx(headers, ['mrp incl', 'mrp', 'incl. gst', 'incl gst'])
       const segIdx  = findColIdx(headers, ['segment'])
 
-      if (cbnIdx  < 0) { setError('CBN column not found.'); return }
-      if (mrpIdx  < 0) { setError('MRP column not found.'); return }
+      if (cbnIdx  < 0) { toast.error('CBN column not found.'); return }
+      if (mrpIdx  < 0) { toast.error('MRP column not found.'); return }
 
       const dataRows = raw.slice(headerIdx + 1)
         .filter(row => String(row[cbnIdx] || '').trim())
@@ -1281,7 +1300,7 @@ function ImportTab({ subSegs, onRefresh }) {
         .eq('code', brand)
         .single()
       if (brandErr || !brandRow) {
-        setError(`Could not resolve brand "${brand}" — no matching row in the brands table.`)
+        toast.error(`Could not resolve brand "${brand}" — no matching row in the brands table.`)
         return
       }
       const brand_id = brandRow.id
@@ -1318,7 +1337,7 @@ function ImportTab({ subSegs, onRefresh }) {
         sheetName,
       })
     } catch (err) {
-      setError('Failed to parse file: ' + err.message)
+      toast.error('Failed to parse file: ' + err.message)
     }
   }
 
@@ -1328,10 +1347,24 @@ function ImportTab({ subSegs, onRefresh }) {
     if (f) processFile(f)
   }
 
+  // Blank template matching exactly what processFile() looks for. The note row
+  // sits ABOVE the header (the header-finder scans for the "CBN" cell, so rows
+  // before it are ignored) and there are deliberately NO example data rows —
+  // an unedited upload must import zero vehicles, not junk ones.
+  function downloadTemplate() {
+    const ws = XLSX.utils.aoa_to_sheet([
+      ['One row per vehicle. CBN and MRP are compulsory; Segment may be left blank when the Sub-Category is a known sub-segment (it auto-fills). Existing CBNs get their price updated; new CBNs are added.'],
+      ['CBN', 'Description', 'Sub-Category', 'Tyres', 'MRP Incl. GST', 'Segment'],
+    ])
+    ws['!cols'] = [{ wch: 18 }, { wch: 60 }, { wch: 18 }, { wch: 18 }, { wch: 14 }, { wch: 14 }]
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'All Vehicles')
+    XLSX.writeFile(wb, 'Price_Circular_Template.xlsx')
+  }
+
   async function runImport() {
     if (!preview) return
     setImporting(true)
-    setError('')
     const payload = preview.rows.map(({ _isNew, ...r }) => ({
       ...r,
       price_circular: priceCircular || null,
@@ -1359,8 +1392,10 @@ function ImportTab({ subSegs, onRefresh }) {
           Upload the Excel price list. Existing vehicles are updated by CBN; new CBNs are inserted.
           Expected columns: <strong>CBN, Description, Sub-Category, Tyres, MRP incl. 18% GST</strong>
         </p>
-
-        {error && <div className="alert alert-error">{error}</div>}
+        <button type="button" className="btn btn-secondary btn-sm" style={{ marginBottom: 16 }}
+          onClick={downloadTemplate}>
+          <Icon name="download" size={14} /> Download template
+        </button>
 
         <div className="form-group" style={{ maxWidth: 260, marginBottom: 16 }}>
           <label className="form-label" htmlFor="imp-brand">Brand *</label>
@@ -1385,7 +1420,7 @@ function ImportTab({ subSegs, onRefresh }) {
             style={{ display: 'none' }}
             onChange={e => e.target.files[0] && processFile(e.target.files[0])}
           />
-          <div className="vc-dropzone-icon">📊</div>
+          <div className="vc-dropzone-icon"><Icon name="upload" size={34} strokeWidth={1.4} color="var(--text-muted)" /></div>
           {file ? (
             <div>
               <div style={{ fontWeight: 600 }}>{file.name}</div>
@@ -1627,12 +1662,15 @@ function SalesCatalog({ profile }) {
 
   return (
     <div>
-      <div className="page-header">
-        <h1>Vehicle Catalog</h1>
-        <p>
-          Browse models and download brochures
-          {verticalLabels.length > 0 ? ` · ${verticalLabels.join(', ')} range` : ''}
-        </p>
+      <div className="page-head">
+        <div>
+          <div className="page-head-crumb">Sales Tools</div>
+          <h1 className="page-head-title">Vehicle Catalog<span className="period-accent">.</span></h1>
+          <div className="page-head-sub">
+            Browse models and download brochures
+            {verticalLabels.length > 0 ? ` · ${verticalLabels.join(', ')} range` : ''}
+          </div>
+        </div>
       </div>
 
       <div className="vc-controls">
@@ -1654,7 +1692,7 @@ function SalesCatalog({ profile }) {
         <Skeleton variant="card" count={3} />
       ) : cards.length === 0 ? (
         <div className="empty-state">
-          <div className="empty-state-icon">🚛</div>
+          <div className="empty-state-icon"><Icon name="truck" size={36} color="var(--text-muted)" /></div>
           <h3>No vehicles available</h3>
           <p>No catalog data for your assigned brand / product range</p>
         </div>

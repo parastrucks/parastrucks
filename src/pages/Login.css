@@ -5,7 +5,7 @@
 
 .login-page {
   min-height: 100vh;
-  background: linear-gradient(135deg, #0A1628 0%, #0D2844 50%, #0B4F7A 100%);
+  background: var(--paper);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -13,11 +13,13 @@
 }
 .login-card {
   background: var(--white);
+  border: 1px solid var(--border-default);
+  border-top: 3px solid var(--ink);
   border-radius: var(--radius);
-  padding: 36px 32px;
+  padding: 34px 32px;
   width: 100%;
   max-width: 400px;
-  box-shadow: var(--shadow-lg);
+  box-shadow: none;
   animation: slideUp .25s ease;
 }
 .login-logo-wrap {
@@ -31,10 +33,10 @@
 }
 .login-title {
   text-align: center;
-  font-size: 22px;
-  font-weight: 800;
-  color: var(--gray-900);
-  letter-spacing: -.5px;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -.02em;
   margin-bottom: 4px;
 }
 .login-subtitle {
@@ -86,6 +88,6 @@
 }
 .login-footer a {
   color: var(--blue);
-  font-weight: 600;
+  font-weight: 700;
 }
 .login-footer a:hover { text-decoration: underline; }

@@ -33,6 +33,7 @@ function RulesTab({ refreshAccessRules }) {
   const [showAdd, setShowAdd]       = useState(false)
   const [deleting, setDeleting]     = useState(null)
   const [error, setError]           = useState('')
+  const [errorField, setErrorField] = useState(null) // which field to flag red on validation
   const [refEntities, setRefEntities]   = useState([])
   const [refDepartments, setRefDepartments] = useState([])
   const [refDesignations, setRefDesignations] = useState([])
@@ -73,12 +74,20 @@ function RulesTab({ refreshAccessRules }) {
     [refDesignations, form.department_id],
   )
 
+  const focusEl = (id) => {
+    const el = document.getElementById(id)
+    if (!el) return
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    if (typeof el.focus === 'function') { try { el.focus({ preventScroll: true }) } catch { el.focus() } }
+  }
+
   async function handleAdd(e) {
     e.preventDefault()
     setError('')
-    if (!form.route)         { setError('Route is required.'); return }
-    if (!form.entity_id)     { setError('Entity is required.'); return }
-    if (!form.department_id) { setError('Department is required.'); return }
+    setErrorField(null)
+    if (!form.route)         { setError('Route is required.');      setErrorField('route');         focusEl('ar-route');      return }
+    if (!form.entity_id)     { setError('Entity is required.');     setErrorField('entity_id');     focusEl('ar-entity');     return }
+    if (!form.department_id) { setError('Department is required.'); setErrorField('department_id'); focusEl('ar-department'); return }
 
     try {
       await callEdge('admin-access-rules', 'createRule', {
@@ -93,7 +102,8 @@ function RulesTab({ refreshAccessRules }) {
       await loadAll()
       await refreshAccessRules()
     } catch (err) {
-      setError(err.message)
+      // No banner: the create failed server-side — surface it as a toast.
+      toast.error(err.message || 'Failed to add rule.')
     }
   }
 
@@ -112,7 +122,10 @@ function RulesTab({ refreshAccessRules }) {
 
   const F = field => ({
     value: form[field],
-    onChange: e => setForm(f => ({ ...f, [field]: e.target.value })),
+    onChange: e => {
+      setForm(f => ({ ...f, [field]: e.target.value }))
+      setErrorField(f => f === field ? null : f)
+    },
   })
 
   return (
@@ -121,12 +134,10 @@ function RulesTab({ refreshAccessRules }) {
         <p className="ar-section-desc" style={{ margin: 0 }}>
           Each rule grants route access to users matching all 3 required axes (permission level × entity × department). Designation is optional — NULL means "any designation in this department". Admin bypasses every rule.
         </p>
-        <button className="btn btn-primary btn-sm" onClick={() => { setShowAdd(true); setError('') }}>
+        <button className="btn btn-primary btn-sm" onClick={() => { setShowAdd(true); setError(''); setErrorField(null) }}>
           + Add Rule
         </button>
       </div>
-
-      {error && <div className="alert alert-error" style={{ marginBottom: 16 }}><span>⚠</span><span>{error}</span></div>}
 
       {showAdd && (
         <div className="ar-add-form">
@@ -135,10 +146,11 @@ function RulesTab({ refreshAccessRules }) {
             <div className="ar-form-grid">
               <div className="form-group">
                 <label className="form-label" htmlFor="ar-route">Route *</label>
-                <select id="ar-route" className="form-select" {...F('route')}>
+                <select id="ar-route" className={`form-select ${errorField === 'route' ? 'error' : ''}`} {...F('route')}>
                   <option value="">— Select route —</option>
                   {ALL_ROUTES.map(r => <option key={r.route} value={r.route}>{r.label} ({r.route})</option>)}
                 </select>
+                {errorField === 'route' && <div className="form-error">{error}</div>}
               </div>
               <div className="form-group">
                 <label className="form-label" htmlFor="ar-level">Permission Level *</label>
@@ -148,19 +160,24 @@ function RulesTab({ refreshAccessRules }) {
               </div>
               <div className="form-group">
                 <label className="form-label" htmlFor="ar-entity">Entity *</label>
-                <select id="ar-entity" className="form-select" {...F('entity_id')}>
+                <select id="ar-entity" className={`form-select ${errorField === 'entity_id' ? 'error' : ''}`} {...F('entity_id')}>
                   <option value="">— Select —</option>
                   {refEntities.map(e => <option key={e.id} value={e.id}>{e.code}</option>)}
                 </select>
+                {errorField === 'entity_id' && <div className="form-error">{error}</div>}
               </div>
               <div className="form-group">
                 <label className="form-label" htmlFor="ar-department">Department *</label>
-                <select id="ar-department" className="form-select"
+                <select id="ar-department" className={`form-select ${errorField === 'department_id' ? 'error' : ''}`}
                   value={form.department_id}
-                  onChange={e => setForm(f => ({ ...f, department_id: e.target.value, designation_id: '' }))}>
+                  onChange={e => {
+                    setForm(f => ({ ...f, department_id: e.target.value, designation_id: '' }))
+                    setErrorField(f => f === 'department_id' ? null : f)
+                  }}>
                   <option value="">— Select —</option>
                   {refDepartments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                 </select>
+                {errorField === 'department_id' && <div className="form-error">{error}</div>}
               </div>
               <div className="form-group">
                 <label className="form-label" htmlFor="ar-designation">Designation</label>
@@ -338,25 +355,25 @@ function GMPicker({ entity_id, field, current, options, onSave, saving }) {
    TAB 3 — CONFIGURATION (Brands / Roles / Locations / Departments)
 ══════════════════════════════════════════════════════════════ */
 function RefTable({ title, items, onAdd, onToggle, addPlaceholder, nameKey = 'name', labelKey = null, extraFields = null }) {
+  const toast = useToast()
   const [newName,  setNewName]  = useState('')
   const [newLabel, setNewLabel] = useState('')
   const [saving,   setSaving]   = useState(false)
-  const [error,    setError]    = useState('')
 
   async function handleAdd(e) {
     e.preventDefault()
     if (!newName.trim()) return
-    setSaving(true); setError('')
+    setSaving(true)
     const err = await onAdd(newName.trim(), newLabel.trim())
     setSaving(false)
-    if (err) { setError(err); return }
+    // Add failures are server-side (or a missing display name) — toast, no banner.
+    if (err) { toast.error(err); return }
     setNewName(''); setNewLabel('')
   }
 
   return (
     <div className="ar-ref-table">
       <h3 className="ar-ref-title">{title}</h3>
-      {error && <div className="alert alert-error" style={{ marginBottom: 10, padding: '6px 10px' }}><span>⚠</span><span style={{ fontSize: 12 }}>{error}</span></div>}
       <div className="table-wrap" style={{ marginBottom: 12 }}>
         <table>
           <thead>
@@ -509,12 +526,14 @@ function ConfigTab() {
 const OU_EMPTY = { brand: '', location: '', entity_code: '', full_name: '', address: '', gstin: '', bank_account: '', bank_name: '', bank_ifsc: '' }
 
 function OperatingUnits({ brands, locations }) {
+  const toast = useToast()
   const [units,   setUnits]   = useState([])
   const [loading, setLoading] = useState(true)
   const [modal,   setModal]   = useState(null)
   const [form,    setForm]    = useState(OU_EMPTY)
   const [saving,  setSaving]  = useState(false)
   const [error,   setError]   = useState('')
+  const [errorField, setErrorField] = useState(null) // which field to flag red on validation
   const trapRef = useFocusTrap(!!modal, closeModal)
 
   const load = useCallback(async () => {
@@ -526,19 +545,37 @@ function OperatingUnits({ brands, locations }) {
 
   useEffect(() => { load() }, [load])
 
-  function openAdd() { setForm(OU_EMPTY); setError(''); setModal('add') }
+  function openAdd() { setForm(OU_EMPTY); setError(''); setErrorField(null); setModal('add') }
   function openEdit(ou) {
     setForm({ brand: ou.brand, location: ou.location, entity_code: ou.entity_code || '', full_name: ou.full_name || '', address: ou.address || '', gstin: ou.gstin || '', bank_account: ou.bank_account || '', bank_name: ou.bank_name || '', bank_ifsc: ou.bank_ifsc || '' })
-    setError(''); setModal('edit')
+    setError(''); setErrorField(null); setModal('edit')
   }
-  function closeModal() { setModal(null); setError('') }
+  function closeModal() { setModal(null); setError(''); setErrorField(null) }
 
-  const F = field => ({ value: form[field], onChange: e => setForm(f => ({ ...f, [field]: e.target.value })) })
+  const F = field => ({
+    value: form[field],
+    onChange: e => {
+      setForm(f => ({ ...f, [field]: e.target.value }))
+      setErrorField(f => f === field ? null : f)
+    },
+  })
 
   async function handleSave(e) {
     e.preventDefault()
-    if (!form.brand || !form.location) { setError('Brand and Location are required.'); return }
-    setSaving(true); setError('')
+    setError('')
+    setErrorField(null)
+    if (!form.brand || !form.location) {
+      setError('Brand and Location are required.')
+      const field = !form.brand ? 'brand' : 'location'
+      setErrorField(field)
+      const el = document.getElementById(field === 'brand' ? 'ou-brand' : 'ou-location')
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        try { el.focus({ preventScroll: true }) } catch { el.focus() }
+      }
+      return
+    }
+    setSaving(true)
     const payload = {
       brand:        form.brand,
       location:     form.location,
@@ -554,7 +591,7 @@ function OperatingUnits({ brands, locations }) {
       if (modal === 'add') await callEdge('admin-access-rules', 'createOperatingUnit', payload)
       else                 await callEdge('admin-access-rules', 'updateOperatingUnit', payload)
     } catch (e) {
-      setSaving(false); setError(e.message); return
+      setSaving(false); toast.error(e.message); return
     }
     setSaving(false); closeModal(); await load()
   }
@@ -620,22 +657,23 @@ function OperatingUnits({ brands, locations }) {
               <button className="modal-close" onClick={closeModal}>×</button>
             </div>
             <div className="modal-body">
-              {error && <div className="alert alert-error" style={{ marginBottom: 12 }}><span>⚠</span><span>{error}</span></div>}
               <form onSubmit={handleSave} noValidate>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
                   <div className="form-group">
                     <label className="form-label" htmlFor="ou-brand">Brand *</label>
-                    <select id="ou-brand" className="form-select" {...F('brand')} disabled={modal === 'edit'}>
+                    <select id="ou-brand" className={`form-select ${errorField === 'brand' ? 'error' : ''}`} {...F('brand')} disabled={modal === 'edit'}>
                       <option value="">— Select —</option>
                       {brands.map(b => <option key={b.code} value={b.code}>{b.name}</option>)}
                     </select>
+                    {errorField === 'brand' && <div className="form-error">{error}</div>}
                   </div>
                   <div className="form-group">
                     <label className="form-label" htmlFor="ou-location">Location *</label>
-                    <select id="ou-location" className="form-select" {...F('location')} disabled={modal === 'edit'}>
+                    <select id="ou-location" className={`form-select ${errorField === 'location' ? 'error' : ''}`} {...F('location')} disabled={modal === 'edit'}>
                       <option value="">— Select —</option>
                       {locations.map(l => <option key={l.name} value={l.name}>{l.name}</option>)}
                     </select>
+                    {errorField === 'location' && <div className="form-error">{error}</div>}
                   </div>
                   <div className="form-group">
                     <label className="form-label" htmlFor="ou-entity-code">Entity Code</label>
@@ -705,12 +743,23 @@ function ErrorsTab() {
       try {
         const { data, error: err } = await supabase
           .from('error_log')
-          .select('id, created_at, user_id, url, message, stack, context, user:users(full_name, email)')
+          .select('id, created_at, user_id, url, message, stack, context')
           .order('created_at', { ascending: false })
           .limit(100)
         if (cancelled) return
-        if (err) toast.error(err.message)
-        else setRows(data || [])
+        if (err) { toast.error(err.message); return }
+        // error_log.user_id's FK targets auth.users, not public.users, so
+        // PostgREST can't embed user:users(...) (400 "no relationship in cache").
+        // Resolve display names with a second lookup keyed on the distinct ids.
+        const rows = data || []
+        const ids = [...new Set(rows.map(r => r.user_id).filter(Boolean))]
+        let userMap = {}
+        if (ids.length) {
+          const { data: us } = await supabase.from('users').select('id, full_name, email').in('id', ids)
+          if (cancelled) return
+          userMap = Object.fromEntries((us || []).map(u => [u.id, u]))
+        }
+        setRows(rows.map(r => ({ ...r, user: userMap[r.user_id] || null })))
       } catch (e) {
         if (!cancelled) toast.error('Failed to load errors: ' + e.message)
       } finally {
@@ -803,9 +852,12 @@ export default function AccessRules() {
 
   return (
     <div>
-      <div className="page-header">
-        <h1>Access Rules</h1>
-        <p>Define route-level access, assign entity GMs, manage reference data.</p>
+      <div className="page-head">
+        <div>
+          <div className="page-head-crumb">Operations Tools</div>
+          <h1 className="page-head-title">Access Rules<span className="period-accent">.</span></h1>
+          <div className="page-head-sub">Define route-level access, assign entity GMs, manage reference data.</div>
+        </div>
       </div>
 
       <div className="ar-tabs">

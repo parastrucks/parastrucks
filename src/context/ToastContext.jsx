@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useRef, useState } from 'react'
+import Icon from '../components/Icon'
 
 const ToastContext = createContext(null)
 
@@ -57,7 +58,7 @@ export function ToastProvider({ children }) {
           {toasts.map(t => (
             <div key={t.id} className={`toast toast--${t.type}`}>
               <span className="toast__icon">
-                {t.type === 'success' ? '✓' : t.type === 'error' ? '✕' : 'ℹ'}
+                <Icon name={t.type === 'success' ? 'check' : t.type === 'error' ? 'x' : 'info'} size={16} />
               </span>
               <span className="toast__message">{t.message}</span>
               <button

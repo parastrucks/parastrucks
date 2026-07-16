@@ -1,5 +1,6 @@
 // TIV Forecast — Segment Analysis Tab
 import { useState, useMemo } from 'react'
+import Icon from '../../components/Icon'
 import { SEGMENTS, SEG_COLORS, SEG_COL } from '../constants'
 import SegmentChart from './SegmentChart'
 
@@ -133,7 +134,7 @@ export default function SegmentAnalysisTab({ tivActuals, alActuals, ptbActuals, 
 
       {(!tivActuals?.length) && (
         <div className="empty-state">
-          <div className="empty-icon">📈</div>
+          <div className="empty-icon"><Icon name="trending" size={34} color="var(--text-muted)" /></div>
           <div className="empty-title">No historical data</div>
           <div className="empty-desc">Upload a Market Data file to see segment analysis.</div>
         </div>

@@ -2,7 +2,10 @@
 // Tracks the four cases {outside, ancillary} × {warranty, paid}. Reads are direct
 // supabase under RLS; every write goes through the `service-jobs` Edge Function.
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import Icon from '../components/Icon'
 import { useAuth } from '../context/AuthContext'
+import { useToast } from '../context/ToastContext'
 import { supabase } from '../lib/supabase'
 import { callEdge } from '../lib/api'
 import { generateServicePoPdf } from '../utils/pdfGenerator'
@@ -195,6 +198,7 @@ function LensDropdown({ value, onChange }) {
 
 export default function ServiceJobs() {
   const { profile } = useAuth()
+  const toast = useToast()   // global toast — load/create/action failures
   const [entity, setEntity] = useState(null)
   const [deptCode, setDeptCode] = useState(null)
   const [vendors, setVendors] = useState([])
@@ -202,13 +206,25 @@ export default function ServiceJobs() {
   const [tab, setTab] = useState('active')
   const [filters, setFilters] = useState({ q: '', job_type: '', repair_type: '', stage: '' })
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [showNew, setShowNew] = useState(false)
   const [form, setForm] = useState(blankForm())
   const [selected, setSelected] = useState(null)
+
+  // Auto-open the New Job form when arrived via the mobile Create (+) sheet
+  // (/vendor-jobs?new=1). Keyed on searchParams so it also fires when the user
+  // is already on this route (the (+) sheet just changes the query string, it
+  // does not remount). Stripping the param re-runs this with no ?new, a no-op.
+  const [searchParams, setSearchParams] = useSearchParams()
+  useEffect(() => {
+    if (searchParams.get('new') === '1') {
+      openNew()
+      searchParams.delete('new')
+      setSearchParams(searchParams, { replace: true })
+    }
+  }, [searchParams]) // eslint-disable-line react-hooks/exhaustive-deps
   const [events, setEvents] = useState([])
-  const [toast, setToast] = useState(null) // { msg, kind }
+  const [pageToast, setPageToast] = useState(null) // in-page success pill — { msg, kind }
   const [showFilters, setShowFilters] = useState(false)
   const [sort, setSort] = useState(null) // { key, dir: 'asc'|'desc' } | null = default order
   const [mode, setMode] = useState('needs') // 'needs' | 'all'
@@ -218,12 +234,12 @@ export default function ServiceJobs() {
   const selectedRef = useRef(null)
   selectedRef.current = selected
 
-  const showToast = useCallback((msg, kind = 'success') => setToast({ msg, kind }), [])
+  const showToast = useCallback((msg, kind = 'success') => setPageToast({ msg, kind }), [])
   useEffect(() => {
-    if (!toast) return
-    const id = setTimeout(() => setToast(null), 3200)
+    if (!pageToast) return
+    const id = setTimeout(() => setPageToast(null), 3200)
     return () => clearTimeout(id)
-  }, [toast])
+  }, [pageToast])
 
   // Close the filter popover on outside-click / Esc.
   useEffect(() => {
@@ -275,10 +291,10 @@ export default function ServiceJobs() {
     setLoading(true)
     const { data, error: e } = await supabase.from('service_jobs')
       .select('*').order('created_at', { ascending: false })
-    if (e) setError(e.message)
+    if (e) toast.error(e.message)
     setJobs(data || [])
     setLoading(false)
-  }, [])
+  }, [toast])
 
   useEffect(() => { loadVendors(); loadJobs() }, [loadVendors, loadJobs])
 
@@ -320,8 +336,8 @@ export default function ServiceJobs() {
     setRecent(rows)
   }, [])
 
-  function openDetail(job) { setError(''); setSelected(job); loadEvents(job.id) }
-  function openNew() { setError(''); setForm(blankForm()); setShowNew(true) }
+  function openDetail(job) { setSelected(job); loadEvents(job.id) }
+  function openNew() { setForm(blankForm()); setShowNew(true) }
 
   async function refreshSelected(jobId) {
     await loadJobs()
@@ -421,7 +437,7 @@ export default function ServiceJobs() {
 
   async function handleCreate(e) {
     e.preventDefault()
-    setError(''); setBusy(true)
+    setBusy(true)
     try {
       const aw = form.job_type === 'ancillary' && form.repair_type === 'warranty'
       const payload = {
@@ -449,32 +465,32 @@ export default function ServiceJobs() {
       await loadJobs()
       showToast('Job created · PO downloaded')
     } catch (err) {
-      setError(err.message || 'Failed to create job')
+      toast.error(err.message || 'Failed to create job')
     } finally { setBusy(false) }
   }
 
   async function act(action, payload, jobId, successMsg) {
-    setError(''); setBusy(true)
+    setBusy(true)
     try {
       await callEdge('service-jobs', action, payload)
       await refreshSelected(jobId)
       if (successMsg) showToast(successMsg)
     } catch (err) {
-      setError(err.message || 'Action failed')
+      toast.error(err.message || 'Action failed')
     } finally { setBusy(false) }
   }
 
   // Inline action from a Needs-you card / feed row — no drawer; just refresh the
   // lists and toast. (The drawer's `act` refreshes the open job instead.)
   async function quickAct(action, payload, msg) {
-    setError(''); setBusy(true)
+    setBusy(true)
     try {
       await callEdge('service-jobs', action, payload)
       await loadJobs()
       if (viewCaps.canGm) await loadRecent()
       if (msg) showToast(msg)
     } catch (err) {
-      setError(err.message || 'Action failed')
+      toast.error(err.message || 'Action failed')
     } finally { setBusy(false) }
   }
 
@@ -492,16 +508,16 @@ export default function ServiceJobs() {
 
   return (
     <div className="page">
-      <div className="page-header sj-page-head">
+      <div className="page-head">
         <div>
-          <h1>Vendor Jobs</h1>
-          <p>Track outside-workshop &amp; ancillary repair jobs end to end</p>
+          <div className="page-head-crumb">Service Tools</div>
+          <h1 className="page-head-title">Vendor Jobs<span className="period-accent">.</span></h1>
+          <div className="page-head-sub">Track outside-workshop &amp; ancillary repair jobs end to end</div>
         </div>
-        <button className="btn btn-primary" onClick={openNew}>+ New Job</button>
+        <button className="btn btn-primary page-head-right" onClick={openNew}><Icon name="plus" size={15} /> New Job</button>
       </div>
 
-      {/* Load/page-level errors only when no modal is open (action errors render inside the modal). */}
-      {error && !showNew && !selected && <div className="alert alert-error" style={{ marginBottom: 12 }}>{error}</div>}
+      {/* Load / create / action failures surface as a global toast (no banner). */}
 
       {/* Top-level mode switch + (admin) lens dropdown. */}
       <div className="sj-needs-bar">
@@ -557,7 +573,7 @@ export default function ServiceJobs() {
 
               {needCount === 0 && !(viewCaps.canGm && recent.length > 0) && (
                 <div className="sj-caughtup">
-                  <div className="sj-caughtup-mark" aria-hidden="true">✓</div>
+                  <div className="sj-caughtup-mark" aria-hidden="true"><Icon name="check" size={16} /></div>
                   <div className="sj-caughtup-title">You’re all caught up</div>
                   <div className="sj-caughtup-sub">
                     {openJobs.length ? `${plural(openJobs.length, 'job')} in progress — nothing needs you right now.` : 'No active jobs right now.'}
@@ -602,21 +618,19 @@ export default function ServiceJobs() {
         ))}
       </div>
 
-      {/* Parts-Out Clock — exception banner over all open jobs. */}
-      {tab !== 'past' && radar.open > 0 && (
-        (radar.overdueParts || radar.stuck) ? (
-          <div className="sj-radar sj-radar-warn">
-            <span>⏰ {[
-              radar.overdueParts ? `${plural(radar.overdueParts, 'part')} overdue` : null,
-              radar.stuck ? `${plural(radar.stuck, 'job')} idle 3+ days` : null,
-            ].filter(Boolean).join(' · ')}</span>
-            {radar.overdueParts > 0 && tab !== 'parts' && (
-              <button type="button" className="btn btn-sm btn-secondary" onClick={() => setTab('parts')}>View parts out</button>
-            )}
-          </div>
-        ) : (
-          <div className="sj-radar sj-radar-ok">✓ All {plural(radar.open, 'active job')} on track{radar.partsOut ? ` · ${plural(radar.partsOut, 'part')} out` : ''}</div>
-        )
+      {/* Parts-Out Clock — exception banner only. The all-clear state used to render a
+          green "on track" line, but a banner nobody has to act on is just a row of the
+          list you can't see; silence now means everything is fine. */}
+      {tab !== 'past' && radar.open > 0 && (radar.overdueParts || radar.stuck) && (
+        <div className="sj-radar sj-radar-warn">
+          <span><Icon name="clock" size={14} /> {[
+            radar.overdueParts ? `${plural(radar.overdueParts, 'part')} overdue` : null,
+            radar.stuck ? `${plural(radar.stuck, 'job')} idle 3+ days` : null,
+          ].filter(Boolean).join(' · ')}</span>
+          {radar.overdueParts > 0 && tab !== 'parts' && (
+            <button type="button" className="btn btn-sm btn-secondary" onClick={() => setTab('parts')}>View parts out</button>
+          )}
+        </div>
       )}
 
       <div className="sj-toolbar">
@@ -626,7 +640,7 @@ export default function ServiceJobs() {
         <div className="sj-filter-wrap" ref={filterRef}>
           <button type="button" className={`btn btn-secondary sj-filter-btn${dropdownCount ? ' has-active' : ''}`}
             aria-haspopup="dialog" aria-expanded={showFilters} onClick={() => setShowFilters(s => !s)}>
-            <span aria-hidden="true">⚙</span> Filters
+            <Icon name="filter-alt" size={15} /> Filters
             {dropdownCount > 0 && <span className="sj-filter-badge">{dropdownCount}</span>}
           </button>
           {showFilters && (
@@ -649,6 +663,22 @@ export default function ServiceJobs() {
                   <option value="">All stages</option>{SPINE.map(s => <option key={s} value={s}>{STAGE_LABEL[s]}</option>)}
                 </select>
               </div>
+              {/* Mobile only — the desktop table sorts from its column headers. */}
+              <div className="sj-filter-sort">
+                <label className="form-label" htmlFor="sj-f-sort">Sort by</label>
+                <div className="sj-filter-sort-row">
+                  <select id="sj-f-sort" className="form-select" value={sort?.key || ''}
+                    onChange={e => setSort(e.target.value ? { key: e.target.value, dir: sort?.dir || 'asc' } : null)}>
+                    <option value="">Default order</option>
+                    {Object.entries(SORT_COLS).map(([k, c]) => <option key={k} value={k}>{c.label}</option>)}
+                  </select>
+                  <button type="button" className="btn btn-sm btn-secondary" disabled={!sort}
+                    aria-label="Toggle sort direction"
+                    onClick={() => setSort(s => s ? { ...s, dir: s.dir === 'asc' ? 'desc' : 'asc' } : s)}>
+                    {sort?.dir === 'desc' ? '↓ Desc' : '↑ Asc'}
+                  </button>
+                </div>
+              </div>
               <div className="sj-filter-pop-foot">
                 <button type="button" className="btn btn-sm btn-secondary" disabled={!dropdownCount}
                   onClick={() => setFilters(f => ({ ...f, job_type: '', repair_type: '', stage: '' }))}>Clear filters</button>
@@ -668,21 +698,6 @@ export default function ServiceJobs() {
         <div className="empty-state">{filtersActive ? 'No jobs match these filters.' : 'No jobs yet — create one with + New Job.'}</div>
       ) : (
         <>
-          {/* Mobile: sort control (the desktop table sorts via its headers). */}
-          <div className="sj-sortbar">
-            <span className="sj-sortbar-lbl">Sort</span>
-            <select className="form-select" aria-label="Sort jobs by" value={sort?.key || ''}
-              onChange={e => setSort(e.target.value ? { key: e.target.value, dir: sort?.dir || 'asc' } : null)}>
-              <option value="">Default order</option>
-              {Object.entries(SORT_COLS).map(([k, c]) => <option key={k} value={k}>{c.label}</option>)}
-            </select>
-            <button type="button" className="btn btn-sm btn-secondary" disabled={!sort}
-              aria-label="Toggle sort direction"
-              onClick={() => setSort(s => s ? { ...s, dir: s.dir === 'asc' ? 'desc' : 'asc' } : s)}>
-              {sort?.dir === 'desc' ? '↓ Desc' : '↑ Asc'}
-            </button>
-          </div>
-
           {/* Desktop: table */}
           <div className="table-wrap sj-desktop-table">
             <table aria-label="Service jobs">
@@ -749,7 +764,7 @@ export default function ServiceJobs() {
       )}
 
       {showNew && (
-        <Modal wide error={error} onClose={() => { setError(''); setShowNew(false) }} title="New Service Job"
+        <Modal wide onClose={() => setShowNew(false)} title="New Service Job"
           subtitle="Generate a PO / warranty-request letter for outside-workshop work">
           <NewJobForm
             form={form} setForm={setForm} vendors={vendors} canManage={canManage}
@@ -759,7 +774,7 @@ export default function ServiceJobs() {
       )}
 
       {selected && (
-        <Modal error={error} onClose={() => { setError(''); setSelected(null) }} title={selected.po_number}
+        <Modal onClose={() => setSelected(null)} title={selected.po_number}
           subtitle={`Reg ${selected.vehicle_registration_no}`}
           headerExtra={(
             <div className="sj-badges">
@@ -775,8 +790,8 @@ export default function ServiceJobs() {
         </Modal>
       )}
 
-      {toast && (
-        <div className={`sj-toast sj-toast-${toast.kind}`} role="status" aria-live="polite">{toast.msg}</div>
+      {pageToast && (
+        <div className={`sj-toast sj-toast-${pageToast.kind}`} role="status" aria-live="polite">{pageToast.msg}</div>
       )}
     </div>
   )
@@ -871,7 +886,7 @@ function OverviewDash({ overview, onOpen, onJumpParts, onJumpAccounts }) {
       </div>
       <div className="sj-ov-row">
         <section className="sj-ov-card">
-          <div className="sj-ov-card-head"><span className="sj-ov-card-title">⚠ Bottlenecks</span></div>
+          <div className="sj-ov-card-head"><span className="sj-ov-card-title"><Icon name="alert" size={15} /> Bottlenecks</span></div>
           {overview.top.length ? (
             <div className="sj-ov-list">
               {overview.top.map(({ j, a }) => (
@@ -913,7 +928,7 @@ function statusBadges(job) {
   return badges
 }
 
-function Modal({ title, subtitle, onClose, children, wide, headerExtra, error }) {
+function Modal({ title, subtitle, onClose, children, wide, headerExtra }) {
   const ref = useRef(null)
   const titleId = useRef('sj-modal-' + Math.random().toString(36).slice(2)).current
   // Keep the latest onClose in a ref so the focus-trap effect can run ONCE on
@@ -953,12 +968,11 @@ function Modal({ title, subtitle, onClose, children, wide, headerExtra, error })
               <h2 id={titleId}>{title}</h2>
               {subtitle && <p style={{ margin: '2px 0 0', fontSize: 13, color: 'var(--gray-500)' }}>{subtitle}</p>}
             </div>
-            <button className="modal-close" onClick={onClose} aria-label="Close">✕</button>
+            <button className="modal-close" onClick={onClose} aria-label="Close"><Icon name="x" size={18} /></button>
           </div>
           {headerExtra && <div className="modal-header-extra">{headerExtra}</div>}
         </div>
         <div className="modal-body">
-          {error && <div className="alert alert-error" style={{ marginBottom: 12 }}>{error}</div>}
           {children}
         </div>
       </div>
@@ -971,11 +985,18 @@ function NewJobForm({ form, setForm, vendors, canManage, onReloadVendors, onSubm
   const [vendorName, setVendorName] = useState('')
   const [vendorOem, setVendorOem] = useState('')
   const [vendorErr, setVendorErr] = useState('')
+  const [errorField, setErrorField] = useState(null)
+  const [error, setError] = useState('')
   const aw = form.job_type === 'ancillary' && form.repair_type === 'warranty'
   // Ancillary work goes to an authorized OEM dealer (has an OEM); outside work goes
   // to a general (non-authorized) vendor. The vendor list + add-form follow this.
   const isAncillary = form.job_type === 'ancillary'
-  const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }))
+  const set = (k) => (e) => {
+    setForm(f => ({ ...f, [k]: e.target.value }))
+    setErrorField(f => (f === k ? null : f))
+  }
+  const err = (k) => (errorField === k ? ' error' : '')
+  const msg = (k) => (errorField === k ? <div className="form-error">{error}</div> : null)
 
   async function addVendor() {
     if (!vendorName.trim()) return
@@ -993,6 +1014,40 @@ function NewJobForm({ form, setForm, vendors, canManage, onReloadVendors, onSubm
     } catch (e) { setVendorErr(e.message || 'Failed to add vendor') }
   }
 
+  // Validate in JS, not with the HTML `required` attribute — the browser's native
+  // bubble ("Please select an item in the list.") is off-design. Errors show at the
+  // offending field, matching the rest of the app.
+  function validate(e) {
+    e.preventDefault()
+    setError(''); setErrorField(null)
+    const fail = (key, message, id) => {
+      setError(message); setErrorField(key)
+      const el = document.getElementById(id)
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        try { el.focus({ preventScroll: true }) } catch { el.focus() }
+      }
+      return false
+    }
+    if (!form.vehicle_registration_no.trim())
+      return fail('vehicle_registration_no', 'Vehicle registration no is required.', 'sj-reg')
+    if (!form.customer_name.trim())
+      return fail('customer_name', 'Customer name is required.', 'sj-cust')
+    if (!form.vendor_id)
+      return fail('vendor_id', `Select ${isAncillary ? 'an authorized dealer' : 'a vendor'}.`, 'sj-vendor')
+    if (!form.material_out_date)
+      return fail('material_out_date', 'Material out date is required.', 'sj-mout')
+    if (aw) {
+      for (const key of reqLetter) {
+        if (!String(form[key] || '').trim()) {
+          const label = (LETTER_FIELDS.find(f => f[0] === key) || [, key])[1]
+          return fail(key, `${label} is required.`, `sj-lf-${key}`)
+        }
+      }
+    }
+    onSubmit(e)
+  }
+
   const pick = (k, v) => setForm(f => ({ ...f, [k]: v }))
   // Switching job type swaps the eligible vendor pool (authorized vs general),
   // so any previously-picked vendor no longer applies — clear it.
@@ -1001,7 +1056,7 @@ function NewJobForm({ form, setForm, vendors, canManage, onReloadVendors, onSubm
   const eligibleVendors = vendors.filter(v => v.is_active && !!v.is_authorized === isAncillary)
 
   return (
-    <form onSubmit={onSubmit} className="sj-form">
+    <form onSubmit={validate} className="sj-form" noValidate>
       {/* 1 — Classification */}
       <div className="sj-section">
         <div className="sj-section-title">Job classification</div>
@@ -1036,17 +1091,19 @@ function NewJobForm({ form, setForm, vendors, canManage, onReloadVendors, onSubm
         <div className="sj-grid-2">
           <div className="form-group">
             <label className="form-label" htmlFor="sj-reg">Vehicle registration no <span className="req">*</span></label>
-            <input id="sj-reg" className="form-input" required value={form.vehicle_registration_no} onChange={set('vehicle_registration_no')} placeholder="e.g. GJ01AB1234" />
+            <input id="sj-reg" className={`form-input${err('vehicle_registration_no')}`} value={form.vehicle_registration_no} onChange={set('vehicle_registration_no')} placeholder="e.g. GJ01AB1234" />
+            {msg('vehicle_registration_no')}
           </div>
           <div className="form-group">
             <label className="form-label" htmlFor="sj-cust">Customer name <span className="req">*</span></label>
-            <input id="sj-cust" className="form-input" required value={form.customer_name} onChange={set('customer_name')} placeholder="Vehicle owner" />
+            <input id="sj-cust" className={`form-input${err('customer_name')}`} value={form.customer_name} onChange={set('customer_name')} placeholder="Vehicle owner" />
+            {msg('customer_name')}
           </div>
         </div>
         <div className="form-group">
           <label className="form-label" htmlFor="sj-vendor">{isAncillary ? 'Authorized dealer' : 'Vendor'} <span className="req">*</span></label>
           <div className="sj-vendor-row">
-            <select id="sj-vendor" className="form-select" required value={form.vendor_id} onChange={set('vendor_id')}>
+            <select id="sj-vendor" className={`form-select${err('vendor_id')}`} value={form.vendor_id} onChange={set('vendor_id')}>
               <option value="">{isAncillary ? '— select authorized dealer —' : '— select vendor —'}</option>
               {eligibleVendors.map(v => <option key={v.id} value={v.id}>{v.name}{v.oem ? ` (${v.oem})` : ''}</option>)}
             </select>
@@ -1056,6 +1113,7 @@ function NewJobForm({ form, setForm, vendors, canManage, onReloadVendors, onSubm
               </button>
             )}
           </div>
+          {msg('vendor_id')}
           <p className="field-hint">
             {isAncillary
               ? 'Ancillary work goes to the OEM’s authorized dealer (e.g. Bosch Diesel Services).'
@@ -1088,19 +1146,21 @@ function NewJobForm({ form, setForm, vendors, canManage, onReloadVendors, onSubm
         )}
         <div className="form-group">
           <label className="form-label" htmlFor="sj-mout">Material out date <span className="req">*</span></label>
-          <input id="sj-mout" className="form-input" type="date" required value={form.material_out_date} onChange={set('material_out_date')} />
+          <input id="sj-mout" className={`form-input${err('material_out_date')}`} type="date" value={form.material_out_date} onChange={set('material_out_date')} />
+          {msg('material_out_date')}
           <p className="field-hint">Defaults to today. Material-returned is recorded automatically when work is marked completed; the ancillary portal ref is added later, after the AL-portal upload.</p>
         </div>
 
         {aw && (
           <div className="sj-letter">
-            <div className="sj-letter-legend">📝 Warranty request letter details</div>
+            <div className="sj-letter-legend"><Icon name="clipboard" size={15} /> Warranty request letter details</div>
             <div className="sj-grid-2">
               {LETTER_FIELDS.map(([key, label, type]) => (
                 <div className="form-group" key={key}>
                   <label className="form-label" htmlFor={`sj-lf-${key}`}>{label}{reqLetter.includes(key) ? <span className="req"> *</span> : ''}</label>
-                  <input id={`sj-lf-${key}`} className="form-input" type={type === 'date' ? 'date' : 'text'}
-                    required={reqLetter.includes(key)} value={form[key]} onChange={set(key)} />
+                  <input id={`sj-lf-${key}`} className={`form-input${err(key)}`} type={type === 'date' ? 'date' : 'text'}
+                    value={form[key]} onChange={set(key)} />
+                  {msg(key)}
                 </div>
               ))}
             </div>
@@ -1184,7 +1244,7 @@ function JobDetail({ job, events, busy, caps, onAct, onReprint }) {
       )}
 
       <div className="sj-actions">
-        <button className="btn btn-sm btn-secondary" onClick={onReprint}>🖨 Re-print PO</button>
+        <button className="btn btn-sm btn-secondary" onClick={onReprint}><Icon name="printer" size={15} /> Re-print PO</button>
         {canAdvance && (
           <button className="btn btn-sm btn-primary" disabled={busy}
             onClick={() => onAct('advanceStage', { jobId: job.id, toStage: nextStage }, job.id, `Advanced to ${STAGE_LABEL[nextStage]}`)}>Advance → {STAGE_LABEL[nextStage]}</button>

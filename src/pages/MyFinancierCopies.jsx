@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import { generateFinancierCopyPdf, buildFinancierCopyPdfArgs } from '../utils/pdfGenerator'
 import Skeleton from '../components/Skeleton'
+import Icon from '../components/Icon'
 
 function fmtINR(n) {
   if (!n && n !== 0) return '—'
-  return '₹\u00a0' + Number(n).toLocaleString('en-IN')
+  return '₹ ' + Number(n).toLocaleString('en-IN')
 }
 function fmtDate(iso) {
   if (!iso) return '—'
@@ -15,7 +17,7 @@ function fmtDate(iso) {
 }
 
 export default function MyFinancierCopies() {
-  const { profile } = useAuth()
+  const { profile, canAccess } = useAuth()
   const [copies, setCopies] = useState([])
   const [loading, setLoading] = useState(true)
   const [downloadingId, setDownloadingId] = useState(null)
@@ -70,11 +72,25 @@ export default function MyFinancierCopies() {
     }
   }
 
+  const pdfBtn = (p) => (
+    <button className="btn btn-secondary btn-sm" onClick={() => handleRedownload(p)} disabled={downloadingId === p.id}>
+      {downloadingId === p.id
+        ? <><span className="spinner spinner-sm" /> Generating…</>
+        : <><Icon name="download" size={15} /> PDF</>}
+    </button>
+  )
+
   return (
     <div>
-      <div className="page-header">
-        <h1>My Financier's Copies</h1>
-        <p>Your financier's copy history — re-download any PDF</p>
+      <div className="page-head">
+        <div>
+          <div className="page-head-crumb">Financier's Copies</div>
+          <h1 className="page-head-title">My Financier's Copies<span className="period-accent">.</span></h1>
+          <div className="page-head-sub">Your financier's copy history — re-download any PDF</div>
+        </div>
+        {canAccess('/financier-copy') && (
+          <Link to="/financier-copy" className="btn btn-primary page-head-right"><Icon name="plus" size={15} /> New Copy</Link>
+        )}
       </div>
 
       {loading ? (
@@ -83,57 +99,66 @@ export default function MyFinancierCopies() {
         </div>
       ) : copies.length === 0 ? (
         <div className="empty-state">
-          <div className="empty-state-icon">📄</div>
+          <div className="empty-state-icon"><Icon name="landmark" size={40} color="var(--text-muted)" /></div>
           <h3>No financier's copies yet</h3>
           <p>Financier's copies you create will appear here.</p>
         </div>
       ) : (
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>FC Number</th>
-                <th>Date</th>
-                <th>Customer</th>
-                <th>Chassis No.</th>
-                <th className="text-right">Grand Total</th>
-                <th>Valid Until</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {copies.map(p => (
-                <tr key={p.id}>
-                  <td><span className="q-number">{p.fc_number}</span></td>
-                  <td>{fmtDate(p.created_at)}</td>
-                  <td>
-                    <div className="q-customer">{p.customer_name}</div>
-                    {p.customer_mobile && (
-                      <div className="q-customer-sub">{p.customer_mobile}</div>
-                    )}
-                  </td>
-                  <td>
-                    <div style={{ fontFamily: 'monospace', fontSize: 12 }}>{p.chassis_no}</div>
-                    <div style={{ fontSize: 11, color: 'var(--gray-400)', fontFamily: 'monospace' }}>{p.engine_no}</div>
-                  </td>
-                  <td style={{ textAlign: 'right', fontWeight: 700 }}>{fmtINR(p.grand_total)}</td>
-                  <td>{fmtDate(p.valid_until)}</td>
-                  <td>
-                    <button
-                      className="btn btn-secondary btn-sm"
-                      onClick={() => handleRedownload(p)}
-                      disabled={downloadingId === p.id}
-                    >
-                      {downloadingId === p.id
-                        ? <><span className="spinner spinner-sm" /> Generating…</>
-                        : '↓ PDF'}
-                    </button>
-                  </td>
+        <>
+          <div className="table-wrap only-desktop">
+            <table>
+              <thead>
+                <tr>
+                  <th>FC Number</th>
+                  <th>Date</th>
+                  <th>Customer</th>
+                  <th>Chassis No.</th>
+                  <th className="text-right">Grand Total</th>
+                  <th>Valid Until</th>
+                  <th></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {copies.map(p => (
+                  <tr key={p.id}>
+                    <td><span className="q-number">{p.fc_number}</span></td>
+                    <td>{fmtDate(p.created_at)}</td>
+                    <td>
+                      <div className="q-customer">{p.customer_name}</div>
+                      {p.customer_mobile && <div className="q-customer-sub">{p.customer_mobile}</div>}
+                    </td>
+                    <td>
+                      <div style={{ fontFamily: 'monospace', fontSize: 12 }}>{p.chassis_no}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>{p.engine_no}</div>
+                    </td>
+                    <td style={{ textAlign: 'right', fontWeight: 700 }}>{fmtINR(p.grand_total)}</td>
+                    <td>{fmtDate(p.valid_until)}</td>
+                    <td>{pdfBtn(p)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="only-mobile mobile-cards">
+            {copies.map(p => (
+              <div className="m-card" key={p.id}>
+                <div className="m-card-top">
+                  <span className="q-number">{p.fc_number}</span>
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{fmtDate(p.created_at)}</span>
+                </div>
+                <div className="q-customer">{p.customer_name}</div>
+                {p.customer_mobile && <div className="q-customer-sub">{p.customer_mobile}</div>}
+                <div className="m-card-kvs">
+                  <div><div className="m-kv-label">Grand Total</div><div className="m-kv-val">{fmtINR(p.grand_total)}</div></div>
+                  <div><div className="m-kv-label">Valid Until</div><div className="m-kv-val">{fmtDate(p.valid_until)}</div></div>
+                  <div><div className="m-kv-label">Chassis / Engine</div><div className="m-kv-val" style={{ fontFamily: 'monospace', fontSize: 11.5 }}>{p.chassis_no}{p.engine_no ? ` / ${p.engine_no}` : ''}</div></div>
+                  <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'flex-end' }}>{pdfBtn(p)}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
       )}
     </div>
   )

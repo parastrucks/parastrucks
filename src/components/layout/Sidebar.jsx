@@ -2,60 +2,44 @@ import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabase'
+import { useErp, useErpVisible } from '../../lib/erp'
+import Icon from '../Icon'
+import { NAV_SECTIONS, itemVisible } from './navConfig'
 
-const NAV_GROUPS = [
-  {
-    key: 'quotations',
-    icon: '📄',
-    label: 'Quotations',
-    items: [
-      { to: '/quotation',     icon: '✏️', label: 'New Quotation' },
-      { to: '/my-quotations', icon: '🗂', label: 'My Quotations' },
-      { to: '/quotation-log', icon: '📊', label: 'Quotation Log' },
-    ],
-  },
-  {
-    key: 'proformas',
-    icon: '📃',
-    label: 'Proforma Invoices',
-    items: [
-      { to: '/proforma-invoice', icon: '✏️', label: 'New Proforma' },
-      { to: '/my-proformas',     icon: '🗃', label: 'My Proformas' },
-      { to: '/proforma-log',     icon: '📋', label: 'Proforma Log' },
-    ],
-  },
-  {
-    key: 'financier-copies',
-    icon: '🏦',
-    label: "Financier's Copies",
-    items: [
-      { to: '/financier-copy',      icon: '✏️', label: 'New Copy' },
-      { to: '/my-financier-copies', icon: '🗃', label: 'My Copies' },
-      { to: '/financier-copy-log',  icon: '📋', label: 'Copy Log' },
-    ],
-  },
-]
+const ICON_ACTIVE = '#6AA0FF'
+const ICON_IDLE = 'rgba(255,255,255,0.7)'
 
-const UNGROUPED = [
-  { to: '/employees',      icon: '👥', label: 'Employees'       },
-  { to: '/access-rules',   icon: '🔐', label: 'Access Rules'    },
-  { to: '/catalog',        icon: '🚛', label: 'Vehicle Catalog' },
-  { to: '/bus-calculator', icon: '🚌', label: 'Bus Calculator'  },
-  { to: '/tiv-forecast',   icon: '📈', label: 'TIV Forecast'    },
-  { to: '/vendor-jobs',    icon: '🔧', label: 'Vendor Jobs' },
-]
+function SidebarLink({ to, icon, label }) {
+  return (
+    <NavLink
+      to={to}
+      end={to === '/'}
+      className={({ isActive }) => `sidebar-link${isActive ? ' active' : ''}`}
+    >
+      {({ isActive }) => (
+        <>
+          <Icon name={icon} size={17} color={isActive ? ICON_ACTIVE : ICON_IDLE} className="sidebar-icon" />
+          {label}
+        </>
+      )}
+    </NavLink>
+  )
+}
 
 function NavGroup({ group, canAccess }) {
+  // Hooks must run before any early return (rules of hooks) — the parent filters
+  // groups with the same predicate so the guard below is unreachable today, but
+  // keep the hooks unconditional so a future predicate divergence can't blank the tree.
   const location = useLocation()
   const accessibleItems = group.items.filter(item => canAccess(item.to))
-  if (accessibleItems.length === 0) return null
-
   const isGroupActive = accessibleItems.some(item => location.pathname === item.to)
+  // Auto-expand the group that holds the active route (open on mount if we land
+  // directly on one of its pages, and open it when navigation enters the group).
+  // Still user-collapsible otherwise.
   const [open, setOpen] = useState(isGroupActive)
+  useEffect(() => { if (isGroupActive) setOpen(true) }, [isGroupActive])
 
-  useEffect(() => {
-    if (isGroupActive) setOpen(true)
-  }, [isGroupActive])
+  if (accessibleItems.length === 0) return null
 
   return (
     <div className={`sidebar-group${open ? ' sidebar-group--open' : ''}`}>
@@ -63,10 +47,11 @@ function NavGroup({ group, canAccess }) {
         type="button"
         className={`sidebar-link sidebar-group-header${isGroupActive ? ' group-active' : ''}`}
         onClick={() => setOpen(o => !o)}
+        aria-expanded={open}
       >
-        <span className="sidebar-icon">{group.icon}</span>
+        <Icon name={group.icon} size={17} color={isGroupActive ? ICON_ACTIVE : ICON_IDLE} className="sidebar-icon" />
         <span className="sidebar-group-label">{group.label}</span>
-        <span className="sidebar-group-chevron" />
+        <Icon name={open ? 'chevron-down' : 'chevron-right'} size={15} color="rgba(255,255,255,0.45)" />
       </button>
       {open && (
         <div className="sidebar-group-items">
@@ -76,13 +61,29 @@ function NavGroup({ group, canAccess }) {
               to={item.to}
               className={({ isActive }) => `sidebar-link sidebar-link--sub${isActive ? ' active' : ''}`}
             >
-              <span className="sidebar-icon">{item.icon}</span>
               {item.label}
             </NavLink>
           ))}
         </div>
       )}
     </div>
+  )
+}
+
+function ErpItem({ item }) {
+  const { openErp, erpBusy } = useErp()
+  return (
+    <button
+      type="button"
+      className="sidebar-link"
+      onClick={openErp}
+      aria-busy={erpBusy}
+      style={{ width: '100%' }}
+    >
+      <Icon name={item.icon} size={17} color={ICON_IDLE} className="sidebar-icon" />
+      {item.label}
+      <Icon name="external" size={14} color="rgba(255,255,255,0.4)" style={{ marginLeft: 'auto' }} />
+    </button>
   )
 }
 
@@ -142,7 +143,7 @@ function UserMenu({ profile, entityCode }) {
             role="menuitem"
             onClick={() => setOpen(false)}
           >
-            👤 Profile
+            <Icon name="user" size={16} /> Profile
           </Link>
           <button
             type="button"
@@ -150,7 +151,7 @@ function UserMenu({ profile, entityCode }) {
             role="menuitem"
             onClick={handleSignOut}
           >
-            ↩ Sign Out
+            <Icon name="logout" size={16} /> Sign Out
           </button>
         </div>
       )}
@@ -160,6 +161,7 @@ function UserMenu({ profile, entityCode }) {
 
 export default function Sidebar() {
   const { profile, canAccess } = useAuth()
+  const erpVisible = useErpVisible()
 
   const [entityCode, setEntityCode] = useState(null)
   useEffect(() => {
@@ -172,8 +174,6 @@ export default function Sidebar() {
 
   if (!profile) return null
 
-  const ungroupedItems = UNGROUPED.filter(item => canAccess(item.to))
-
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
@@ -183,25 +183,22 @@ export default function Sidebar() {
       <UserMenu profile={profile} entityCode={entityCode} />
 
       <nav className="sidebar-nav">
-        <NavLink to="/" end className={({ isActive }) => `sidebar-link${isActive ? ' active' : ''}`}>
-          <span className="sidebar-icon">⊞</span>
-          Dashboard
-        </NavLink>
+        <SidebarLink to="/" icon="dashboard" label="Dashboard" />
 
-        {NAV_GROUPS.map(group => (
-          <NavGroup key={group.key} group={group} canAccess={canAccess} />
-        ))}
-
-        {ungroupedItems.map(item => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            className={({ isActive }) => `sidebar-link${isActive ? ' active' : ''}`}
-          >
-            <span className="sidebar-icon">{item.icon}</span>
-            {item.label}
-          </NavLink>
-        ))}
+        {NAV_SECTIONS.map(section => {
+          const visible = section.items.filter(item => item.type === 'erp' ? erpVisible : itemVisible(item, canAccess))
+          if (visible.length === 0) return null
+          return (
+            <div className="sidebar-section" key={section.label}>
+              <div className="sidebar-section-label">{section.label}</div>
+              {visible.map(item => {
+                if (item.type === 'group') return <NavGroup key={item.key} group={item} canAccess={canAccess} />
+                if (item.type === 'erp') return <ErpItem key="erp" item={item} />
+                return <SidebarLink key={item.to} to={item.to} icon={item.icon} label={item.label} />
+              })}
+            </div>
+          )
+        })}
       </nav>
     </aside>
   )

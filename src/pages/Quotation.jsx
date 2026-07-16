@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import Fuse from 'fuse.js'
+import Icon from '../components/Icon'
 import { supabase } from '../lib/supabase'
 import { useDebounce } from '../lib/useDebounce'
 import { useAuth } from '../context/AuthContext'
@@ -90,6 +91,7 @@ export default function Quotation() {
   // UI state
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [errorField, setErrorField] = useState(null) // which field to flag red on validation
   const toast = useToast()
 
   // Load catalog on mount
@@ -123,6 +125,7 @@ export default function Quotation() {
               { name: 'description', weight: 1 },
             ],
             threshold: 0.35,
+            ignoreLocation: true,
             minMatchCharLength: 2,
           })
         )
@@ -161,6 +164,7 @@ export default function Quotation() {
             { name: 'description', weight: 1 },
           ],
           threshold: 0.35,
+          ignoreLocation: true,
           minMatchCharLength: 2,
         })
         found = tmpFuse.search(q).map(r => r.item)
@@ -250,15 +254,38 @@ export default function Quotation() {
   async function handleSubmit(e) {
     e.preventDefault()
     setError('')
+    setErrorField(null)
 
-    if (!customer.name.trim()) { setError('Customer name is required.'); return }
-    if (customer.gstin.trim() && customer.gstin.trim().length !== 15) {
-      setError('GSTIN must be exactly 15 characters.'); return
+    const focusEl = (el) => {
+      if (!el) return
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      if (typeof el.focus === 'function') { try { el.focus({ preventScroll: true }) } catch { el.focus() } }
     }
-    if (lineItems.length === 0) { setError('Add at least one vehicle.'); return }
+
+    if (!customer.name.trim()) {
+      setError('Customer name is required.')
+      setErrorField('name')
+      focusEl(document.getElementById('q-cust-name'))
+      return
+    }
+    if (customer.gstin.trim() && customer.gstin.trim().length !== 15) {
+      setError('GSTIN must be exactly 15 characters.')
+      setErrorField('gstin')
+      focusEl(document.getElementById('q-cust-gstin'))
+      return
+    }
+    if (lineItems.length === 0) {
+      setError('Add at least one vehicle.')
+      setErrorField('search')
+      focusEl(searchRef.current?.querySelector('input') || searchRef.current)
+      return
+    }
     const emptyDescIdx = lineItems.findIndex(li => !String(li.description || '').trim())
     if (emptyDescIdx !== -1) {
       setError(`Vehicle #${emptyDescIdx + 1} description cannot be empty.`)
+      setErrorField(`desc-${emptyDescIdx}`)
+      const card = document.querySelectorAll('.line-item-card')[emptyDescIdx]
+      focusEl(card?.querySelector('textarea, input') || card)
       return
     }
 
@@ -387,7 +414,9 @@ export default function Quotation() {
       setValidUntil(endOfMonth())
     } catch (err) {
       console.error(err)
-      setError(err.message || 'Failed to save quotation.')
+      // No banner: save failures surface as a toast (validation errors show
+      // inline at the offending field instead).
+      toast.error(err.message || 'Failed to save quotation.')
     } finally {
       setSaving(false)
     }
@@ -395,16 +424,13 @@ export default function Quotation() {
 
   return (
     <div>
-      <div className="page-header">
-        <h1>New Quotation</h1>
-        <p>Create a truck price quotation for a customer</p>
-      </div>
-
-      {error && (
-        <div className="alert alert-error" role="alert">
-          <span>⚠</span> {error}
+      <div className="page-head">
+        <div>
+          <div className="page-head-crumb">Quotations</div>
+          <h1 className="page-head-title">New Quotation<span className="period-accent">.</span></h1>
+          <div className="page-head-sub">Create a truck price quotation for a customer</div>
         </div>
-      )}
+      </div>
 
       <form onSubmit={handleSubmit} noValidate>
         <div className="q-layout">
@@ -419,11 +445,12 @@ export default function Quotation() {
                   <label className="form-label" htmlFor="q-cust-name">Customer Name *</label>
                   <input
                     id="q-cust-name"
-                    className="form-input"
+                    className={`form-input ${errorField === 'name' ? 'error' : ''}`}
                     value={customer.name}
-                    onChange={e => setCustomer(c => ({ ...c, name: e.target.value }))}
+                    onChange={e => { setCustomer(c => ({ ...c, name: e.target.value })); setErrorField(f => f === 'name' ? null : f) }}
                     placeholder="Full name or company name"
                   />
+                  {errorField === 'name' && <div className="form-error">{error}</div>}
                 </div>
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label" htmlFor="q-cust-mobile">Mobile</label>
@@ -440,12 +467,13 @@ export default function Quotation() {
                   <label className="form-label" htmlFor="q-cust-gstin">GSTIN</label>
                   <input
                     id="q-cust-gstin"
-                    className="form-input"
+                    className={`form-input ${errorField === 'gstin' ? 'error' : ''}`}
                     value={customer.gstin}
-                    onChange={e => setCustomer(c => ({ ...c, gstin: e.target.value.toUpperCase() }))}
+                    onChange={e => { setCustomer(c => ({ ...c, gstin: e.target.value.toUpperCase() })); setErrorField(f => f === 'gstin' ? null : f) }}
                     placeholder="22AAAAA0000A1Z5"
                     maxLength={15}
                   />
+                  {errorField === 'gstin' && <div className="form-error">{error}</div>}
                 </div>
                 <div className="form-group span-2" style={{ marginBottom: 0 }}>
                   <label className="form-label" htmlFor="q-cust-addr">Address</label>
@@ -518,7 +546,7 @@ export default function Quotation() {
                     ))}
                   </select>
                   <input
-                    className="form-input"
+                    className={`form-input ${errorField === 'search' ? 'error' : ''}`}
                     value={query}
                     onChange={handleQueryChange}
                     onFocus={() => results.length > 0 && setShowDropdown(true)}
@@ -527,6 +555,7 @@ export default function Quotation() {
                     autoComplete="off"
                   />
                 </div>
+                {errorField === 'search' && <div className="form-error">{error}</div>}
 
                 {showDropdown && (
                   <div className="search-dropdown">
@@ -537,7 +566,10 @@ export default function Quotation() {
                         onMouseDown={() => addVehicle(v)}
                       >
                         <div className="search-item-name">{v.sub_category || v.description}</div>
-                        <div className="search-item-meta">{v.cbn} · {v.tyres}</div>
+                        {v.sub_category && v.description && (
+                          <div className="search-item-desc" title={v.description}>{v.description}</div>
+                        )}
+                        <div className="search-item-meta">{v.cbn}{v.tyres ? ` · ${v.tyres}` : ''}</div>
                         <div className="search-item-price">{fmtINR(v.mrp_incl_gst)}</div>
                       </div>
                     ))}
@@ -567,11 +599,11 @@ export default function Quotation() {
                           <div className="li-card-name">
                             {canEditDescription ? (
                               <textarea
-                                className="form-input"
+                                className={`form-input ${errorField === `desc-${idx}` ? 'error' : ''}`}
                                 value={item.description || ''}
                                 rows={4}
                                 placeholder="Edit description for this quotation only…"
-                                onChange={e => updateItem(idx, 'description', e.target.value)}
+                                onChange={e => { updateItem(idx, 'description', e.target.value); setErrorField(f => f === `desc-${idx}` ? null : f) }}
                                 onInput={e => {
                                   e.currentTarget.style.height = 'auto'
                                   e.currentTarget.style.height = e.currentTarget.scrollHeight + 'px'
@@ -589,6 +621,7 @@ export default function Quotation() {
                             ) : (
                               <strong>{item.description}</strong>
                             )}
+                            {errorField === `desc-${idx}` && <div className="form-error">{error}</div>}
                             <span className="li-card-cbn">
                               {item.cbn}{item.tyres ? ` · ${item.tyres}` : ''}
                             </span>
@@ -597,7 +630,7 @@ export default function Quotation() {
                                 <span className="badge badge-amber">edited</span>
                                 <button
                                   type="button"
-                                  className="btn btn-sm"
+                                  className="btn btn-sm btn-secondary"
                                   onClick={() => resetDescription(idx)}
                                   title="Revert to the current catalog description"
                                 >
@@ -744,7 +777,7 @@ export default function Quotation() {
                 {saving ? (
                   <><span className="spinner spinner-sm" /> Saving…</>
                 ) : (
-                  '💾 Save & Download PDF'
+                  <><Icon name="download" size={16} /> Save &amp; Download PDF</>
                 )}
               </button>
             </div>

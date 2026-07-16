@@ -12,6 +12,7 @@ export default function Profile() {
   const { profile, signOut } = useAuth()
   const toast = useToast()
   const { run, loading: pwLoading, error: pwError, setError: setPwError, clearError } = useAsyncAction()
+  const [pwErrorField, setPwErrorField] = useState(null) // which password field to flag red
   const [changingPw, setChangingPw] = useState(false)
   const [newPw, setNewPw] = useState('')
   const [confirmPw, setConfirmPw] = useState('')
@@ -51,13 +52,36 @@ export default function Profile() {
 
   async function handleChangePw(e) {
     e.preventDefault()
-    if (newPw.length < 8) { setPwError('Password must be at least 8 characters.'); return }
-    if (newPw !== confirmPw) { setPwError('Passwords do not match.'); return }
+    setPwError('')
+    setPwErrorField(null)
+
+    const focusEl = (id) => {
+      const el = document.getElementById(id)
+      if (!el) return
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      if (typeof el.focus === 'function') { try { el.focus({ preventScroll: true }) } catch { el.focus() } }
+    }
+
+    if (newPw.length < 8) {
+      setPwError('Password must be at least 8 characters.')
+      setPwErrorField('new')
+      focusEl('profile-new-pw')
+      return
+    }
+    if (newPw !== confirmPw) {
+      setPwError('Passwords do not match.')
+      setPwErrorField('confirm')
+      focusEl('profile-confirm-pw')
+      return
+    }
     await run(async () => {
       const { error } = await supabase.auth.updateUser({ password: newPw })
       if (error) throw error
       toast.success('Password updated successfully.')
       setNewPw(''); setConfirmPw(''); setChangingPw(false)
+    }, {
+      // Server failures surface as a toast — no banner.
+      onError: err => toast.error(err?.message || 'Failed to update password.'),
     }).catch(() => {})
   }
 
@@ -80,9 +104,12 @@ export default function Profile() {
 
   return (
     <div style={{ maxWidth: 560 }}>
-      <div className="page-header">
-        <h1>My Profile</h1>
-        <p>Your account details. To update attributes, contact HR.</p>
+      <div className="page-head">
+        <div>
+          <div className="page-head-crumb">Account</div>
+          <h1 className="page-head-title">My Profile<span className="period-accent">.</span></h1>
+          <div className="page-head-sub">Your account details. To update attributes, contact HR.</div>
+        </div>
       </div>
 
       <div className="card mb-24">
@@ -123,8 +150,6 @@ export default function Profile() {
           )}
         </div>
 
-        {pwError && <div className="alert alert-error"><span>⚠</span><span>{pwError}</span></div>}
-
         {changingPw && (
           <form onSubmit={handleChangePw}>
             <div className="form-group">
@@ -132,29 +157,31 @@ export default function Profile() {
               <input
                 id="profile-new-pw"
                 type="password"
-                className="form-input"
+                className={`form-input ${pwErrorField === 'new' ? 'error' : ''}`}
                 placeholder="Minimum 8 characters"
                 value={newPw}
-                onChange={e => setNewPw(e.target.value)}
+                onChange={e => { setNewPw(e.target.value); setPwErrorField(f => f === 'new' ? null : f) }}
                 autoFocus
               />
+              {pwErrorField === 'new' && <div className="form-error">{pwError}</div>}
             </div>
             <div className="form-group">
               <label className="form-label" htmlFor="profile-confirm-pw">Confirm Password</label>
               <input
                 id="profile-confirm-pw"
                 type="password"
-                className="form-input"
+                className={`form-input ${pwErrorField === 'confirm' ? 'error' : ''}`}
                 placeholder="Re-enter new password"
                 value={confirmPw}
-                onChange={e => setConfirmPw(e.target.value)}
+                onChange={e => { setConfirmPw(e.target.value); setPwErrorField(f => f === 'confirm' ? null : f) }}
               />
+              {pwErrorField === 'confirm' && <div className="form-error">{pwError}</div>}
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
               <button type="submit" className="btn btn-primary" disabled={pwLoading}>
                 {pwLoading ? <span className="spinner spinner-sm" /> : 'Update Password'}
               </button>
-              <button type="button" className="btn btn-secondary" onClick={() => { setChangingPw(false); clearError(); }}>
+              <button type="button" className="btn btn-secondary" onClick={() => { setChangingPw(false); clearError(); setPwErrorField(null) }}>
                 Cancel
               </button>
             </div>

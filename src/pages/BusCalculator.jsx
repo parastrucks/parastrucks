@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
+import Icon from '../components/Icon'
 
 // ── Chassis Database (84 AL Bus Cowl Chassis — Apr 2026) ──────────────────────
 const DB = [
@@ -310,9 +311,12 @@ export default function BusCalculator() {
 
   return (
     <div>
-      <div className="page-header">
-        <h1>Bus Price Calculator</h1>
-        <p>Build a chassis + body estimate step by step — all prices incl. GST</p>
+      <div className="page-head">
+        <div>
+          <div className="page-head-crumb">Sales Tools</div>
+          <h1 className="page-head-title">Bus Price Calculator<span className="period-accent">.</span></h1>
+          <div className="page-head-sub">Build a chassis + body estimate step by step — all prices incl. GST</div>
+        </div>
       </div>
 
       <div className="bc-layout">
@@ -327,7 +331,7 @@ export default function BusCalculator() {
             </div>
 
             <div className="bc-srch-wrap" ref={searchRef}>
-              <span className="bc-srch-ico">⌕</span>
+              <span className="bc-srch-ico"><Icon name="search" size={17} /></span>
               <input
                 type="text"
                 className="bc-srch-in"
@@ -415,8 +419,8 @@ export default function BusCalculator() {
             <div className="q-section" style={{ marginBottom: 16 }}>
               <div className="q-section-title"><span className="bc-step-pill">STEP 2</span> Body Type</div>
               <div className="bc-rg">
-                <div className={`bc-rb${bodyT === 'school' ? ' on' : ''}`} onClick={() => handleSetBodyT('school')}>🏫 School</div>
-                <div className={`bc-rb${bodyT === 'staff' ? ' on' : ''}`} onClick={() => handleSetBodyT('staff')}>💼 Staff</div>
+                <div className={`bc-rb${bodyT === 'school' ? ' on' : ''}`} onClick={() => handleSetBodyT('school')}>School</div>
+                <div className={`bc-rb${bodyT === 'staff' ? ' on' : ''}`} onClick={() => handleSetBodyT('staff')}>Staff</div>
               </div>
               <div className="bc-dp-row" style={{ marginTop: 16 }}>
                 <span className="bc-dp-lbl">Body Price</span>
@@ -436,8 +440,8 @@ export default function BusCalculator() {
               <div className="q-section-title"><span className="bc-step-pill">STEP 3</span> Air Conditioning</div>
               {acNote && <div className={acNote.cls}>{acNote.text}</div>}
               <div className="bc-rg" style={{ marginTop: 12 }}>
-                <div className={`bc-rb${wantAC ? ' on' : ''}`} onClick={() => handleSetAC(true)}>❄ With AC</div>
-                <div className={`bc-rb${!wantAC ? ' on' : ''}`} onClick={() => handleSetAC(false)}>— Non-AC</div>
+                <div className={`bc-rb${wantAC ? ' on' : ''}`} onClick={() => handleSetAC(true)}>With AC</div>
+                <div className={`bc-rb${!wantAC ? ' on' : ''}`} onClick={() => handleSetAC(false)}>Non-AC</div>
               </div>
               {wantAC && (
                 <div style={{ marginTop: 16 }}>
@@ -545,7 +549,7 @@ export default function BusCalculator() {
 
             {!summary ? (
               <div className="bc-sum-ph">
-                <div className="bc-sum-ph-ico">🚌</div>
+                <div className="bc-sum-ph-ico"><Icon name="bus" size={40} strokeWidth={1.4} /></div>
                 <div className="bc-sum-ph-txt">Search a CBN or model in Step 1 to begin building the price estimate.</div>
               </div>
             ) : (

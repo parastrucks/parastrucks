@@ -1,6 +1,7 @@
 // TIV Forecast — Forecast Output Tab
 // 3 layers shown as sub-tabs to avoid vertical scroll
 import { useState } from 'react'
+import Icon from '../../components/Icon'
 import { TRIGGER_DEFS } from '../lib/triggerDefs'
 import ForecastTable from './ForecastTable'
 
@@ -35,7 +36,7 @@ export default function ForecastOutputTab({ forecastResult, judgmentTiv, judgmen
   if (!forecastResult) {
     return (
       <div className="empty-state">
-        <div className="empty-icon">📊</div>
+        <div className="empty-icon"><Icon name="chart" size={34} color="var(--text-muted)" /></div>
         <div className="empty-title">No forecast data</div>
         <div className="empty-desc">Upload a Market Data file to generate forecasts.</div>
       </div>
@@ -52,9 +53,9 @@ export default function ForecastOutputTab({ forecastResult, judgmentTiv, judgmen
       {/* Active trigger context banner — single line, truncated */}
       {activeTriggers.length > 0 && (
         <div style={{
-          background: 'var(--amber-light, #FFF8E1)',
-          border: '1px solid var(--amber, #F59E0B)',
-          borderRadius: 6,
+          background: 'var(--amber-light)',
+          border: '1px solid var(--amber)',
+          borderRadius: 'var(--radius-sm)',
           padding: '7px 12px',
           marginBottom: 12,
           fontSize: 13,
