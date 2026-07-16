@@ -70,18 +70,53 @@ unlocks: safe rename, retire, reshuffle integrity, and rule targets that survive
 
 ## Schema changes (all additive)
 
-- `vehicle_catalog.sub_segment_id uuid NULL REFERENCES sub_segments(id)` + backfill + index.
-- `sub_segments.is_active boolean NOT NULL DEFAULT true` (retire).
+> **Corrected 2026-07-17 during the 9.7a build** — the two struck items below were
+> wrong in the original plan. Verified against `docs/db/schema-current.sql` and both
+> live databases.
+
+- ~~`vehicle_catalog.sub_segment_id uuid`~~ → **`integer`**. `sub_segments.id` is
+  `integer` (a `sub_segments_id_seq` serial), not uuid. Shipped as `integer NULL
+  REFERENCES sub_segments(id) ON DELETE SET NULL` + backfill + index. ✅ DONE (9.7a)
+- ~~`sub_segments.is_active` (new)~~ → **already exists** and is already enforced:
+  `SalesCatalog` filters `.eq('is_active', true)` on it. Retire is partly built;
+  9.7b's Families tab is UI over an existing column, not a schema change.
+- Also useful: `sub_segments.name` is **globally UNIQUE** (`sub_segments_name_key`),
+  so the name-match backfill cannot fan out — each CBN resolves to ≤1 family.
 - `sub_segments.cover_url text NULL` (+ `cover_filename` if needed).
 - New `catalog_assign_rules` (RLS admin-write; read for import-triage callers).
 - Optional later: `catalog_family_opens` for a cross-device shelf.
 - EF `admin-catalog`: new actions (moveCbns, createSubSegment inline, retire/reactivate,
   rules CRUD, saveCover); keep `verify_jwt:false` + internal verify() pattern.
 
+## Findings from the 9.7a build (2026-07-17)
+
+- **Backfill coverage:** prod links **976 / 1006** CBNs. The 30 that don't are 5 family
+  names that were never created — `Garud 15M`, `Haulage – MAV 45T/46T/49T (Air Susp)`,
+  `Haulage – Other`. They are the opening queue for 9.7b's Import-triage tab.
+- **Staging was NOT a copy of prod** — its `sub_segments` held a single fixture row
+  (`ECOMET 1115`) against a full 906-row `vehicle_catalog`, so nothing catalog-shaped was
+  reviewable there. Reseeded from a prod `pg_dump` of `sub_segments` (owner-approved
+  2026-07-17). **Caveat: brochure PDFs are NOT in staging's Storage bucket**, so
+  `brochure_url` rows resolve but downloads 404 locally. This will bite 9.7c (F2 covers).
+- **`MBP Truck` is a live segment on prod (11 families) but was missing from the app's
+  `SEGMENTS` constant**, so those families rendered a blank segment dropdown. Added in
+  9.7a as a stopgap. Picking any option also clears `sub_category`, so an idle click on
+  that blank dropdown could strand a family's CBNs — a pre-existing prod bug.
+- **An earlier `MBP Truck` → `Long Haul Trucks` rename was started and left half-done**
+  (`Haulage – 19T`/`Haulage – CNG 19T` vs `Haulage 1916 HF`/`1920 HF`/`19T CNG`; the new
+  ones carry brochures, the old `Haulage – CNG 19T` has 0 CBNs). Owner decided 2026-07-17
+  to **finish the consolidation in 9.7b**. Remove `MBP Truck` from `SEGMENTS` once done.
+- **`docs/db/seed-reference.sql` is stale** — 44 families vs prod's 49 (missing ids 45–49).
+  Worth refreshing from prod separately.
+
 ## Build order
 
 1. **9.7a keystone** — migration + backfill + switch reads/writes to id; enable rename. Test on
    staging first (psql via Session Pooler; CLI db push needs Docker — not installed).
+   ✅ **DONE on staging 2026-07-17** — migration applied (860/906 linked, 0 drift), EF
+   deployed, rename verified end-to-end (`renamed: 33`, text synced across all 33 CBNs
+   incl. 1 inactive). **NOT yet applied to prod**: prod needs the same migration + an
+   `admin-catalog` EF deploy before the client code can ship.
 2. **9.7b workbench** — the four tabs (biggest JSX chunk); wire triage into the existing Import flow.
 3. **9.7c find** — F1 landing + shelf; F2 wall + upload-time thumbnails + backfill; F3 re-parent.
 4. **9.7d share** — S1 share + caption template.
