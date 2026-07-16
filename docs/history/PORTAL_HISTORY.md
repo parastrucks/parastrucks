@@ -1357,7 +1357,7 @@ deferred engineering backlog) is kept here for the record.*
 
 ---
 
-## Phase 9.6 — Portal visual redesign (Paras Group print-report language) — REVIEW COMPLETE, NOT YET LIVE (2026-07-16)
+## Phase 9.6 — Portal visual redesign (Paras Group print-report language) — ✅ LIVE ON PROD (2026-07-16, PR #78 → `29404b4`)
 
 Full **visual/structural redesign** of the whole portal to the Paras Group print-report design
 language. Zero behavioural change intended — routing, Supabase, edge-fn calls, `canAccess`, and all
@@ -1609,3 +1609,24 @@ Branch at 58 commits, all pushed; owner set the 9.6 deploy for TONIGHT.**
   QR-on-print, and all price-first ideas (price card / compare / quote-this / circular history /
   price book). 9.7 builds after 9.6 is live, own branch and PRs — only the two safe presentational
   pieces above rode the 9.6 release.
+
+
+**Session 2026-07-16 (night) — 🚀 Phase 9.6 GO-LIVE. PR #78 squash-merged to portal; prod + CSP verified.**
+
+- Owner gave the word ("let's go live" → "go"). Pre-flight: `origin/portal` had moved **+5
+  commits** during the 9.6 build (the ERP-sync fixes `3bd278b`/`9e030b6` + docs/security
+  `7cdbee6`/`f4924b0`/`6288473`) → rebased the branch onto latest portal per the
+  parallel-changes rule. **Clean rebase of all 59 commits**, build green (432ms), force-pushed
+  with lease.
+- **PR #78** (`9.6-portal-redesign` → `portal`) opened with the full release summary. All
+  checks green: CodeQL (+ JS/TS scan), npm-audit, gitleaks, trivy-fs, and all three Vercel
+  builds completed — including the `portal` prod-candidate.
+- **Squash-merged** on the owner's "go" → merge commit `29404b4` (2026-07-16T14:30Z).
+- **Verified live:** Vercel production deployment for `29404b4` = READY (target=production,
+  branch portal). Curled real page URLs — `team.parastrucks.in/` and `/login` both 200 with
+  the **full CSP intact** (script-src self+Turnstile, fonts.googleapis/gstatic, frame-ancestors
+  none, HSTS preload, X-Frame-Options DENY). Served HTML loads **Carlito** (no Inter) —
+  confirming the new build, not a stale cache.
+- **Phase 9.6 is COMPLETE.** 59 commits, 2 red-team rounds, a staging smoke-test, and a full
+  owner screen-by-screen review, released in one shot.
+  Next build: **Phase 9.7 Catalog UX** (`docs/backlog/phase97-catalog-ux.md`).

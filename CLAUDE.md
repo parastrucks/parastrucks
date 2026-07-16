@@ -31,41 +31,30 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ## Current state (2026-07-16)
 
-- **Deployed & live:** Phases 1A–9 + **Phase 9.5 Vendor Jobs** (`/vendor-jobs`) + the 2026-07-04
-  changes (Service/Spares require Brands; bus-calc sticky fix; gitignore `.env*`). CI + Vercel green.
-- **Built + fully reviewed, NOT yet live — Phase 9.6 visual redesign** (Paras Group print-report
-  language: paper/ink/hairline/one-blue-accent, Carlito, Lucide; 4-section sidebar; new mobile shell;
-  PageHead; mobile card tables). Branch **`9.6-portal-redesign`** (off `origin/portal`, **58 commits,
-  all pushed**, builds green). **🟢 Owner screen-by-screen localhost review COMPLETE (2026-07-16) —
-  every screen passed**, including the 760px shell boundary (swept 386→768: exactly one shell at
-  every width, no dead zone). Late riders (owner-directed): **Excel templates on both upload
-  surfaces**, the **duplicate brochure-upload-progress fix** (prod bug), and **full variant
-  descriptions** in the family modal. **NEXT = open PR → CI green + Vercel READY → owner one-shot
-  merge to `portal` → verify prod + CSP — owner wants the deploy TONIGHT (2026-07-16).**
-  Prior: smoke-tested on staging + **red-teamed twice** (both ship-safe, all findings fixed) + all
-  owner design-decisions resolved; **accounts + HR got their missing `user_brands` rows on prod**
-  (PTB→`al`). Review round 2 (2026-07-16) landed 8 commits: Vendor Jobs native-Chrome-bubble →
-  inline-at-field, green all-clear banner deleted + Sort merged into Filters, Employees filters →
-  popover, a **global modal-header ✕ regression** (8 modals stacked the ✕ below the title — the flex
-  had moved to a ServiceJobs-only wrapper), the **Access Rules Errors-tab 400** (a *pre-existing prod*
-  bug — PostgREST can't embed `users` because `error_log`'s FK targets `auth.users`), TIV key-prop
-  warnings, **toast contrast** (pale wash → solid fills, global), and the **TIV chart palette**
-  (saturated rainbow → muted categorical; Judgment orange → ink). Detail:
-  `memory/phase96_portal_redesign.md`; decisions + fixed-item log in `memory/known_issues.md`.
-  Old-portal designer handoff on the branch: `docs/PORTAL_UI_HANDOFF.md`.
-- **Planned, not started:** **Phase 9.7 — Catalog UX rework** (owner-approved 2026-07-16; builds
-  AFTER 9.6 is live) — see `docs/backlog/phase97-catalog-ux.md`. **Phase 10 — Vehicle Tracker**
+- **Deployed & live:** Phases 1A–9 + **Phase 9.5 Vendor Jobs** (`/vendor-jobs`) +
+  **Phase 9.6 visual redesign — LIVE 2026-07-16** (Paras Group print-report language:
+  paper/ink/hairline/one-blue-accent, Carlito, Lucide; 4-section sidebar; new mobile shell at the
+  760px boundary; PageHead; mobile card tables; solid-fill toasts; muted TIV chart palette; Excel
+  templates on both upload surfaces). Shipped via **PR #78** (branch `9.6-portal-redesign`, 59
+  commits, rebased onto latest portal, squash-merged → `29404b4`): CI all-green, Vercel prod deploy
+  READY, prod + CSP verified on `/` and `/login`. Pipeline before merge: staging smoke-test,
+  red-teamed twice, full owner screen-by-screen review (every screen passed). Also riding: the
+  Access Rules Errors-tab 400 fix and the duplicate brochure-upload-progress fix (both pre-existing
+  prod bugs). Build/review record: `memory/phase96_portal_redesign.md`; decisions + fixed-item log
+  in `memory/known_issues.md`. Designer handoff: `docs/PORTAL_UI_HANDOFF.md`.
+- **Planned, not started:** **Phase 9.7 — Catalog UX rework** (owner-approved 2026-07-16; the next
+  build) — see `docs/backlog/phase97-catalog-ux.md`. **Phase 10 — Vehicle Tracker**
   (`/tracker`) — see `docs/backlog/phase10-vehicle-tracker.md`.
 - **Separate project (not this repo):** the HD Hyundai **ERP** (`erp.parastrucks.in`, repo `erp-parastrucks`) — see `memory/project_hd_hyundai_vertical.md`.
 
 ## Next actions
 
-- **Phase 9.6 redesign go-live — the only step left.** Owner review is COMPLETE (all screens passed).
-  Open PR `9.6-portal-redesign` → `portal` (runs CI + Vercel prod-candidate) → confirm CI all-green
-  AND the Vercel deploy = READY → **owner merges** for the one-shot release → verify prod + CSP (curl
-  real page URLs `/` and `/login`, not `vercel.json`). Worktree `.claude/worktrees/awesome-kare-7d6c1b`
-  has dev-local `.env`→staging + `launch.json`→port 5173 (uncommitted — do not commit).
-
+- **Phase 9.7 — Catalog UX rework (next build).** Full owner-approved plan in
+  `docs/backlog/phase97-catalog-ux.md`; build order 9.7a (keystone `vehicle_catalog.sub_segment_id`
+  FK + backfill) → 9.7b (admin workbench) → 9.7c (F1/F2/F3 find surfaces) → 9.7d (S1 share).
+  Own branch/PRs off latest `origin/portal`.
+- **Post-9.6 watch:** big visual release just shipped — treat early user reports as candidates for
+  quick direct-to-`portal` fixes.
 - **Task A — restore localhost dev:** keep local `.env` pointed at the **staging** Supabase
   project (`klpnhpnlotcbbovwswmq`); staging EFs whitelist `http://localhost:3000` in `ALLOWED_ORIGINS`.
   **Do NOT add localhost to the prod project's `ALLOWED_ORIGINS`** (owner-rejected). Prod creds
