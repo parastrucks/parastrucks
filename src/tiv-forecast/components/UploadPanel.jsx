@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
 import { supabase } from '../../lib/supabase'
 import Icon from '../../components/Icon'
-import { parseExcelFile } from '../lib/parseExcel'
+import { parseExcelFile, downloadMarketDataTemplate } from '../lib/parseExcel'
 import { retrainModel } from '../lib/retrainModel'
 import {
   upsertTivActuals, upsertPtbActuals, upsertAlActuals,
@@ -257,6 +257,10 @@ export default function UploadPanel({ onUploadComplete }) {
             <span style={{ fontSize: 13, color: 'var(--gray-500)' }}>
               {file ? file.name : 'No file selected'}
             </span>
+            <button type="button" className="btn btn-secondary btn-sm" style={{ marginLeft: 'auto' }}
+              onClick={downloadMarketDataTemplate}>
+              <Icon name="download" size={14} /> Download template
+            </button>
           </div>
 
           {preview && (

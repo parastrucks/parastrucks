@@ -241,6 +241,56 @@ function parseRawDataSheet(ws) {
   return { alActuals, rawRows }
 }
 
+// ── Template generator ───────────────────────────────────────────────
+// Builds a blank Market_Data workbook from the SAME constants the parser
+// reads (sheet order, month format, Raw-Data segment-row indices), so the
+// template can never drift out of sync with what the import expects.
+export function downloadMarketDataTemplate() {
+  const wb = XLSX.utils.book_new()
+  const segHeader = ['Month', ...SEGMENTS]
+
+  const meta = XLSX.utils.aoa_to_sheet([
+    ['Market Data template — how to fill'],
+    [],
+    ['1. Keep the sheets in this order: Metadata, TIV actuals, PTB actuals, TIV judgment, PTB judgment, Raw Data.'],
+    ['2. Months go in the first column, one row per month, written as Apr-22, May-22, … (3-letter month, dash, 2-digit year).'],
+    ['3. Actuals sheets take whole numbers. The judgment (prediction) sheets are optional — leave them empty if there is no manual forecast.'],
+    ['4. Raw Data: replace <Apr-22> in the top row with the real month, then add further months to the right — 10 columns per month (AL PTB LM TML EML M&M BB Others TIV MS%) plus one blank spacer column.'],
+    ['5. Raw Data: the six segment TOTAL rows are pre-placed on exact rows the system reads — do not insert or delete rows above or between them.'],
+  ])
+  meta['!cols'] = [{ wch: 118 }]
+  XLSX.utils.book_append_sheet(wb, meta, 'Metadata')
+
+  const tiv = XLSX.utils.aoa_to_sheet([[...segHeader, 'TIV']])
+  tiv['!cols'] = segHeader.map(() => ({ wch: 12 }))
+  XLSX.utils.book_append_sheet(wb, tiv, 'Segment wise data - TIV')
+
+  const ptb = XLSX.utils.aoa_to_sheet([[...segHeader, 'Total Sale']])
+  ptb['!cols'] = segHeader.map(() => ({ wch: 12 }))
+  XLSX.utils.book_append_sheet(wb, ptb, 'Segment wise data - PTB')
+
+  const judgTiv = XLSX.utils.aoa_to_sheet([[...segHeader, 'TIV']])
+  XLSX.utils.book_append_sheet(wb, judgTiv, 'Segment wise prediction - TIV')
+
+  const judgPtb = XLSX.utils.aoa_to_sheet([[...segHeader, 'Total Sale']])
+  XLSX.utils.book_append_sheet(wb, judgPtb, 'Segment wise prediction - PTB')
+
+  // Raw Data skeleton — segment TOTAL rows pinned to the exact indices in
+  // RAW_SEGMENT_ROWS. The <Apr-22> month placeholder is deliberately angle-
+  // bracketed so parseMonthLabel() ignores it until replaced with a real month.
+  const maxRow = Math.max(...Object.values(RAW_SEGMENT_ROWS))
+  const raw = Array.from({ length: maxRow + 1 }, () => [''])
+  raw[0] = ['Segment ↓', '<Apr-22>']
+  raw[1] = ['', ...Object.keys(RAW_COL_OFFSET)]
+  raw[2] = ['(sub-model rows may go between the TOTAL rows — totals must stay on their pre-placed rows)']
+  for (const [seg, idx] of Object.entries(RAW_SEGMENT_ROWS)) raw[idx][0] = `${seg} — TOTAL`
+  const rawWs = XLSX.utils.aoa_to_sheet(raw)
+  rawWs['!cols'] = [{ wch: 24 }, ...Object.keys(RAW_COL_OFFSET).map(() => ({ wch: 9 }))]
+  XLSX.utils.book_append_sheet(wb, rawWs, 'Raw Data')
+
+  XLSX.writeFile(wb, 'Market_Data_Template.xlsx')
+}
+
 // ── Main export ──────────────────────────────────────────────────────
 export function parseExcelFile(arrayBuffer) {
   const wb = XLSX.read(new Uint8Array(arrayBuffer), { type: 'array', cellDates: false, raw: true })

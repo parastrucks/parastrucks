@@ -1357,6 +1357,21 @@ function ImportTab({ subSegs, onRefresh }) {
     if (f) processFile(f)
   }
 
+  // Blank template matching exactly what processFile() looks for. The note row
+  // sits ABOVE the header (the header-finder scans for the "CBN" cell, so rows
+  // before it are ignored) and there are deliberately NO example data rows —
+  // an unedited upload must import zero vehicles, not junk ones.
+  function downloadTemplate() {
+    const ws = XLSX.utils.aoa_to_sheet([
+      ['One row per vehicle. CBN and MRP are compulsory; Segment may be left blank when the Sub-Category is a known sub-segment (it auto-fills). Existing CBNs get their price updated; new CBNs are added.'],
+      ['CBN', 'Description', 'Sub-Category', 'Tyres', 'MRP Incl. GST', 'Segment'],
+    ])
+    ws['!cols'] = [{ wch: 18 }, { wch: 60 }, { wch: 18 }, { wch: 18 }, { wch: 14 }, { wch: 14 }]
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'All Vehicles')
+    XLSX.writeFile(wb, 'Price_Circular_Template.xlsx')
+  }
+
   async function runImport() {
     if (!preview) return
     setImporting(true)
@@ -1387,6 +1402,10 @@ function ImportTab({ subSegs, onRefresh }) {
           Upload the Excel price list. Existing vehicles are updated by CBN; new CBNs are inserted.
           Expected columns: <strong>CBN, Description, Sub-Category, Tyres, MRP incl. 18% GST</strong>
         </p>
+        <button type="button" className="btn btn-secondary btn-sm" style={{ marginBottom: 16 }}
+          onClick={downloadTemplate}>
+          <Icon name="download" size={14} /> Download template
+        </button>
 
         <div className="form-group" style={{ maxWidth: 260, marginBottom: 16 }}>
           <label className="form-label" htmlFor="imp-brand">Brand *</label>
