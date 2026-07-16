@@ -2072,6 +2072,17 @@ tbody tr:hover td { background: var(--gray-50); }
   text-overflow: ellipsis;
   font-size: 13px;
 }
+/* Sub-segment variant list: show the FULL price-list description. Employees
+   identify variants by the long AL description string — truncating it hides
+   exactly the load-span / cabin / fuel details that distinguish CBNs within a
+   family. (The main Vehicles table keeps the ellipsis for scanability.) */
+.vc-wide-modal .vc-desc {
+  max-width: none;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  line-height: 1.45;
+}
 .vc-mrp-cell {
   text-align: right;
   font-weight: 700;
