@@ -118,6 +118,10 @@ Deno.serve(async (req: Request) => {
           description: p.description,
           brand: p.brand ?? "al",
           segment: p.segment,
+          // Phase 9.7a: sub_segment_id is the real link; sub_category text is
+          // dual-written alongside it until every reader has moved to the id
+          // (Quotation / ProformaInvoice / FinancierCopy still search the text).
+          sub_segment_id: p.sub_segment_id ?? null,
           sub_category: p.sub_category ?? null,
           tyres: p.tyres ?? null,
           mrp_incl_gst: p.mrp_incl_gst,
@@ -138,7 +142,7 @@ Deno.serve(async (req: Request) => {
         if (id == null || !update) return json({ error: "Missing id or update" }, 400)
         // Whitelist of updatable fields
         const allowed = [
-          "description", "brand", "segment", "sub_category", "tyres",
+          "description", "brand", "segment", "sub_segment_id", "sub_category", "tyres",
           "mrp_incl_gst", "gst_rate", "price_circular", "effective_date", "is_active",
         ]
         const clean: Record<string, unknown> = {}
@@ -183,6 +187,56 @@ Deno.serve(async (req: Request) => {
           .upsert(rows, { onConflict: "cbn", ignoreDuplicates: false })
         if (error) return json({ error: error.message }, 400)
         return json({ ok: true, count: rows.length })
+      }
+
+      // ── Rename a sub-segment (Phase 9.7a) ─────────────────────
+      // Renaming used to be forbidden in the UI: vehicle_catalog.sub_category
+      // was free text matched against sub_segments.name, so a rename stranded
+      // every CBN in the family. Now sub_segment_id carries the link and the
+      // rename is safe — but the text column is still what Quotation /
+      // ProformaInvoice / FinancierCopy search, so it must move in step.
+      //
+      // The two writes are NOT in one transaction (PostgREST gives us no
+      // transaction across calls). The id link is the source of truth, so the
+      // failure mode is a stale text column, never a stranded CBN — and the
+      // 3c integrity query in the 9.7a migration detects exactly that drift.
+      // If the second write fails we report it rather than silently succeed.
+      case "renameSubSegment": {
+        const { id, name } = payload as { id?: number; name?: string }
+        if (id == null || !name?.trim()) {
+          return json({ error: "id and name are required" }, 400)
+        }
+        const clean = name.trim()
+
+        const { data: existing, error: exErr } = await admin
+          .from("sub_segments").select("id, name").eq("id", id).maybeSingle()
+        if (exErr) return json({ error: exErr.message }, 400)
+        if (!existing) return json({ error: "Sub-segment not found" }, 404)
+        if (existing.name === clean) return json({ ok: true, renamed: 0, unchanged: true })
+
+        // sub_segments.name is UNIQUE — surface the collision as a clean 409
+        // instead of a raw Postgres constraint error.
+        const { data: clash } = await admin
+          .from("sub_segments").select("id").ilike("name", clean).neq("id", id).maybeSingle()
+        if (clash) return json({ error: `A sub-segment named "${clean}" already exists` }, 409)
+
+        const { error: nameErr } = await admin
+          .from("sub_segments").update({ name: clean }).eq("id", id)
+        if (nameErr) return json({ error: nameErr.message }, 400)
+
+        const { data: synced, error: syncErr } = await admin
+          .from("vehicle_catalog")
+          .update({ sub_category: clean })
+          .eq("sub_segment_id", id)
+          .select("id")
+        if (syncErr) {
+          return json({
+            ok: false,
+            error: `Renamed to "${clean}", but the CBN text did not sync: ${syncErr.message}. ` +
+                   `The id link is intact — re-run the rename to retry.`,
+          }, 500)
+        }
+        return json({ ok: true, renamed: synced?.length ?? 0 })
       }
 
       // ── Brochure upload: return a one-shot signed URL ─────────
