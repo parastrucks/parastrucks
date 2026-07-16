@@ -2,9 +2,19 @@
 const XLSX = require('xlsx')
 const { createClient } = require('@supabase/supabase-js')
 
-const SUPABASE_URL = 'https://mmmxvjaavdtwlpcnjgzy.supabase.co'
-const SERVICE_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1tbXh2amFhdmR0d2xwY25qZ3p5Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NDc1MTczMCwiZXhwIjoyMDkwMzI3NzMwfQ.Tg6nhWyVOGbVZit6JAAJZ82RRoX9PE5WImWOQOmRpQU'
-const EXCEL        = 'D:/PTB/Website/parastrucks/pricelist/AL_Vehicle_Price_List_Apr2026.xlsx'
+// Credentials come from the environment — never hardcode them here. This script
+// writes with the service_role key, which bypasses RLS: point it at the wrong
+// project and it silently rewrites that project's catalog.
+//   SUPABASE_URL=https://<ref>.supabase.co SUPABASE_SERVICE_KEY=<key> node scripts/fix_inactive.cjs
+const SUPABASE_URL = process.env.SUPABASE_URL
+const SERVICE_KEY  = process.env.SUPABASE_SERVICE_KEY
+const EXCEL        = process.env.PRICE_LIST_XLSX
+  || 'D:/PTB/Website/parastrucks/pricelist/AL_Vehicle_Price_List_Apr2026.xlsx'
+
+if (!SUPABASE_URL || !SERVICE_KEY) {
+  console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_KEY in the environment.')
+  process.exit(1)
+}
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } })
 
