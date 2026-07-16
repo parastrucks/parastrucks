@@ -1357,7 +1357,7 @@ deferred engineering backlog) is kept here for the record.*
 
 ---
 
-## Phase 9.6 — Portal visual redesign (Paras Group print-report language) — BUILT, NOT YET LIVE (2026-07-05)
+## Phase 9.6 — Portal visual redesign (Paras Group print-report language) — REVIEW COMPLETE, NOT YET LIVE (2026-07-16)
 
 Full **visual/structural redesign** of the whole portal to the Paras Group print-report design
 language. Zero behavioural change intended — routing, Supabase, edge-fn calls, `canAccess`, and all
@@ -1507,3 +1507,72 @@ src` returns ErrorBoundary only; zero orphaned `setError`/`parseError`; no error
 *Gotcha:* `ServiceJobs.jsx` already had a local success-pill state literally named `toast`
 (`.sj-toast`), so it was renamed to `pageToast` to free the name for `useToast()` — pill behaviour
 unchanged.
+
+**Session 2026-07-16 — owner screen-by-screen review COMPLETE (Phase 9.6). Branch at 53 commits, all
+pushed, build green. Every screen passed; opening the PR to `portal` is the only step left.**
+Eight commits landed this round (each committed as the owner found it, per the commit-each-fix rule):
+
+- **ERP gating as `svc.mgr`** — PASS. HD Hyundai ERP correctly hidden on the dashboard, sidebar *and*
+  drawer for a PTB service manager; visible again for admin. (The R1 red-team fail-open fix holds.)
+- **Vendor Jobs — native Chrome validation bubble** (`d55c180`). The New Service Job form still used
+  the HTML `required` attribute, so Chrome intercepted submit and drew its own off-design bubble
+  ("Please select an item in the list.") before our code ran. Fixed with `noValidate` + JS validation
+  → red field + `.form-error` beneath, clearing as the user types. Covers reg-no, customer, vendor,
+  material-out date and the three required warranty-letter fields.
+- **Vendor Jobs — mobile fold** (`d9e5ba0`, superseded by `d274bb4`). The first attempt compacted
+  every band; the owner rejected it ("rather than resizing to make it look awkward, remove the green
+  line and merge sort into the filter button"). Final: the **green all-clear radar banner is deleted**
+  (the bar is exception-only now — silence means everything is on track) and the standalone mobile
+  **sort bar moved into the Filters popover** (mobile-only; desktop still sorts from table headers).
+  The app-wide page-head margin trim from the first attempt was reverted. Net ≈90px reclaimed with
+  nothing resized. Verified end-to-end: job create → `PO-PTB-2026-27-0001` generated + downloaded,
+  green "Job created · PO downloaded" pill (the renamed `pageToast`), mobile (+) → New Vendor Job.
+- **Employees** (`d2f28be`). The four always-open filter selects (entity / department / level /
+  status) stacked into a four-row block on mobile → collapsed behind a **Filters button + popover**
+  (the Vendor Jobs pattern; count badge + Clear/Done, search stays inline). Edit-modal footer tagged
+  `.modal-actions` so the buttons wrap on a phone — **"Delete Permanently" was cut off the edge**.
+- **🔴 GLOBAL modal-header regression** (`bd51070`). The redesign had moved the header's flex layout
+  onto a new `.modal-header-main` wrapper that **only the ServiceJobs modal uses**, so **all 8 simple
+  modals** (Employees edit / reset-pw / confirm, AccessRules ×2, Catalog ×3) lost their row layout and
+  stacked the ✕ as a grey circle *below* the title. Fixed by restoring flex on `.modal-header` itself,
+  with `flex-basis:100%` on `.modal-header-main` / `.modal-header-extra` so ServiceJobs keeps stacking
+  its subtitle + badge row. **All 10 modal-header call-sites audited: 8 fixed, 2 pixel-identical** —
+  the ServiceJobs job-detail modal (the only one that actually passes `headerExtra`, a `.sj-badges`
+  row) and the Catalog sub-segment detail modal (`<div>` title + `<div>` actions, handled by
+  `space-between`). Owner eyeballed both.
+- **Access Rules → Errors tab 400** (`096cef1`) — **a pre-existing, prod-affecting bug, not a redesign
+  regression** (the query was byte-identical to `origin/portal`). The tab embedded
+  `user:users(full_name,email)` on `error_log`, but `error_log.user_id`'s FK targets **`auth.users`**,
+  not `public.users`; PostgREST only exposes `public`, so it could never resolve the relationship —
+  400 *"Could not find a relationship between 'error_log' and 'users' in the schema cache"*, and the
+  tab silently showed "No errors logged" even with rows present. Fixed app-side (no schema change):
+  drop the embed, resolve display names with a second `users` lookup on the distinct ids.
+  *Lesson:* a PostgREST embed needs a **declared FK on the exposed schema** — a matching id column is
+  not enough.
+- **TIV — key-prop warnings** (`6df6135`). `.map()` returning a bare `<>…</>` fragment, which **cannot
+  carry a key** (the inner `<th>`/`<td>` keys don't count — React needs it on the top-level mapped
+  node). ForecastTable ×3 + AccuracyTrackerTab ×1 → keyed `<Fragment>`.
+- **Toast contrast** (`6df6135`) — owner: *"not visible"*. Toasts were a pale wash (dark-red text on a
+  near-white pink) that barely lifted off the page. Now **solid saturated fills with white text**
+  (success / error / info, all passing WCAG AA) and the ✕ went .5→.8 opacity. **Global** — every toast
+  in the app. Confirmed live on Profile's "Password updated successfully." (solid green).
+- **TIV charts** (`31990e1`) — owner: *"graphs have not been redesigned"*, and they were right: the
+  charts still carried the pre-redesign colours. `SEG_COLORS`' saturated rainbow
+  (`#E67E22`/`#2ECC71`/`#9B59B6`/`#E74C3C`/`#1ABC9C`) → a **muted categorical set** at the design
+  tokens' own saturation, led by the accent blue. **Six distinct hues were kept deliberately** — the
+  "TIV Forecast by Segment (all segments)" **stacked bar** genuinely needs them; collapsing to one
+  blue would have made it unreadable. On the Accuracy chart the **"Judgment" series identity was
+  `#F59E0B`, which collided with the semantic amber ≤25% threshold** (one colour, two meanings) →
+  identity is now **ink** (blue vs ink reads cleanly and is on-language). Chrome: tooltip → a
+  print-report card (hairline, 2px radius, soft lift), axis ticks/lines → secondary/hairline,
+  recharts' default `#8884d8` purple fallback → accent, active-trigger banner radius 6px→2px.
+  **Deliberately unchanged:** the accuracy **threshold** colours (green ≤15% / amber ≤25% / red >25%)
+  encode meaning, not decoration — they only moved from a raw hex onto the `--amber` token.
+- **Profile** — PASS. Inline validation ("Password must be at least 8 characters." at the red field),
+  the new solid-green success toast, clean mobile stacking, clean console.
+- **760px shell boundary** — PASS. Swept 386 / 700 / 759 (mobile shell) → 760 / 761 / 768 (desktop
+  shell): exactly one shell at every width, a clean single switch, no flicker, **no dead zone, and
+  768px iPad-portrait lands correctly on desktop**. The R2 `759.98px` fractional-viewport fix holds.
+
+*Note:* the two console warnings present on every page (React Router v7 `startTransition` /
+`relativeSplatPath` future flags) are **also on production** — not redesign noise.

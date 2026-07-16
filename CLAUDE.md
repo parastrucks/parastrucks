@@ -29,39 +29,38 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ---
 
-## Current state (2026-07-05)
+## Current state (2026-07-16)
 
 - **Deployed & live:** Phases 1A–9 + **Phase 9.5 Vendor Jobs** (`/vendor-jobs`) + the 2026-07-04
   changes (Service/Spares require Brands; bus-calc sticky fix; gitignore `.env*`). CI + Vercel green.
-- **Built, NOT yet live — Phase 9.6 visual redesign** (Paras Group print-report language: paper/ink/
-  hairline/one-blue-accent, Carlito, Lucide; 4-section sidebar; new mobile shell; PageHead; mobile
-  card tables). Branch **`9.6-portal-redesign`** (off `origin/portal`, **43 commits, all pushed**,
-  builds green). **Owner step-by-step localhost review IN PROGRESS (2026-07-14)** — the
-  banner→inline-field-error sweep is **COMPLETE** (errors now show at the red field; only
-  `ErrorBoundary` keeps a banner). Resume by asking the owner for the next screen; still unchecked:
-  ERP gating as `svc.mgr`, list/log pages, Employees, Access Rules, TIV, Vendor Jobs, Profile, and
-  the 760px boundary. Detail in `memory/phase96_portal_redesign.md`. Previously:
-  smoke-tested on staging + **red-teamed twice** (round 1 = 3 agents, round 2 = 4 Fable-5 agents; both
-  ship-safe, all findings fixed) + **full local staging walkthrough passed** (mobile shell live: M3
-  auto-expand, L2 focus-trap, drawer close-on-back, body scroll-lock, `?new=1` incl. already-on-page,
-  ERP hidden for PTB service manager, create-sheet canAccess filtering, mobile cards — zero console
-  errors). Visual/structural only. Also this session: **accounts + HR users got their missing
-  `user_brands` rows on prod** (PTB→`al`; audit found sales/service/back_office already provisioned);
-  **all four owner design-decisions resolved** (M2 accepted as-is · M3 sidebar auto-expand restored ·
-  L2 drawer/sheet focus-trap wired · LOW-1 declined); **login show-password emoji → Lucide eye**.
-  **Next = open PR → owner one-shot merge to `portal`** (one real-desktop-width eyeball still advised —
-  the preview harness has no layout viewport). Detail: `memory/phase96_portal_redesign.md`; decisions + fixed-item
-  log in `memory/known_issues.md`. Old-portal designer handoff on the branch: `docs/PORTAL_UI_HANDOFF.md`.
+- **Built + fully reviewed, NOT yet live — Phase 9.6 visual redesign** (Paras Group print-report
+  language: paper/ink/hairline/one-blue-accent, Carlito, Lucide; 4-section sidebar; new mobile shell;
+  PageHead; mobile card tables). Branch **`9.6-portal-redesign`** (off `origin/portal`, **53 commits,
+  all pushed**, builds green). **🟢 Owner screen-by-screen localhost review COMPLETE (2026-07-16) —
+  every screen passed**, including the 760px shell boundary (swept 386→768: exactly one shell at
+  every width, no dead zone). Visual/structural only. **NEXT = open PR → CI green + Vercel READY →
+  owner one-shot merge to `portal` → verify prod + CSP.**
+  Prior: smoke-tested on staging + **red-teamed twice** (both ship-safe, all findings fixed) + all
+  owner design-decisions resolved; **accounts + HR got their missing `user_brands` rows on prod**
+  (PTB→`al`). Review round 2 (2026-07-16) landed 8 commits: Vendor Jobs native-Chrome-bubble →
+  inline-at-field, green all-clear banner deleted + Sort merged into Filters, Employees filters →
+  popover, a **global modal-header ✕ regression** (8 modals stacked the ✕ below the title — the flex
+  had moved to a ServiceJobs-only wrapper), the **Access Rules Errors-tab 400** (a *pre-existing prod*
+  bug — PostgREST can't embed `users` because `error_log`'s FK targets `auth.users`), TIV key-prop
+  warnings, **toast contrast** (pale wash → solid fills, global), and the **TIV chart palette**
+  (saturated rainbow → muted categorical; Judgment orange → ink). Detail:
+  `memory/phase96_portal_redesign.md`; decisions + fixed-item log in `memory/known_issues.md`.
+  Old-portal designer handoff on the branch: `docs/PORTAL_UI_HANDOFF.md`.
 - **Planned, not started:** **Phase 10 — Vehicle Tracker** (`/tracker`) — see `docs/backlog/phase10-vehicle-tracker.md`.
 - **Separate project (not this repo):** the HD Hyundai **ERP** (`erp.parastrucks.in`, repo `erp-parastrucks`) — see `memory/project_hd_hyundai_vertical.md`.
 
 ## Next actions
 
-- **Phase 9.6 redesign go-live:** open PR `9.6-portal-redesign` → `portal` (runs CI + Vercel
-  prod-candidate) → **owner merges** for the one-shot release → verify prod + CSP. Optionally action
-  the open owner design-decisions first (drawer Profile / sidebar auto-expand / drawer focus-trap /
-  mobile-card designation — `memory/known_issues.md`). Worktree `.claude/worktrees/awesome-kare-7d6c1b`
-  has dev-local `.env`→staging + `launch.json`→port 5173 (uncommitted).
+- **Phase 9.6 redesign go-live — the only step left.** Owner review is COMPLETE (all screens passed).
+  Open PR `9.6-portal-redesign` → `portal` (runs CI + Vercel prod-candidate) → confirm CI all-green
+  AND the Vercel deploy = READY → **owner merges** for the one-shot release → verify prod + CSP (curl
+  real page URLs `/` and `/login`, not `vercel.json`). Worktree `.claude/worktrees/awesome-kare-7d6c1b`
+  has dev-local `.env`→staging + `launch.json`→port 5173 (uncommitted — do not commit).
 
 - **Task A — restore localhost dev:** keep local `.env` pointed at the **staging** Supabase
   project (`klpnhpnlotcbbovwswmq`); staging EFs whitelist `http://localhost:3000` in `ALLOWED_ORIGINS`.
