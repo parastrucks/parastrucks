@@ -9,8 +9,18 @@ import Icon from '../components/Icon'
 import useFocusTrap from '../hooks/useFocusTrap'
 
 /* ── CONSTANTS ───────────────────────────────────────────────── */
+// Must contain every segment value that actually exists in the data. Prod uses
+// seven; this list carried six, so the 11 families in 'MBP Truck' rendered with
+// a blank segment dropdown (the <select> had no matching <option>). The form
+// keeps the original value unless the user touches the field, so nothing was
+// silently rewritten — but picking any option also clears sub_category, so an
+// idle click on a blank dropdown could strand a family's CBNs.
+//
+// 'MBP Truck' is legacy: Phase 9.7b consolidates it into 'Long Haul Trucks'
+// (owner-approved 2026-07-16 — an earlier rename was started and left half
+// done). It stays listed until that migration lands, then comes out.
 const SEGMENTS = [
-  'ICV Truck', 'Long Haul Trucks', 'Tipper',
+  'ICV Truck', 'Long Haul Trucks', 'MBP Truck', 'Tipper',
   'Bus – ICV', 'Bus – MCV', 'RMC / Boom Pump',
 ]
 
@@ -70,7 +80,7 @@ function AdminCatalog() {
     try {
       const { data, error } = await supabase
         .from('vehicle_catalog')
-        .select('id, cbn, description, brand, segment, sub_category, tyres, mrp_incl_gst, gst_rate, price_circular, effective_date, is_active')
+        .select('id, cbn, description, brand, segment, sub_segment_id, sub_category, tyres, mrp_incl_gst, gst_rate, price_circular, effective_date, is_active')
         .order('segment')
         .order('sub_category')
         .order('cbn')
@@ -416,7 +426,8 @@ function VehiclesTab({ vehicles, subSegs, loading, onRefresh }) {
 
 /* ── VEHICLE ADD / EDIT MODAL ────────────────────────────────── */
 const EMPTY_VEHICLE = {
-  cbn: '', description: '', brand: 'al', segment: SEGMENTS[0], sub_category: '',
+  cbn: '', description: '', brand: 'al', segment: SEGMENTS[0],
+  sub_segment_id: '', sub_category: '',
   tyres: '', mrp_incl_gst: '', gst_rate: 18,
   price_circular: '', effective_date: '', is_active: true,
 }
@@ -433,8 +444,12 @@ function VehicleModal({ mode, vehicle, subSegs, onClose, onSaved }) {
   const [error,  setError]  = useState('')
   const [errorField, setErrorField] = useState(null) // which field to flag red on validation
 
-  const subCatOptions = useMemo(
-    () => subSegs.filter(ss => ss.segment === form.segment).map(ss => ss.name),
+  // Phase 9.7a: options carry the whole family row now, not just its name —
+  // the <select> binds to sub_segment_id. Still filtered by segment only (not
+  // brand), matching the pre-9.7 behaviour deliberately: narrowing by brand
+  // here would be a separate change with its own blast radius.
+  const subSegOptions = useMemo(
+    () => subSegs.filter(ss => ss.segment === form.segment),
     [subSegs, form.segment]
   )
 
@@ -469,6 +484,7 @@ function VehicleModal({ mode, vehicle, subSegs, onClose, onSaved }) {
       description:    form.description.trim(),
       brand:          form.brand || 'al',
       segment:        form.segment,
+      sub_segment_id: form.sub_segment_id || null,
       sub_category:   form.sub_category || null,
       tyres:          form.tyres || null,
       mrp_incl_gst:   parseInt(form.mrp_incl_gst),
@@ -556,7 +572,15 @@ function VehicleModal({ mode, vehicle, subSegs, onClose, onSaved }) {
                 id="vm-segment"
                 className="form-select"
                 value={form.segment}
-                onChange={e => { set('segment', e.target.value); set('sub_category', '') }}
+                onChange={e => {
+                  // Changing segment invalidates the family — drop BOTH halves
+                  // of the link, or the row keeps an id pointing at a family in
+                  // the old segment.
+                  setForm(f => ({
+                    ...f, segment: e.target.value, sub_segment_id: null, sub_category: '',
+                  }))
+                  setError(''); setErrorField(null)
+                }}
               >
                 {SEGMENTS.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
@@ -566,22 +590,40 @@ function VehicleModal({ mode, vehicle, subSegs, onClose, onSaved }) {
           <div className="vc-form-grid">
             <div className="form-group">
               <label className="form-label" htmlFor="vm-subseg">Sub-Segment</label>
-              {subCatOptions.length > 0 ? (
+              {subSegOptions.length > 0 ? (
                 <select
                   id="vm-subseg"
                   className="form-select"
-                  value={form.sub_category}
-                  onChange={e => set('sub_category', e.target.value)}
+                  value={form.sub_segment_id ?? ''}
+                  onChange={e => {
+                    // Keep the id and the text in lockstep — the id is the link,
+                    // the text is what Quotation search still reads.
+                    const id = e.target.value
+                    const ss = subSegOptions.find(o => String(o.id) === id)
+                    setForm(f => ({
+                      ...f,
+                      sub_segment_id: id ? Number(id) : null,
+                      sub_category:   ss ? ss.name : null,
+                    }))
+                    setError(''); setErrorField(null)
+                  }}
                 >
                   <option value="">— Select —</option>
-                  {subCatOptions.map(s => <option key={s} value={s}>{s}</option>)}
+                  {subSegOptions.map(ss => (
+                    <option key={ss.id} value={ss.id}>{ss.name}</option>
+                  ))}
                 </select>
               ) : (
+                // No families in this segment yet. Free text still allowed, but
+                // it produces an UNLINKED row (sub_segment_id null) that surfaces
+                // in 9.7b's import-triage queue rather than silently vanishing.
                 <input
                   id="vm-subseg"
                   className="form-input"
-                  value={form.sub_category}
-                  onChange={e => set('sub_category', e.target.value)}
+                  value={form.sub_category || ''}
+                  onChange={e => setForm(f => ({
+                    ...f, sub_category: e.target.value, sub_segment_id: null,
+                  }))}
                   placeholder="Sub-segment name"
                 />
               )}
@@ -832,16 +874,18 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
     setErrorField(f => (f === field ? null : f))
   }
 
-  // Edit mode: load CBNs belonging to this sub-segment (by name text match)
+  // Edit mode: load CBNs belonging to this sub-segment. Phase 9.7a — keyed on
+  // sub_segment_id, not the name text. Keyed on subSeg.id (stable) rather than
+  // form.name, so typing a new name no longer re-queries and blanks the list.
   useEffect(() => {
     if (mode !== 'edit') return
     setCbnLoading(true)
     supabase.from('vehicle_catalog')
       .select('cbn, description')
-      .eq('sub_category', form.name)
+      .eq('sub_segment_id', subSeg.id)
       .order('cbn')
       .then(({ data }) => { setAllocatedCBNs(data || []); setCbnLoading(false) })
-  }, [mode, form.name])
+  }, [mode, subSeg?.id])
 
   // Add mode: reload all CBNs in this segment/brand (with their CURRENT
   // sub_category) whenever segment or brand changes. We show every CBN and mark
@@ -852,7 +896,7 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
     setCbnLoading(true)
     setSelectedCBNs(new Set())
     supabase.from('vehicle_catalog')
-      .select('cbn, description, sub_category')
+      .select('cbn, description, sub_segment_id, sub_category')
       .eq('segment', form.segment)
       .eq('brand', form.brand)
       .order('cbn')
@@ -950,23 +994,40 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
 
     let err
     if (mode === 'add') {
-      ;({ error: err } = await supabase.from('sub_segments').insert(payload))
+      // Need the new id back to link CBNs by FK, so insert().select().single().
+      const { data: created, error: insErr } = await supabase
+        .from('sub_segments').insert(payload).select('id').single()
+      err = insErr
       if (!err && selectedCBNs.size > 0) {
         // Latest assignment takes priority: a selected CBN already in another
-        // sub-segment is reassigned here (its single sub_category is overwritten,
-        // so a CBN is only ever in one sub-segment). Count the reassignments to
-        // report them non-blockingly.
+        // family is reassigned here (a CBN is only ever in one family). Count
+        // the reassignments to report them non-blockingly.
         const movedCount = [...selectedCBNs]
           .map(c => cbnOptions.find(v => v.cbn === c))
-          .filter(v => v && v.sub_category).length
+          .filter(v => v && (v.sub_segment_id || v.sub_category)).length
         const { error: assignErr } = await supabase.from('vehicle_catalog')
-          .update({ sub_category: payload.name })
+          .update({ sub_segment_id: created.id, sub_category: payload.name })
           .in('cbn', [...selectedCBNs])
         if (assignErr) toast.error('Sub-segment saved but CBN assignment failed: ' + assignErr.message)
         else if (movedCount > 0) toast.info(`${movedCount} CBN${movedCount > 1 ? 's' : ''} reassigned here — latest assignment takes priority.`)
       }
     } else {
-      ;({ error: err } = await supabase.from('sub_segments').update(payload).eq('id', subSeg.id))
+      // Phase 9.7a: renaming is allowed now. The name goes through the Edge
+      // Function, which also rewrites sub_category on every CBN linked by id —
+      // the client can't do that atomically and mustn't try. Everything else is
+      // a plain row update.
+      const renamed = payload.name !== subSeg.name
+      if (renamed) {
+        try {
+          await callEdge('admin-catalog', 'renameSubSegment', { id: subSeg.id, name: payload.name })
+        } catch (e) {
+          setSaving(false)
+          toast.error('Rename failed: ' + e.message)
+          return
+        }
+      }
+      const { name: _skip, ...rest } = payload
+      ;({ error: err } = await supabase.from('sub_segments').update(rest).eq('id', subSeg.id))
     }
     setSaving(false)
     if (err) { toast.error('Save failed: ' + err.message); return }
@@ -988,10 +1049,18 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
               className={`form-input ${errorField === 'name' ? 'error' : ''}`}
               value={form.name}
               onChange={e => set('name', e.target.value)}
-              disabled={mode === 'edit'}
               placeholder="e.g. Boss 11T"
             />
             {errorField === 'name' && <div className="form-error">{error}</div>}
+            {/* Phase 9.7a unlocked this. It was disabled because CBNs were tied
+                to the family by name text, so a rename stranded them. They are
+                tied by sub_segment_id now and the rename syncs the text. */}
+            {mode === 'edit' && form.name !== subSeg.name && (
+              <div className="text-small text-gray mt-4">
+                Renaming updates this family on {allocatedCBNs.length} linked CBN
+                {allocatedCBNs.length === 1 ? '' : 's'}.
+              </div>
+            )}
           </div>
 
           <div className="vc-form-grid">
@@ -1561,7 +1630,7 @@ function SalesCatalog({ profile }) {
       // The .or() expresses the NULL-or-match half using PostgREST's filter syntax.
       let vQuery = supabase
         .from('vehicle_catalog')
-        .select('id, cbn, description, brand, segment, sub_category, mrp_incl_gst, tyres, brand_id, sales_vertical_id')
+        .select('id, cbn, description, brand, segment, sub_segment_id, sub_category, mrp_incl_gst, tyres, brand_id, sales_vertical_id')
         .eq('is_active', true)
         .in('brand_id', scope.brandIds)
         .order('sub_category')
@@ -1602,28 +1671,36 @@ function SalesCatalog({ profile }) {
     return () => { cancelled = true }
   }, [fetchData])
 
-  const subSegMap = useMemo(
-    () => Object.fromEntries(subSegs.map(ss => [ss.name, ss])),
+  // Phase 9.7a: keyed by sub_segment_id, so a renamed family keeps its brochure.
+  const subSegById = useMemo(
+    () => Object.fromEntries(subSegs.map(ss => [ss.id, ss])),
     [subSegs]
   )
 
-  // Build cards: one per unique sub_category with vehicle list + brochure info
+  // Build cards: one per family. CBNs with no sub_segment_id (the ~30 orphans
+  // awaiting 9.7b triage) still group under their raw text so they stay visible
+  // to sales — they just have no brochure until an admin files them.
   const cards = useMemo(() => {
-    const grouped = {}
+    const grouped = new Map()
     for (const v of vehicles) {
-      const key = v.sub_category || '(Other)'
-      if (!grouped[key]) grouped[key] = []
-      grouped[key].push(v)
+      const key = v.sub_segment_id ?? `text:${v.sub_category || '(Other)'}`
+      if (!grouped.has(key)) grouped.set(key, [])
+      grouped.get(key).push(v)
     }
-    return Object.entries(grouped).map(([name, vlist]) => ({
-      name,
-      segment:          vlist[0].segment,
-      count:            vlist.length,
-      brochure_url:     subSegMap[name]?.brochure_url     || null,
-      brochure_filename: subSegMap[name]?.brochure_filename || null,
-      vehicles:         vlist,
-    }))
-  }, [vehicles, subSegMap])
+    return [...grouped.entries()].map(([key, vlist]) => {
+      const ss = typeof key === 'number' ? subSegById[key] : null
+      return {
+        key,
+        // Prefer the family's own name — it is the one the rename updates.
+        name:              ss?.name || vlist[0].sub_category || '(Other)',
+        segment:           ss?.segment || vlist[0].segment,
+        count:             vlist.length,
+        brochure_url:      ss?.brochure_url      || null,
+        brochure_filename: ss?.brochure_filename || null,
+        vehicles:          vlist,
+      }
+    })
+  }, [vehicles, subSegById])
 
   const availableSegs = useMemo(
     () => [...new Set(cards.map(c => c.segment))].sort(),
@@ -1707,7 +1784,7 @@ function SalesCatalog({ profile }) {
                 <div className="vc-segment-label">{seg}</div>
                 <div className="vc-subseg-grid">
                   {segCards.map(card => (
-                    <div key={card.name} className="vc-subseg-card">
+                    <div key={card.key} className="vc-subseg-card">
                       <div className="vc-subseg-name">{card.name}</div>
                       <div className="vc-subseg-count">
                         {card.count} variant{card.count !== 1 ? 's' : ''}
