@@ -148,11 +148,60 @@ independent of 9.7 and fix a live prod bug. Owner was shown that tradeoff and ac
 **Prod cutover order (strict — a wrong order breaks the catalog for everyone):**
 1. Apply `20260716_97a_sub_segment_id_keystone.sql` to prod. The client selects
    `sub_segment_id`; without the column PostgREST 400s and the Catalog page dies.
-2. Deploy the `admin-catalog` EF (`--no-verify-jwt` — all 7 EFs run `verify_jwt:false`
+2. Apply `20260717_97b_mbp_truck_consolidation.sql` — **must come AFTER the keystone**:
+   its retire-guard queries `vc.sub_segment_id` and errors (loud, safe, nothing applied)
+   if the column doesn't exist. Expect the retire step to print **`UPDATE 1`** on prod
+   (`Haulage – CNG 19T`, 0 CBNs there). **`UPDATE 0` = stop and investigate** — the
+   retire path could NOT be rehearsed on staging (that family holds 6 CBNs there, so
+   the guard no-op'd; staging's CBN↔family distribution is NOT prod's — prod families
+   over staging's older 906-row catalog).
+3. Deploy the `admin-catalog` EF (`--no-verify-jwt` — all 7 EFs run `verify_jwt:false`
    and do their own stricter verify(); deploying without the flag breaks every action).
-3. Merge the PR / let Vercel deploy the client.
+   Must precede the client: old EF's createVehicle silently drops sub_segment_id from
+   new vehicles (unknown fields ignored, no error) — degradation, not breakage, but real.
+4. Merge the PR / let Vercel deploy the client.
+5. Run the 9.7c cover-thumbnail backfill **against prod** (staging's brochures bucket is
+   empty — the backfill can only truly run where the PDFs are).
+6. Refresh `docs/db/schema-current.sql` + `seed-reference.sql` dumps (both stale now:
+   no sub_segment_id; 44 vs 49 families).
 Expected prod backfill: **976 / 1006** linked, 30 CBNs left NULL across the 5 orphan
 family names (they become the Import-triage tab's opening queue).
+
+## Red-team findings (2026-07-17, post-9.7a review) — open items in scope for 9.7
+
+- **🔴 R1 — Import re-introduces text/id drift after any rename (armed landmine).**
+  `runImport`/`bulkUpsertVehicles` upserts `sub_category` text with NO `sub_segment_id`:
+  existing rows keep their id but get their text overwritten by the Excel. Harmless
+  while Excel names == family names; the **first rename followed by the next circular
+  import** makes admin table (reads text) disagree with sales cards (read id), and
+  nothing in the app detects it. **Required 9.7b scope, not optional:** import must
+  resolve `sub_segment_id` from the name match at import time (triage queues the rest),
+  and ideally the app gains a drift check (the migration's 3c query, surfaced in admin).
+- **🔴 R2 — Quotation / ProformaInvoice / FinancierCopy have the same latent 1000-row
+  cap** just fixed in Catalog (Quotation.jsx:107, ProformaInvoice.jsx:118,
+  FinancierCopy.jsx:130 — active-vehicle fetches, no `.range()`). 897 active on prod
+  today; past 1000, vehicles silently vanish from quotation search — no error, just
+  unquotable. **Fix in this release** (reuse `fetchAllRows`; it needs extracting from
+  Catalog.jsx into a shared module first — it currently lives there as a local helper).
+- **🟠 R3 — Editing a family's SEGMENT syncs nothing** (only rename syncs). Changing it
+  in the sub-segment modal recreates exactly the family-vs-vehicle segment mismatch the
+  consolidation cleaned. 9.7b: sync linked CBNs' segment like rename does, or lock the
+  field behind the same treatment rename got.
+- **🟠 R4 — Retired families remain assignable**: admin `fetchSubSegs` has no
+  `is_active` filter and the vehicle modal's family dropdown filters by segment only;
+  the import's segment auto-fill map also includes retired names. Fine today (nothing
+  retired); wrong the day 9.7b's retire fires. Filter assignment surfaces to active.
+- **🟠 R5 — EF paths unverified since the staging redeploy**: only `renameSubSegment`
+  was exercised end-to-end. `createVehicle` / `updateVehicle` / `toggleVehicleActive` /
+  `bulkUpsertVehicles` / `signBrochureUpload` carry a 2-line diff but are inferred-safe,
+  not verified-safe. Cover them in the pre-ship staging smoke-test.
+- **🟡 R6 — minor**: `renameSubSegment` has no name-length cap; its `ilike` collision
+  check misparses `%`/`_` in names (none exist today). `fetchAllRows` offset-pages, so a
+  concurrent import can skip/dup a row mid-fetch (admin-only; refresh self-heals); on
+  fetch error the catalog shows an empty state, not an error (pre-existing pattern).
+- **🟡 R7 — 9.7c prerequisite**: cover upload cannot reuse `signBrochureUpload` (signs
+  `.pdf` paths / PDF content-type); needs its own EF action for webp. And staging's
+  empty brochures bucket blocks the F2-wall review — decide the approach before 9.7c.
 
 Owner reviews on localhost (port **3000** per `.claude/launch.json`, staging DB) in the
 established fix-and-commit-each rhythm; verify CI + Vercel READY on the single deploy.
