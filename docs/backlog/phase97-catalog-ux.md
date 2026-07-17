@@ -184,18 +184,30 @@ family names (they become the Import-triage tab's opening queue).
   Quotation paged 8 requests to 797 active rows and terminated correctly.
   **Rule for all future catalog work: never `.select()` vehicle_catalog without
   `fetchAllRows` or an explicit `.range()`.**
-- **🟠 R3 — Editing a family's SEGMENT syncs nothing** (only rename syncs). Changing it
-  in the sub-segment modal recreates exactly the family-vs-vehicle segment mismatch the
-  consolidation cleaned. 9.7b: sync linked CBNs' segment like rename does, or lock the
-  field behind the same treatment rename got.
-- **🟠 R4 — Retired families remain assignable**: admin `fetchSubSegs` has no
-  `is_active` filter and the vehicle modal's family dropdown filters by segment only;
-  the import's segment auto-fill map also includes retired names. Fine today (nothing
-  retired); wrong the day 9.7b's retire fires. Filter assignment surfaces to active.
-- **🟠 R5 — EF paths unverified since the staging redeploy**: only `renameSubSegment`
-  was exercised end-to-end. `createVehicle` / `updateVehicle` / `toggleVehicleActive` /
-  `bulkUpsertVehicles` / `signBrochureUpload` carry a 2-line diff but are inferred-safe,
-  not verified-safe. Cover them in the pre-ship staging smoke-test.
+- ~~**🟠 R3 — Editing a family's SEGMENT syncs nothing**~~ ✅ **FIXED + verified on
+  staging 2026-07-17** (`ffc6f28`). EF action `setSubSegmentSegment` updates the family
+  and syncs `vehicle_catalog.segment` on every linked CBN (`synced: 1` observed, vehicle
+  followed `Bus – MCV` → `Bus – ICV`). **The b2 UI must route the modal's Segment field
+  through this action** — a direct PostgREST write bypasses the sync.
+- **🟠 R4 — Retired families remain assignable** (server side ✅ done, **UI still open**):
+  `moveCbns` now refuses a retired destination (409, verified). Still to do in b2: admin
+  `fetchSubSegs` has no `is_active` filter, the vehicle modal's family dropdown filters
+  by segment only, and the import's segment auto-fill map includes retired names.
+- **🟠 R5 — EF paths unverified since the staging redeploy** (partially closed):
+  ✅ `signBrochureUpload` verified end-to-end via the real UI (EF 200 → storage 200 →
+  file resolves). ✅ All 9.7b actions verified incl. refusal paths. **Still unverified:**
+  `createVehicle` / `updateVehicle` / `toggleVehicleActive` / `bulkUpsertVehicles` —
+  cover in the pre-ship smoke test.
+- **🔴 R10 — `moveCbns` originally did not carry `segment`** (found + fixed 2026-07-17,
+  `d6e50fd`). It wrote `sub_segment_id` + `sub_category` only, so moving a CBN into a
+  family in a DIFFERENT segment left the vehicle's segment stale — the same
+  family-vs-vehicle drift the MBP consolidation had just cleaned, re-entering through
+  the move path. R3 fixed the *edit* path and missed the *move* path.
+  **Only surfaced because a test move happened to cross segments; a same-segment test
+  passes clean.** Now all three placement columns are written together, and the
+  cross-segment move is a permanent test case. `COALESCE` keeps the segment on unassign.
+  **Lesson for b2/b3: any new write to vehicle_catalog placement must set
+  sub_segment_id + sub_category + segment together, and be tested ACROSS segments.**
 - **🟡 R6 — minor**: `renameSubSegment` has no name-length cap; its `ilike` collision
   check misparses `%`/`_` in names (none exist today). `fetchAllRows` offset-pages, so a
   concurrent import can skip/dup a row mid-fetch (admin-only; refresh self-heals); on
