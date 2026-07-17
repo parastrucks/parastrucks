@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import Fuse from 'fuse.js'
 import { supabase } from '../lib/supabase'
+import { fetchAllRows } from '../lib/fetchAll'
 import Icon from '../components/Icon'
 import { useDebounce } from '../lib/useDebounce'
 import { useAuth } from '../context/AuthContext'
@@ -124,13 +125,16 @@ export default function FinancierCopy() {
       setCatalogLoading(true)
       setCatalogError(false)
       try {
-        const { data, error: err } = await supabase
+        // Phase 9.7 R2: paginated — see ../lib/fetchAll. fetchAllRows throws on
+        // a failed page, which the catch below already turns into a catalog
+        // error, so a partial list can never reach the search index.
+        const data = await fetchAllRows(() => supabase
           .from('vehicle_catalog')
           .select('id, cbn, description, sub_category, segment, tyres, mrp_incl_gst, brand_id')
           .eq('is_active', true)
           .order('segment').order('sub_category').order('description')
+          .order('id'))  // tiebreak: offset paging needs a total order
         if (cancelled) return
-        if (err) { setCatalogError(true); toast.error('Failed to load vehicle catalog.'); return }
         setCatalog(data || [])
         setFuseInst(new Fuse(data || [], {
           keys: [{ name: 'sub_category', weight: 3 }, { name: 'cbn', weight: 2 }, { name: 'description', weight: 1 }],

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
 import { callEdge } from '../lib/api'
+import { fetchAllRows } from '../lib/fetchAll'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import Skeleton from '../components/Skeleton'
@@ -39,27 +40,8 @@ function fmtMRP(n) {
   return '₹' + Number(n).toLocaleString('en-IN')
 }
 
-// PostgREST caps every response at 1000 rows (Supabase's default max-rows) and
-// says nothing when it truncates — it just returns 1000. vehicle_catalog passed
-// that mark (1006 rows on prod as of 2026-07-17), so an unpaginated select was
-// silently dropping the tail and the UI was reporting the truncated count as
-// the total ("897 of 1000" when the table held 1006).
-//
-// Pages through in PAGE_SIZE chunks until a short page proves the end. Callers
-// pass a builder so filters/ordering stay with the caller. Any page erroring
-// aborts the whole fetch rather than returning a partial list quietly — a
-// half-loaded catalog driving a bulk reassign is worse than a visible failure.
-const PAGE_SIZE = 1000
-
-async function fetchAllRows(buildQuery) {
-  const out = []
-  for (let from = 0; ; from += PAGE_SIZE) {
-    const { data, error } = await buildQuery().range(from, from + PAGE_SIZE - 1)
-    if (error) throw error
-    out.push(...(data || []))
-    if (!data || data.length < PAGE_SIZE) return out
-  }
-}
+// fetchAllRows now lives in ../lib/fetchAll — the quotation-path pages need it
+// too (Phase 9.7 R2). See that file for why unpaginated selects are unsafe here.
 
 /* ══════════════════════════════════════════════════════════════
    MAIN EXPORT — routes to admin or sales view

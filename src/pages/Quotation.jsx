@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import Fuse from 'fuse.js'
 import Icon from '../components/Icon'
 import { supabase } from '../lib/supabase'
+import { fetchAllRows } from '../lib/fetchAll'
 import { useDebounce } from '../lib/useDebounce'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
@@ -101,21 +102,25 @@ export default function Quotation() {
       setCatalogLoading(true)
       setCatalogError(false)
       try {
-        const query = supabase
-          .from('vehicle_catalog')
-          .select('id, cbn, description, sub_category, segment, tyres, mrp_incl_gst, brand_id')
-          .eq('is_active', true)
-          .order('segment')
-          .order('sub_category')
-          .order('description')
-
-        const { data, error: err } = await Promise.race([
-          query,
+        // Phase 9.7 R2: paginated. 897 active rows on prod — one price circular
+        // from PostgREST's 1000-row cap, past which vehicles would silently
+        // disappear from quotation search with no error shown. The timeout now
+        // covers the whole paginated read; fetchAllRows throws on any page
+        // failing, so the catch below still reports it as a catalog error
+        // rather than quietly searching a partial list.
+        const data = await Promise.race([
+          fetchAllRows(() => supabase
+            .from('vehicle_catalog')
+            .select('id, cbn, description, sub_category, segment, tyres, mrp_incl_gst, brand_id')
+            .eq('is_active', true)
+            .order('segment')
+            .order('sub_category')
+            .order('description')
+            .order('id')),  // tiebreak: offset paging needs a total order
           new Promise((_, reject) => setTimeout(() => reject(new Error('catalog_timeout')), 15000)),
         ])
 
         if (cancelled) return
-        if (err) { console.error('Catalog load error:', err); setCatalogError(true); return }
         setCatalog(data || [])
         setFuseInst(
           new Fuse(data || [], {
