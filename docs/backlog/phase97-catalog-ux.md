@@ -102,10 +102,28 @@ unlocks: safe rename, retire, reshuffle integrity, and rule targets that survive
   `SEGMENTS` constant**, so those families rendered a blank segment dropdown. Added in
   9.7a as a stopgap. Picking any option also clears `sub_category`, so an idle click on
   that blank dropdown could strand a family's CBNs — a pre-existing prod bug.
-- **An earlier `MBP Truck` → `Long Haul Trucks` rename was started and left half-done**
-  (`Haulage – 19T`/`Haulage – CNG 19T` vs `Haulage 1916 HF`/`1920 HF`/`19T CNG`; the new
-  ones carry brochures, the old `Haulage – CNG 19T` has 0 CBNs). Owner decided 2026-07-17
-  to **finish the consolidation in 9.7b**. Remove `MBP Truck` from `SEGMENTS` once done.
+- **An earlier `MBP Truck` → `Long Haul Trucks` rename was started and left half-done.**
+  Owner decided 2026-07-17 to **finish the consolidation in 9.7b**.
+  **Reconciled against prod 2026-07-17 — the direction is unambiguous:**
+  `vehicle_catalog` has **zero** `MBP Truck` rows (all 328 are already
+  `Long Haul Trucks`); only `sub_segments` still says `MBP Truck`, for 11 families
+  covering 277 CBNs. **The vehicles were migrated and the families were left behind.**
+  So the consolidation is `UPDATE sub_segments SET segment='Long Haul Trucks' WHERE
+  segment='MBP Truck'` (11 rows) — not a data migration. Then remove `MBP Truck` from
+  the `SEGMENTS` constant (added in 9.7a only as a stopgap so those 11 families stop
+  rendering a blank segment dropdown; no vehicle ever had that segment).
+  Two near-duplicate pairs need an owner decision first, they are NOT mechanical:
+  `Haulage – CNG 19T` (0 CBNs) vs `Haulage 19T CNG` (6, has brochure), and
+  `Haulage – 19T` (6) vs `Haulage 1916 HF`/`Haulage 1920 HF` (9/8, both have brochures).
+
+- **🔴 PostgREST's 1000-row cap was silently truncating the catalog** (fixed 2026-07-17,
+  commits `ba43a5f` + `e55bef3`). `vehicle_catalog` is 1006 rows on prod; every fetch
+  selected without a range, so PostgREST returned exactly 1000 and said nothing — the
+  admin tab displayed "897 of 1000" while the table held 1006. Six vehicles were
+  invisible in prod's admin UI, growing with every circular. The import preview's
+  existing-CBN lookup had the same flaw plus a 414-length risk on a ~1000-value `.in()`.
+  **Directly relevant to 9.7b:** Reshuffle's "select-all-matching" would have driven bulk
+  reassigns off a truncated list. Any new catalog-wide read must use `fetchAllRows()`.
 - **`docs/db/seed-reference.sql` is stale** — 44 families vs prod's 49 (missing ids 45–49).
   Worth refreshing from prod separately.
 
