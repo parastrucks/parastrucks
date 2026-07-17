@@ -201,8 +201,37 @@ family names (they become the Import-triage tab's opening queue).
   concurrent import can skip/dup a row mid-fetch (admin-only; refresh self-heals); on
   fetch error the catalog shows an empty state, not an error (pre-existing pattern).
 - **🟡 R7 — 9.7c prerequisite**: cover upload cannot reuse `signBrochureUpload` (signs
-  `.pdf` paths / PDF content-type); needs its own EF action for webp. And staging's
-  empty brochures bucket blocks the F2-wall review — decide the approach before 9.7c.
+  `.pdf` paths / PDF content-type); needs its own EF action for webp.
+  ✅ **Staging brochures RESOLVED 2026-07-17** — see R8; the F2-wall review is unblocked.
+
+- **🔴 R8 — staging's Storage had NO RLS policies for the `brochures` bucket**
+  (fixed on staging 2026-07-17; **prod was never affected** — it has all four).
+  Symptom: `createSignedUrl` returned `400 / {"statusCode":"404","error":"not_found"}`
+  for every brochure, and `storage.buckets` listed as `[]` to an authenticated admin.
+  Storage reports 404 rather than 403 by design (so the API can't probe for file
+  existence), which makes a *permissions* fault look exactly like a *missing file*.
+  Uploads still succeeded throughout — signed-upload URLs are token-authorised and
+  bypass RLS — so files were present but invisible. `pg_policies` showed **0 rows**
+  before the fix; prod's four `brochures_*` policies were copied verbatim from
+  `docs/db/schema-current.sql`. Repair script:
+  `scratchpad/staging_storage_policies.sql` (staging-only, idempotent).
+  Staging now has 7 families with real, resolving brochures (verified: signed URL +
+  byte counts match source PDFs); `12M Coach` / `RMC` / `RMC EDPTO` had their dangling
+  `brochure_url` cleared to NULL (owner-approved) so nothing 404s during review.
+
+- **🔴 R9 — `RECONSTRUCTION.md` cannot actually rebuild the portal: Storage is missing
+  entirely.** No step creates the `brochures` bucket, and the bucket ROW is not in
+  `schema-current.sql` (only the `storage.*` policies are, incidentally). A rebuild
+  from that blueprint yields a portal whose brochure upload/download fails. Staging is
+  the proof — bucket created by hand, policies never applied, drift unnoticed for
+  months. **Fix:** add a Storage section to RECONSTRUCTION.md (create bucket, private,
+  + the four policies) and consider dumping `storage.buckets` alongside the schema.
+
+- **⚠️ Standing lesson — "staging mirrors prod" is FALSE.** Twice now, silently:
+  `sub_segments` held 1 fixture row vs prod's 49; Storage had zero policies vs prod's
+  four. Both were invisible until something specifically exercised them, and both
+  masqueraded as other problems (a bad backfill; missing files). **Verify, never
+  assume, whenever 9.7 touches a surface staging has not exercised before.**
 
 Owner reviews on localhost (port **3000** per `.claude/launch.json`, staging DB) in the
 established fix-and-commit-each rhythm; verify CI + Vercel READY on the single deploy.
