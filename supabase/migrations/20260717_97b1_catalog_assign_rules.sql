@@ -101,10 +101,22 @@ CREATE POLICY catalog_assign_rules_delete ON public.catalog_assign_rules
 --      5000-CBN ceiling that is a ~100 KB request line — a 414 waiting to
 --      happen. An array parameter travels in the POST body instead.
 --
--- Both halves of the link are written together (sub_segment_id + sub_category);
--- writing one without the other is the drift 9.7a exists to end. p_family_name
--- is resolved and validated by the Edge Function before this is called; NULL
--- means unassign (back to the triage queue), and both columns go NULL in step.
+-- ALL THREE columns that describe a CBN's placement are written together:
+-- sub_segment_id (the truth), sub_category (what Quotation/PI/FC still search),
+-- and segment. Writing any subset is the drift 9.7a exists to end.
+--
+-- p_segment is why this function was revised: an earlier version moved only the
+-- family, so moving a CBN into a family in a DIFFERENT segment left the
+-- vehicle's own segment stale — the family said one thing, its vehicle another.
+-- That is the same mismatch the MBP Truck consolidation had just cleaned up,
+-- re-entering through the move path. Caught on staging 2026-07-17 by a move
+-- that happened to cross segments; a same-segment test would have passed.
+--
+-- p_family_name / p_segment are resolved and validated by the Edge Function
+-- before this is called. NULL family = unassign (back to the triage queue):
+-- id and text go NULL together, while segment is DELIBERATELY preserved via
+-- COALESCE — an unassigned CBN has no family to take a segment from, and
+-- blanking it would lose information the triage tab needs to suggest one.
 --
 -- SECURITY INVOKER (the default) is deliberate: the Edge Function calls this
 -- with the service_role key, which bypasses RLS anyway. Leaving it INVOKER
@@ -113,10 +125,16 @@ CREATE POLICY catalog_assign_rules_delete ON public.catalog_assign_rules
 -- EXECUTE is revoked from anon and authenticated regardless — in this project
 -- Postgres grants EXECUTE to those roles on creation, and revoking from
 -- `public` alone does NOT remove it (see memory/project_edge_function_auth).
+-- Drop the earlier 3-arg version explicitly: adding a parameter creates an
+-- OVERLOAD rather than replacing, and two versions would both be callable —
+-- with the stale one silently skipping the segment sync.
+DROP FUNCTION IF EXISTS public.move_cbns_to_family(text[], integer, text);
+
 CREATE OR REPLACE FUNCTION public.move_cbns_to_family(
   p_cbns           text[],
   p_sub_segment_id integer,
-  p_family_name    text
+  p_family_name    text,
+  p_segment        text
 ) RETURNS integer
   LANGUAGE sql
   SET search_path TO 'public'
@@ -124,17 +142,20 @@ AS $$
   WITH moved AS (
     UPDATE public.vehicle_catalog
        SET sub_segment_id = p_sub_segment_id,
-           sub_category   = p_family_name
+           sub_category   = p_family_name,
+           -- COALESCE, not a plain assignment: on unassign (p_segment NULL)
+           -- the CBN keeps whatever segment it had.
+           segment        = COALESCE(p_segment, segment)
      WHERE cbn = ANY (p_cbns)
     RETURNING id
   )
   SELECT count(*)::integer FROM moved;
 $$;
 
-REVOKE ALL   ON FUNCTION public.move_cbns_to_family(text[], integer, text) FROM public;
-REVOKE ALL   ON FUNCTION public.move_cbns_to_family(text[], integer, text) FROM anon;
-REVOKE ALL   ON FUNCTION public.move_cbns_to_family(text[], integer, text) FROM authenticated;
-GRANT EXECUTE ON FUNCTION public.move_cbns_to_family(text[], integer, text) TO service_role;
+REVOKE ALL   ON FUNCTION public.move_cbns_to_family(text[], integer, text, text) FROM public;
+REVOKE ALL   ON FUNCTION public.move_cbns_to_family(text[], integer, text, text) FROM anon;
+REVOKE ALL   ON FUNCTION public.move_cbns_to_family(text[], integer, text, text) FROM authenticated;
+GRANT EXECUTE ON FUNCTION public.move_cbns_to_family(text[], integer, text, text) TO service_role;
 
 COMMIT;
 

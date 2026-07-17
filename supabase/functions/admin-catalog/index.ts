@@ -269,13 +269,14 @@ Deno.serve(async (req: Request) => {
         // into a retired family would hide them from every employee surface
         // while looking like a successful move.
         let familyName: string | null = null
+        let familySegment: string | null = null
         if (sub_segment_id !== null && sub_segment_id !== undefined) {
           if (!Number.isInteger(sub_segment_id)) {
             return json({ error: "sub_segment_id must be an integer or null" }, 400)
           }
           const { data: fam, error: famErr } = await admin
             .from("sub_segments")
-            .select("id, name, is_active")
+            .select("id, name, segment, is_active")
             .eq("id", sub_segment_id)
             .maybeSingle()
           if (famErr) return json({ error: famErr.message }, 400)
@@ -284,6 +285,10 @@ Deno.serve(async (req: Request) => {
             return json({ error: `"${fam.name}" is retired — reactivate it before moving CBNs into it` }, 409)
           }
           familyName = fam.name
+          // The destination's segment travels with the move. Without this, a CBN
+          // moved across segments keeps its old one and the family disagrees with
+          // its own vehicles — the exact drift the MBP consolidation cleaned up.
+          familySegment = fam.segment
         }
 
         // Via RPC, not .update().in(): PostgREST would put all 5000 CBNs in the
@@ -294,6 +299,7 @@ Deno.serve(async (req: Request) => {
           p_cbns: cbns as string[],
           p_sub_segment_id: sub_segment_id ?? null,
           p_family_name: familyName,
+          p_segment: familySegment,  // null on unassign — the RPC keeps the old segment
         })
         if (error) return json({ error: error.message }, 400)
 
