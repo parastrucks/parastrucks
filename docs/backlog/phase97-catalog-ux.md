@@ -138,8 +138,24 @@ unlocks: safe rename, retire, reshuffle integrity, and rule targets that survive
 2. **9.7b workbench** — the four tabs (biggest JSX chunk); wire triage into the existing Import flow.
 3. **9.7c find** — F1 landing + shelf; F2 wall + upload-time thumbnails + backfill; F3 re-parent.
 4. **9.7d share** — S1 share + caption template.
-Each its own PR to `portal`; owner reviews on localhost:5173 (staging DB) in the established
-fix-and-commit-each rhythm; verify CI + Vercel READY per deploy.
+**Release shape — decided by the owner 2026-07-17: 9.7 ships to prod as ONE release**,
+like 9.6 (staging smoke-test → red-team → owner screen-by-screen → single squash-merge).
+Sub-phases are build/review milestones on one branch, **not** separate prod deploys.
+Explicitly included in that decision: the two 1000-row-cap fixes (`ba43a5f`, `e55bef3`)
+ride with the release rather than going direct-to-`portal`, even though they are
+independent of 9.7 and fix a live prod bug. Owner was shown that tradeoff and accepted it.
+
+**Prod cutover order (strict — a wrong order breaks the catalog for everyone):**
+1. Apply `20260716_97a_sub_segment_id_keystone.sql` to prod. The client selects
+   `sub_segment_id`; without the column PostgREST 400s and the Catalog page dies.
+2. Deploy the `admin-catalog` EF (`--no-verify-jwt` — all 7 EFs run `verify_jwt:false`
+   and do their own stricter verify(); deploying without the flag breaks every action).
+3. Merge the PR / let Vercel deploy the client.
+Expected prod backfill: **976 / 1006** linked, 30 CBNs left NULL across the 5 orphan
+family names (they become the Import-triage tab's opening queue).
+
+Owner reviews on localhost (port **3000** per `.claude/launch.json`, staging DB) in the
+established fix-and-commit-each rhythm; verify CI + Vercel READY on the single deploy.
 
 ## Risks / limits
 
