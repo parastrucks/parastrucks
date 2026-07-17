@@ -1379,13 +1379,25 @@ function ImportTab({ subSegs, onRefresh }) {
       const dataRows = raw.slice(headerIdx + 1)
         .filter(row => String(row[cbnIdx] || '').trim())
 
-      // Fetch existing CBNs to classify as new vs update
+      // Fetch existing CBNs to classify as new vs update. Chunked AND paginated:
+      // a full circular is ~1000 CBNs, which hits two separate ceilings — a
+      // single .in() list that long risks a 414 on the request URL, and the
+      // response would be capped at 1000 rows anyway. Either one silently
+      // mislabels existing vehicles as "New" in the preview. The upsert itself
+      // is keyed on cbn so the import stays correct; it's the counts you approve
+      // that would lie.
       const cbns = dataRows.map(r => String(r[cbnIdx]).trim())
-      const { data: existing } = await supabase
-        .from('vehicle_catalog')
-        .select('cbn')
-        .in('cbn', cbns)
-      const existingSet = new Set((existing || []).map(r => r.cbn))
+      const IN_CHUNK = 300
+      const existingSet = new Set()
+      for (let i = 0; i < cbns.length; i += IN_CHUNK) {
+        const slice = cbns.slice(i, i + IN_CHUNK)
+        const rows = await fetchAllRows(() => supabase
+          .from('vehicle_catalog')
+          .select('cbn')
+          .in('cbn', slice)
+          .order('cbn'))
+        for (const r of rows) existingSet.add(r.cbn)
+      }
 
       // Resolve the uuid brand_id for the selected brand code — vehicle_catalog.brand_id
       // is NOT NULL, so every imported row must carry it (the legacy `brand` text
