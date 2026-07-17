@@ -39,6 +39,28 @@ function fmtMRP(n) {
   return '₹' + Number(n).toLocaleString('en-IN')
 }
 
+// PostgREST caps every response at 1000 rows (Supabase's default max-rows) and
+// says nothing when it truncates — it just returns 1000. vehicle_catalog passed
+// that mark (1006 rows on prod as of 2026-07-17), so an unpaginated select was
+// silently dropping the tail and the UI was reporting the truncated count as
+// the total ("897 of 1000" when the table held 1006).
+//
+// Pages through in PAGE_SIZE chunks until a short page proves the end. Callers
+// pass a builder so filters/ordering stay with the caller. Any page erroring
+// aborts the whole fetch rather than returning a partial list quietly — a
+// half-loaded catalog driving a bulk reassign is worse than a visible failure.
+const PAGE_SIZE = 1000
+
+async function fetchAllRows(buildQuery) {
+  const out = []
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await buildQuery().range(from, from + PAGE_SIZE - 1)
+    if (error) throw error
+    out.push(...(data || []))
+    if (!data || data.length < PAGE_SIZE) return out
+  }
+}
+
 /* ══════════════════════════════════════════════════════════════
    MAIN EXPORT — routes to admin or sales view
 ══════════════════════════════════════════════════════════════ */
@@ -78,13 +100,14 @@ function AdminCatalog() {
   const fetchVehicles = useCallback(async () => {
     setVLoading(true)
     try {
-      const { data, error } = await supabase
+      // Paginated: the table is past PostgREST's 1000-row cap. See fetchAllRows.
+      const data = await fetchAllRows(() => supabase
         .from('vehicle_catalog')
         .select('id, cbn, description, brand, segment, sub_segment_id, sub_category, tyres, mrp_incl_gst, gst_rate, price_circular, effective_date, is_active')
         .order('segment')
         .order('sub_category')
-        .order('cbn')
-      if (!error) setVehicles(data || [])
+        .order('cbn'))
+      setVehicles(data)
     } catch (e) { console.error(e) }
     finally { setVLoading(false) }
   }, [])
@@ -1632,21 +1655,26 @@ function SalesCatalog({ profile }) {
 
       // Vehicles: brand ∈ user_brands AND (sales_vertical_id IS NULL OR vertical ∈ user_sales_verticals)
       // The .or() expresses the NULL-or-match half using PostgREST's filter syntax.
-      let vQuery = supabase
-        .from('vehicle_catalog')
-        .select('id, cbn, description, brand, segment, sub_segment_id, sub_category, mrp_incl_gst, tyres, brand_id, sales_vertical_id')
-        .eq('is_active', true)
-        .in('brand_id', scope.brandIds)
-        .order('sub_category')
-        .order('mrp_incl_gst')
-
-      if (scope.verticalIds.length > 0) {
-        vQuery = vQuery.or(
-          `sales_vertical_id.is.null,sales_vertical_id.in.(${scope.verticalIds.join(',')})`,
-        )
-      } else {
-        // No verticals assigned → only show catalog rows with no vertical constraint.
-        vQuery = vQuery.is('sales_vertical_id', null)
+      // Paginated for the same reason as the admin fetch: active rows are under
+      // PostgREST's 1000-row cap today (897 on prod) but the margin is thin, and
+      // silently losing vehicles from the sales view is worse than in admin —
+      // nobody would notice a model quietly missing from the catalog.
+      const buildVQuery = () => {
+        let q = supabase
+          .from('vehicle_catalog')
+          .select('id, cbn, description, brand, segment, sub_segment_id, sub_category, mrp_incl_gst, tyres, brand_id, sales_vertical_id')
+          .eq('is_active', true)
+          .in('brand_id', scope.brandIds)
+          .order('sub_category')
+          .order('mrp_incl_gst')
+          .order('id')  // tiebreak: paging needs a total order or rows can repeat/vanish across pages
+        if (scope.verticalIds.length > 0) {
+          q = q.or(`sales_vertical_id.is.null,sales_vertical_id.in.(${scope.verticalIds.join(',')})`)
+        } else {
+          // No verticals assigned → only show catalog rows with no vertical constraint.
+          q = q.is('sales_vertical_id', null)
+        }
+        return q
       }
 
       // Sub-segments: brand-scoped by the legacy `brand` text until a brand_id
@@ -1659,9 +1687,12 @@ function SalesCatalog({ profile }) {
         ? supabase.from('sub_segments').select('*').eq('is_active', true).in('brand', brandCodes)
         : supabase.from('sub_segments').select('*').eq('is_active', true)
 
-      const [{ data: vData }, { data: ssData }] = await Promise.all([vQuery, ssQuery])
-      setVehicles(vData || [])
-      setSubSegs(ssData  || [])
+      const [vData, { data: ssData }] = await Promise.all([
+        fetchAllRows(buildVQuery),
+        ssQuery,
+      ])
+      setVehicles(vData)
+      setSubSegs(ssData || [])
     } catch (e) {
       console.error(e)
     } finally {
