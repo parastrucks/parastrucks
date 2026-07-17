@@ -177,12 +177,13 @@ family names (they become the Import-triage tab's opening queue).
   nothing in the app detects it. **Required 9.7b scope, not optional:** import must
   resolve `sub_segment_id` from the name match at import time (triage queues the rest),
   and ideally the app gains a drift check (the migration's 3c query, surfaced in admin).
-- **🔴 R2 — Quotation / ProformaInvoice / FinancierCopy have the same latent 1000-row
-  cap** just fixed in Catalog (Quotation.jsx:107, ProformaInvoice.jsx:118,
-  FinancierCopy.jsx:130 — active-vehicle fetches, no `.range()`). 897 active on prod
-  today; past 1000, vehicles silently vanish from quotation search — no error, just
-  unquotable. **Fix in this release** (reuse `fetchAllRows`; it needs extracting from
-  Catalog.jsx into a shared module first — it currently lives there as a local helper).
+- ~~**🔴 R2 — Quotation / ProformaInvoice / FinancierCopy have the same latent 1000-row
+  cap**~~ ✅ **FIXED 2026-07-17 (`2a11a72`).** `fetchAllRows` extracted to
+  `src/lib/fetchAll.js`; all four readers paginated, each with an `.order('id')`
+  tiebreak (offset paging needs a total order). Verified on staging at PAGE_SIZE=100 —
+  Quotation paged 8 requests to 797 active rows and terminated correctly.
+  **Rule for all future catalog work: never `.select()` vehicle_catalog without
+  `fetchAllRows` or an explicit `.range()`.**
 - **🟠 R3 — Editing a family's SEGMENT syncs nothing** (only rename syncs). Changing it
   in the sub-segment modal recreates exactly the family-vs-vehicle segment mismatch the
   consolidation cleaned. 9.7b: sync linked CBNs' segment like rename does, or lock the
