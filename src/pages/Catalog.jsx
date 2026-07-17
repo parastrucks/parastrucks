@@ -1729,14 +1729,16 @@ function ImportTab({ subSegs, onRefresh }) {
   const [importing,     setImporting]     = useState(false)
   const fileRef = useRef()
 
-  // Maps a sub-category text from the spreadsheet to its segment, to fill a
-  // blank Segment column. Phase 9.7b (R4): retired families are excluded — an
-  // import must never quietly file new CBNs under a family that has been taken
-  // out of service.
-  const subSegMap = useMemo(
-    () => Object.fromEntries(subSegs.filter(ss => ss.is_active).map(ss => [ss.name, ss.segment])),
-    [subSegs]
-  )
+  // Resolves a spreadsheet sub-category text to a real family (Phase 9.7b3, R1).
+  // Keyed on trimmed/case-folded name, matching the 9.7a backfill's comparison
+  // so the import and the backfill can never disagree about what "matches".
+  // Retired families are excluded (R4): an import must never quietly file new
+  // CBNs under a family taken out of service — they go to triage instead.
+  const famByName = useMemo(() => {
+    const m = new Map()
+    for (const ss of subSegs) if (ss.is_active) m.set(ss.name.trim().toLowerCase(), ss)
+    return m
+  }, [subSegs])
 
   async function processFile(f) {
     setFile(f)
@@ -1811,16 +1813,24 @@ function ImportTab({ subSegs, onRefresh }) {
 
       const mapped = dataRows.map(row => {
         const cbn         = String(row[cbnIdx]).trim()
-        const sub_category = subIdx >= 0 ? String(row[subIdx]).trim() : ''
-        const segment     = (segIdx >= 0 ? String(row[segIdx]).trim() : '')
-                          || subSegMap[sub_category]
-                          || ''
+        const rawSubCat   = subIdx >= 0 ? String(row[subIdx]).trim() : ''
+        // R1: resolve the family by id, not by leaving free text to be matched
+        // later. No match = null = it queues in triage, rather than being
+        // guessed at.
+        const fam         = rawSubCat ? famByName.get(rawSubCat.toLowerCase()) : null
+        // A matched family owns the canonical spelling and the segment — that
+        // is what keeps id, text and segment in step from the moment of import.
+        const sub_category = fam ? fam.name : (rawSubCat || null)
+        const segment     = fam
+                          ? fam.segment
+                          : ((segIdx >= 0 ? String(row[segIdx]).trim() : '') || '')
         const mrpRaw      = String(row[mrpIdx] || '').replace(/[₹,\s]/g, '')
         const mrp         = parseInt(mrpRaw) || 0
         return {
           cbn,
           description:  descIdx >= 0 ? String(row[descIdx]).trim() : '',
-          sub_category: sub_category || null,
+          sub_segment_id: fam ? fam.id : null,
+          sub_category,
           segment,
           tyres:        tyreIdx >= 0 ? String(row[tyreIdx]).trim() || null : null,
           mrp_incl_gst: mrp,
@@ -1829,13 +1839,21 @@ function ImportTab({ subSegs, onRefresh }) {
           brand_id,
           is_active:    true,
           _isNew:       !existingSet.has(cbn),
+          _rawSubCat:   rawSubCat,
         }
       }).filter(r => r.mrp_incl_gst > 0)
 
+      // New CBNs whose family text matched nothing — these land unassigned and
+      // become the triage queue. Surfaced up front so the number is a decision
+      // the admin makes, not a surprise found later.
+      const unresolved = mapped.filter(r => r._isNew && !r.sub_segment_id)
+      const unresolvedNames = [...new Set(unresolved.map(r => r._rawSubCat || '(blank)'))]
       setPreview({
         rows:     mapped,
         updated:  mapped.filter(r => !r._isNew).length,
         newRows:  mapped.filter(r => r._isNew).length,
+        unresolved: unresolved.length,
+        unresolvedNames,
         skipped:  dataRows.length - mapped.length,
         sample:   mapped.slice(0, 10),
         sheetName,
@@ -1869,20 +1887,31 @@ function ImportTab({ subSegs, onRefresh }) {
   async function runImport() {
     if (!preview) return
     setImporting(true)
-    const payload = preview.rows.map(({ _isNew, ...r }) => ({
-      ...r,
-      price_circular: priceCircular || null,
-      effective_date: effectiveDate || null,
-    }))
+    // Only send these when the admin actually filled them in. Blank must mean
+    // "leave what is there alone", never "erase it": sending null wiped
+    // price_circular + effective_date on every row of the import, silently
+    // destroying the provenance of vehicles the circular merely re-priced.
+    // (Pre-existing behaviour — the old upsert did the same. Caught on staging
+    // 2026-07-17 by an import run with both fields blank, which nulled 797 rows.)
+    const stamp = {}
+    if (priceCircular.trim()) stamp.price_circular = priceCircular.trim()
+    if (effectiveDate)        stamp.effective_date = effectiveDate
+    const payload = preview.rows.map(({ _isNew, _rawSubCat, ...r }) => ({ ...r, ...stamp }))
+    let res
     try {
-      await callEdge('admin-catalog', 'bulkUpsertVehicles', { rows: payload })
+      res = await callEdge('admin-catalog', 'bulkUpsertVehicles', { rows: payload })
     } catch (e) {
       setImporting(false)
       toast.error('Import failed: ' + e.message)
       return
     }
     setImporting(false)
-    toast.success(`Import complete — ${preview.updated} updated, ${preview.newRows} new vehicles added.`)
+    // Report the server's counts, not the preview's prediction — they diverge
+    // if the catalog changed between preview and import.
+    toast.success(`Import complete — ${res.updated ?? 0} price-updated, ${res.inserted ?? 0} added.`)
+    if (preview.unresolved > 0) {
+      toast.info(`${preview.unresolved} new CBN${preview.unresolved === 1 ? '' : 's'} need a family — see the Triage tab.`)
+    }
     setPreview(null)
     setFile(null)
     onRefresh()
@@ -1943,13 +1972,32 @@ function ImportTab({ subSegs, onRefresh }) {
         {preview && (
           <>
             <div className="vc-import-stats">
-              <span className="vc-import-stat vc-stat-update">{preview.updated} to update</span>
+              <span className="vc-import-stat vc-stat-update">{preview.updated} price updates</span>
               <span className="vc-import-stat vc-stat-new">{preview.newRows} new</span>
+              {preview.unresolved > 0 && (
+                <span className="vc-import-stat vc-stat-skip">{preview.unresolved} need a family</span>
+              )}
               {preview.skipped > 0 && (
                 <span className="vc-import-stat vc-stat-skip">{preview.skipped} skipped</span>
               )}
               <span className="text-gray text-small">sheet: {preview.sheetName}</span>
             </div>
+
+            {/* Say plainly what this import will NOT do. Before 9.7b3 a circular
+                silently re-filed existing vehicles from its own Sub-Category
+                column, which quietly undid hand-triage and re-broke renames. */}
+            <div className="text-small text-gray" style={{ marginTop: 8 }}>
+              Existing vehicles get prices updated only — their sub-segment is left as it is.
+              Use Reshuffle to move vehicles between families.
+            </div>
+
+            {preview.unresolved > 0 && (
+              <div style={{ fontSize: 13, color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6, padding: 10, marginTop: 10 }}>
+                <strong>{preview.unresolved} new CBN{preview.unresolved === 1 ? '' : 's'} match no existing sub-segment</strong> and
+                will be imported unassigned, ready to triage:
+                <div style={{ marginTop: 4 }}>{preview.unresolvedNames.slice(0, 6).join(' · ')}{preview.unresolvedNames.length > 6 ? ` · +${preview.unresolvedNames.length - 6} more` : ''}</div>
+              </div>
+            )}
 
             <div className="vc-form-grid mt-16">
               <div className="form-group">

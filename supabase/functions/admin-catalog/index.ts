@@ -174,6 +174,27 @@ Deno.serve(async (req: Request) => {
       }
 
       // ── Bulk price-circular import ────────────────────────────
+      // Phase 9.7b3 (red-team R1) — a price circular updates PRICES. It does
+      // NOT get to re-file vehicles.
+      //
+      // The old version upserted every column for every row, which meant the
+      // spreadsheet's sub_category text overwrote whatever was in the database.
+      // Two ways that bites:
+      //   • After a rename, the next circular still carries the OLD family name
+      //     and stamps it back over rows whose sub_segment_id points at the
+      //     renamed family — so the admin table (reads text) and the sales cards
+      //     (read id) disagree, and Quotation search shows the stale name.
+      //   • Worse once the id is written too: a CBN an admin triaged BY HAND
+      //     would be un-assigned by the next circular whose text matches no
+      //     family. Every import would silently undo the triage queue.
+      //
+      // So the rows are split by whether the CBN already exists:
+      //   • NEW      → inserted whole, including the family resolved by the
+      //                client from the spreadsheet text (or null → triage).
+      //   • EXISTING → only price-ish fields are updated. The family columns
+      //                (sub_segment_id / sub_category / segment) are NEVER
+      //                touched: a human decided those, and a human outranks a
+      //                spreadsheet. Reshuffle is where they change.
       case "bulkUpsertVehicles": {
         const { rows } = payload as { rows?: Record<string, unknown>[] }
         if (!Array.isArray(rows) || rows.length === 0) {
@@ -182,11 +203,52 @@ Deno.serve(async (req: Request) => {
         if (rows.length > 5000) {
           return json({ error: "Max 5000 rows per import" }, 400)
         }
-        const { error } = await admin
-          .from("vehicle_catalog")
-          .upsert(rows, { onConflict: "cbn", ignoreDuplicates: false })
-        if (error) return json({ error: error.message }, 400)
-        return json({ ok: true, count: rows.length })
+
+        const cbns = rows.map((r) => String(r.cbn ?? "")).filter(Boolean)
+        if (cbns.length !== rows.length) {
+          return json({ error: "Every row needs a cbn" }, 400)
+        }
+
+        // Which already exist? Chunked: a full circular is ~1000 CBNs and
+        // PostgREST puts .in() values in the query string (414 risk), while the
+        // response itself is capped at 1000 rows.
+        const existing = new Set<string>()
+        const CHUNK = 300
+        for (let i = 0; i < cbns.length; i += CHUNK) {
+          const slice = cbns.slice(i, i + CHUNK)
+          const { data, error } = await admin
+            .from("vehicle_catalog").select("cbn").in("cbn", slice)
+          if (error) return json({ error: error.message }, 400)
+          for (const r of data ?? []) existing.add(r.cbn as string)
+        }
+
+        const toInsert = rows.filter((r) => !existing.has(String(r.cbn)))
+        const toUpdate = rows.filter((r) =>  existing.has(String(r.cbn)))
+
+        let inserted = 0
+        if (toInsert.length > 0) {
+          const { error } = await admin.from("vehicle_catalog").insert(toInsert)
+          if (error) return json({ error: error.message }, 400)
+          inserted = toInsert.length
+        }
+
+        // Price-ish only. Anything not on this list is left exactly as it is.
+        const PRICE_FIELDS = [
+          "description", "tyres", "mrp_incl_gst", "gst_rate",
+          "price_circular", "effective_date", "is_active",
+        ]
+        let updated = 0
+        for (const r of toUpdate) {
+          const patch: Record<string, unknown> = {}
+          for (const k of PRICE_FIELDS) if (k in r) patch[k] = r[k]
+          if (Object.keys(patch).length === 0) continue
+          const { error } = await admin
+            .from("vehicle_catalog").update(patch).eq("cbn", String(r.cbn))
+          if (error) return json({ error: error.message }, 400)
+          updated++
+        }
+
+        return json({ ok: true, inserted, updated, count: inserted + updated })
       }
 
       // ── Rename a sub-segment (Phase 9.7a) ─────────────────────
