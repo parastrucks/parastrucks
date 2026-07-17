@@ -116,6 +116,7 @@ function AdminCatalog() {
 
   const TABS = [
     { key: 'vehicles',      label: 'Vehicles' },
+    { key: 'reshuffle',     label: 'Reshuffle' },
     { key: 'sub-segments',  label: 'Sub-Segments' },
     { key: 'import',        label: 'Import' },
   ]
@@ -150,9 +151,18 @@ function AdminCatalog() {
           onRefresh={fetchVehicles}
         />
       )}
+      {tab === 'reshuffle' && (
+        <ReshuffleTab
+          vehicles={vehicles}
+          subSegs={subSegs}
+          loading={vLoading}
+          onRefresh={() => { fetchVehicles(); fetchSubSegs() }}
+        />
+      )}
       {tab === 'sub-segments' && (
         <SubSegmentsTab
           subSegs={subSegs}
+          vehicles={vehicles}
           loading={ssLoading}
           // Phase 9.7a: saving a sub-segment can now write vehicle_catalog too —
           // a rename rewrites sub_category on every linked CBN, and add-mode
@@ -457,9 +467,18 @@ function VehicleModal({ mode, vehicle, subSegs, onClose, onSaved }) {
   // the <select> binds to sub_segment_id. Still filtered by segment only (not
   // brand), matching the pre-9.7 behaviour deliberately: narrowing by brand
   // here would be a separate change with its own blast radius.
+  //
+  // Phase 9.7b (R4): retired families are not assignment targets. But a vehicle
+  // ALREADY in a retired family must still show it — dropping it from the
+  // options would render the field blank against a non-empty value, which is
+  // exactly the MBP Truck bug (and picking any option then silently clears the
+  // family). So: active families, plus this vehicle's current one regardless.
   const subSegOptions = useMemo(
-    () => subSegs.filter(ss => ss.segment === form.segment),
-    [subSegs, form.segment]
+    () => subSegs.filter(ss =>
+      ss.segment === form.segment &&
+      (ss.is_active || ss.id === form.sub_segment_id)
+    ),
+    [subSegs, form.segment, form.sub_segment_id]
   )
 
   function set(field, value) {
@@ -619,7 +638,9 @@ function VehicleModal({ mode, vehicle, subSegs, onClose, onSaved }) {
                 >
                   <option value="">— Select —</option>
                   {subSegOptions.map(ss => (
-                    <option key={ss.id} value={ss.id}>{ss.name}</option>
+                    <option key={ss.id} value={ss.id}>
+                      {ss.name}{ss.is_active ? '' : ' (retired)'}
+                    </option>
                   ))}
                 </select>
               ) : (
@@ -711,16 +732,307 @@ function VehicleModal({ mode, vehicle, subSegs, onClose, onSaved }) {
   )
 }
 
+/* ── RESHUFFLE TAB (Phase 9.7b) ──────────────────────────────── */
+/* Filter CBNs, select them (including every match, not just the visible page),
+   and move them to another family in one server-side call. Replaces the old
+   assign-CBNs-inside-the-add-modal flow, which could only assign at creation.
+
+   The whole tab runs off the already-loaded `vehicles` array, which is fully
+   paginated (see fetchAllRows) — that matters more here than anywhere else:
+   "select all matching" over a silently truncated list would drive a bulk
+   reassign that quietly skips rows. */
+function ReshuffleTab({ vehicles, subSegs, loading, onRefresh }) {
+  const toast = useToast()
+  const [filterInput, setFilterInput]   = useState('')
+  const [filter, setFilter]             = useState('')
+  const [filterSeg, setFilterSeg]       = useState('')
+  const [filterFam, setFilterFam]       = useState('')   // '' all · 'none' unassigned · <id>
+  const [selected, setSelected]         = useState(new Set())
+  const [dest, setDest]                 = useState('')
+  const [moving, setMoving]             = useState(false)
+  const [confirming, setConfirming]     = useState(false)
+  const [newFamOpen, setNewFamOpen]     = useState(false)
+  const confirmTrapRef = useFocusTrap(confirming, () => setConfirming(null))
+
+  useEffect(() => {
+    const t = setTimeout(() => setFilter(filterInput), 150)
+    return () => clearTimeout(t)
+  }, [filterInput])
+
+  const famById = useMemo(
+    () => Object.fromEntries(subSegs.map(ss => [ss.id, ss])),
+    [subSegs]
+  )
+
+  // Tokenised: every token must appear in CBN + description + family text.
+  // Matches how the employees actually search (they know CBNs and families
+  // cold, and type fragments of both).
+  const matches = useMemo(() => {
+    let list = vehicles.filter(v => v.is_active)
+    if (filterSeg) list = list.filter(v => v.segment === filterSeg)
+    if (filterFam === 'none')      list = list.filter(v => !v.sub_segment_id)
+    else if (filterFam)            list = list.filter(v => String(v.sub_segment_id) === filterFam)
+    const tokens = filter.trim().toLowerCase().split(/\s+/).filter(Boolean)
+    if (tokens.length) {
+      list = list.filter(v => {
+        const hay = `${v.cbn} ${v.description} ${v.sub_category || ''}`.toLowerCase()
+        return tokens.every(t => hay.includes(t))
+      })
+    }
+    return list
+  }, [vehicles, filter, filterSeg, filterFam])
+
+  // Selection survives filter changes (you may filter twice to build one set),
+  // so the count shown is always of what will ACTUALLY move, not what is visible.
+  const selectedList = useMemo(() => [...selected], [selected])
+  const allMatchingSelected = matches.length > 0 && matches.every(v => selected.has(v.cbn))
+
+  const destFam = dest ? famById[Number(dest)] : null
+  // Which of the selected CBNs are crossing segments — the case that silently
+  // corrupted data before R10. Surfaced so the admin sees it before committing.
+  const crossSegment = useMemo(() => {
+    if (!destFam) return []
+    return selectedList
+      .map(c => vehicles.find(v => v.cbn === c))
+      .filter(v => v && v.segment !== destFam.segment)
+  }, [selectedList, destFam, vehicles])
+
+  async function doMove() {
+    setMoving(true)
+    try {
+      const res = await callEdge('admin-catalog', 'moveCbns', {
+        cbns: selectedList,
+        sub_segment_id: dest === 'none' ? null : Number(dest),
+      })
+      // Report what the server actually moved, not what we asked for: a CBN
+      // that no longer exists is a silent no-op server-side.
+      if (res.moved !== res.requested) {
+        toast.info(`Moved ${res.moved} of ${res.requested} — ${res.requested - res.moved} no longer exist.`)
+      } else {
+        toast.success(`Moved ${res.moved} CBN${res.moved === 1 ? '' : 's'}${res.family ? ` to ${res.family}` : ' — unassigned'}.`)
+      }
+      setSelected(new Set())
+      setDest('')
+      setConfirming(false)
+      onRefresh()
+    } catch (e) {
+      toast.error('Move failed: ' + e.message)
+    }
+    setMoving(false)
+  }
+
+  const activeFams = useMemo(
+    () => subSegs.filter(ss => ss.is_active).sort((a, b) =>
+      a.segment.localeCompare(b.segment) || a.name.localeCompare(b.name)),
+    [subSegs]
+  )
+
+  return (
+    <>
+      <div className="vc-controls">
+        <input
+          className="form-input vc-search"
+          placeholder="Filter by CBN, description or family — every word must match…"
+          value={filterInput}
+          onChange={e => setFilterInput(e.target.value)}
+        />
+        <div className="vc-filters">
+          <select className="form-select" value={filterSeg} onChange={e => setFilterSeg(e.target.value)}>
+            <option value="">All Segments</option>
+            {SEGMENTS.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <select className="form-select" value={filterFam} onChange={e => setFilterFam(e.target.value)}>
+            <option value="">All Families</option>
+            <option value="none">— Unassigned —</option>
+            {activeFams.map(ss => <option key={ss.id} value={ss.id}>{ss.name}</option>)}
+          </select>
+        </div>
+      </div>
+
+      <div className="vc-stats-row">
+        <span>
+          {matches.length} match{matches.length === 1 ? '' : 'es'}
+          {selected.size > 0 && ` · ${selected.size} selected`}
+        </span>
+        <div className="flex gap-8">
+          {matches.length > 0 && (
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => setSelected(s => {
+                const next = new Set(s)
+                if (allMatchingSelected) matches.forEach(v => next.delete(v.cbn))
+                else                     matches.forEach(v => next.add(v.cbn))
+                return next
+              })}
+            >
+              {allMatchingSelected ? 'Deselect' : 'Select'} all {matches.length} matching
+            </button>
+          )}
+          {selected.size > 0 && (
+            <button className="btn btn-ghost btn-sm" onClick={() => setSelected(new Set())}>
+              Clear selection
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Move bar — appears only with a selection */}
+      {selected.size > 0 && (
+        <div className="card" style={{ padding: 12, marginBottom: 12, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <strong style={{ fontSize: 14 }}>Move {selected.size} CBN{selected.size === 1 ? '' : 's'} to:</strong>
+          <select className="form-select" style={{ maxWidth: 280 }} value={dest} onChange={e => {
+            if (e.target.value === '__new__') { setNewFamOpen(true); return }
+            setDest(e.target.value)
+          }}>
+            <option value="">— Choose family —</option>
+            <option value="none">— Unassign (send to triage) —</option>
+            {activeFams.map(ss => (
+              <option key={ss.id} value={ss.id}>{ss.segment} · {ss.name}</option>
+            ))}
+            <option value="__new__">+ New sub-segment…</option>
+          </select>
+          <button className="btn btn-primary btn-sm" disabled={!dest} onClick={() => setConfirming(true)}>
+            Move
+          </button>
+          {crossSegment.length > 0 && (
+            <span className="text-small" style={{ color: '#92400e' }}>
+              {crossSegment.length} cross{crossSegment.length === 1 ? 'es' : ''} into {destFam.segment}
+            </span>
+          )}
+        </div>
+      )}
+
+      {loading ? (
+        <Skeleton variant="row" count={4} />
+      ) : matches.length === 0 ? (
+        <div className="empty-state">
+          <div className="empty-state-icon"><Icon name="truck" size={36} color="var(--text-muted)" /></div>
+          <h3>No CBNs match</h3>
+          <p>Try a shorter filter, or clear the segment / family filters</p>
+        </div>
+      ) : (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th style={{ width: 34 }}></th>
+                <th>CBN</th>
+                <th>Description</th>
+                <th>Current family</th>
+                <th>Segment</th>
+              </tr>
+            </thead>
+            <tbody>
+              {/* Cap the DOM at 200 rows — a 900-row table is unusable and slow.
+                  Select-all still operates on ALL matches, not just these; the
+                  banner below says so explicitly so the cap can never be
+                  mistaken for the selection being capped too. */}
+              {matches.slice(0, 200).map(v => (
+                <tr key={v.cbn} style={selected.has(v.cbn) ? { background: 'var(--blue-50, #eff6ff)' } : undefined}>
+                  <td>
+                    <input
+                      type="checkbox"
+                      checked={selected.has(v.cbn)}
+                      onChange={e => setSelected(s => {
+                        const next = new Set(s)
+                        e.target.checked ? next.add(v.cbn) : next.delete(v.cbn)
+                        return next
+                      })}
+                    />
+                  </td>
+                  <td className="vc-cbn">{v.cbn}</td>
+                  <td className="vc-desc" title={v.description}>{v.description}</td>
+                  <td>
+                    {v.sub_segment_id
+                      ? (famById[v.sub_segment_id]?.name || v.sub_category)
+                      : <span className="badge badge-gray">Unassigned</span>}
+                  </td>
+                  <td><span className="badge badge-blue">{v.segment}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {matches.length > 200 && (
+            <div className="text-small text-gray" style={{ padding: '8px 4px' }}>
+              Showing the first 200 of {matches.length}. “Select all {matches.length} matching” covers every match, not just these.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Confirm — bulk writes get a checkpoint, with the cross-segment warning */}
+      {confirming && (
+        <div className="modal-overlay">
+          <div className="modal" ref={confirmTrapRef} tabIndex={-1} style={{ maxWidth: 460 }}>
+            <div className="modal-header">
+              <h2>Move {selected.size} CBN{selected.size === 1 ? '' : 's'}</h2>
+              <button className="modal-close" onClick={() => setConfirming(false)}>×</button>
+            </div>
+            <div className="modal-body">
+              <p style={{ marginBottom: 12 }}>
+                {dest === 'none'
+                  ? <>These CBNs will be <strong>unassigned</strong> and queue up in import triage. Their segment is kept.</>
+                  : <>Moving to <strong>{destFam?.name}</strong> ({destFam?.segment}).</>}
+              </p>
+              {crossSegment.length > 0 && (
+                <div style={{ fontSize: 13, color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6, padding: 10, marginBottom: 12 }}>
+                  <strong>{crossSegment.length} CBN{crossSegment.length === 1 ? '' : 's'} will change segment</strong> to {destFam.segment}.
+                  Their segment follows the family — this also changes where they appear in quotation search.
+                </div>
+              )}
+              <div className="flex gap-8">
+                <button className="btn btn-secondary" onClick={() => setConfirming(false)}>Cancel</button>
+                <button className="btn btn-primary" disabled={moving} onClick={doMove}>
+                  {moving ? <span className="spinner spinner-sm" /> : 'Move'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Inline "+ new sub-segment…" — create and select it in one stroke */}
+      {newFamOpen && (
+        <SubSegmentModal
+          mode="add"
+          subSeg={null}
+          inline
+          onClose={() => setNewFamOpen(false)}
+          onSaved={(created) => {
+            setNewFamOpen(false)
+            if (created?.id) setDest(String(created.id))
+            onRefresh()
+          }}
+        />
+      )}
+    </>
+  )
+}
+
 /* ── SUB-SEGMENTS TAB ────────────────────────────────────────── */
-function SubSegmentsTab({ subSegs, loading, onRefresh }) {
+function SubSegmentsTab({ subSegs, vehicles = [], loading, onRefresh }) {
+  const toast = useToast()
   const [modal,       setModal]       = useState(null)
   const [selected,    setSelected]    = useState(null)
   const [filterBrand, setFilterBrand] = useState('al')
+  const [filterState, setFilterState] = useState('active')  // active | retired | all
   const [search,      setSearch]      = useState('')
+  const [busyId,      setBusyId]      = useState(null)
+
+  // Live CBN counts per family — drives both the empty-family flag and the
+  // retire affordance. Counted from the (fully paginated) vehicles array so it
+  // agrees with what the server's retire guard will independently check.
+  const cbnCount = useMemo(() => {
+    const t = {}
+    for (const v of vehicles) if (v.is_active && v.sub_segment_id) t[v.sub_segment_id] = (t[v.sub_segment_id] || 0) + 1
+    return t
+  }, [vehicles])
 
   const filtered = useMemo(() => {
     let list = subSegs
     if (filterBrand) list = list.filter(ss => ss.brand === filterBrand)
+    if (filterState === 'active')  list = list.filter(ss => ss.is_active)
+    if (filterState === 'retired') list = list.filter(ss => !ss.is_active)
     if (search.trim()) {
       const s = search.toLowerCase()
       list = list.filter(ss =>
@@ -729,7 +1041,22 @@ function SubSegmentsTab({ subSegs, loading, onRefresh }) {
       )
     }
     return list
-  }, [subSegs, filterBrand, search])
+  }, [subSegs, filterBrand, filterState, search])
+
+  // Retire/reactivate go through the EF: it enforces "retire only at 0 active
+  // CBNs" server-side. The client count below is a UX hint only — the server
+  // is the authority, and its 409 is surfaced verbatim.
+  async function setActive(ss, is_active) {
+    setBusyId(ss.id)
+    try {
+      await callEdge('admin-catalog', 'setSubSegmentActive', { id: ss.id, is_active })
+      toast.success(`${ss.name} ${is_active ? 'reactivated' : 'retired'}.`)
+      onRefresh()
+    } catch (e) {
+      toast.error(e.message)
+    }
+    setBusyId(null)
+  }
 
   return (
     <>
@@ -746,6 +1073,13 @@ function SubSegmentsTab({ subSegs, loading, onRefresh }) {
             <option value="al">Ashok Leyland</option>
             <option value="switch">Switch Mobility</option>
             <option value="hdh">HD Hyundai</option>
+          </select>
+          {/* Retired families are hidden by default but never gone — the whole
+              point of retire over delete is that they stay recoverable. */}
+          <select className="form-select" value={filterState} onChange={e => setFilterState(e.target.value)}>
+            <option value="active">Active</option>
+            <option value="retired">Retired</option>
+            <option value="all">All</option>
           </select>
           <button
             className="btn btn-primary btn-sm"
@@ -768,17 +1102,29 @@ function SubSegmentsTab({ subSegs, loading, onRefresh }) {
                   <th>Sub-Segment</th>
                   <th>Segment</th>
                   <th>Brand</th>
+                  <th style={{ textAlign: 'right' }}>CBNs</th>
                   <th>Brochure</th>
                   <th>Status</th>
                   <th></th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(ss => (
-                  <tr key={ss.id}>
-                    <td style={{ fontWeight: 600 }}>{ss.name}</td>
+                {filtered.map(ss => {
+                  const n = cbnCount[ss.id] || 0
+                  return (
+                  <tr key={ss.id} style={ss.is_active ? undefined : { opacity: 0.6 }}>
+                    <td style={{ fontWeight: 600 }}>
+                      {ss.name}
+                      {/* Empty + active = a family nobody can reach anything through.
+                          Flagged, not auto-retired: it may be newly created and
+                          awaiting its CBNs. */}
+                      {ss.is_active && n === 0 && (
+                        <span className="badge badge-gray" style={{ marginLeft: 8, fontWeight: 400 }}>empty</span>
+                      )}
+                    </td>
                     <td>{ss.segment}</td>
                     <td><span className="badge badge-blue">{ss.brand.toUpperCase()}</span></td>
+                    <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{n}</td>
                     <td>
                       {ss.brochure_url
                         ? <BrochureDownload path={ss.brochure_url} filename={ss.brochure_filename} />
@@ -786,22 +1132,44 @@ function SubSegmentsTab({ subSegs, loading, onRefresh }) {
                     </td>
                     <td>
                       <span className={`badge ${ss.is_active ? 'badge-green' : 'badge-gray'}`}>
-                        {ss.is_active ? 'Active' : 'Inactive'}
+                        {ss.is_active ? 'Active' : 'Retired'}
                       </span>
                     </td>
                     <td>
-                      <button
-                        className="btn btn-secondary btn-sm"
-                        onClick={() => { setSelected(ss); setModal('edit') }}
-                      >
-                        Edit
-                      </button>
+                      <div className="vc-row-actions">
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => { setSelected(ss); setModal('edit') }}
+                        >
+                          Edit
+                        </button>
+                        {ss.is_active ? (
+                          <button
+                            className="btn btn-danger btn-sm"
+                            disabled={busyId === ss.id || n > 0}
+                            title={n > 0
+                              ? `Move its ${n} CBN${n === 1 ? '' : 's'} elsewhere first`
+                              : 'Hide from all employee surfaces; brochure and history kept'}
+                            onClick={() => setActive(ss, false)}
+                          >
+                            {busyId === ss.id ? <span className="spinner spinner-sm" /> : 'Retire'}
+                          </button>
+                        ) : (
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            disabled={busyId === ss.id}
+                            onClick={() => setActive(ss, true)}
+                          >
+                            {busyId === ss.id ? <span className="spinner spinner-sm" /> : 'Reactivate'}
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
-                ))}
+                )})}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={6}>
+                    <td colSpan={7}>
                       <div className="empty-state" style={{ padding: '32px 24px' }}>
                         <div className="empty-state-icon"><Icon name="folder" size={36} color="var(--text-muted)" /></div>
                         <h3>No sub-segments found</h3>
@@ -861,7 +1229,11 @@ const EMPTY_SUBSEG = {
   name: '', segment: SEGMENTS[0], brand: 'al', description: '', is_active: true,
 }
 
-function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
+// `inline` (Phase 9.7b): opened from Reshuffle's move menu to create a family
+// mid-move. Hides the add-mode CBN checklist — the caller is already holding a
+// selection and will move it the moment this returns. onSaved receives the
+// created row so the caller can select it without a refetch round-trip.
+function SubSegmentModal({ mode, subSeg, onClose, onSaved, inline = false }) {
   const toast = useToast()
   const trapRef = useFocusTrap(true, onClose)
   const [form,            setForm]            = useState(mode === 'edit' ? { ...subSeg } : EMPTY_SUBSEG)
@@ -901,7 +1273,7 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
   // the ones already in another sub-segment; selecting one MOVES it (a CBN can
   // only ever be in one sub-segment — sub_category is a single column).
   useEffect(() => {
-    if (mode !== 'add') return
+    if (mode !== 'add' || inline) return   // inline: no checklist, so don't fetch it
     setCbnLoading(true)
     setSelectedCBNs(new Set())
     supabase.from('vehicle_catalog')
@@ -1002,12 +1374,14 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
     }
 
     let err
+    let createdRow = null
     if (mode === 'add') {
       // Need the new id back to link CBNs by FK, so insert().select().single().
       const { data: created, error: insErr } = await supabase
-        .from('sub_segments').insert(payload).select('id').single()
+        .from('sub_segments').insert(payload).select('*').single()
       err = insErr
-      if (!err && selectedCBNs.size > 0) {
+      createdRow = created
+      if (!err && !inline && selectedCBNs.size > 0) {
         // Latest assignment takes priority: a selected CBN already in another
         // family is reassigned here (a CBN is only ever in one family). Count
         // the reassignments to report them non-blockingly.
@@ -1035,12 +1409,47 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
           return
         }
       }
-      const { name: _skip, ...rest } = payload
+      // Phase 9.7b — segment and is_active must NOT be written directly.
+      //   • segment: setSubSegmentSegment also syncs vehicle_catalog.segment on
+      //     every linked CBN (red-team R3). A direct write moves the family and
+      //     leaves its own vehicles behind — the drift the MBP consolidation
+      //     just cleaned up.
+      //   • is_active: setSubSegmentActive enforces "retire only at 0 active
+      //     CBNs". A direct write sails straight past that guard and hides a
+      //     family whose vehicles are still live.
+      // Both are stripped from the direct update and sent through the EF.
+      // (RLS still permits a direct write, so this is a UX guard for trusted
+      // admins, not a security boundary — see the backlog note.)
+      if (payload.segment !== subSeg.segment) {
+        try {
+          await callEdge('admin-catalog', 'setSubSegmentSegment', {
+            id: subSeg.id, segment: payload.segment,
+          })
+        } catch (e) {
+          setSaving(false)
+          toast.error('Segment change failed: ' + e.message)
+          return
+        }
+      }
+      if (payload.is_active !== subSeg.is_active) {
+        try {
+          await callEdge('admin-catalog', 'setSubSegmentActive', {
+            id: subSeg.id, is_active: payload.is_active,
+          })
+        } catch (e) {
+          setSaving(false)
+          // The 409 "still has N active CBNs" lands here — surface it verbatim,
+          // it tells the admin exactly what to do next.
+          toast.error(e.message)
+          return
+        }
+      }
+      const { name: _n, segment: _s, is_active: _a, ...rest } = payload
       ;({ error: err } = await supabase.from('sub_segments').update(rest).eq('id', subSeg.id))
     }
     setSaving(false)
     if (err) { toast.error('Save failed: ' + err.message); return }
-    onSaved()
+    onSaved(createdRow)
   }
 
   return (
@@ -1177,8 +1586,9 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved }) {
             </div>
           )}
 
-          {/* Add mode: filterable checklist of unallocated CBNs */}
-          {mode === 'add' && (
+          {/* Add mode: filterable checklist of unallocated CBNs.
+              Hidden when inline — Reshuffle already holds the selection. */}
+          {mode === 'add' && !inline && (
             <div className="form-group">
               <label className="form-label">Assign CBN Numbers (optional)</label>
               {cbnLoading ? (
@@ -1319,8 +1729,12 @@ function ImportTab({ subSegs, onRefresh }) {
   const [importing,     setImporting]     = useState(false)
   const fileRef = useRef()
 
+  // Maps a sub-category text from the spreadsheet to its segment, to fill a
+  // blank Segment column. Phase 9.7b (R4): retired families are excluded — an
+  // import must never quietly file new CBNs under a family that has been taken
+  // out of service.
   const subSegMap = useMemo(
-    () => Object.fromEntries(subSegs.map(ss => [ss.name, ss.segment])),
+    () => Object.fromEntries(subSegs.filter(ss => ss.is_active).map(ss => [ss.name, ss.segment])),
     [subSegs]
   )
 
