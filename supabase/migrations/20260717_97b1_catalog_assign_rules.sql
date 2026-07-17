@@ -90,9 +90,62 @@ CREATE POLICY catalog_assign_rules_delete ON public.catalog_assign_rules
   FOR DELETE TO authenticated
   USING (public.current_user_role() = ANY (ARRAY['admin'::text, 'back_office'::text]));
 
+-- ── Atomic bulk move (Phase 9.7b) ────────────────────────────────────────────
+-- Reshuffle's move-selected is the first bulk write in the catalog. It goes
+-- through an RPC rather than a PostgREST .update().in() for two reasons:
+--
+--   1. ATOMICITY. One statement, one transaction: the move either lands for
+--      every CBN or none. A chunked client- or EF-side loop can die halfway and
+--      leave half a selection moved, with no record of which half.
+--   2. URL LENGTH. PostgREST puts .in() values in the query string. At the
+--      5000-CBN ceiling that is a ~100 KB request line — a 414 waiting to
+--      happen. An array parameter travels in the POST body instead.
+--
+-- Both halves of the link are written together (sub_segment_id + sub_category);
+-- writing one without the other is the drift 9.7a exists to end. p_family_name
+-- is resolved and validated by the Edge Function before this is called; NULL
+-- means unassign (back to the triage queue), and both columns go NULL in step.
+--
+-- SECURITY INVOKER (the default) is deliberate: the Edge Function calls this
+-- with the service_role key, which bypasses RLS anyway. Leaving it INVOKER
+-- means that if it is ever reached by a user token, vehicle_catalog's own RLS
+-- still applies rather than being silently bypassed by DEFINER rights.
+-- EXECUTE is revoked from anon and authenticated regardless — in this project
+-- Postgres grants EXECUTE to those roles on creation, and revoking from
+-- `public` alone does NOT remove it (see memory/project_edge_function_auth).
+CREATE OR REPLACE FUNCTION public.move_cbns_to_family(
+  p_cbns           text[],
+  p_sub_segment_id integer,
+  p_family_name    text
+) RETURNS integer
+  LANGUAGE sql
+  SET search_path TO 'public'
+AS $$
+  WITH moved AS (
+    UPDATE public.vehicle_catalog
+       SET sub_segment_id = p_sub_segment_id,
+           sub_category   = p_family_name
+     WHERE cbn = ANY (p_cbns)
+    RETURNING id
+  )
+  SELECT count(*)::integer FROM moved;
+$$;
+
+REVOKE ALL   ON FUNCTION public.move_cbns_to_family(text[], integer, text) FROM public;
+REVOKE ALL   ON FUNCTION public.move_cbns_to_family(text[], integer, text) FROM anon;
+REVOKE ALL   ON FUNCTION public.move_cbns_to_family(text[], integer, text) FROM authenticated;
+GRANT EXECUTE ON FUNCTION public.move_cbns_to_family(text[], integer, text) TO service_role;
+
 COMMIT;
 
 -- ── Verification ─────────────────────────────────────────────────────────────
+
+\echo '=== V0: move_cbns_to_family is callable ONLY by service_role ==='
+-- Expect exactly one grantee: service_role. anon/authenticated must NOT appear.
+SELECT grantee, privilege_type
+FROM information_schema.routine_privileges
+WHERE routine_schema='public' AND routine_name='move_cbns_to_family'
+ORDER BY grantee;
 
 \echo '=== V1: table shape ==='
 SELECT column_name, data_type, is_nullable, column_default

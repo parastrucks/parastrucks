@@ -239,6 +239,153 @@ Deno.serve(async (req: Request) => {
         return json({ ok: true, renamed: synced?.length ?? 0 })
       }
 
+      // ── Reshuffle: move CBNs to a family (Phase 9.7b) ─────────
+      // The first bulk write in the catalog. It lives server-side, as one
+      // statement, on purpose: a client-side loop could die halfway and leave
+      // half the selection moved with no record of which half.
+      //
+      // Writes BOTH halves of the link — sub_segment_id (the truth) and
+      // sub_category (what Quotation/ProformaInvoice/FinancierCopy still
+      // search). Writing only one is exactly the drift 9.7a set out to end.
+      case "moveCbns": {
+        const { cbns, sub_segment_id } = payload as {
+          cbns?: unknown
+          sub_segment_id?: number | null
+        }
+        if (!Array.isArray(cbns) || cbns.length === 0) {
+          return json({ error: "cbns array is required" }, 400)
+        }
+        if (!cbns.every((c) => typeof c === "string" && c.trim())) {
+          return json({ error: "cbns must be non-empty strings" }, 400)
+        }
+        // Matches bulkUpsertVehicles' ceiling. Also keeps the .in() list below
+        // well clear of any request-line limit.
+        if (cbns.length > 5000) {
+          return json({ error: "Max 5000 CBNs per move" }, 400)
+        }
+
+        // sub_segment_id null = unassign (send back to the triage queue).
+        // Anything else must resolve to a real, ACTIVE family: moving CBNs
+        // into a retired family would hide them from every employee surface
+        // while looking like a successful move.
+        let familyName: string | null = null
+        if (sub_segment_id !== null && sub_segment_id !== undefined) {
+          if (!Number.isInteger(sub_segment_id)) {
+            return json({ error: "sub_segment_id must be an integer or null" }, 400)
+          }
+          const { data: fam, error: famErr } = await admin
+            .from("sub_segments")
+            .select("id, name, is_active")
+            .eq("id", sub_segment_id)
+            .maybeSingle()
+          if (famErr) return json({ error: famErr.message }, 400)
+          if (!fam) return json({ error: "Sub-segment not found" }, 404)
+          if (!fam.is_active) {
+            return json({ error: `"${fam.name}" is retired — reactivate it before moving CBNs into it` }, 409)
+          }
+          familyName = fam.name
+        }
+
+        // Via RPC, not .update().in(): PostgREST would put all 5000 CBNs in the
+        // query string (a ~100 KB request line — 414 territory), and a chunked
+        // loop could half-apply. The RPC is one atomic UPDATE, array in the body.
+        // It writes both halves of the link; family name is null when unassigning.
+        const { data: moved, error } = await admin.rpc("move_cbns_to_family", {
+          p_cbns: cbns as string[],
+          p_sub_segment_id: sub_segment_id ?? null,
+          p_family_name: familyName,
+        })
+        if (error) return json({ error: error.message }, 400)
+
+        // Report what actually moved, not what was asked for: a CBN that does
+        // not exist is silently a no-op, and "moved 40" when you selected 42 is
+        // a signal the caller should see rather than a rounding error.
+        return json({
+          ok: true,
+          moved: typeof moved === "number" ? moved : 0,
+          requested: cbns.length,
+          family: familyName,
+        })
+      }
+
+      // ── Retire / reactivate a family (Phase 9.7b) ─────────────
+      // Families are NEVER deleted — standing rule, and the 9.7 lifecycle
+      // model. Retire hides a family from every employee surface while keeping
+      // its brochure and history intact.
+      case "setSubSegmentActive": {
+        const { id, is_active } = payload as { id?: number; is_active?: boolean }
+        if (id == null || typeof is_active !== "boolean") {
+          return json({ error: "id and is_active required" }, 400)
+        }
+
+        // Retire is only legal at zero ACTIVE CBNs. Retiring a family that
+        // still holds live vehicles would vanish them from the sales catalog
+        // with no trace — the CBNs stay active but their family is hidden.
+        if (is_active === false) {
+          const { count, error: cErr } = await admin
+            .from("vehicle_catalog")
+            .select("id", { count: "exact", head: true })
+            .eq("sub_segment_id", id)
+            .eq("is_active", true)
+          if (cErr) return json({ error: cErr.message }, 400)
+          if ((count ?? 0) > 0) {
+            return json({
+              error: `Cannot retire: ${count} active CBN${count === 1 ? "" : "s"} still assigned. ` +
+                     `Move them to another family first.`,
+            }, 409)
+          }
+        }
+
+        const { error } = await admin
+          .from("sub_segments").update({ is_active }).eq("id", id)
+        if (error) return json({ error: error.message }, 400)
+        return json({ ok: true })
+      }
+
+      // ── Change a family's segment (Phase 9.7b, red-team R3) ───
+      // sub_segments.segment and vehicle_catalog.segment are separate columns
+      // that must agree. Editing the family's segment alone recreates exactly
+      // the drift the MBP Truck consolidation just cleaned up: the family says
+      // one segment, its own vehicles say another, and the sales browse view
+      // (which groups by the family's segment) disagrees with the admin table
+      // (which shows the vehicle's).
+      //
+      // Same non-atomic caveat as renameSubSegment: PostgREST gives us no
+      // cross-call transaction. The family row is written first, so a failure
+      // leaves vehicles lagging — visible, reported, and re-runnable — rather
+      // than a family stranded in a segment none of its vehicles share.
+      case "setSubSegmentSegment": {
+        const { id, segment } = payload as { id?: number; segment?: string }
+        if (id == null || !segment?.trim()) {
+          return json({ error: "id and segment are required" }, 400)
+        }
+        const clean = segment.trim()
+
+        const { data: fam, error: fErr } = await admin
+          .from("sub_segments").select("id, name, segment").eq("id", id).maybeSingle()
+        if (fErr) return json({ error: fErr.message }, 400)
+        if (!fam) return json({ error: "Sub-segment not found" }, 404)
+        if (fam.segment === clean) return json({ ok: true, synced: 0, unchanged: true })
+
+        const { error: segErr } = await admin
+          .from("sub_segments").update({ segment: clean }).eq("id", id)
+        if (segErr) return json({ error: segErr.message }, 400)
+
+        const { data: synced, error: syncErr } = await admin
+          .from("vehicle_catalog")
+          .update({ segment: clean })
+          .eq("sub_segment_id", id)
+          .select("id")
+        if (syncErr) {
+          return json({
+            ok: false,
+            error: `Segment changed to "${clean}", but its CBNs did not follow: ${syncErr.message}. ` +
+                   `Re-run to retry.`,
+          }, 500)
+        }
+        return json({ ok: true, synced: synced?.length ?? 0 })
+      }
+
       // ── Brochure upload: return a one-shot signed URL ─────────
       // Phase 9f M5 — server generates an unguessable UUID filename.
       // The client-supplied `path` is ignored entirely. The original filename
