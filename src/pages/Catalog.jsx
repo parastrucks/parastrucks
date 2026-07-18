@@ -2407,13 +2407,68 @@ function ImportTab({ subSegs, onRefresh }) {
 /* ══════════════════════════════════════════════════════════════
    SALES VIEW
 ══════════════════════════════════════════════════════════════ */
+/* ── Shelf: per-employee most-opened families (Phase 9.7c F1) ──
+   localStorage, per-device — the plan's deliberate starting point over a
+   catalog_family_opens table (zero schema, and a salesperson works from one
+   phone). Keyed by the family's stable card key (sub_segment_id, or the raw
+   text key for not-yet-triaged orphans). Namespaced by user id so a shared
+   device doesn't blend two people's shelves. All access is wrapped: private
+   mode / disabled storage must degrade to "no shelf", never throw. */
+const SHELF_PREFIX = 'ptb_catalog_shelf_v1:'
+function shelfKey(userId) { return SHELF_PREFIX + (userId || 'anon') }
+function readShelf(userId) {
+  try { return JSON.parse(localStorage.getItem(shelfKey(userId))) || {} }
+  catch { return {} }
+}
+function bumpShelf(userId, cardKey) {
+  const s = readShelf(userId)
+  s[String(cardKey)] = (s[String(cardKey)] || 0) + 1
+  try { localStorage.setItem(shelfKey(userId), JSON.stringify(s)) } catch { /* storage full/blocked — shelf just won't persist */ }
+  return s
+}
+
+/* One cover tile on the brochure wall. Shows the real page-1 thumbnail once
+   9.7c c2 populates cover_url; until then a typographic title block (zero cost,
+   always available). The whole tile opens the variants modal; brochure download
+   stays a distinct affordance inside the modal. */
+function FamilyCoverCard({ card, onOpen }) {
+  return (
+    <div className="vc-cover-card" onClick={() => onOpen(card)} role="button" tabIndex={0}
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(card) } }}>
+      <div className="vc-cover-art">
+        {card.cover_url ? (
+          <img src={card.cover_url} alt={card.name} loading="lazy" />
+        ) : (
+          <div className="vc-cover-fallback">
+            <div className="vc-cover-fallback-seg">{card.segment}</div>
+            <div className="vc-cover-fallback-name">{card.name}</div>
+          </div>
+        )}
+        {card.brochure_url && (
+          <span className="vc-cover-badge"><Icon name="file" size={10} color="#fff" /> PDF</span>
+        )}
+      </div>
+      <div className="vc-cover-body">
+        <div className="vc-cover-name">{card.name}</div>
+        <div className="vc-cover-count">{card.count} variant{card.count !== 1 ? 's' : ''}</div>
+      </div>
+    </div>
+  )
+}
+
 function SalesCatalog({ profile }) {
   const [subSegs,        setSubSegs]        = useState([])
   const [vehicles,       setVehicles]       = useState([])
   const [loading,        setLoading]        = useState(true)
   const [search,         setSearch]         = useState('')
-  const [filterSeg,      setFilterSeg]      = useState('')
   const [selectedSubSeg, setSelectedSubSeg] = useState(null)
+  const [shelf,          setShelf]          = useState(() => readShelf(profile.id))
+
+  // Opening a family both records the visit (shelf ranking) and shows variants.
+  const openFamily = useCallback((card) => {
+    setShelf(bumpShelf(profile.id, card.key))
+    setSelectedSubSeg(card)
+  }, [profile.id])
   // Phase 6c.1 scope derived from the user's join tables instead of the
   // legacy profile.brand + VERTICAL_SEGMENTS map. Loaded once per mount;
   // RLS on vehicle_catalog will (once landed) enforce the same constraints
@@ -2538,18 +2593,34 @@ function SalesCatalog({ profile }) {
     [cards]
   )
 
-  const visibleCards = useMemo(() => {
-    let list = cards
-    if (filterSeg) list = list.filter(c => c.segment === filterSeg)
-    if (search.trim()) {
-      const s = search.toLowerCase()
-      list = list.filter(c =>
-        c.name.toLowerCase().includes(s) ||
-        c.segment.toLowerCase().includes(s)
-      )
-    }
-    return list
-  }, [cards, filterSeg, search])
+  // Tokenised search over the family AND its variants: (visibleCards removed —
+  // the old flat filter is superseded by searchResults + the wall.) every token must appear
+  // somewhere in name + segment + each CBN + each description. This is what lets
+  // an employee type "1920 haulage" or a CBN fragment and land on the family —
+  // hits point at the family (the unit of everything), brochure one tap away.
+  const searchResults = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return null
+    const tokens = q.split(/\s+/).filter(Boolean)
+    return cards
+      .filter(c => {
+        const hay = `${c.name} ${c.segment} ${c.vehicles.map(v => `${v.cbn} ${v.description || ''}`).join(' ')}`.toLowerCase()
+        return tokens.every(t => hay.includes(t))
+      })
+      .sort((a, b) => a.segment.localeCompare(b.segment) || a.name.localeCompare(b.name))
+  }, [cards, search])
+
+  // Shelf tiles: the employee's most-opened families, most-first, still present
+  // in their current scope. Falls back to empty (new employee / cleared storage)
+  // — the wall is always one tap away, so an empty shelf is never a dead end.
+  const shelfCards = useMemo(() => {
+    const byKey = new Map(cards.map(c => [String(c.key), c]))
+    return Object.entries(shelf)
+      .sort((a, b) => b[1] - a[1])
+      .map(([k]) => byKey.get(k))
+      .filter(Boolean)
+      .slice(0, 8)
+  }, [shelf, cards])
 
   // Show the current user's assigned verticals as subtitle context.
   // Lookup happens once when scope resolves — no async render.
@@ -2575,25 +2646,21 @@ function SalesCatalog({ profile }) {
           <div className="page-head-crumb">Sales Tools</div>
           <h1 className="page-head-title">Vehicle Catalog<span className="period-accent">.</span></h1>
           <div className="page-head-sub">
-            Browse models and download brochures
+            Find the right brochure fast
             {verticalLabels.length > 0 ? ` · ${verticalLabels.join(', ')} range` : ''}
           </div>
         </div>
       </div>
 
-      <div className="vc-controls">
+      {/* F1 — hero search: the primary way in */}
+      <div className="vc-hero-search">
+        <span className="vc-hero-icon"><Icon name="search" size={18} /></span>
         <input
-          className="form-input vc-search"
-          placeholder="Search models…"
           value={search}
           onChange={e => setSearch(e.target.value)}
+          placeholder="Search model or CBN — e.g. “1920 haulage” or a CBN number"
+          aria-label="Search catalog"
         />
-        <div className="vc-filters">
-          <select className="form-select" value={filterSeg} onChange={e => setFilterSeg(e.target.value)}>
-            <option value="">All Segments</option>
-            {availableSegs.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </div>
       </div>
 
       {loading ? (
@@ -2604,42 +2671,63 @@ function SalesCatalog({ profile }) {
           <h3>No vehicles available</h3>
           <p>No catalog data for your assigned brand / product range</p>
         </div>
+
+      /* ── Search results: flat, ranked, brochure one tap away ── */
+      ) : searchResults ? (
+        searchResults.length === 0 ? (
+          <div className="empty-state">
+            <div className="empty-state-icon"><Icon name="search" size={36} color="var(--text-muted)" /></div>
+            <h3>Nothing matches “{search.trim()}”</h3>
+            <p>Try fewer words, or a CBN fragment</p>
+          </div>
+        ) : (
+          <>
+            <div className="vc-shelf-head">
+              <span className="vc-shelf-title">{searchResults.length} famil{searchResults.length === 1 ? 'y' : 'ies'}</span>
+            </div>
+            <div className="vc-wall-grid">
+              {searchResults.map(card => (
+                <FamilyCoverCard key={card.key} card={card} onOpen={openFamily} />
+              ))}
+            </div>
+          </>
+        )
+
+      /* ── Landing: shelf + the full brochure wall, grouped by segment ── */
       ) : (
-        availableSegs
-          .filter(seg => !filterSeg || seg === filterSeg)
-          .map(seg => {
-            const segCards = visibleCards.filter(c => c.segment === seg)
+        <>
+          {shelfCards.length > 0 && (
+            <div className="vc-shelf">
+              <div className="vc-shelf-head">
+                <span className="vc-shelf-title">Your shelf</span>
+                <span className="vc-shelf-hint">most-opened families on this device</span>
+              </div>
+              <div className="vc-wall-grid">
+                {shelfCards.map(card => (
+                  <FamilyCoverCard key={card.key} card={card} onOpen={openFamily} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="vc-shelf-head">
+            <span className="vc-shelf-title">Browse</span>
+          </div>
+          {availableSegs.map(seg => {
+            const segCards = cards.filter(c => c.segment === seg)
             if (segCards.length === 0) return null
             return (
               <div key={seg} className="vc-segment-group">
                 <div className="vc-segment-label">{seg}</div>
-                <div className="vc-subseg-grid">
+                <div className="vc-wall-grid">
                   {segCards.map(card => (
-                    <div key={card.key} className="vc-subseg-card">
-                      <div className="vc-subseg-name">{card.name}</div>
-                      <div className="vc-subseg-count">
-                        {card.count} variant{card.count !== 1 ? 's' : ''}
-                      </div>
-                      <div className="vc-subseg-actions">
-                        <button
-                          className="btn btn-secondary btn-sm"
-                          onClick={() => setSelectedSubSeg(card)}
-                        >
-                          View Variants
-                        </button>
-                        {card.brochure_url && (
-                          <BrochureDownload
-                            path={card.brochure_url}
-                            filename={card.brochure_filename}
-                          />
-                        )}
-                      </div>
-                    </div>
+                    <FamilyCoverCard key={card.key} card={card} onOpen={openFamily} />
                   ))}
                 </div>
               </div>
             )
-          })
+          })}
+        </>
       )}
 
       {selectedSubSeg && (
