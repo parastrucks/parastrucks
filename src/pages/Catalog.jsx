@@ -114,9 +114,18 @@ function AdminCatalog() {
     return () => { cancelled = true }
   }, [fetchVehicles, fetchSubSegs])
 
+  // Count of unassigned active CBNs — the triage backlog, shown as a badge so
+  // the queue can't sit forgotten.
+  const triageCount = useMemo(
+    () => vehicles.filter(v => v.is_active && !v.sub_segment_id).length,
+    [vehicles]
+  )
+
   const TABS = [
     { key: 'vehicles',      label: 'Vehicles' },
     { key: 'reshuffle',     label: 'Reshuffle' },
+    { key: 'triage',        label: triageCount > 0 ? `Triage (${triageCount})` : 'Triage' },
+    { key: 'rules',         label: 'Rules' },
     { key: 'sub-segments',  label: 'Sub-Segments' },
     { key: 'import',        label: 'Import' },
   ]
@@ -158,6 +167,17 @@ function AdminCatalog() {
           loading={vLoading}
           onRefresh={() => { fetchVehicles(); fetchSubSegs() }}
         />
+      )}
+      {tab === 'triage' && (
+        <TriageTab
+          vehicles={vehicles}
+          subSegs={subSegs}
+          loading={vLoading}
+          onRefresh={() => { fetchVehicles(); fetchSubSegs() }}
+        />
+      )}
+      {tab === 'rules' && (
+        <RulesTab subSegs={subSegs} />
       )}
       {tab === 'sub-segments' && (
         <SubSegmentsTab
@@ -1004,6 +1024,326 @@ function ReshuffleTab({ vehicles, subSegs, loading, onRefresh }) {
             onRefresh()
           }}
         />
+      )}
+    </>
+  )
+}
+
+/* ── RULE MATCHING (shared by Triage) ────────────────────────── */
+/* A rule matches a CBN when its pattern appears in "cbn + description" AND none
+   of its NOT-terms do. Rules only SUGGEST — a human confirms in triage. When
+   several rules match, the one with the most hits wins (most battle-tested);
+   `hits` ties break toward the rule that has proven itself, then arbitrarily. */
+function suggestFamily(vehicle, rules) {
+  const hay = `${vehicle.cbn} ${vehicle.description || ''}`.toLowerCase()
+  const matched = rules.filter(r => {
+    const pat = r.pattern.trim().toLowerCase()
+    if (!pat || !hay.includes(pat)) return false
+    return !(r.not_terms || []).some(nt => nt && hay.includes(nt.toLowerCase()))
+  })
+  if (matched.length === 0) return null
+  matched.sort((a, b) => (b.hits || 0) - (a.hits || 0))
+  return matched[0].sub_segment_id
+}
+
+/* ── TRIAGE TAB (Phase 9.7b3) ─────────────────────────────────── */
+/* Unassigned active CBNs — the queue new imports feed and manual unassigns add
+   to. Each gets a rule-suggested family the admin can accept, override, or skip.
+   Assignment goes through moveCbns (writes id + text + segment together). */
+function TriageTab({ vehicles, subSegs, loading, onRefresh }) {
+  const toast = useToast()
+  const [rules, setRules]     = useState([])
+  const [choice, setChoice]   = useState({})   // cbn -> chosen sub_segment_id ('' = skip)
+  const [busy, setBusy]       = useState(false)
+
+  const activeFams = useMemo(
+    () => subSegs.filter(ss => ss.is_active).sort((a, b) =>
+      a.segment.localeCompare(b.segment) || a.name.localeCompare(b.name)),
+    [subSegs]
+  )
+
+  // Rules are admin-only; fetch here rather than lifting to the parent.
+  const loadRules = useCallback(async () => {
+    const { data } = await supabase.from('catalog_assign_rules').select('*')
+    setRules(data || [])
+  }, [])
+  useEffect(() => { loadRules() }, [loadRules])
+
+  const queue = useMemo(
+    () => vehicles.filter(v => v.is_active && !v.sub_segment_id),
+    [vehicles]
+  )
+
+  // The effective destination for a row: the admin's explicit override if they
+  // set one, otherwise the live rule suggestion. Deriving it (rather than
+  // pre-seeding `choice` in an effect) sidesteps a race — rules load async, so
+  // any seed that runs before they arrive would lock in a blank the later load
+  // can't correct.
+  const effective = useCallback((v) => {
+    if (choice[v.cbn] !== undefined) return choice[v.cbn]
+    const s = suggestFamily(v, rules)
+    return s != null ? String(s) : ''
+  }, [choice, rules])
+
+  const suggestedCount = queue.filter(v => effective(v)).length
+
+  async function assign(cbnList) {
+    // Group by chosen family — moveCbns takes one destination per call.
+    const groups = {}
+    for (const cbn of cbnList) {
+      const v = queue.find(q => q.cbn === cbn)
+      const fam = v ? effective(v) : ''
+      if (!fam) continue
+      ;(groups[fam] ||= []).push(cbn)
+    }
+    const famIds = Object.keys(groups)
+    if (famIds.length === 0) { toast.info('Nothing to assign — pick a family first.'); return }
+    setBusy(true)
+    let moved = 0
+    try {
+      for (const fam of famIds) {
+        const res = await callEdge('admin-catalog', 'moveCbns', {
+          cbns: groups[fam], sub_segment_id: Number(fam),
+        })
+        moved += res.moved || 0
+      }
+      // Bump hits on rules whose suggestion was accepted, so the Rules tab can
+      // show which ones earn their keep. Best-effort; a failure here doesn't
+      // undo the assignment.
+      const accepted = cbnList
+        .map(cbn => { const v = queue.find(q => q.cbn === cbn); return { v, fam: v ? effective(v) : '' } })
+        .filter(x => x.v && x.fam)
+      const bumps = {}
+      for (const { v, fam } of accepted) {
+        const s = suggestFamily(v, rules)
+        if (s != null && String(s) === fam) {
+          const rule = rules.filter(r => r.sub_segment_id === s)
+            .sort((a, b) => (b.hits || 0) - (a.hits || 0))[0]
+          if (rule) bumps[rule.id] = (bumps[rule.id] || rule.hits || 0) + 1
+        }
+      }
+      for (const [id, hits] of Object.entries(bumps)) {
+        await supabase.from('catalog_assign_rules').update({ hits }).eq('id', id)
+      }
+      toast.success(`Assigned ${moved} CBN${moved === 1 ? '' : 's'}.`)
+      onRefresh(); loadRules()
+    } catch (e) {
+      toast.error('Assign failed: ' + e.message)
+    }
+    setBusy(false)
+  }
+
+  if (loading) return <Skeleton variant="row" count={4} />
+
+  if (queue.length === 0) {
+    return (
+      <div className="empty-state">
+        <div className="empty-state-icon"><Icon name="check" size={36} color="var(--text-muted)" /></div>
+        <h3>Triage queue is empty</h3>
+        <p>Every active vehicle belongs to a family. New unmatched imports show up here.</p>
+      </div>
+    )
+  }
+
+  return (
+    <>
+      <div className="vc-stats-row">
+        <span>{queue.length} unassigned · {suggestedCount} with a suggested family</span>
+        <button
+          className="btn btn-primary btn-sm"
+          disabled={busy || suggestedCount === 0}
+          onClick={() => assign(queue.filter(v => effective(v)).map(v => v.cbn))}
+        >
+          {busy ? <span className="spinner spinner-sm" /> : `Accept all ${suggestedCount} suggestions`}
+        </button>
+      </div>
+
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>CBN</th>
+              <th>Description</th>
+              <th>Assign to family</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {queue.slice(0, 200).map(v => {
+              const suggested = suggestFamily(v, rules)
+              const val = effective(v)
+              return (
+                <tr key={v.cbn}>
+                  <td className="vc-cbn">{v.cbn}</td>
+                  <td className="vc-desc" title={v.description}>{v.description}</td>
+                  <td>
+                    <select
+                      className="form-select"
+                      style={{ maxWidth: 260 }}
+                      value={val}
+                      onChange={e => setChoice(c => ({ ...c, [v.cbn]: e.target.value }))}
+                    >
+                      <option value="">— Skip for now —</option>
+                      {activeFams.map(ss => (
+                        <option key={ss.id} value={ss.id}>
+                          {ss.segment} · {ss.name}{ss.id === suggested ? '  ⟵ suggested' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td>
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      disabled={busy || !val}
+                      onClick={() => assign([v.cbn])}
+                    >
+                      Assign
+                    </button>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+        {queue.length > 200 && (
+          <div className="text-small text-gray" style={{ padding: '8px 4px' }}>
+            Showing the first 200 of {queue.length}. “Accept all” covers every suggested match.
+          </div>
+        )}
+      </div>
+    </>
+  )
+}
+
+/* ── RULES TAB (Phase 9.7b3) ─────────────────────────────────── */
+/* CRUD over catalog_assign_rules. Writes go direct via PostgREST — the table's
+   RLS already restricts everything to admin/back_office, and these are
+   single-table writes with no cross-table invariant to enforce (unlike the
+   family lifecycle actions, which is why those live in the EF). */
+function RulesTab({ subSegs }) {
+  const toast = useToast()
+  const [rules, setRules]   = useState([])
+  const [loading, setLoad]  = useState(true)
+  const [famId, setFamId]   = useState('')
+  const [pattern, setPat]   = useState('')
+  const [notTerms, setNot]  = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const activeFams = useMemo(
+    () => subSegs.filter(ss => ss.is_active).sort((a, b) =>
+      a.segment.localeCompare(b.segment) || a.name.localeCompare(b.name)),
+    [subSegs]
+  )
+  const famById = useMemo(() => Object.fromEntries(subSegs.map(ss => [ss.id, ss])), [subSegs])
+
+  const load = useCallback(async () => {
+    setLoad(true)
+    const { data } = await supabase.from('catalog_assign_rules')
+      .select('*').order('sub_segment_id')
+    setRules(data || [])
+    setLoad(false)
+  }, [])
+  useEffect(() => { load() }, [load])
+
+  async function add() {
+    if (!famId)         { toast.error('Pick a family'); return }
+    if (!pattern.trim()){ toast.error('Pattern is required'); return }
+    setSaving(true)
+    const terms = notTerms.split(',').map(t => t.trim()).filter(Boolean)
+    const { error } = await supabase.from('catalog_assign_rules').insert({
+      sub_segment_id: Number(famId),
+      pattern: pattern.trim(),
+      not_terms: terms,
+    })
+    setSaving(false)
+    if (error) {
+      // Unique (family, pattern) collision surfaces here as a 409-ish message.
+      toast.error(/duplicate/i.test(error.message)
+        ? 'That family already has this pattern.'
+        : 'Save failed: ' + error.message)
+      return
+    }
+    setPat(''); setNot('')
+    toast.success('Rule added.')
+    load()
+  }
+
+  async function remove(id) {
+    const { error } = await supabase.from('catalog_assign_rules').delete().eq('id', id)
+    if (error) { toast.error('Delete failed: ' + error.message); return }
+    load()
+  }
+
+  return (
+    <>
+      <div className="card" style={{ padding: 14, marginBottom: 14 }}>
+        <h3 style={{ margin: '0 0 4px', fontSize: 15 }}>Add a suggestion rule</h3>
+        <p className="text-small text-gray" style={{ margin: '0 0 12px' }}>
+          When a CBN’s number or description contains the <strong>pattern</strong> and none of the
+          <strong> NOT-terms</strong>, this family is suggested during triage. Rules only suggest — you confirm each.
+        </p>
+        <div className="vc-form-grid">
+          <div className="form-group">
+            <label className="form-label">Family</label>
+            <select className="form-select" value={famId} onChange={e => setFamId(e.target.value)}>
+              <option value="">— Choose —</option>
+              {activeFams.map(ss => <option key={ss.id} value={ss.id}>{ss.segment} · {ss.name}</option>)}
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Pattern</label>
+            <input className="form-input" value={pattern} onChange={e => setPat(e.target.value)} placeholder="e.g. 1009.9" />
+          </div>
+        </div>
+        <div className="form-group">
+          <label className="form-label">NOT-terms <span className="text-gray">(comma-separated, optional)</span></label>
+          <input className="form-input" value={notTerms} onChange={e => setNot(e.target.value)} placeholder="e.g. school, staff" />
+        </div>
+        <button className="btn btn-primary btn-sm" disabled={saving} onClick={add}>
+          {saving ? <span className="spinner spinner-sm" /> : 'Add rule'}
+        </button>
+      </div>
+
+      {loading ? (
+        <Skeleton variant="row" count={3} />
+      ) : rules.length === 0 ? (
+        <div className="empty-state" style={{ padding: 32 }}>
+          <h3>No rules yet</h3>
+          <p>Add one above to speed up import triage.</p>
+        </div>
+      ) : (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Family</th>
+                <th>Pattern</th>
+                <th>NOT-terms</th>
+                <th style={{ textAlign: 'right' }}>Accepted</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {rules.map(r => {
+                const fam = famById[r.sub_segment_id]
+                return (
+                  <tr key={r.id}>
+                    <td style={{ fontWeight: 600 }}>
+                      {fam ? fam.name : `#${r.sub_segment_id}`}
+                      {fam && !fam.is_active && <span className="badge badge-gray" style={{ marginLeft: 6 }}>retired</span>}
+                    </td>
+                    <td style={{ fontFamily: 'monospace' }}>{r.pattern}</td>
+                    <td className="text-small">{(r.not_terms || []).join(', ') || '—'}</td>
+                    <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{r.hits || 0}</td>
+                    <td>
+                      <button className="btn btn-danger btn-sm" onClick={() => remove(r.id)}>Delete</button>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
     </>
   )

@@ -258,6 +258,21 @@ established fix-and-commit-each rhythm; verify CI + Vercel READY on the single d
 - The Vehicles/Sub-Segments/Import tab layout changes shape (F1 becomes the landing): re-run the
   owner screen-review for the catalog area only.
 
+## Post-9.7 follow-up: provenance repair (owner-deferred 2026-07-17)
+
+The import used to send `null` for blank Price Circular / Effective Date, ERASING
+those columns on every imported row (fixed in `dd9e831` — blank now means "leave
+as is"). Any PAST prod import run with those fields blank will have nulled the
+provenance of the rows it touched. **Do this AFTER 9.7 ships:**
+1. Measure (read-only): count prod `vehicle_catalog` rows with null `price_circular`
+   / `effective_date`, split active vs inactive.
+2. If active rows are affected: every active vehicle reflects the CURRENT price
+   list, so one import of the latest circular WITH both fields filled restamps the
+   whole active catalog cleanly (proved on staging — 797 null → 0). Fold into a
+   cutover import or run standalone.
+3. Inactive/superseded rows: historical circular is likely unreconstructable —
+   accept as-is, low operational value.
+
 ## Explicitly out of scope (owner-decided)
 
 WhatsApp bot (S2) · QR on printed brochures (S3) · price card / compare / quote-this ·
