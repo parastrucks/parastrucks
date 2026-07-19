@@ -199,11 +199,21 @@ family names (they become the Import-triage tab's opening queue).
   `moveCbns` now refuses a retired destination (409, verified). Still to do in b2: admin
   `fetchSubSegs` has no `is_active` filter, the vehicle modal's family dropdown filters
   by segment only, and the import's segment auto-fill map includes retired names.
-- **🟠 R5 — EF paths unverified since the staging redeploy** (partially closed):
-  ✅ `signBrochureUpload` verified end-to-end via the real UI (EF 200 → storage 200 →
-  file resolves). ✅ All 9.7b actions verified incl. refusal paths. **Still unverified:**
-  `createVehicle` / `updateVehicle` / `toggleVehicleActive` / `bulkUpsertVehicles` —
-  cover in the pre-ship smoke test.
+- **✅ R5 — EF paths verified** (CLOSED 2026-07-20). `signBrochureUpload` + all 9.7b actions
+  verified earlier (incl. refusal paths). The 4 remaining actions —
+  `createVehicle` / `updateVehicle` / `toggleVehicleActive` / `bulkUpsertVehicles` — were
+  covered by the pre-ship smoke test (signed-in staging admin JWT → deployed staging EF,
+  read-back after each): **19/19 checks pass**, incl. updateVehicle whitelist enforcement
+  (a sneak `cbn` write is ignored), bulkUpsert insert/update split, the null-erase guard
+  (blank price_circular preserved), and R1 no-refile-of-existing.
+- **🔴 R11 — `createVehicle` never set `brand_id`** (found + fixed 2026-07-20, `745f093`).
+  The single-vehicle Add form wrote only the legacy `brand` text code; `vehicle_catalog.brand_id`
+  is NOT NULL, so **every "Add Vehicle" failed the constraint**. `git log -S brand_id` on the EF
+  shows it was never set → **pre-existing prod bug**, latent because the R5 actions had never been
+  exercised end-to-end; surfaced immediately by the smoke test. Fix resolves `brand_id` server-side
+  from the brand code, mirroring the import path's client-side resolution. This bug rides the 9.7
+  release (fixed within it), like the other three pre-existing prod bugs (1000-row cap, import
+  null-erase, MBP blank dropdown). Requires the `admin-catalog` EF deploy on the cutover.
 - **🔴 R10 — `moveCbns` originally did not carry `segment`** (found + fixed 2026-07-17,
   `d6e50fd`). It wrote `sub_segment_id` + `sub_category` only, so moving a CBN into a
   family in a DIFFERENT segment left the vehicle's segment stale — the same
