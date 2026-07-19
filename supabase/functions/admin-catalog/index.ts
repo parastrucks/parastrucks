@@ -113,10 +113,20 @@ Deno.serve(async (req: Request) => {
         const p = payload as Record<string, unknown>
         if (!p.cbn) return json({ error: "cbn is required" }, 400)
         if (!p.description) return json({ error: "description is required" }, 400)
+        // vehicle_catalog.brand_id is NOT NULL. The form only sends the legacy
+        // `brand` text code, so resolve the uuid here — the single-add path had
+        // never set it (pre-9.7 bug: every "Add Vehicle" hit the NOT-NULL
+        // constraint). Mirrors the import's client-side resolution.
+        const brandCode = (p.brand as string) ?? "al"
+        const { data: brandRow, error: brandErr } = await admin
+          .from("brands").select("id").eq("code", brandCode).maybeSingle()
+        if (brandErr) return json({ error: brandErr.message }, 400)
+        if (!brandRow) return json({ error: `Unknown brand code "${brandCode}"` }, 400)
         const { error } = await admin.from("vehicle_catalog").insert({
           cbn: p.cbn,
           description: p.description,
-          brand: p.brand ?? "al",
+          brand: brandCode,
+          brand_id: brandRow.id,
           segment: p.segment,
           // Phase 9.7a: sub_segment_id is the real link; sub_category text is
           // dual-written alongside it until every reader has moved to the id
