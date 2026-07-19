@@ -2427,6 +2427,72 @@ function bumpShelf(userId, cardKey) {
   return s
 }
 
+/* ── Family share (Phase 9.7d, S1) ────────────────────────────
+   Hands the OS share sheet the brochure PDF + a pre-filled caption; in
+   WhatsApp it lands as an editable draft the employee reviews before sending.
+   FAMILY-LEVEL ONLY — never a single CBN's price. One brochure serves many
+   CBNs at different prices, so the caption says "prices on request", never a
+   number. */
+const BRAND_LABEL = { al: 'Ashok Leyland', switch: 'Switch Mobility', hdh: 'HD Hyundai' }
+
+function buildShareCaption(card) {
+  const brand = BRAND_LABEL[card.brand] || 'Ashok Leyland'
+  return [
+    `*${brand} — ${card.name}*`,
+    `${card.segment} · ${card.count} variant${card.count !== 1 ? 's' : ''}`,
+    '',
+    'Full model brochure attached. Prices on request.',
+    '',
+    '— Paras Trucks & Buses',
+    'team.parastrucks.in',
+  ].join('\n')
+}
+
+async function fetchBrochureFile(card) {
+  if (!card.brochure_url) return null
+  const { data, error } = await supabase.storage
+    .from('brochures').createSignedUrl(card.brochure_url, 300)
+  if (error || !data?.signedUrl) return null
+  const res = await fetch(data.signedUrl)
+  if (!res.ok) return null
+  const blob = await res.blob()
+  const raw = (card.brochure_filename || `${card.name}.pdf`).replace(/[^\w.\- ]+/g, '_')
+  const name = raw.toLowerCase().endsWith('.pdf') ? raw : `${raw}.pdf`
+  return new File([blob], name, { type: 'application/pdf' })
+}
+
+// Returns a short status the caller can toast. Never throws.
+async function shareFamily(card) {
+  const caption = buildShareCaption(card)
+  let file = null
+  try { file = await fetchBrochureFile(card) } catch { /* fall through to text/desktop */ }
+
+  // Mobile: OS share sheet with the PDF + caption. Android Chrome supports
+  // files; the caption arrives in WhatsApp as an editable draft.
+  if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], text: caption, title: card.name }); return { ok: true } }
+    catch (e) { if (e?.name === 'AbortError') return { ok: true, cancelled: true } /* else fall through */ }
+  }
+  // Some phones share text but not files.
+  if (!file && navigator.share) {
+    try { await navigator.share({ text: caption, title: card.name }); return { ok: true } }
+    catch (e) { if (e?.name === 'AbortError') return { ok: true, cancelled: true } }
+  }
+
+  // Desktop fallback: copy the caption, download the PDF, tell the user to paste.
+  let copied = false
+  try { await navigator.clipboard.writeText(caption); copied = true } catch { /* clipboard blocked */ }
+  if (file) {
+    const url = URL.createObjectURL(file)
+    const a = document.createElement('a')
+    a.href = url; a.download = file.name
+    document.body.appendChild(a); a.click(); document.body.removeChild(a)
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+    return { ok: true, desktop: true, copied, downloaded: true }
+  }
+  return { ok: true, desktop: true, copied, downloaded: false }
+}
+
 /* One cover tile on the brochure wall. Shows the real page-1 thumbnail once
    9.7c c2 populates cover_url; until then a typographic title block (zero cost,
    always available). The whole tile opens the variants modal; brochure download
@@ -2580,9 +2646,11 @@ function SalesCatalog({ profile }) {
         // Prefer the family's own name — it is the one the rename updates.
         name:              ss?.name || vlist[0].sub_category || '(Other)',
         segment:           ss?.segment || vlist[0].segment,
+        brand:             ss?.brand || vlist[0].brand || 'al',
         count:             vlist.length,
         brochure_url:      ss?.brochure_url      || null,
         brochure_filename: ss?.brochure_filename || null,
+        cover_url:         ss?.cover_url         || null,
         vehicles:          vlist,
       }
     })
@@ -2743,7 +2811,23 @@ function SalesCatalog({ profile }) {
 /* ── VEHICLE LIST MODAL (sales view) ─────────────────────────── */
 function VehicleListModal({ subSeg, onClose }) {
   const trapRef = useFocusTrap(true, onClose)
+  const toast = useToast()
   const [search, setSearch] = useState('')
+  const [sharing, setSharing] = useState(false)
+
+  async function onShare() {
+    setSharing(true)
+    const r = await shareFamily(subSeg)
+    setSharing(false)
+    if (r.cancelled) return
+    if (r.desktop) {
+      if (r.copied && r.downloaded) toast.success('Caption copied & brochure downloaded — paste into WhatsApp and attach the file.')
+      else if (r.downloaded)        toast.info('Brochure downloaded. Copy the caption manually to share.')
+      else if (r.copied)            toast.success('Caption copied — paste into WhatsApp.')
+      else                          toast.info('Sharing not available on this browser.')
+    }
+    // Mobile success is silent — the OS share sheet already gave feedback.
+  }
 
   const filtered = useMemo(() => {
     if (!search.trim()) return subSeg.vehicles
@@ -2767,6 +2851,10 @@ function VehicleListModal({ subSeg, onClose }) {
             </p>
           </div>
           <div className="flex gap-8" style={{ alignItems: 'flex-start' }}>
+            <button className="btn btn-primary btn-sm" onClick={onShare} disabled={sharing}
+              title="Share this family's brochure on WhatsApp">
+              {sharing ? <span className="spinner spinner-sm" /> : <><Icon name="share" size={14} /> Share</>}
+            </button>
             {subSeg.brochure_url && (
               <BrochureDownload path={subSeg.brochure_url} filename={subSeg.brochure_filename} />
             )}
