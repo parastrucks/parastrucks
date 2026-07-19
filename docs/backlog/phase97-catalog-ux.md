@@ -160,8 +160,10 @@ independent of 9.7 and fix a live prod bug. Owner was shown that tradeoff and ac
    Must precede the client: old EF's createVehicle silently drops sub_segment_id from
    new vehicles (unknown fields ignored, no error) — degradation, not breakage, but real.
 4. Merge the PR / let Vercel deploy the client.
-5. Run the 9.7c cover-thumbnail backfill **against prod** (staging's brochures bucket is
-   empty — the backfill can only truly run where the PDFs are).
+5. Run the 9.7c cover-thumbnail backfill **against prod**: log in as admin → Vehicle
+   Catalog → Sub-Segments → "Generate N covers". **Keep the tab visible** — pdfjs render
+   steps via requestAnimationFrame; a hidden tab pauses it (a scoped rAF shim guards this,
+   but foreground is still best). Runs where the real PDFs are; ~0.2s/page.
 6. Refresh `docs/db/schema-current.sql` + `seed-reference.sql` dumps (both stale now:
    no sub_segment_id; 44 vs 49 families).
 Expected prod backfill: **976 / 1006** linked, 30 CBNs left NULL across the 5 orphan
@@ -272,6 +274,22 @@ provenance of the rows it touched. **Do this AFTER 9.7 ships:**
    cutover import or run standalone.
 3. Inactive/superseded rows: historical circular is likely unreconstructable —
    accept as-is, low operational value.
+
+## pdfjs cover generation — hard-won setup notes (2026-07-20, c2)
+
+Real thumbnails via `pdfjs-dist` fought two non-obvious issues; both are fixed and
+documented in `src/lib/coverGen.js` + `vite.config.js`, recorded here so they aren't
+re-litigated:
+- **optimizeDeps exclude**: `pdfjs-dist` MUST be excluded from Vite's `optimizeDeps`, or
+  the pre-bundled main import and the `?worker` build become different instances whose
+  API-version constants mismatch → `page.render()` deadlocks (getDocument/getPage/
+  getOperatorList all still work, which is what makes it baffling).
+- **requestAnimationFrame in hidden tabs**: pdfjs steps its canvas draw via rAF, which the
+  browser PAUSES in a backgrounded/hidden tab, so render hangs forever there. A scoped
+  rAF→setTimeout shim in coverGen fixes it. (This also cost a long debug session because
+  the automated test browser runs `hidden` — the "deadlock" was a test artifact, not code.)
+- Perf: render is ~0.2s/page; covers are 14-25 KB webp. Not a hot path (admin batch only),
+  and pdfjs is a lazy dynamic-import chunk that never enters the employee bundle.
 
 ## Explicitly out of scope (owner-decided)
 
