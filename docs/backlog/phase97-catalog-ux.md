@@ -1,8 +1,12 @@
 # Phase 9.7 — Vehicle Catalog UX rework (owner-approved package)
 
-**Status:** planned, not started. Decided 2026-07-16 from the interactive prototype board
+**Status (2026-07-20): 🔨 BUILT & STAGING-VERIFIED — NOT YET ON PROD.** All of 9.7a/b/c/d built and
+verified against staging `klpnhpnlotcbbovwswmq` on branch **`claude/phase-9-7-start-0c4b8d`** (26
+commits). Not merged; no prod migration/EF deploy yet. Ships to prod as ONE release (owner-decided) —
+see the "Prod cutover order" and "Red-team findings" sections below, and the pre-ship pipeline in
+`CLAUDE.md` → Next actions. Decided 2026-07-16 from the interactive prototype board
 (artifact: `claude.ai/code/artifact/aa2a498e-8d7f-46ad-ad71-9b927eb79d1f`, v3 "shortlist").
-Builds AFTER the Phase 9.6 redesign is live, on its own branch off `origin/portal`, its own PR.
+The sections below are the LIVING record (build notes, findings, cutover) — read top-to-bottom.
 
 ## The reframe everything rests on
 
