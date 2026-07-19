@@ -1383,6 +1383,45 @@ function SubSegmentsTab({ subSegs, vehicles = [], loading, onRefresh }) {
     return list
   }, [subSegs, filterBrand, filterState, search])
 
+  // c2 backfill — families with a brochure but no cover yet. Rendered in the
+  // admin browser because pdfjs needs a DOM/canvas; a Node script can't (no
+  // node-canvas installed). This is THE way covers get generated for brochures
+  // that were uploaded before c2, so it must be run once on prod at cutover.
+  const [covering, setCovering] = useState(null)  // {done,total} | null
+  const missingCovers = useMemo(
+    () => subSegs.filter(ss => ss.is_active && ss.brochure_url && !ss.cover_url),
+    [subSegs]
+  )
+  async function backfillCovers() {
+    if (missingCovers.length === 0) { toast.info('Every brochure already has a cover.'); return }
+    setCovering({ done: 0, total: missingCovers.length })
+    let ok = 0, fail = 0
+    try {
+      const { generateCoverWebp } = await import('../lib/coverGen')
+      for (const ss of missingCovers) {
+        try {
+          const { data: signed, error: sErr } = await supabase.storage
+            .from('brochures').createSignedUrl(ss.brochure_url, 300)
+          if (sErr || !signed?.signedUrl) throw new Error('sign brochure failed')
+          const buf = await (await fetch(signed.signedUrl)).arrayBuffer()
+          const blob = await generateCoverWebp(buf)
+          if (!blob) throw new Error('generate returned null')
+          const path = await uploadCoverBlob(blob)
+          if (!path) throw new Error('cover upload failed')
+          const { error } = await supabase.from('sub_segments').update({ cover_url: path }).eq('id', ss.id)
+          if (error) throw error
+          ok++
+        } catch { fail++ }
+        setCovering(c => ({ ...c, done: c.done + 1 }))
+      }
+    } catch (e) {
+      toast.error('Cover generation unavailable: ' + e.message)
+    }
+    setCovering(null)
+    toast.success(`Covers generated: ${ok}${fail ? ` · ${fail} failed` : ''}.`)
+    onRefresh()
+  }
+
   // Retire/reactivate go through the EF: it enforces "retire only at 0 active
   // CBNs" server-side. The client count below is a UX hint only — the server
   // is the authority, and its 409 is surfaced verbatim.
@@ -1429,6 +1468,20 @@ function SubSegmentsTab({ subSegs, vehicles = [], loading, onRefresh }) {
           </button>
         </div>
       </div>
+
+      {/* c2 cover backfill — only shows when there are brochures without covers */}
+      {missingCovers.length > 0 && (
+        <div className="card" style={{ padding: 12, marginBottom: 12, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span className="text-small">
+            {missingCovers.length} brochure{missingCovers.length === 1 ? '' : 's'} {missingCovers.length === 1 ? 'has' : 'have'} no cover thumbnail yet.
+          </span>
+          <button className="btn btn-secondary btn-sm" disabled={!!covering} onClick={backfillCovers}>
+            {covering
+              ? `Generating… ${covering.done}/${covering.total}`
+              : `Generate ${missingCovers.length} cover${missingCovers.length === 1 ? '' : 's'}`}
+          </button>
+        </div>
+      )}
 
       {loading ? (
         <Skeleton variant="row" count={4} />
@@ -1674,6 +1727,7 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved, inline = false }) {
     setSaving(true)
     let brochure_url      = form.brochure_url      || null
     let brochure_filename = form.brochure_filename  || null
+    let cover_url         = form.cover_url          || null
 
     if (brochureFile) {
       // Phase 9f M5 — the EF generates an unguessable UUID filename
@@ -1701,6 +1755,15 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved, inline = false }) {
       }
       brochure_url      = serverPath
       brochure_filename = brochureFile.name
+
+      // c2: render page 1 → webp cover from the same file, best-effort. A new
+      // brochure always regenerates the cover (a replaced PDF must not keep the
+      // old page-1 image). Failure leaves cover_url null → typographic fallback.
+      setUploadPct(null)
+      try {
+        const buf = await brochureFile.arrayBuffer()
+        cover_url = await generateAndUploadCover(buf)
+      } catch { cover_url = null }
     }
 
     const payload = {
@@ -1710,6 +1773,7 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved, inline = false }) {
       description:      form.description || null,
       brochure_url,
       brochure_filename,
+      cover_url,
       is_active:        form.is_active,
     }
 
@@ -2021,6 +2085,27 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved, inline = false }) {
       </div>
     </div>
   )
+}
+
+/* ── Cover thumbnail upload (Phase 9.7c c2) ───────────────────
+   generate + upload are best-effort: a cover failure must NEVER block the
+   brochure save, and a missing cover simply falls back to the typographic
+   tile. pdfjs is pulled in via the lazy coverGen import, keeping it out of the
+   employee bundle. */
+async function uploadCoverBlob(webpBlob) {
+  try {
+    const { path, token } = await callEdge('admin-catalog', 'signCoverUpload', {})
+    const { error } = await supabase.storage.from('brochures')
+      .uploadToSignedUrl(path, token, webpBlob, { upsert: false, contentType: 'image/webp' })
+    return error ? null : path
+  } catch { return null }
+}
+async function generateAndUploadCover(pdfArrayBuffer) {
+  try {
+    const { generateCoverWebp } = await import('../lib/coverGen')
+    const blob = await generateCoverWebp(pdfArrayBuffer)
+    return blob ? await uploadCoverBlob(blob) : null
+  } catch { return null }
 }
 
 /* ── BROCHURE DOWNLOAD BUTTON ────────────────────────────────── */
@@ -2629,6 +2714,23 @@ function SalesCatalog({ profile }) {
     [subSegs]
   )
 
+  // c2: covers live in the private brochures bucket, so an <img src> needs a
+  // signed URL. Batch-sign every cover path in ONE request (createSignedUrls
+  // plural) rather than N calls for a wall of tiles. Refreshed with subSegs.
+  const [coverUrls, setCoverUrls] = useState({})   // storage path → signed URL
+  useEffect(() => {
+    const paths = subSegs.filter(s => s.cover_url).map(s => s.cover_url)
+    if (paths.length === 0) { setCoverUrls({}); return }
+    let cancelled = false
+    supabase.storage.from('brochures').createSignedUrls(paths, 3600).then(({ data }) => {
+      if (cancelled || !data) return
+      const map = {}
+      for (const d of data) if (d.signedUrl && !d.error) map[d.path] = d.signedUrl
+      setCoverUrls(map)
+    })
+    return () => { cancelled = true }
+  }, [subSegs])
+
   // Build cards: one per family. CBNs with no sub_segment_id (the ~30 orphans
   // awaiting 9.7b triage) still group under their raw text so they stay visible
   // to sales — they just have no brochure until an admin files them.
@@ -2650,11 +2752,12 @@ function SalesCatalog({ profile }) {
         count:             vlist.length,
         brochure_url:      ss?.brochure_url      || null,
         brochure_filename: ss?.brochure_filename || null,
-        cover_url:         ss?.cover_url         || null,
+        // Resolved signed URL for the <img>, or null → typographic fallback.
+        cover_url:         (ss?.cover_url && coverUrls[ss.cover_url]) || null,
         vehicles:          vlist,
       }
     })
-  }, [vehicles, subSegById])
+  }, [vehicles, subSegById, coverUrls])
 
   const availableSegs = useMemo(
     () => [...new Set(cards.map(c => c.segment))].sort(),

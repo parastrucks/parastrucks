@@ -472,6 +472,22 @@ Deno.serve(async (req: Request) => {
         return json({ ok: true, signedUrl: data.signedUrl, token: data.token, path: data.path })
       }
 
+      // ── Cover thumbnail upload (Phase 9.7c c2, R7) ────────────
+      // A separate action from signBrochureUpload: covers are .webp, not .pdf.
+      // Same private `brochures` bucket (its RLS keys on bucket_id, not path),
+      // so a cover is exactly as protected as the brochure it was rendered from.
+      // The client renders page 1 via pdfjs and PUTs the webp to this URL.
+      case "signCoverUpload": {
+        const path = `${crypto.randomUUID()}.webp`
+        const { data, error } = await admin.storage
+          .from("brochures")
+          .createSignedUploadUrl(path)
+        if (error || !data) {
+          return json({ error: error?.message || "Failed to sign cover upload" }, 400)
+        }
+        return json({ ok: true, signedUrl: data.signedUrl, token: data.token, path: data.path })
+      }
+
       default:
         return json({ error: `Unknown action: ${action}` }, 400)
     }
