@@ -1630,3 +1630,98 @@ Branch at 58 commits, all pushed; owner set the 9.6 deploy for TONIGHT.**
 - **Phase 9.6 is COMPLETE.** 59 commits, 2 red-team rounds, a staging smoke-test, and a full
   owner screen-by-screen review, released in one shot.
   Next build: **Phase 9.7 Catalog UX** (`docs/backlog/phase97-catalog-ux.md`).
+
+
+---
+
+**Sessions 2026-07-17 → 2026-07-20 — 🔨 Phase 9.7 Catalog UX: BUILT & STAGING-VERIFIED (not yet on prod).**
+
+Branch **`claude/phase-9-7-start-0c4b8d`** (26 commits, off `origin/portal`, worktree
+`.claude/worktrees/suspicious-snyder-af9361`). Every sub-phase built and verified against the
+**staging** Supabase project `klpnhpnlotcbbovwswmq` (migrations via `psql` Session Pooler; the
+`admin-catalog` EF redeployed to staging several times via `npx supabase functions deploy … --no-verify-jwt`).
+Owner reviewed direction throughout; **decided the whole package ships to prod as ONE release** (like
+9.6), not incremental deploys. Full living plan + red-team log + cutover order: `docs/backlog/phase97-catalog-ux.md`.
+
+**Discovery that reshaped the work:** staging is **NOT** a copy of prod. Twice, silently — (1)
+`sub_segments` held a single fixture row (`ECOMET 1115`) against a full 906-row `vehicle_catalog`;
+reseeded from a prod `pg_dump` of the 49 real families. (2) staging's `storage.objects` had **zero**
+RLS policies for the `brochures` bucket, so every brochure read 404'd while uploads succeeded
+(signed-upload URLs bypass RLS) — copied prod's four `brochures_*` policies verbatim
+(`docs/db/staging_storage_policies.sql`). Standing lesson recorded: verify, never assume staging
+mirrors prod. Also surfaced **R9**: `RECONSTRUCTION.md` cannot actually rebuild the portal — it never
+creates the Storage bucket and the bucket row is not in `schema-current.sql`.
+
+**9.7a keystone** (`1b99aa7`, `8902060`, `00261d3`, `1aaf1bb`): additive `vehicle_catalog.sub_segment_id`
+integer FK (the 9.7 plan said uuid — wrong; `sub_segments.id` is a serial) + name-match backfill
+(`sub_segments.name` is globally UNIQUE, so no fan-out). Reads/writes moved onto the id; **rename
+unlocked** (was disabled by design because CBNs were tied by name text) via EF `renameSubSegment`
+which syncs `sub_category` on every linked CBN — verified end-to-end (`renamed: 33`, text propagated,
+32 active + 1 inactive reconciled). Prod prediction: **976/1006** CBNs link; the 30 that don't are 5
+family names never created (the Import-triage opening queue). `SEGMENTS` gained `MBP Truck` as a
+stopgap (11 prod families lived there but the constant omitted it → blank segment dropdown).
+
+**MBP Truck → Long Haul Trucks consolidation** (`6ebd19a`): a prod reconciliation proved
+`vehicle_catalog` has **zero** MBP Truck rows — the vehicles were migrated long ago and only 11
+`sub_segments` rows lagged. So an 11-row `UPDATE`, not a data migration; guarded to abort if any
+vehicle still claims MBP Truck. Owner decisions: retire the empty `Haulage – CNG 19T` leftover;
+leave `Haulage – 19T`'s 6 CBNs for hand-triage in Reshuffle. (The retire step no-op'd on staging —
+that family holds 6 CBNs there vs 0 on prod — so on prod it must print `UPDATE 1`, else STOP.)
+
+**R2 fix** (`2a11a72`): **PostgREST silently caps every response at 1000 rows.** `vehicle_catalog` is
+1006 on prod, so the admin catalog was already truncating ("897 of 1000" vs 1006) AND
+Quotation/ProformaInvoice/FinancierCopy (897 active) were one circular from losing vehicles from
+**quotation search** with no error. Extracted `fetchAllRows` to `src/lib/fetchAll.js`; paginated all
+four readers (+ `.order('id')` tiebreak). Owner found the gap by noticing the 1000/1006 mismatch.
+
+**9.7b workbench** (`2fefc8c`, `ffc6f28`, `b4abd8f`, `2f6c52a`): `catalog_assign_rules` table
+(admin/back_office-only RLS, pattern + NOT-terms, unique per family) + the atomic
+`move_cbns_to_family` RPC (EXECUTE revoked from anon AND authenticated — the project's known gotcha —
+granted only to service_role; verified a real `service`-role user gets 403). EF actions: `moveCbns`
+(writes **all three** placement columns id+text+segment together — **R10**: it originally omitted
+`segment`, caught by a cross-segment test move, so a CBN moved across segments kept its old segment),
+`setSubSegmentActive` (retire refused while active CBNs remain), `setSubSegmentSegment` (**R3**: syncs
+`vehicle_catalog.segment` on linked CBNs). UI: **Reshuffle** tab (tokenised filter,
+select-all-matching over the *full* paginated set — verified 797 matches → 797 selected, not the 200
+rendered; cross-segment warning; inline "+ new sub-segment"), **Families** lifecycle
+(retire/reactivate through the EF, empty flags), **Triage** tab (unassigned queue with rule-suggested
+family, accept one/all, rule `hits` bump — a suggestion race fixed by deriving the value not
+pre-seeding it), **Rules** tab (CRUD). Closed **R1** (`dd9e831`, the last armed landmine): the import
+`bulkUpsertVehicles` used to upsert every column, so a circular's stale Sub-Category text overwrote
+the DB (silently undoing renames + poisoning quotation search). Now NEW CBNs are inserted with their
+resolved family; EXISTING CBNs get **price fields only** — family assignment stays with the human
+(owner confirmed this trade). Also fixed a pre-existing data-loss bug: **blank Price Circular /
+Effective Date sent null and ERASED those columns** on every imported row (verified by nulling then
+restoring 797 staging rows). Guard-bypass holes closed: the sub-segment modal's Segment/Active fields
+now route through the EF.
+
+**9.7c find surfaces** — **c1** (`326876c`): rebuilt the employee SalesCatalog as search-first —
+hero tokenised search (family + CBN + description; "1920 haulage" or a CBN fragment lands on the
+family), per-user **shelf** (most-opened families, localStorage, namespaced by user id), **brochure
+wall** (cover tiles grouped by segment). **c2** (`dea16a5`): real page-1 cover thumbnails —
+`sub_segments.cover_url`, `signCoverUpload` EF action (webp), `src/lib/coverGen.js` (pdfjs, lazy
+dynamic-import → separate admin-only chunk), generate at brochure upload + an admin "Generate N
+covers" backfill; SalesCatalog batch-signs cover paths and renders `<img>` with typographic fallback.
+Verified all 7 staging covers (real image/webp, 14-25 KB). **pdfjs cost a long debug session** — two
+non-obvious setup requirements now documented in code + backlog: (1) exclude `pdfjs-dist` from Vite
+`optimizeDeps` or the main/worker version constants mismatch and `page.render()` deadlocks; (2) render
+steps via `requestAnimationFrame`, which the browser PAUSES in a hidden/backgrounded tab, so a scoped
+rAF→setTimeout shim is required (the automated review browser runs hidden — the "deadlock" was a test
+artifact; `getOperatorList` returning 748 ops in 189 ms was the clue). Sales-view verification used a
+temp `?as=sales` toggle + temporarily scoping admin to AL + all verticals — **all reverted**.
+
+**9.7d share** (`eb3a3d6`): family-level WhatsApp share button in the variant modal. Mobile:
+`navigator.share({files,text})` → editable WhatsApp draft; desktop fallback: copy caption + download
+PDF. **Family-level only — never a single CBN's price** ("prices on request" + PTB sign-off). Desktop
+fallback verified (caption verbatim, PDF downloaded, clipboard degrades gracefully). **Mobile Web
+Share files path needs an on-device Android check before S1 is "done."**
+
+**State at session end:** 26 commits on the branch; staging clean & review-ready (real families, 7
+brochures + covers, 0 drift, admin scope reverted, all temp toggles removed). **Nothing on prod** —
+no prod migration, no prod EF deploy, not merged. Red-team findings R1–R10 all closed or scoped.
+**Next:** pre-ship pipeline (smoke-test the 4 still-unverified EF actions — R5; red-team the full
+diff; owner catalog screen-review) → the single strict-order cutover (see backlog) → prod cover
+backfill (visible tab) → refresh the DB dumps. Separately parked: **rotate the prod `service_role`
+key** (a live prod key sat hardcoded in two tracked scripts, now env-only in `f420425`, but valid in
+git history until rotated — coupled-key caveat applies); the mobile-share on-phone check; the
+post-9.7 provenance repair (blank-circular rows).

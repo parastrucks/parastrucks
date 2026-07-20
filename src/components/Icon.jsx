@@ -9,7 +9,7 @@ import {
   ArrowRight, ArrowLeft, ArrowUp, ArrowDown, Menu, X, Check, CheckCircle2,
   Pencil, Trash2, SlidersHorizontal, Printer, Undo2, AlertTriangle, Clock,
   BarChart3, Folder, RotateCcw, Settings, Lock, Mail, Calendar, Filter,
-  Building2, Info, CircleAlert, ClipboardList, RefreshCw,
+  Building2, Info, CircleAlert, ClipboardList, RefreshCw, Share2,
 } from 'lucide-react';
 
 /* Semantic name → Lucide component. Keep names aligned with the prototype's
@@ -66,6 +66,7 @@ export const ICONS = {
   info: Info,
   'alert-circle': CircleAlert,
   clipboard: ClipboardList,
+  share: Share2,
 };
 
 export default function Icon({
