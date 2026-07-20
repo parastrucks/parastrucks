@@ -26,12 +26,34 @@ ALTER TABLE public.vehicle_catalog
   ADD COLUMN IF NOT EXISTS sub_segment_id integer
   REFERENCES public.sub_segments(id) ON DELETE SET NULL;
 
--- 2. Backfill from the existing text match. sub_segments.name is globally
---    UNIQUE (sub_segments_name_key), so this join cannot fan out — each CBN
---    resolves to at most one family. Matching is done on trimmed, case-folded
---    text because the text was hand-entered and imported from spreadsheets.
---    Rows whose sub_category matches no sub_segment are LEFT NULL, not guessed
---    (they are reported below and triaged by a human in 9.7b).
+-- 2. Backfill from the existing text match. Matching is done on trimmed,
+--    case-folded text because the text was hand-entered and imported from
+--    spreadsheets. Rows whose sub_category matches no sub_segment are LEFT
+--    NULL, not guessed (they are reported below and triaged by a human in
+--    9.7b).
+--
+--    GUARD (red-team-2 H9): sub_segments.name is UNIQUE, but that constraint
+--    is exact-text — it does NOT guarantee uniqueness under the folded match
+--    below. Two families differing only in case or whitespace ('Bus 9M' /
+--    'bus 9M ') would make the UPDATE..FROM pick one match arbitrarily and
+--    silently mis-file every CBN carrying that text. Assert the folded-unique
+--    premise before relying on it; a RAISE here aborts the whole transaction.
+DO $$
+DECLARE dup record;
+BEGIN
+  SELECT btrim(lower(name)) AS folded, count(*) AS n, string_agg(name, ' | ') AS names
+    INTO dup
+    FROM public.sub_segments
+   GROUP BY btrim(lower(name))
+  HAVING count(*) > 1
+   LIMIT 1;
+  IF FOUND THEN
+    RAISE EXCEPTION 'sub_segments names collide under trim+casefold: [%] (% rows). '
+                    'The backfill join would fan out arbitrarily — resolve the '
+                    'duplicate names first, then re-run.', dup.names, dup.n;
+  END IF;
+END $$;
+
 UPDATE public.vehicle_catalog vc
    SET sub_segment_id = ss.id
   FROM public.sub_segments ss
