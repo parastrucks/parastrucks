@@ -1725,3 +1725,80 @@ backfill (visible tab) → refresh the DB dumps. Separately parked: **rotate the
 key** (a live prod key sat hardcoded in two tracked scripts, now env-only in `f420425`, but valid in
 git history until rotated — coupled-key caveat applies); the mobile-share on-phone check; the
 post-9.7 provenance repair (blank-circular rows).
+
+
+---
+
+**Session 2026-07-20 (cont.) — ✅ Phase 9.7 SHIPPED TO PROD (one release).**
+
+The pre-ship pipeline and the strict-order cutover both ran this session; 9.7 went live on
+`team.parastrucks.in`. Final prod commit **`506d888`** (PR #79 squash-merged to `portal`); CI
+all-green (CodeQL, gitleaks, npm-audit, trivy-fs), Vercel `portal` READY, prod `/` + `/login` = 200.
+
+**Pre-ship pipeline.**
+- **R5 EF smoke test** — signed-in staging admin JWT → deployed staging `admin-catalog` EF, exercising
+  the 4 never-verified actions (createVehicle / updateVehicle / toggleVehicleActive /
+  bulkUpsertVehicles) with read-back. First run FAILED immediately and usefully: **createVehicle threw
+  `null value in column brand_id`** — the single-add form only ever wrote the legacy `brand` text, never
+  the NOT-NULL `brand_id`. `git log -S brand_id` on the EF showed it was *never* set → a pre-existing
+  prod bug (every "Add Vehicle" failed), latent because the action had never been exercised end-to-end.
+  Fixed server-side (`745f093`, **R11**): resolve `brand_id` from the brand code, mirroring the import's
+  client-side resolution. After redeploy: **19/19 pass** (incl. updateVehicle whitelist enforcement,
+  bulkUpsert insert/update split, the null-erase guard, R1 no-refile-of-existing).
+- **Four clean-room red-team lanes** (general-purpose subagents, each barred from reading `docs/`/CLAUDE.md
+  so they rediscovered rather than parroted R1–R11): server/migrations, admin workbench, sales UI/covers/
+  share, and a cross-cutting lane that deliberately read files the branch did NOT change. 57 raw
+  candidates → deduped + code-verified by the main agent → **19 Tier1+2 fixes**, Tier 3 backlogged.
+  Headline finds:
+  - **T2 (worst):** `sales_vertical_id` — a 4th placement column nobody synced. RLS + the sales/quotation
+    query both scope on it, so a cross-segment Reshuffle move (segment synced, vertical didn't) would make
+    a vehicle vanish from the destination vertical's catalog AND quotation search while haunting the old
+    one. Fix: EF resolves the vertical from the destination family's segment (`SEGMENT_VERTICAL_CODE` map
+    → `resolveVerticalId`) and the RPC grew to **5 args** writing `sales_vertical_id`.
+  - **T1:** import still erased `description`/`tyres`/`gst_rate`/`is_active` on a minimal "CBN+MRP" sheet
+    (the earlier null-erase fix covered only price_circular/effective_date) — and silently *reactivated*
+    hand-deactivated vehicles. Fix: `PRICE_FIELDS` trimmed to description/tyres/mrp/price_circular/
+    effective_date; gst_rate + is_active never touched on existing rows (server-enforced).
+  - **T3:** Add-Sub-Segment modal wrote placement direct via PostgREST (no segment, no retired-guard,
+    unchunked `.in()`) → routed through moveCbns.
+  - **T4:** Triage suggested retired families (blank-but-armed dropdown, Accept-all half-commit) → active
+    filter + correct hits-bump.
+  - **T6/T7/H10/H11:** rename/segment repair-on-unchanged (removed the no-op early-return); updateVehicle
+    re-resolves brand_id; unknown segment rejected; activate-into-retired refused; retire refused with an
+    active CBN present.
+  - Sales/coverGen: **H4** text-only share no longer gated on `!file`; **H5** cover `<img>` onError →
+    typographic fallback; **H6** corrupt-shelf guard; **H7** coverGen render mutex + single-flight worker.
+- **Re-verified 25/25 on staging** after re-running the b1 migration + redeploying the EF (a
+  comprehensive script: T2 vertical travels Bus→buses then Tipper→tipper and is preserved on unassign;
+  T1 preservation; T7 brand FK; T6 resync-on-unchanged; H10/H11 guards; R5 regression).
+- **Owner screen-by-screen review on staging** (login → Vehicles → Reshuffle → Rules → Triage →
+  Sub-Segments → sales wall). All passed. Two "issues" were clarifications, not bugs: the Vehicles count
+  reads 908 (staging < prod's 1006, so the 1000-row cap isn't observable there) and the "Generate covers"
+  button only shows when brochures lack covers. One real enhancement landed mid-review (`2e99f9e`): an
+  **admin "Browse" tab** rendering the exact employee wall at full-catalog scope — new `allBrands`
+  (an admin has no user_brands rows but should see everything, matching RLS) + `embedded` (suppress the
+  wall's own page-head) props on SalesCatalog.
+- **Production build green** — 811 modules; pdfjs stays a lazy admin-only chunk (worker 1298 kB, pdf
+  330 kB, coverGen 1.47 kB all separate from the main bundle), confirming employees never download it.
+
+**Prod cutover (strict order, owner-run psql via prod Session pooler + `npx supabase functions deploy`,
+guided step-by-step).** A first attempt hit `tenant/user not found` — the prod project is NOT in
+staging's `aws-0-ap-south-1` pooler cluster; owner pulled the correct Session-pooler string from the
+dashboard. Then:
+1. **97a keystone** → `UPDATE 976`; verification **976/1006 linked**, 30 text_but_unmatched (the 5 orphan
+   families: Haulage – Other ×10, MAV 45T/49T/46T Air Susp ×6 each, Garud 15M ×2 → the Triage opening
+   queue), 0 no_family_text, integrity drift 0 rows. Exactly the prediction.
+2. **97b consolidation** → guard passed (no MBP vehicles), `UPDATE 1` retire of `Haulage – CNG 19T`
+   (id 27, 0 CBNs), `UPDATE 11` families → Long Haul Trucks, `families_still_mbp = 0`, family-vs-vehicle
+   segment drift 0 rows.
+3. **97b1 rules + 5-arg RPC** → table/RLS/4 policies/constraints/indexes all correct; V0 grantees =
+   `postgres` (owner, not client-reachable) + `service_role`, **anon/authenticated absent** (the project's
+   known revoke-from-both gotcha handled). **97c cover_url** → `ALTER TABLE`.
+4. **`admin-catalog` EF** deployed to prod ref `mmmxvjaavdtwlpcnjgzy` (`--no-verify-jwt`).
+5. **PR #79** squash-merged → `506d888`; Vercel `portal` deploy = success/READY; prod curl 200.
+
+**Small tail left (non-blocking):** prod cover backfill (auto-generates on each brochure upload; owner
+does granular prod uploads himself), refresh `docs/db/schema-current.sql` + `seed-reference.sql` (stale),
+and the owner's on-phone Android Web-Share check (opted to test on prod; the mobile code was verified
+correct by inspection — H4/H5 fixed). Staging left with harmless test data (`SMOKE97-A`/`B` inactive,
+`SMOKE97-FAM` retired) the owner chose to keep.

@@ -1,18 +1,20 @@
 # Phase 9.7 — Vehicle Catalog UX rework (owner-approved package)
 
-**Status (2026-07-20): 🔨 BUILT, STAGING-VERIFIED, RED-TEAM-2 HARDENED & OWNER-REVIEWED — NOT YET ON
-PROD.** All of 9.7a/b/c/d built and verified against staging `klpnhpnlotcbbovwswmq` on branch
-**`claude/phase-9-7-start-0c4b8d`** (40 commits). **Pre-ship pipeline done:** R5 EF smoke test (19/19,
-found+fixed R11 createVehicle brand_id) → four clean-room red-team lanes → 19 Tier1+2 fixes
-(R12–R18 + hardening) → **re-verified 25/25 on staging** after the b1 migration re-run + EF redeploy
-(the T2 vertical-sync headline, T1 import field-preservation, T6 repair-on-save, T7 brand FK, H10/H11
-guards, R5 regression all green). **Owner walked the catalog screen-by-screen on staging (2026-07-20)
-— all tabs pass.** One enhancement landed during review (`2e99f9e`): an **admin "Browse" tab** that
-renders the employee wall with full-catalog scope (`allBrands`/`embedded` props on SalesCatalog) so an
-admin can see what sales see — client-only, no migration/EF change, rides the merge. Branch is current
-with `origin/portal` (no rebase pending). **Remaining before ship:** owner's on-phone Android
-Web-Share check (S1) + the strict-order cutover. Not merged; no prod migration/EF deploy yet.
-Ships to prod as ONE release (owner-decided) —
+**Status (2026-07-20): ✅ LIVE ON PROD.** Shipped as ONE release — PR #79 squash-merged to `portal`
+→ **`506d888`**, CI all-green, Vercel `portal` READY, prod `/`+`/login` = 200. **Cutover executed in
+strict order (2026-07-20):** 97a keystone (prod backfill **976/1006** linked, 30 orphans → Triage) →
+97b consolidation (`UPDATE 11` families → Long Haul Trucks, retire `UPDATE 1` on `Haulage – CNG 19T`,
+segment-drift check 0 rows) → 97b1 rules + **5-arg `move_cbns_to_family` RPC** (writes
+`sales_vertical_id` too; V0 grantees = postgres owner + service_role, anon/authenticated absent) →
+97c `cover_url` → `admin-catalog` EF deployed to prod (`--no-verify-jwt`) → merge/Vercel → prod
+verified. **Pre-ship pipeline (all done):** R5 EF smoke test (19/19, found+fixed R11 createVehicle
+brand_id) → four clean-room red-team lanes → 19 Tier1+2 fixes (R12–R18 + hardening) → **re-verified
+25/25 on staging** (T2 vertical-sync headline, T1 import field-preservation, T6 repair-on-save, T7
+brand FK, H10/H11 guards, R5 regression) → **owner screen-by-screen review** (all tabs pass) → prod
+build green. Enhancement landed during review (`2e99f9e`): an **admin "Browse" tab** rendering the
+employee wall at full-catalog scope (`allBrands`/`embedded` props on SalesCatalog). **Small tail:**
+prod cover backfill (auto-generates on upload), DB-dump refresh, owner's on-phone Android share check.
+Shipped as ONE release (owner-decided) —
 see the "Prod cutover order" and "Red-team findings" sections below, and the pre-ship pipeline in
 `CLAUDE.md` → Next actions. Decided 2026-07-16 from the interactive prototype board
 (artifact: `claude.ai/code/artifact/aa2a498e-8d7f-46ad-ad71-9b927eb79d1f`, v3 "shortlist").
