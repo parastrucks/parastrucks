@@ -201,6 +201,17 @@ Deno.serve(async (req: Request) => {
         if (Object.keys(clean).length === 0) {
           return json({ error: "No valid fields" }, 400)
         }
+        // brand text and brand_id must move together (red-team-2 T7): the
+        // whitelist accepts the legacy text code, but readers key on the FK —
+        // updating one without the other points a Switch vehicle's FK at
+        // Ashok Leyland forever. Same resolution as createVehicle.
+        if ("brand" in clean) {
+          const { data: brandRow, error: brandErr } = await admin
+            .from("brands").select("id").eq("code", clean.brand as string).maybeSingle()
+          if (brandErr) return json({ error: brandErr.message }, 400)
+          if (!brandRow) return json({ error: `Unknown brand code "${clean.brand}"` }, 400)
+          clean.brand_id = brandRow.id
+        }
         const { error } = await admin.from("vehicle_catalog").update(clean).eq("id", id)
         if (error) return json({ error: error.message }, 400)
         return json({ ok: true })
@@ -213,6 +224,29 @@ Deno.serve(async (req: Request) => {
         }
         if (id == null || typeof is_active !== "boolean") {
           return json({ error: "id and is_active required" }, 400)
+        }
+        // Activation into a retired family is refused (red-team-2 H11): the
+        // retire guard only counts ACTIVE CBNs, so a family holding inactive
+        // ones retires legally — reactivating one of them afterwards would
+        // create an active vehicle invisible on every employee surface (its
+        // family is hidden) and absent from triage (its sub_segment_id is
+        // set). The retire-time invariant has to hold at reactivate time too.
+        if (is_active === true) {
+          const { data: veh, error: vErr } = await admin
+            .from("vehicle_catalog").select("sub_segment_id").eq("id", id).maybeSingle()
+          if (vErr) return json({ error: vErr.message }, 400)
+          if (!veh) return json({ error: "Vehicle not found" }, 404)
+          if (veh.sub_segment_id != null) {
+            const { data: fam, error: fErr } = await admin
+              .from("sub_segments").select("name, is_active").eq("id", veh.sub_segment_id).maybeSingle()
+            if (fErr) return json({ error: fErr.message }, 400)
+            if (fam && !fam.is_active) {
+              return json({
+                error: `Cannot activate: its family "${fam.name}" is retired. ` +
+                       `Reactivate the family first, or move the CBN to an active one.`,
+              }, 409)
+            }
+          }
         }
         const { error } = await admin
           .from("vehicle_catalog")
@@ -274,9 +308,24 @@ Deno.serve(async (req: Request) => {
         const toInsert = rows.filter((r) => !existing.has(String(r.cbn)))
         const toUpdate = rows.filter((r) =>  existing.has(String(r.cbn)))
 
+        // Column whitelist for the INSERT half (red-team-2 H2): rows used to
+        // go to .insert() verbatim, so any real column could be set — an
+        // explicit `id` (poisoning the serial sequence into future PK
+        // collisions), created_at, a brand_id disagreeing with brand.
+        // Mirrors updateVehicle's discipline.
+        const INSERT_FIELDS = [
+          "cbn", "description", "brand", "brand_id", "segment",
+          "sub_segment_id", "sub_category", "tyres", "mrp_incl_gst",
+          "gst_rate", "price_circular", "effective_date", "is_active",
+        ]
         let inserted = 0
         if (toInsert.length > 0) {
-          const { error } = await admin.from("vehicle_catalog").insert(toInsert)
+          const cleanRows = toInsert.map((r) => {
+            const o: Record<string, unknown> = {}
+            for (const k of INSERT_FIELDS) if (k in r) o[k] = r[k]
+            return o
+          })
+          const { error } = await admin.from("vehicle_catalog").insert(cleanRows)
           if (error) return json({ error: error.message }, 400)
           inserted = toInsert.length
         }
