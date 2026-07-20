@@ -323,22 +323,41 @@ Deno.serve(async (req: Request) => {
           return json({ error: "id and name are required" }, 400)
         }
         const clean = name.trim()
+        // The name fans out into sub_category on every linked CBN — cap it
+        // before a pathological value is written hundreds of times.
+        if (clean.length > 120) {
+          return json({ error: "Name too long (max 120 characters)" }, 400)
+        }
 
         const { data: existing, error: exErr } = await admin
           .from("sub_segments").select("id, name").eq("id", id).maybeSingle()
         if (exErr) return json({ error: exErr.message }, 400)
         if (!existing) return json({ error: "Sub-segment not found" }, 404)
-        if (existing.name === clean) return json({ ok: true, renamed: 0, unchanged: true })
 
-        // sub_segments.name is UNIQUE — surface the collision as a clean 409
-        // instead of a raw Postgres constraint error.
-        const { data: clash } = await admin
-          .from("sub_segments").select("id").ilike("name", clean).neq("id", id).maybeSingle()
-        if (clash) return json({ error: `A sub-segment named "${clean}" already exists` }, 409)
+        // NO unchanged-value early-return (red-team-2 T6): the rename is two
+        // non-atomic writes (family row, then CBN text), so "the family
+        // already says X" does not imply its CBNs do. The old early-return
+        // made the advertised recovery ("re-run the rename to retry") a
+        // silent no-op. Falling through to the sync makes a re-run — and
+        // every ordinary save — the repair tool; both writes are idempotent.
+        if (existing.name !== clean) {
+          // sub_segments.name is UNIQUE — surface the collision as a clean 409
+          // instead of a raw Postgres constraint error. The new name is
+          // escaped (%/_ are ILIKE wildcards — red-team-2 H1: unescaped, a
+          // name like "Haulage_19T" matched unrelated families and blocked
+          // legitimate renames), limit(1) so multiple matches can't error out
+          // of maybeSingle, and the error is surfaced, not discarded.
+          const pat = clean.replace(/[%_\\]/g, (m) => "\\" + m)
+          const { data: clash, error: clashErr } = await admin
+            .from("sub_segments").select("id").ilike("name", pat).neq("id", id)
+            .limit(1).maybeSingle()
+          if (clashErr) return json({ error: clashErr.message }, 400)
+          if (clash) return json({ error: `A sub-segment named "${clean}" already exists` }, 409)
 
-        const { error: nameErr } = await admin
-          .from("sub_segments").update({ name: clean }).eq("id", id)
-        if (nameErr) return json({ error: nameErr.message }, 400)
+          const { error: nameErr } = await admin
+            .from("sub_segments").update({ name: clean }).eq("id", id)
+          if (nameErr) return json({ error: nameErr.message }, 400)
+        }
 
         const { data: synced, error: syncErr } = await admin
           .from("vehicle_catalog")

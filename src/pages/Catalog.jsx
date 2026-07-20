@@ -1784,6 +1784,30 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved, inline = false }) {
     let err
     let createdRow = null
     if (mode === 'add') {
+      // Case-insensitive clash pre-check (red-team-2): rename enforces this in
+      // the EF, but add only had the DB's case-SENSITIVE unique — so
+      // "BOSS 11T" could be created alongside "Boss 11T", and the import's
+      // case-folded famByName would then collapse the two and file CBNs under
+      // whichever it iterated last. %/_ are escaped: they are ILIKE wildcards.
+      const namePat = payload.name.replace(/[%_\\]/g, m => '\\' + m)
+      const { data: clash } = await supabase.from('sub_segments')
+        .select('id, name').ilike('name', namePat).limit(1).maybeSingle()
+      if (clash) {
+        setSaving(false)
+        setError(`A sub-segment named "${clash.name}" already exists`)
+        setErrorField('name')
+        return
+      }
+      // Born-retired + CBNs (red-team-2): assigning CBNs to an inactive family
+      // hides them from every employee surface AND from triage (their
+      // sub_segment_id is set). moveCbns below would 409 anyway — block early
+      // with a message that says what to do instead.
+      if (!inline && selectedCBNs.size > 0 && !payload.is_active) {
+        setSaving(false)
+        setError('An inactive sub-segment cannot take CBNs — save it as Active, or clear the CBN selection.')
+        setErrorField('name')
+        return
+      }
       // Need the new id back to link CBNs by FK, so insert().select().single().
       const { data: created, error: insErr } = await supabase
         .from('sub_segments').insert(payload).select('*').single()
@@ -1796,48 +1820,61 @@ function SubSegmentModal({ mode, subSeg, onClose, onSaved, inline = false }) {
         const movedCount = [...selectedCBNs]
           .map(c => cbnOptions.find(v => v.cbn === c))
           .filter(v => v && (v.sub_segment_id || v.sub_category)).length
-        const { error: assignErr } = await supabase.from('vehicle_catalog')
-          .update({ sub_segment_id: created.id, sub_category: payload.name })
-          .in('cbn', [...selectedCBNs])
-        if (assignErr) toast.error('Sub-segment saved but CBN assignment failed: ' + assignErr.message)
-        else if (movedCount > 0) toast.info(`${movedCount} CBN${movedCount > 1 ? 's' : ''} reassigned here — latest assignment takes priority.`)
+        // Through moveCbns, NOT a direct PostgREST write (red-team-2): the EF
+        // writes all four placement columns (id + text + segment + vertical)
+        // atomically via the RPC, refuses retired destinations, and carries
+        // the CBN list in the POST body instead of an unchunked .in() query
+        // string. The old direct write set id + text only — the exact
+        // partial-placement drift the RPC exists to end, re-entering through
+        // the create path.
+        try {
+          await callEdge('admin-catalog', 'moveCbns', {
+            cbns: [...selectedCBNs], sub_segment_id: created.id,
+          })
+          if (movedCount > 0) toast.info(`${movedCount} CBN${movedCount > 1 ? 's' : ''} reassigned here — latest assignment takes priority.`)
+        } catch (e) {
+          toast.error('Sub-segment saved but CBN assignment failed: ' + e.message)
+        }
       }
     } else {
       // Phase 9.7a: renaming is allowed now. The name goes through the Edge
       // Function, which also rewrites sub_category on every CBN linked by id —
       // the client can't do that atomically and mustn't try. Everything else is
       // a plain row update.
-      const renamed = payload.name !== subSeg.name
-      if (renamed) {
-        try {
-          await callEdge('admin-catalog', 'renameSubSegment', { id: subSeg.id, name: payload.name })
-        } catch (e) {
-          setSaving(false)
-          toast.error('Rename failed: ' + e.message)
-          return
-        }
+      //
+      // Rename and segment are sent UNCONDITIONALLY, even when unchanged
+      // (red-team-2 T6): both EF flows are two non-atomic writes, so "the
+      // family row already says X" does not imply its CBNs do. Skipping the
+      // call when the value looks unchanged made a half-applied sync
+      // unrepairable — the family row updated first, so every retry compared
+      // equal and skipped the very sync that failed. Both EF actions resync
+      // idempotently on unchanged values, which makes Save the repair tool.
+      try {
+        await callEdge('admin-catalog', 'renameSubSegment', { id: subSeg.id, name: payload.name })
+      } catch (e) {
+        setSaving(false)
+        toast.error('Rename failed: ' + e.message)
+        return
       }
-      // Phase 9.7b — segment and is_active must NOT be written directly.
-      //   • segment: setSubSegmentSegment also syncs vehicle_catalog.segment on
-      //     every linked CBN (red-team R3). A direct write moves the family and
-      //     leaves its own vehicles behind — the drift the MBP consolidation
-      //     just cleaned up.
+      // Segment and is_active must NOT be written directly (Phase 9.7b).
+      //   • segment: setSubSegmentSegment also syncs vehicle_catalog.segment
+      //     AND sales_vertical_id on every linked CBN (red-team R3 + T2). A
+      //     direct write moves the family and leaves its own vehicles behind —
+      //     the drift the MBP consolidation just cleaned up.
       //   • is_active: setSubSegmentActive enforces "retire only at 0 active
       //     CBNs". A direct write sails straight past that guard and hides a
       //     family whose vehicles are still live.
       // Both are stripped from the direct update and sent through the EF.
       // (RLS still permits a direct write, so this is a UX guard for trusted
       // admins, not a security boundary — see the backlog note.)
-      if (payload.segment !== subSeg.segment) {
-        try {
-          await callEdge('admin-catalog', 'setSubSegmentSegment', {
-            id: subSeg.id, segment: payload.segment,
-          })
-        } catch (e) {
-          setSaving(false)
-          toast.error('Segment change failed: ' + e.message)
-          return
-        }
+      try {
+        await callEdge('admin-catalog', 'setSubSegmentSegment', {
+          id: subSeg.id, segment: payload.segment,
+        })
+      } catch (e) {
+        setSaving(false)
+        toast.error('Segment change failed: ' + e.message)
+        return
       }
       if (payload.is_active !== subSeg.is_active) {
         try {
