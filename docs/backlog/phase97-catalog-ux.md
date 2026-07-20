@@ -150,8 +150,18 @@ ride with the release rather than going direct-to-`portal`, even though they are
 independent of 9.7 and fix a live prod bug. Owner was shown that tradeoff and accepted it.
 
 **Prod cutover order (strict — a wrong order breaks the catalog for everyone):**
+
+> **Deploy-window rule (red-team-2):** from step 1 until step 6 is READY, **nobody runs a
+> price-circular import or edits families**. The old EF's `bulkUpsertVehicles` upserts
+> `sub_category`/`segment` text without the id, and the old client's family edit writes
+> text alone — either one, run mid-window, stamps text that disagrees with the freshly
+> backfilled ids. Silent drift, not breakage; the window is minutes, keep it clean.
+
 1. Apply `20260716_97a_sub_segment_id_keystone.sql` to prod. The client selects
    `sub_segment_id`; without the column PostgREST 400s and the Catalog page dies.
+   The migration now **asserts folded-name uniqueness before the backfill** (red-team-2
+   H9) — if it RAISEs about colliding family names, resolve the duplicates first;
+   nothing has been written.
 2. Apply `20260717_97b_mbp_truck_consolidation.sql` — **must come AFTER the keystone**:
    its retire-guard queries `vc.sub_segment_id` and errors (loud, safe, nothing applied)
    if the column doesn't exist. Expect the retire step to print **`UPDATE 1`** on prod
@@ -159,16 +169,20 @@ independent of 9.7 and fix a live prod bug. Owner was shown that tradeoff and ac
    retire path could NOT be rehearsed on staging (that family holds 6 CBNs there, so
    the guard no-op'd; staging's CBN↔family distribution is NOT prod's — prod families
    over staging's older 906-row catalog).
-3. Deploy the `admin-catalog` EF (`--no-verify-jwt` — all 7 EFs run `verify_jwt:false`
+3. Apply `20260717_97b1_catalog_assign_rules.sql` — the rules table + the
+   `move_cbns_to_family` RPC (now 5-arg: it writes **all four** placement columns,
+   incl. `sales_vertical_id` — red-team-2 T2). Then apply
+   `20260717_97c_cover_url.sql` (adds `sub_segments.cover_url`).
+4. Deploy the `admin-catalog` EF (`--no-verify-jwt` — all 7 EFs run `verify_jwt:false`
    and do their own stricter verify(); deploying without the flag breaks every action).
    Must precede the client: old EF's createVehicle silently drops sub_segment_id from
    new vehicles (unknown fields ignored, no error) — degradation, not breakage, but real.
-4. Merge the PR / let Vercel deploy the client.
-5. Run the 9.7c cover-thumbnail backfill **against prod**: log in as admin → Vehicle
+5. Merge the PR / let Vercel deploy the client. Verify CI all-green + Vercel READY.
+6. Run the 9.7c cover-thumbnail backfill **against prod**: log in as admin → Vehicle
    Catalog → Sub-Segments → "Generate N covers". **Keep the tab visible** — pdfjs render
    steps via requestAnimationFrame; a hidden tab pauses it (a scoped rAF shim guards this,
    but foreground is still best). Runs where the real PDFs are; ~0.2s/page.
-6. Refresh `docs/db/schema-current.sql` + `seed-reference.sql` dumps (both stale now:
+7. Refresh `docs/db/schema-current.sql` + `seed-reference.sql` dumps (both stale now:
    no sub_segment_id; 44 vs 49 families).
 Expected prod backfill: **976 / 1006** linked, 30 CBNs left NULL across the 5 orphan
 family names (they become the Import-triage tab's opening queue).
@@ -309,3 +323,109 @@ re-litigated:
 
 WhatsApp bot (S2) · QR on printed brochures (S3) · price card / compare / quote-this ·
 circular-history layer · price-book PDF. Revisit only on owner request.
+
+
+## Red-team 2 — clean-room review (2026-07-20, pre-ship pipeline)
+
+Four independent reviewer lanes (server EF+migrations · admin workbench UI · sales
+UI+covers+share · cross-cutting incl. files the branch did NOT change), each **barred from
+reading docs/ and CLAUDE.md** so they could not parrot the R1–R11 log. 57 raw candidates →
+deduped, then every reported finding was re-verified against the code before acting.
+Clean across all lanes: no unauthenticated-reachable surface, no injection, **no price
+leakage in the share path**, no retired/inactive leakage to employees, RPC lockdown
+correct, migrations idempotent and order-safe.
+
+**Tier 1+2 — 19 findings fixed (owner-approved wave, commits `c076e91..e85b134`):**
+
+- **T2 / R12 — `sales_vertical_id` was a 4th placement column nobody synced** (`ddc0bda`).
+  `vehicle_catalog_select` RLS scopes every sales read — catalog AND quotation search — on
+  it, and Phase 6b backfilled it FROM segment. A cross-segment Reshuffle move synced
+  segment but left the old vertical: the vehicle vanished for the destination vertical's
+  salespeople and haunted the old vertical's. RPC now 5-arg (4-arg dropped); EF resolves
+  the vertical from destination segment+brand via the 6b mapping; unassign preserves it
+  like segment; `setSubSegmentSegment` syncs it too. **The worst find of the wave — the
+  exact drift class 9.7 was built to end, one column over.**
+- **T1 / R13 — import erased 4 more fields it always sent** (`8580349`). The R-fix for
+  blank price_circular/effective_date left `description` (''), `tyres` (null),
+  `gst_rate` (18), `is_active` (true) stamped on every row — a minimal CBN+MRP sheet
+  blanked descriptions catalog-wide and **silently reactivated hand-deactivated
+  vehicles**. Existing rows now get only fields the file carries; gst_rate/is_active are
+  never sent for them AND dropped from the EF's PRICE_FIELDS (stale clients can't
+  reintroduce it — owner-ratified policy: a circular never changes activation).
+- **T3 / R14 — Add-Sub-Segment assigned CBNs via direct PostgREST** (`f1459ed`): id+text
+  only (no segment, no vertical), no retired-destination guard (born-retired family could
+  swallow active CBNs, hiding them from every surface incl. triage), unchunked `.in()`.
+  Now routed through `moveCbns`; born-retired+CBNs blocked client-side; add gets the
+  case-insensitive name-clash check rename already had.
+- **T6 / R15 — the rename/segment "re-run to retry" repair was a no-op** (`f1459ed`,
+  `ddc0bda`): both flows early-returned on an unchanged value, but the family row updates
+  FIRST, so every retry compared equal and skipped the failed CBN sync. Early-returns
+  removed; the modal now calls both EFs unconditionally on save — **Save is the repair
+  tool** for half-applied syncs.
+- **T4 / R16 — triage suggested retired families** (`301b10c`): rules aren't cleaned on
+  retire; a retired-family rule rendered a blank-but-armed dropdown, per-row Assign
+  409'd, Accept-all aborted mid-run AND the catch skipped the refresh (committed groups
+  rendered as unassigned). Suggestions now filter to active families; refresh in finally.
+- **T5 / R17 — 'MBP Truck' still in SEGMENTS** (`c076e91`) — the code's own comment
+  promised removal with this release; left in, it let admins re-file vehicles into the
+  just-eliminated segment (invisible to every quotation segment tab).
+- **T7 / R18 — updateVehicle let `brand` drift from `brand_id`** (`2003557`) — the R11
+  fix covered create only; now brand changes re-resolve the FK.
+- **H1–H12 hardening** (same commits): ILIKE clash checks escape %/_ and surface errors
+  (unescaped, "Haulage_19T" matched unrelated names and blocked renames); bulk-insert
+  column whitelist (verbatim rows could set explicit `id`, poisoning the serial into
+  future PK collisions); import CBNs trimmed+uppercased (all 906 prod CBNs are uppercase
+  — case-variant rows forked the catalog) + in-file duplicate CBNs keep last occurrence
+  instead of aborting the INSERT; share's text-only path no longer gated on `!file`
+  (file-incapable phones got the desktop fallback); cover tiles get `onError` →
+  typographic fallback (signed URLs die after 1 h in an open tab); `readShelf` returns
+  only plain objects (corrupt localStorage crashed every card click); coverGen renders
+  serialized module-wide (the rAF shim swaps a global — overlapping renders left the
+  setTimeout shim installed permanently) + single-flight pdfjs init (double Worker leak);
+  triage hits-bump credits the rule that MATCHED, not the family's top-hits rule
+  (corrupted the counts that drive tie-breaks); keystone migration asserts folded-name
+  uniqueness before the backfill (case/whitespace twin names would fan out arbitrarily);
+  `setSubSegmentSegment` pins segment to the known list + rename caps name length;
+  `toggleVehicleActive` refuses activation into a retired family; cover backfill no
+  longer toasts success after a total pdfjs-import failure.
+
+**Tier 3 — verified but deferred (not ship-blocking), in rough priority order:**
+
+1. **EF guards are advisory, not a boundary** — any admin/back_office token can bypass
+   every 9.7 integrity invariant (retire-at-zero, rename sync, segment sync,
+   no-move-into-retired) with one direct PostgREST write from devtools; RLS permits it
+   and the caller set is identical, so no privilege escalates. Real fix = DB triggers
+   enforcing the invariants. Acknowledged in code comments.
+2. **Admin read failures render authoritative-looking empty states** — fetchVehicles /
+   fetchSubSegs / loadRules / modal CBN fetches all swallow errors; worst case Triage
+   shows "queue is empty — every active vehicle belongs to a family" on a network error.
+   (Sales side has the same pattern: "No vehicles available".)
+3. **Retire-vs-move TOCTOU** — two admins interleaving retire and moveCbns can produce a
+   retired family holding active CBNs (both guards are read-then-write, no DB backstop).
+   Low probability on this team size; the trigger fix in (1) would close it too.
+4. **Import family-matching is not brand-filtered** — a Switch circular whose
+   Sub-Category text matches an AL family name files new Switch CBNs into the AL family.
+   Family names are globally unique by design, so this needs an owner decision on
+   whether families are brand-scoped.
+5. **New rows get NULL sales_vertical_id** (import + createVehicle) = visible to every
+   vertical within the brand. Pre-existing behaviour, consistent, but now that moves
+   resolve the vertical the asymmetry is visible. Owner call on auto-scoping new rows.
+6. Smaller: Vehicles-tab pagination can strand past the last page after a refetch;
+   header-detection requires an exact 'cbn' cell while column-matching is substring
+   ("CBN No." fails detection; a "Sub-Segment" column header maps to `segment`); import
+   rows with unresolved family + blank Segment insert `segment: ''` (invisible to
+   segment tabs until triaged); share caption defaults unknown brand to "Ashok Leyland";
+   search has no dash/punctuation folding ("bus-icv" misses "Bus – ICV"); MRP-only
+   search tokens of ₹/commas match everything; renamed/synced counts cap at 1000
+   (PostgREST max-rows on the returning select); Triage accept-all >60 families in a
+   minute can 429 on the EF rate limit; `fetchAllRows` end-detection assumes the
+   server's max-rows stays ≥ PAGE_SIZE (if that setting is ever lowered below 1000 the
+   pagination silently truncates again); family `brand` edits sync nothing on vehicles
+   (same class as segment, no EF action); shelf keys for text-orphan cards strand their
+   open-counts once the family is properly filed.
+
+**Re-verification needed on staging before owner review:** re-run
+`20260717_97b1_catalog_assign_rules.sql` (RPC signature changed — the migration drops the
+4-arg overload itself) and redeploy `admin-catalog`; then targeted smoke: cross-segment
+move syncs vertical, import preserves untouched fields, unconditional save repairs, R5
+actions still green.
