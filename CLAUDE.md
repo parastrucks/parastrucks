@@ -32,44 +32,36 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 ## Current state (2026-07-20)
 
 - **Deployed & live:** Phases 1A–9 + **Phase 9.5 Vendor Jobs** (`/vendor-jobs`) +
-  **Phase 9.6 visual redesign — LIVE 2026-07-16** (PR #78 → `29404b4`; Paras print-report language,
-  Carlito, Lucide, new mobile shell). Build/review record: `memory/phase96_portal_redesign.md`.
-- **🔨 Phase 9.7 — Catalog UX rework — BUILT & STAGING-VERIFIED, NOT YET ON PROD.** Branch
-  **`claude/phase-9-7-start-0c4b8d`** (26 commits, off `origin/portal`, worktree
-  `.claude/worktrees/suspicious-snyder-af9361`). Every sub-phase is done and verified against the
-  **staging** DB (`klpnhpnlotcbbovwswmq`): **9.7a keystone** (additive `vehicle_catalog.sub_segment_id`
-  FK + backfill; rename unlocked, verified `renamed:33` w/ text sync) · **9.7b workbench** — Reshuffle
-  (tokenised filter, select-all-matching over the *full* paginated set, bulk `moveCbns` writing
-  id+text+segment atomically via `move_cbns_to_family` RPC), Triage (rule-suggested family, accept
-  one/all, hits-bump), Rules (`catalog_assign_rules` CRUD, admin-only RLS), Families lifecycle
-  (retire/reactivate guarded at 0 active CBNs, empty flags) · **MBP Truck → Long Haul Trucks
-  consolidation** (11 family rows; vehicles were already migrated) · **9.7c** — F1 search-first
-  landing + per-user localStorage shelf, F2 brochure wall, F3 hierarchy; **c2 real cover thumbnails**
-  (pdfjs page-1 → webp, generated once, lazy admin-only chunk) · **9.7d** — family-level WhatsApp
-  share (editable draft; never a single CBN's price). Also **fixes 3 pre-existing PROD bugs** that
-  ride the release: the **PostgREST 1000-row cap** silently truncating catalog + quotation search
-  (`fetchAllRows`), the import **blank-field null-erase** of price_circular/effective_date, and the
-  **`MBP Truck` blank segment dropdown**. Full record: `docs/backlog/phase97-catalog-ux.md` (build
-  notes, red-team R1–R10, pdfjs gotchas, the strict cutover order). NOT merged; NO prod migration/EF
-  deploy yet.
+  **Phase 9.6 visual redesign** (LIVE 2026-07-16, PR #78 → `29404b4`) +
+  **✅ Phase 9.7 — Catalog UX rework — LIVE ON PROD 2026-07-20** (PR #79 squash-merged →
+  **`506d888`**; CI all-green, Vercel `portal` READY, prod `/`+`/login` = 200). The whole package
+  shipped as ONE release: **9.7a keystone** (`vehicle_catalog.sub_segment_id` FK; rename unlocked) ·
+  **9.7b workbench** (Reshuffle bulk-move via `move_cbns_to_family` RPC, Triage rule-suggestions,
+  Rules CRUD, family retire/reactivate lifecycle; **MBP Truck → Long Haul Trucks** consolidation) ·
+  **9.7c** (search-first landing + per-user shelf, brochure wall with real pdfjs cover thumbnails,
+  **admin Browse tab**) · **9.7d** (family-level WhatsApp share). Also fixed **4 pre-existing prod
+  bugs** on the same release: PostgREST 1000-row truncation (`fetchAllRows`), import blank-field
+  null-erase, `MBP Truck` blank dropdown, and `createVehicle` never setting `brand_id` (R11).
+  Pre-ship: R5 EF smoke test (19/19) → 4 clean-room red-team lanes → 19 Tier1+2 fixes → **25/25
+  re-verify on staging** → owner screen-by-screen review. **Prod cutover facts (2026-07-20):**
+  keystone backfill **976/1006** linked (30 orphans → Triage queue); consolidation `UPDATE 11` +
+  retire `UPDATE 1`; b1 rules+5-arg RPC (writes `sales_vertical_id` too — T2) + c2 `cover_url`
+  applied; `admin-catalog` EF deployed to prod. Full record: `docs/backlog/phase97-catalog-ux.md`.
 - **Planned, not started:** **Phase 10 — Vehicle Tracker** (`/tracker`) — `docs/backlog/phase10-vehicle-tracker.md`.
 - **Separate project (not this repo):** the HD Hyundai **ERP** (`erp.parastrucks.in`, repo `erp-parastrucks`) — see `memory/project_hd_hyundai_vertical.md`.
 
 ## Next actions
 
-- **Ship Phase 9.7 to prod — ONE release** (owner-decided). Order is strict; see
-  `docs/backlog/phase97-catalog-ux.md` "Prod cutover order". First the **pre-ship pipeline** (full
-  staging smoke test incl. the still-unverified EF actions createVehicle/updateVehicle/
-  toggleVehicleActive/bulkUpsertVehicles — R5; red-team the complete diff; owner screen-by-screen of
-  the catalog area; rebase onto latest `origin/portal`). Then the **cutover**: keystone migration →
-  consolidation migration (expect `UPDATE 1` on the retire, else STOP) → b1 `catalog_assign_rules`
-  migration → c2 `cover_url` migration → **`admin-catalog` EF deploy** (`--no-verify-jwt`) → merge/
-  Vercel → **cover backfill on prod** (admin → Sub-Segments → "Generate N covers", visible tab) →
-  refresh `docs/db/schema-current.sql` + `seed-reference.sql`. Expected prod backfill: **976/1006**
-  CBNs linked. Migrations applied via `psql` Session Pooler; EF deploy via `npx supabase functions
-  deploy` (needs `SUPABASE_ACCESS_TOKEN`).
-- **On-phone check before S1 is "done":** the mobile Web Share (files → WhatsApp draft) path can't be
-  tested from desktop — verify on a real Android phone (primary) + note iOS behaviour.
+- **✅ Phase 9.7 SHIPPED to prod 2026-07-20** (PR #79 → `506d888`, Vercel READY, prod verified). The
+  3 pre-existing prod bugs that rode it (1000-row cap, import null-erase, MBP blank dropdown) + R11
+  are now fixed on prod. **Small remaining tail:**
+  1. **Cover backfill on prod** — admin → Vehicle Catalog → Sub-Segments → "Generate N covers"
+     (visible tab). Only matters for brochures already uploaded; each future brochure upload
+     auto-generates its cover. Owner does the granular prod brochure uploads themselves.
+  2. **Refresh `docs/db/schema-current.sql` + `seed-reference.sql`** — stale now (no `sub_segment_id`,
+     no `catalog_assign_rules`/`cover_url`, 44-vs-49 families). Needs a prod `pg_dump` (owner creds).
+  3. **On-phone Android Web-Share check** — owner opted to test the WhatsApp files→draft path
+     directly on prod (couldn't be done from desktop; code verified correct by inspection — H4/H5 fixed).
 - **Post-9.7 follow-up (owner-deferred):** provenance repair — count prod rows with null
   `price_circular`/`effective_date` (from past blank-field imports); every active row reflects the
   current price list, so one filled import re-stamps them all. See backlog.
