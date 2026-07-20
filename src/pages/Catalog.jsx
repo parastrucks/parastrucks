@@ -76,7 +76,7 @@ export default function Catalog() {
 /* ══════════════════════════════════════════════════════════════
    ADMIN / BACK-OFFICE VIEW
 ══════════════════════════════════════════════════════════════ */
-function AdminCatalog() {
+function AdminCatalog({ profile }) {
   const [tab, setTab]       = useState('vehicles')
   const [vehicles, setVehicles] = useState([])
   const [subSegs, setSubSegs]   = useState([])
@@ -132,6 +132,7 @@ function AdminCatalog() {
     { key: 'rules',         label: 'Rules' },
     { key: 'sub-segments',  label: 'Sub-Segments' },
     { key: 'import',        label: 'Import' },
+    { key: 'browse',        label: 'Browse' },
   ]
 
   return (
@@ -197,6 +198,14 @@ function AdminCatalog() {
       )}
       {tab === 'import' && (
         <ImportTab subSegs={subSegs} onRefresh={fetchVehicles} />
+      )}
+      {/* Browse: the exact employee-facing wall, so an admin can see what sales
+          see (covers, search, share). allBrands lifts the per-user brand/vertical
+          scope — an admin has no assignments but should see the whole catalog,
+          matching their RLS. embedded hides the wall's own page-head (this view
+          already has one above the tabs). */}
+      {tab === 'browse' && (
+        <SalesCatalog profile={profile} allBrands embedded />
       )}
     </div>
   )
@@ -2713,7 +2722,7 @@ function FamilyCoverCard({ card, onOpen }) {
   )
 }
 
-function SalesCatalog({ profile }) {
+function SalesCatalog({ profile, allBrands = false, embedded = false }) {
   const [subSegs,        setSubSegs]        = useState([])
   const [vehicles,       setVehicles]       = useState([])
   const [loading,        setLoading]        = useState(true)
@@ -2735,10 +2744,22 @@ function SalesCatalog({ profile }) {
   useEffect(() => {
     let cancelled = false
     ;(async () => {
-      const [brandRes, vertRes] = await Promise.all([
-        supabase.from('user_brands').select('brand_id').eq('user_id', profile.id),
-        supabase.from('user_sales_verticals').select('vertical_id').eq('user_id', profile.id),
-      ])
+      // Admin Browse (allBrands): an admin has no user_brands/user_sales_verticals
+      // rows but should see the whole catalog — the same everything their RLS
+      // already permits. Scope to ALL brands + ALL verticals so the existing
+      // brand/vertical-filtered queries below just resolve to no restriction.
+      const [brandRes, vertRes] = allBrands
+        ? await Promise.all([
+            supabase.from('brands').select('id'),
+            supabase.from('sales_verticals').select('id'),
+          ]).then(([b, v]) => [
+            { data: (b.data || []).map(r => ({ brand_id: r.id })) },
+            { data: (v.data || []).map(r => ({ vertical_id: r.id })) },
+          ])
+        : await Promise.all([
+            supabase.from('user_brands').select('brand_id').eq('user_id', profile.id),
+            supabase.from('user_sales_verticals').select('vertical_id').eq('user_id', profile.id),
+          ])
       if (cancelled) return
       setScope({
         brandIds:    (brandRes.data || []).map(r => r.brand_id),
@@ -2746,7 +2767,7 @@ function SalesCatalog({ profile }) {
       })
     })()
     return () => { cancelled = true }
-  }, [profile.id])
+  }, [profile.id, allBrands])
 
   const fetchData = useCallback(async () => {
     if (!scope) return
@@ -2918,16 +2939,18 @@ function SalesCatalog({ profile }) {
 
   return (
     <div>
-      <div className="page-head">
-        <div>
-          <div className="page-head-crumb">Sales Tools</div>
-          <h1 className="page-head-title">Vehicle Catalog<span className="period-accent">.</span></h1>
-          <div className="page-head-sub">
-            Find the right brochure fast
-            {verticalLabels.length > 0 ? ` · ${verticalLabels.join(', ')} range` : ''}
+      {!embedded && (
+        <div className="page-head">
+          <div>
+            <div className="page-head-crumb">Sales Tools</div>
+            <h1 className="page-head-title">Vehicle Catalog<span className="period-accent">.</span></h1>
+            <div className="page-head-sub">
+              Find the right brochure fast
+              {verticalLabels.length > 0 ? ` · ${verticalLabels.join(', ')} range` : ''}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* F1 — hero search: the primary way in */}
       <div className="vc-hero-search">
