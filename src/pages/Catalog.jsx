@@ -17,11 +17,15 @@ import useFocusTrap from '../hooks/useFocusTrap'
 // silently rewritten — but picking any option also clears sub_category, so an
 // idle click on a blank dropdown could strand a family's CBNs.
 //
-// 'MBP Truck' is legacy: Phase 9.7b consolidates it into 'Long Haul Trucks'
+// 'MBP Truck' was legacy: Phase 9.7b consolidates it into 'Long Haul Trucks'
 // (owner-approved 2026-07-16 — an earlier rename was started and left half
-// done). It stays listed until that migration lands, then comes out.
+// done). The consolidation migration ships in the same release as this file,
+// and the cutover order runs migrations before the frontend deploy — so by the
+// time this list renders, no row says 'MBP Truck' and offering it would only
+// let an admin re-file vehicles into the just-eliminated segment (invisible to
+// every quotation segment tab).
 const SEGMENTS = [
-  'ICV Truck', 'Long Haul Trucks', 'MBP Truck', 'Tipper',
+  'ICV Truck', 'Long Haul Trucks', 'Tipper',
   'Bus – ICV', 'Bus – MCV', 'RMC / Boom Pump',
 ]
 
