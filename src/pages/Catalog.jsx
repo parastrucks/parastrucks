@@ -1440,10 +1440,15 @@ function SubSegmentsTab({ subSegs, vehicles = [], loading, onRefresh }) {
         setCovering(c => ({ ...c, done: c.done + 1 }))
       }
     } catch (e) {
+      // The lazy pdfjs import failed — nothing ran. Return, don't fall
+      // through to a "Covers generated: 0" success toast (red-team-2 H12).
+      setCovering(null)
       toast.error('Cover generation unavailable: ' + e.message)
+      return
     }
     setCovering(null)
-    toast.success(`Covers generated: ${ok}${fail ? ` · ${fail} failed` : ''}.`)
+    if (fail && !ok) toast.error(`Cover generation failed for all ${fail} famil${fail === 1 ? 'y' : 'ies'}.`)
+    else toast.success(`Covers generated: ${ok}${fail ? ` · ${fail} failed` : ''}.`)
     onRefresh()
   }
 
@@ -2586,8 +2591,14 @@ function ImportTab({ subSegs, onRefresh }) {
 const SHELF_PREFIX = 'ptb_catalog_shelf_v1:'
 function shelfKey(userId) { return SHELF_PREFIX + (userId || 'anon') }
 function readShelf(userId) {
-  try { return JSON.parse(localStorage.getItem(shelfKey(userId))) || {} }
-  catch { return {} }
+  // Must return a plain object: JSON.parse happily yields primitives/arrays
+  // from corrupt or tinkered storage, and assigning a property to a primitive
+  // throws in strict mode — which made EVERY family-card click crash until
+  // storage was cleared (red-team-2 H6).
+  try {
+    const v = JSON.parse(localStorage.getItem(shelfKey(userId)))
+    return (v && typeof v === 'object' && !Array.isArray(v)) ? v : {}
+  } catch { return {} }
 }
 function bumpShelf(userId, cardKey) {
   const s = readShelf(userId)
@@ -2642,8 +2653,13 @@ async function shareFamily(card) {
     try { await navigator.share({ files: [file], text: caption, title: card.name }); return { ok: true } }
     catch (e) { if (e?.name === 'AbortError') return { ok: true, cancelled: true } /* else fall through */ }
   }
-  // Some phones share text but not files.
-  if (!file && navigator.share) {
+  // Text-only share sheet: phones that share text but not files (older
+  // WebView/iOS), and the recovery path when a file-share threw. This must
+  // NOT be gated on !file (red-team-2 H4): a family WITH a brochure on a
+  // file-incapable phone would otherwise skip both share paths and land in
+  // the desktop clipboard+download fallback — on a phone. An editable text
+  // draft still beats that.
+  if (navigator.share) {
     try { await navigator.share({ text: caption, title: card.name }); return { ok: true } }
     catch (e) { if (e?.name === 'AbortError') return { ok: true, cancelled: true } }
   }
@@ -2667,12 +2683,18 @@ async function shareFamily(card) {
    always available). The whole tile opens the variants modal; brochure download
    stays a distinct affordance inside the modal. */
 function FamilyCoverCard({ card, onOpen }) {
+  // Signed cover URLs live for an hour and are cached in state: a tab
+  // resumed the next morning would render every tile as a broken-image icon.
+  // onError drops to the typographic fallback instead; the reset keys on
+  // cover_url because a refetch mints a NEW signed URL string (red-team-2 H5).
+  const [imgFailed, setImgFailed] = useState(false)
+  useEffect(() => { setImgFailed(false) }, [card.cover_url])
   return (
     <div className="vc-cover-card" onClick={() => onOpen(card)} role="button" tabIndex={0}
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(card) } }}>
       <div className="vc-cover-art">
-        {card.cover_url ? (
-          <img src={card.cover_url} alt={card.name} loading="lazy" />
+        {card.cover_url && !imgFailed ? (
+          <img src={card.cover_url} alt={card.name} loading="lazy" onError={() => setImgFailed(true)} />
         ) : (
           <div className="vc-cover-fallback">
             <div className="vc-cover-fallback-seg">{card.segment}</div>
