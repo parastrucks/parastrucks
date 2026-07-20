@@ -2213,7 +2213,11 @@ function ImportTab({ subSegs, onRefresh }) {
       // mislabels existing vehicles as "New" in the preview. The upsert itself
       // is keyed on cbn so the import stays correct; it's the counts you approve
       // that would lie.
-      const cbns = dataRows.map(r => String(r[cbnIdx]).trim())
+      // Uppercased to match how the vehicle modal stores CBNs (every CBN in the
+      // prod catalog is uppercase — verified against the seed dump). Without
+      // this, a circular typed in lowercase fails the existence check and forks
+      // the catalog with case-variant duplicate rows.
+      const cbns = dataRows.map(r => String(r[cbnIdx]).trim().toUpperCase())
       const IN_CHUNK = 300
       const existingSet = new Set()
       for (let i = 0; i < cbns.length; i += IN_CHUNK) {
@@ -2241,7 +2245,7 @@ function ImportTab({ subSegs, onRefresh }) {
       const brand_id = brandRow.id
 
       const mapped = dataRows.map(row => {
-        const cbn         = String(row[cbnIdx]).trim()
+        const cbn         = String(row[cbnIdx]).trim().toUpperCase()
         const rawSubCat   = subIdx >= 0 ? String(row[subIdx]).trim() : ''
         // R1: resolve the family by id, not by leaving free text to be matched
         // later. No match = null = it queues in triage, rather than being
@@ -2255,36 +2259,54 @@ function ImportTab({ subSegs, onRefresh }) {
                           : ((segIdx >= 0 ? String(row[segIdx]).trim() : '') || '')
         const mrpRaw      = String(row[mrpIdx] || '').replace(/[₹,\s]/g, '')
         const mrp         = parseInt(mrpRaw) || 0
-        return {
-          cbn,
-          description:  descIdx >= 0 ? String(row[descIdx]).trim() : '',
-          sub_segment_id: fam ? fam.id : null,
-          sub_category,
-          segment,
-          tyres:        tyreIdx >= 0 ? String(row[tyreIdx]).trim() || null : null,
-          mrp_incl_gst: mrp,
-          gst_rate:     18,
-          brand,
-          brand_id,
-          is_active:    true,
-          _isNew:       !existingSet.has(cbn),
-          _rawSubCat:   rawSubCat,
+        const description = descIdx >= 0 ? String(row[descIdx]).trim() : ''
+        const tyres       = tyreIdx >= 0 ? String(row[tyreIdx]).trim() || null : null
+        const _isNew      = !existingSet.has(cbn)
+
+        // A key that isn't on the row is a field the import does not touch —
+        // the EF applies only present keys. NEW rows are inserted whole (they
+        // need every column). EXISTING rows get price data only, and a blank
+        // cell means "leave what is there alone", never "erase it": the same
+        // rule the price_circular/effective_date stamp already follows. In
+        // particular gst_rate and is_active are NEVER sent for existing rows —
+        // a circular re-listing a hand-deactivated CBN must not resurrect it.
+        const r = _isNew
+          ? { cbn, description, sub_segment_id: fam ? fam.id : null, sub_category,
+              segment, tyres, mrp_incl_gst: mrp, gst_rate: 18, brand, brand_id,
+              is_active: true }
+          : { cbn, mrp_incl_gst: mrp }
+        if (!_isNew) {
+          if (description) r.description = description
+          if (tyres)       r.tyres = tyres
         }
+        return { ...r, _isNew, _rawSubCat: rawSubCat }
       }).filter(r => r.mrp_incl_gst > 0)
+
+      // Same CBN twice in one file: keep the LAST occurrence (matches the
+      // update loop's last-in-file-wins) — two copies of a NEW cbn would
+      // otherwise land in one INSERT and abort the whole import on the unique
+      // constraint with a raw Postgres error.
+      const byCbn = new Map()
+      for (const r of mapped) byCbn.set(r.cbn, r)
+      const deduped = [...byCbn.values()]
+      const duplicates = mapped.length - deduped.length
+      if (duplicates > 0) {
+        toast.info(`${duplicates} duplicate CBN row${duplicates === 1 ? '' : 's'} in the file — keeping the last occurrence of each.`)
+      }
 
       // New CBNs whose family text matched nothing — these land unassigned and
       // become the triage queue. Surfaced up front so the number is a decision
       // the admin makes, not a surprise found later.
-      const unresolved = mapped.filter(r => r._isNew && !r.sub_segment_id)
+      const unresolved = deduped.filter(r => r._isNew && !r.sub_segment_id)
       const unresolvedNames = [...new Set(unresolved.map(r => r._rawSubCat || '(blank)'))]
       setPreview({
-        rows:     mapped,
-        updated:  mapped.filter(r => !r._isNew).length,
-        newRows:  mapped.filter(r => r._isNew).length,
+        rows:     deduped,
+        updated:  deduped.filter(r => !r._isNew).length,
+        newRows:  deduped.filter(r => r._isNew).length,
         unresolved: unresolved.length,
         unresolvedNames,
         skipped:  dataRows.length - mapped.length,
-        sample:   mapped.slice(0, 10),
+        sample:   deduped.slice(0, 10),
         sheetName,
       })
     } catch (err) {

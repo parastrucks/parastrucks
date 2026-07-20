@@ -243,9 +243,14 @@ Deno.serve(async (req: Request) => {
         }
 
         // Price-ish only. Anything not on this list is left exactly as it is.
+        // gst_rate and is_active are deliberately NOT here: a price circular
+        // re-listing a hand-deactivated CBN must never resurrect it, and no
+        // circular carries a GST column — both were being stamped with client
+        // defaults (true / 18) on every imported row. Server-enforced so even
+        // a stale client can't reintroduce it.
         const PRICE_FIELDS = [
-          "description", "tyres", "mrp_incl_gst", "gst_rate",
-          "price_circular", "effective_date", "is_active",
+          "description", "tyres", "mrp_incl_gst",
+          "price_circular", "effective_date",
         ]
         let updated = 0
         for (const r of toUpdate) {
