@@ -1037,8 +1037,13 @@ function ReshuffleTab({ vehicles, subSegs, loading, onRefresh }) {
 /* A rule matches a CBN when its pattern appears in "cbn + description" AND none
    of its NOT-terms do. Rules only SUGGEST — a human confirms in triage. When
    several rules match, the one with the most hits wins (most battle-tested);
-   `hits` ties break toward the rule that has proven itself, then arbitrarily. */
-function suggestFamily(vehicle, rules) {
+   `hits` ties break toward the rule that has proven itself, then arbitrarily.
+   Returns the winning RULE (not just its family): the hits-bump must credit
+   the rule that actually matched — crediting the family's top-hits rule
+   regardless corrupted the very counts that drive future tie-breaks
+   (red-team-2 H8). Callers pass rules pre-filtered to ACTIVE families:
+   a rule pointing at a retired family must never surface as a suggestion. */
+function suggestRule(vehicle, rules) {
   const hay = `${vehicle.cbn} ${vehicle.description || ''}`.toLowerCase()
   const matched = rules.filter(r => {
     const pat = r.pattern.trim().toLowerCase()
@@ -1047,7 +1052,7 @@ function suggestFamily(vehicle, rules) {
   })
   if (matched.length === 0) return null
   matched.sort((a, b) => (b.hits || 0) - (a.hits || 0))
-  return matched[0].sub_segment_id
+  return matched[0]
 }
 
 /* ── TRIAGE TAB (Phase 9.7b3) ─────────────────────────────────── */
@@ -1078,6 +1083,17 @@ function TriageTab({ vehicles, subSegs, loading, onRefresh }) {
     [vehicles]
   )
 
+  // Rules whose target family is still active — the only ones allowed to
+  // suggest (red-team-2 T4). Rules are not cleaned up on retire (retire only
+  // checks CBN count), so a rule can point at a retired family: unfiltered,
+  // it produced a suggestion the <select> (activeFams options only) rendered
+  // BLANK while the row's Assign button stayed armed — per-row Assign then
+  // 409'd at the EF, and Accept-all aborted mid-run on the retired group.
+  const activeRules = useMemo(() => {
+    const activeIds = new Set(activeFams.map(f => f.id))
+    return rules.filter(r => activeIds.has(r.sub_segment_id))
+  }, [rules, activeFams])
+
   // The effective destination for a row: the admin's explicit override if they
   // set one, otherwise the live rule suggestion. Deriving it (rather than
   // pre-seeding `choice` in an effect) sidesteps a race — rules load async, so
@@ -1085,9 +1101,9 @@ function TriageTab({ vehicles, subSegs, loading, onRefresh }) {
   // can't correct.
   const effective = useCallback((v) => {
     if (choice[v.cbn] !== undefined) return choice[v.cbn]
-    const s = suggestFamily(v, rules)
-    return s != null ? String(s) : ''
-  }, [choice, rules])
+    const r = suggestRule(v, activeRules)
+    return r ? String(r.sub_segment_id) : ''
+  }, [choice, activeRules])
 
   const suggestedCount = queue.filter(v => effective(v)).length
 
@@ -1111,30 +1127,35 @@ function TriageTab({ vehicles, subSegs, loading, onRefresh }) {
         })
         moved += res.moved || 0
       }
-      // Bump hits on rules whose suggestion was accepted, so the Rules tab can
-      // show which ones earn their keep. Best-effort; a failure here doesn't
-      // undo the assignment.
+      // Bump hits on the rule whose suggestion was accepted — the MATCHED
+      // rule, not the family's top-hits one (red-team-2 H8: crediting by
+      // family let an unrelated high-hits rule absorb every acceptance,
+      // corrupting the counts that drive future tie-breaks). Best-effort; a
+      // failure here doesn't undo the assignment.
       const accepted = cbnList
         .map(cbn => { const v = queue.find(q => q.cbn === cbn); return { v, fam: v ? effective(v) : '' } })
         .filter(x => x.v && x.fam)
       const bumps = {}
       for (const { v, fam } of accepted) {
-        const s = suggestFamily(v, rules)
-        if (s != null && String(s) === fam) {
-          const rule = rules.filter(r => r.sub_segment_id === s)
-            .sort((a, b) => (b.hits || 0) - (a.hits || 0))[0]
-          if (rule) bumps[rule.id] = (bumps[rule.id] || rule.hits || 0) + 1
+        const rule = suggestRule(v, activeRules)
+        if (rule && String(rule.sub_segment_id) === fam) {
+          bumps[rule.id] = (bumps[rule.id] || rule.hits || 0) + 1
         }
       }
       for (const [id, hits] of Object.entries(bumps)) {
         await supabase.from('catalog_assign_rules').update({ hits }).eq('id', id)
       }
       toast.success(`Assigned ${moved} CBN${moved === 1 ? '' : 's'}.`)
-      onRefresh(); loadRules()
     } catch (e) {
+      // A mid-loop failure has already committed earlier groups — fall
+      // through to the finally refresh so the UI reflects them (red-team-2:
+      // skipping it left assigned CBNs rendering as unassigned until a
+      // manual reload).
       toast.error('Assign failed: ' + e.message)
+    } finally {
+      onRefresh(); loadRules()
+      setBusy(false)
     }
-    setBusy(false)
   }
 
   if (loading) return <Skeleton variant="row" count={4} />
@@ -1174,7 +1195,7 @@ function TriageTab({ vehicles, subSegs, loading, onRefresh }) {
           </thead>
           <tbody>
             {queue.slice(0, 200).map(v => {
-              const suggested = suggestFamily(v, rules)
+              const suggested = suggestRule(v, activeRules)?.sub_segment_id ?? null
               const val = effective(v)
               return (
                 <tr key={v.cbn}>
