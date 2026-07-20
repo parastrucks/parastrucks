@@ -15,14 +15,19 @@
 //      through setTimeout for the duration of the draw so it completes
 //      regardless of tab visibility.
 
-let _pdfjs = null
-async function getPdfjs() {
-  if (_pdfjs) return _pdfjs
-  const pdfjs = await import('pdfjs-dist')
-  const PdfWorker = (await import('pdfjs-dist/build/pdf.worker.min.mjs?worker')).default
-  pdfjs.GlobalWorkerOptions.workerPort = new PdfWorker()
-  _pdfjs = pdfjs
-  return pdfjs
+// Single-flight init: caching the PROMISE (not the resolved module) means a
+// second caller arriving mid-init awaits the first instead of constructing a
+// second Worker and leaking the first for the session (red-team-2 H7). A
+// failed init clears the cache so the next attempt can retry.
+let _pdfjsPromise = null
+function getPdfjs() {
+  _pdfjsPromise ??= (async () => {
+    const pdfjs = await import('pdfjs-dist')
+    const PdfWorker = (await import('pdfjs-dist/build/pdf.worker.min.mjs?worker')).default
+    pdfjs.GlobalWorkerOptions.workerPort = new PdfWorker()
+    return pdfjs
+  })().catch((e) => { _pdfjsPromise = null; throw e })
+  return _pdfjsPromise
 }
 
 // Run a render task with rAF that fires even when the tab is hidden.
@@ -39,8 +44,22 @@ async function renderVisibilitySafe(page, canvasContext, viewport) {
 /**
  * @param arrayBuffer - the brochure PDF's bytes.
  * @returns a webp Blob of page 1 (~20–50 KB), or throws on a broken PDF.
+ *
+ * SERIALIZED module-wide: the rAF shim swaps a global for the duration of the
+ * draw, and two overlapping renders restore in reverse order — leaving the
+ * setTimeout shim installed for the rest of the session (red-team-2 H7).
+ * Overlap is reachable: the backfill loop only disables its own button, so a
+ * sub-segment-modal save can start a render mid-backfill. A failed render
+ * doesn't block the queue.
  */
-export async function generateCoverWebp(arrayBuffer, { maxWidth = 420, quality = 0.82 } = {}) {
+let _renderQueue = Promise.resolve()
+export function generateCoverWebp(arrayBuffer, opts = {}) {
+  const run = _renderQueue.then(() => generateCoverWebpInner(arrayBuffer, opts))
+  _renderQueue = run.catch(() => {})
+  return run
+}
+
+async function generateCoverWebpInner(arrayBuffer, { maxWidth = 420, quality = 0.82 } = {}) {
   const pdfjs = await getPdfjs()
   // A copy: pdfjs transfers/detaches the buffer, and the caller may still need
   // the original (the upload flow uploads the same file).
