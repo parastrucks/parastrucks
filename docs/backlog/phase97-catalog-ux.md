@@ -1,8 +1,13 @@
 # Phase 9.7 — Vehicle Catalog UX rework (owner-approved package)
 
-**Status (2026-07-20): 🔨 BUILT & STAGING-VERIFIED — NOT YET ON PROD.** All of 9.7a/b/c/d built and
-verified against staging `klpnhpnlotcbbovwswmq` on branch **`claude/phase-9-7-start-0c4b8d`** (26
-commits). Not merged; no prod migration/EF deploy yet. Ships to prod as ONE release (owner-decided) —
+**Status (2026-07-20): 🔨 BUILT & STAGING-VERIFIED (+ red-team-2 hardened) — NOT YET ON PROD.** All of
+9.7a/b/c/d built and verified against staging `klpnhpnlotcbbovwswmq` on branch
+**`claude/phase-9-7-start-0c4b8d`** (39 commits). **Pre-ship pipeline done:** R5 EF smoke test (19/19,
+found+fixed R11 createVehicle brand_id) → four clean-room red-team lanes → 19 Tier1+2 fixes
+(R12–R18 + hardening) → **re-verified 25/25 on staging** after the b1 migration re-run + EF redeploy
+(the T2 vertical-sync headline, T1 import field-preservation, T6 repair-on-save, T7 brand FK, H10/H11
+guards, R5 regression all green). Branch is current with `origin/portal` (no rebase pending). Not
+merged; no prod migration/EF deploy yet. Ships to prod as ONE release (owner-decided) —
 see the "Prod cutover order" and "Red-team findings" sections below, and the pre-ship pipeline in
 `CLAUDE.md` → Next actions. Decided 2026-07-16 from the interactive prototype board
 (artifact: `claude.ai/code/artifact/aa2a498e-8d7f-46ad-ad71-9b927eb79d1f`, v3 "shortlist").
