@@ -101,9 +101,20 @@ CREATE POLICY catalog_assign_rules_delete ON public.catalog_assign_rules
 --      5000-CBN ceiling that is a ~100 KB request line — a 414 waiting to
 --      happen. An array parameter travels in the POST body instead.
 --
--- ALL THREE columns that describe a CBN's placement are written together:
+-- ALL FOUR columns that describe a CBN's placement are written together:
 -- sub_segment_id (the truth), sub_category (what Quotation/PI/FC still search),
--- and segment. Writing any subset is the drift 9.7a exists to end.
+-- segment, and sales_vertical_id. Writing any subset is the drift 9.7a exists
+-- to end.
+--
+-- p_sales_vertical_id is why this function was revised a second time
+-- (red-team-2): vehicle_catalog_select RLS scopes every sales read —
+-- catalog AND quotation search — on sales_vertical_id, and verticals were
+-- backfilled FROM segment in Phase 6b. A cross-segment move that syncs
+-- segment but not the vertical leaves the vehicle invisible to the
+-- destination vertical's salespeople while haunting the old vertical's.
+-- The EF resolves it from the destination family's segment + brand
+-- (the same mapping Phase 6b used); NULL when the segment has no mapped
+-- vertical. On unassign BOTH segment and vertical are preserved.
 --
 -- p_segment is why this function was revised: an earlier version moved only the
 -- family, so moving a CBN into a family in a DIFFERENT segment left the
@@ -125,16 +136,18 @@ CREATE POLICY catalog_assign_rules_delete ON public.catalog_assign_rules
 -- EXECUTE is revoked from anon and authenticated regardless — in this project
 -- Postgres grants EXECUTE to those roles on creation, and revoking from
 -- `public` alone does NOT remove it (see memory/project_edge_function_auth).
--- Drop the earlier 3-arg version explicitly: adding a parameter creates an
+-- Drop the earlier versions explicitly: adding a parameter creates an
 -- OVERLOAD rather than replacing, and two versions would both be callable —
--- with the stale one silently skipping the segment sync.
+-- with the stale one silently skipping the segment / vertical sync.
 DROP FUNCTION IF EXISTS public.move_cbns_to_family(text[], integer, text);
+DROP FUNCTION IF EXISTS public.move_cbns_to_family(text[], integer, text, text);
 
 CREATE OR REPLACE FUNCTION public.move_cbns_to_family(
-  p_cbns           text[],
-  p_sub_segment_id integer,
-  p_family_name    text,
-  p_segment        text
+  p_cbns              text[],
+  p_sub_segment_id    integer,
+  p_family_name       text,
+  p_segment           text,
+  p_sales_vertical_id uuid
 ) RETURNS integer
   LANGUAGE sql
   SET search_path TO 'public'
@@ -145,17 +158,26 @@ AS $$
            sub_category   = p_family_name,
            -- COALESCE, not a plain assignment: on unassign (p_segment NULL)
            -- the CBN keeps whatever segment it had.
-           segment        = COALESCE(p_segment, segment)
+           segment        = COALESCE(p_segment, segment),
+           -- The vertical follows the destination segment. On a REAL move the
+           -- resolved value is applied even when NULL (an unmapped segment
+           -- must clear the old vertical, not keep a stale one — NULL means
+           -- "visible brand-wide", same as every un-backfilled row). Only on
+           -- UNASSIGN (no destination) is the old vertical preserved, exactly
+           -- like segment.
+           sales_vertical_id = CASE WHEN p_sub_segment_id IS NULL
+                                    THEN sales_vertical_id
+                                    ELSE p_sales_vertical_id END
      WHERE cbn = ANY (p_cbns)
     RETURNING id
   )
   SELECT count(*)::integer FROM moved;
 $$;
 
-REVOKE ALL   ON FUNCTION public.move_cbns_to_family(text[], integer, text, text) FROM public;
-REVOKE ALL   ON FUNCTION public.move_cbns_to_family(text[], integer, text, text) FROM anon;
-REVOKE ALL   ON FUNCTION public.move_cbns_to_family(text[], integer, text, text) FROM authenticated;
-GRANT EXECUTE ON FUNCTION public.move_cbns_to_family(text[], integer, text, text) TO service_role;
+REVOKE ALL   ON FUNCTION public.move_cbns_to_family(text[], integer, text, text, uuid) FROM public;
+REVOKE ALL   ON FUNCTION public.move_cbns_to_family(text[], integer, text, text, uuid) FROM anon;
+REVOKE ALL   ON FUNCTION public.move_cbns_to_family(text[], integer, text, text, uuid) FROM authenticated;
+GRANT EXECUTE ON FUNCTION public.move_cbns_to_family(text[], integer, text, text, uuid) TO service_role;
 
 COMMIT;
 

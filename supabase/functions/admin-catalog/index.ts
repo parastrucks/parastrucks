@@ -80,6 +80,45 @@ async function verify(
   return { caller: { id: prof.id, role: token, is_active: prof.is_active }, admin }
 }
 
+// ── Segment → sales-vertical resolution (red-team-2, T2) ─────────────────────
+// vehicle_catalog_select RLS scopes every sales read (catalog AND quotation
+// search) on sales_vertical_id, and Phase 6b backfilled that column FROM
+// segment. So the vertical is placement data: any write that moves a vehicle's
+// segment must move its vertical with it, or the vehicle turns invisible to
+// the destination vertical's salespeople while haunting the old vertical's.
+// This map mirrors the Phase 6b backfill (20260416_phase6b_stage1_additive.sql)
+// with 'MBP Truck' → 'Long Haul Trucks' per the 9.7b consolidation. Verticals
+// are per-brand rows, so resolution needs the family's brand too; segments
+// with no mapped vertical (or non-AL brands without one) resolve to NULL =
+// visible brand-wide, same as every un-backfilled row.
+const SEGMENT_VERTICAL_CODE: Record<string, string> = {
+  "ICV Truck":       "icv_trucks",
+  "Long Haul Trucks": "long_haulage",
+  "Tipper":          "tipper",
+  "RMC / Boom Pump": "tipper",
+  "Bus – ICV":       "buses",
+  "Bus – MCV":       "buses",
+}
+// Doubles as the allow-list for setSubSegmentSegment: one typo'd free-text
+// segment recreates the exact blank-dropdown bug the MBP consolidation fixes.
+const CATALOG_SEGMENTS = Object.keys(SEGMENT_VERTICAL_CODE)
+
+async function resolveVerticalId(
+  admin: SupabaseClient,
+  brandCode: string | null,
+  segment: string | null,
+): Promise<string | null> {
+  const code = SEGMENT_VERTICAL_CODE[segment ?? ""]
+  if (!code || !brandCode) return null
+  const { data: b } = await admin
+    .from("brands").select("id").eq("code", brandCode).maybeSingle()
+  if (!b) return null
+  const { data: v } = await admin
+    .from("sales_verticals").select("id")
+    .eq("brand_id", b.id).eq("code", code).maybeSingle()
+  return (v?.id as string | undefined) ?? null
+}
+
 Deno.serve(async (req: Request) => {
   const json = (b: unknown, status = 200) => jsonResponse(req, b, status)
   if (req.method === "OPTIONS") return preflight(req)
@@ -347,13 +386,14 @@ Deno.serve(async (req: Request) => {
         // while looking like a successful move.
         let familyName: string | null = null
         let familySegment: string | null = null
+        let familyVertical: string | null = null
         if (sub_segment_id !== null && sub_segment_id !== undefined) {
           if (!Number.isInteger(sub_segment_id)) {
             return json({ error: "sub_segment_id must be an integer or null" }, 400)
           }
           const { data: fam, error: famErr } = await admin
             .from("sub_segments")
-            .select("id, name, segment, is_active")
+            .select("id, name, segment, is_active, brand")
             .eq("id", sub_segment_id)
             .maybeSingle()
           if (famErr) return json({ error: famErr.message }, 400)
@@ -366,6 +406,9 @@ Deno.serve(async (req: Request) => {
           // moved across segments keeps its old one and the family disagrees with
           // its own vehicles — the exact drift the MBP consolidation cleaned up.
           familySegment = fam.segment
+          // …and the vertical travels with the segment (RLS scopes sales reads
+          // on it — see SEGMENT_VERTICAL_CODE above).
+          familyVertical = await resolveVerticalId(admin, fam.brand, fam.segment)
         }
 
         // Via RPC, not .update().in(): PostgREST would put all 5000 CBNs in the
@@ -377,6 +420,7 @@ Deno.serve(async (req: Request) => {
           p_sub_segment_id: sub_segment_id ?? null,
           p_family_name: familyName,
           p_segment: familySegment,  // null on unassign — the RPC keeps the old segment
+          p_sales_vertical_id: familyVertical,  // applied on real moves only (see RPC)
         })
         if (error) return json({ error: error.message }, 400)
 
@@ -443,20 +487,35 @@ Deno.serve(async (req: Request) => {
           return json({ error: "id and segment are required" }, 400)
         }
         const clean = segment.trim()
+        // Pinned to the known list: one typo'd free-text segment recreates the
+        // exact blank-dropdown bug the MBP consolidation fixes (red-team-2 H10).
+        if (!CATALOG_SEGMENTS.includes(clean)) {
+          return json({ error: `Unknown segment "${clean}" — must be one of: ${CATALOG_SEGMENTS.join(", ")}` }, 400)
+        }
 
         const { data: fam, error: fErr } = await admin
-          .from("sub_segments").select("id, name, segment").eq("id", id).maybeSingle()
+          .from("sub_segments").select("id, name, segment, brand").eq("id", id).maybeSingle()
         if (fErr) return json({ error: fErr.message }, 400)
         if (!fam) return json({ error: "Sub-segment not found" }, 404)
-        if (fam.segment === clean) return json({ ok: true, synced: 0, unchanged: true })
 
-        const { error: segErr } = await admin
-          .from("sub_segments").update({ segment: clean }).eq("id", id)
-        if (segErr) return json({ error: segErr.message }, 400)
+        // NO unchanged-value early-return (red-team-2 T6): the two writes below
+        // are not atomic, so "family already says X" does NOT imply its CBNs
+        // do. The old early-return made the advertised recovery ("re-run to
+        // retry") a silent no-op — a failed sync became unrepairable from the
+        // UI. Falling through makes a re-run the repair tool it claims to be;
+        // both writes are idempotent.
+        if (fam.segment !== clean) {
+          const { error: segErr } = await admin
+            .from("sub_segments").update({ segment: clean }).eq("id", id)
+          if (segErr) return json({ error: segErr.message }, 400)
+        }
 
+        // The vertical travels with the segment (RLS scopes every sales read
+        // on sales_vertical_id — see SEGMENT_VERTICAL_CODE above).
+        const vertical = await resolveVerticalId(admin, fam.brand, clean)
         const { data: synced, error: syncErr } = await admin
           .from("vehicle_catalog")
-          .update({ segment: clean })
+          .update({ segment: clean, sales_vertical_id: vertical })
           .eq("sub_segment_id", id)
           .select("id")
         if (syncErr) {
