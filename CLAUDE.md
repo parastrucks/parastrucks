@@ -55,11 +55,17 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 - **✅ Phase 9.7 SHIPPED to prod 2026-07-20** (PR #79 → `506d888`, Vercel READY, prod verified). The
   3 pre-existing prod bugs that rode it (1000-row cap, import null-erase, MBP blank dropdown) + R11
   are now fixed on prod. **Small remaining tail:**
-  1. **Cover backfill on prod** — admin → Vehicle Catalog → Sub-Segments → "Generate N covers"
-     (visible tab). Only matters for brochures already uploaded; each future brochure upload
-     auto-generates its cover. Owner does the granular prod brochure uploads themselves.
+  1. **✅ DONE 2026-07-21 — cover backfill on prod (8/8 generated).** Needed a **prod-only cutover gap**
+     fixed first: the prod `brochures` bucket's **allowed MIME types was `application/pdf` only**, so
+     every `image/webp` cover upload was rejected `400` by Storage (not RLS — signed upload URLs bypass
+     it). Fix = add `image/webp` to the bucket's allowed MIME types (dashboard; additive, no code, no
+     deploy). **Systemic, not backfill-only:** `uploadCoverBlob` swallows failures by design, so every
+     *future* brochure upload would silently have produced no cover too. Staging was unaffected because
+     the 2026-07-20 Storage repair copied prod's 4 **policies** but not **bucket settings**.
+     See `memory/known_issues.md`.
   2. **Refresh `docs/db/schema-current.sql` + `seed-reference.sql`** — stale now (no `sub_segment_id`,
      no `catalog_assign_rules`/`cover_url`, 44-vs-49 families). Needs a prod `pg_dump` (owner creds).
+     ⚠️ Scrub webhook `Authorization: Bearer …` headers before commit (PR #75 lesson — gitleaks misses it).
   3. **On-phone Android Web-Share check** — owner opted to test the WhatsApp files→draft path
      directly on prod (couldn't be done from desktop; code verified correct by inspection — H4/H5 fixed).
 - **Post-9.7 follow-up (owner-deferred):** provenance repair — count prod rows with null

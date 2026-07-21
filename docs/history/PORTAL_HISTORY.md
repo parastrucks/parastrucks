@@ -1862,3 +1862,44 @@ under Edge Functions → Secrets. Owner elected to continue the next day.
 
 **Note for later (separate, not required here):** migrating **JWT signing keys** (moving user session
 tokens off the shared JWT secret) is an independent follow-on migration; it does not close this exposure.
+
+
+---
+
+**Session 2026-07-21 (cont.) — post-cutover finding: prod Storage bucket rejected every cover
+(`brochures` MIME allow-list). Fixed; 8/8 covers backfilled on prod.**
+
+Running the last 9.7 tail item (the prod cover backfill) surfaced a **real gap left by the 9.7
+cutover**. Admin → Vehicle Catalog → Sub-Segments → "Generate 8 covers" failed with
+`Cover generation failed for all 8 families.`, and the console showed 8 ×
+`PUT …/storage/v1/object/upload/sign/brochures/<uuid>.webp → 400 (Bad Request)`.
+
+**Diagnosis (evidence-led, no guessing).** The pdfjs console noise (`Knockout groups not supported`,
+`TT: undefined function: 32`) was benign render chatter — the PDFs rasterised fine. The fault was the
+*upload*. Decoding a signed-upload token showed a perfectly well-formed request —
+`{"url":"brochures/<uuid>.webp","upsert":false,"scope":"upload",…}` — with a fresh `crypto.randomUUID()`
+path (so "object already exists" was impossible) and a valid unexpired token, proving `signCoverUpload`
+in the `admin-catalog` EF had done its job. A **400** (not 403) pointed at content validation rather
+than auth, and signed upload URLs bypass RLS anyway. The dashboard confirmed it: the prod `brochures`
+bucket had **`ALLOWED MIME TYPES = application/pdf`** (file size limit 20 MB, 4 policies). Storage was
+refusing `image/webp` outright.
+
+**Why staging never caught it.** The 2026-07-20 staging Storage repair copied prod's **4 policies**
+(`docs/db/staging_storage_policies.sql`) but **not bucket settings** — so staging's bucket stayed
+permissive and accepted webp, while prod's PDF-only allow-list stood. The "staging does NOT mirror
+prod" lesson again, with the drift running the opposite way.
+
+**Fix.** Owner added `image/webp` to the prod bucket's allowed MIME types in the dashboard — additive
+(kept `application/pdf`), no code change, no migration, no redeploy, instantly reversible, and no new
+exposure (signed upload URLs are only minted by `signCoverUpload`, gated to `admin`/`back_office`).
+Re-ran the button → **`Covers generated: 8.`**, console clean of 400s.
+
+**Severity note — this was systemic, not a backfill-only hiccup.** `uploadCoverBlob` is deliberately
+best-effort (`catch { return null }`), so the same rejection would have hit **every future brochure
+upload** on prod, silently, leaving `cover_url` null and the card falling back to the typographic tile
+(the H5 fallback working as designed). Nothing was user-visibly broken, which is exactly why it could
+have gone unnoticed indefinitely; the backfill button was simply the one place it failed loudly.
+
+**Standing lesson (carry into R9 / RECONSTRUCTION.md's Storage section):** a prod↔staging Storage
+comparison must cover **bucket settings — allowed MIME types and file size limit — not just policies**,
+and `RECONSTRUCTION.md` must record them so a rebuild reproduces them.
