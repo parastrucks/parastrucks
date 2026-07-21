@@ -1802,3 +1802,63 @@ does granular prod uploads himself), refresh `docs/db/schema-current.sql` + `see
 and the owner's on-phone Android Web-Share check (opted to test on prod; the mobile code was verified
 correct by inspection — H4/H5 fixed). Staging left with harmless test data (`SMOKE97-A`/`B` inactive,
 `SMOKE97-FAM` retired) the owner chose to keep.
+
+
+---
+
+**Session 2026-07-21 — `service_role` key retirement: investigation + corrected plan (no prod change).**
+
+Owner opened the parked 🔴 item ("let's do service role") and, partway in, set the governing constraint:
+**"make sure that the prod doesn't break due to your change in approach or intervention."** The session
+was therefore **investigation and planning only — nothing was written to prod, staging, or any key
+setting.** All actions were reads (code greps, Supabase docs, one dashboard screenshot from the owner).
+
+**The finding that changed the plan.** The parked note (2026-07-17) assumed Supabase's **coupled-key**
+model: rotating `service_role` would also invalidate `anon` and take prod down until Vercel's
+`VITE_SUPABASE_ANON_KEY` was updated + redeployed. **That assumption is wrong for this project.** The
+owner's dashboard screenshot of `…/project/mmmxvjaavdtwlpcnjgzy/settings/api-keys` showed prod is
+already on the **new API keys** system — a `sb_publishable_…` key named `default` exists, and legacy
+`anon`/`service_role` now sit on their own separate tab. Per Supabase's migration guide, **new and
+legacy keys work simultaneously**, so clients can be swapped one at a time. The work is a **reversible,
+additive migration, not a coupled outage rotation.**
+
+**Code-grounded facts established (all verified, not assumed):**
+- All **8 portal EFs** read the platform-injected legacy `SUPABASE_SERVICE_ROLE_KEY` via `Deno.env.get`
+  — **none hardcode it**, so no secret lives in EF source.
+- EFs validate callers with `userClient.auth.getUser(jwt)` (a GoTrue call), so user sessions do **not**
+  depend on the anon/service_role key values.
+- The **only standalone client key** is the browser's `VITE_SUPABASE_ANON_KEY`, baked into the Vercel
+  build — that is the entire prod-outage surface.
+- ERP EFs (`erp-sso`, `sync-erp-users`) use a **separate `ERP_SERVICE_ROLE_KEY`** for a different
+  project (`cloghfqosoapqtltslrp`) → out of scope, untouched.
+- supabase-js lockfile resolves to **2.100.1**, which understands `sb_publishable_`/`sb_secret_` formats.
+- The Supabase MCP available in-session is authed **only to the ERP org**, not the portal project
+  (`get_publishable_keys` on the portal ref → permission denied) — so portal key state must come from
+  the dashboard, not tooling.
+
+**The catch that sets the scope.** The leaked token only goes inert when **legacy keys are DEACTIVATED**,
+and legacy `anon` + `service_role` deactivate **together** (a single toggle — cf. the Management API
+endpoint "Disable or re-enable JWT based legacy (anon, service_role) API keys"). There is therefore **no
+shortcut that kills only `service_role`**: the browser must first move off legacy `anon`. Crucially,
+deactivation is **reversible** ("You can re-activate them if you find a client you missed"), which is
+the safety net the whole plan leans on.
+
+**Agreed runbook (recorded in `memory/project_next_session.md`; rehearse on STAGING
+`klpnhpnlotcbbovwswmq` end-to-end FIRST, then replicate on prod in a quiet window):**
+1. Confirm/create the `default` **secret** key; confirm EF Secrets expose `SUPABASE_SECRET_KEYS` +
+   `SUPABASE_PUBLISHABLE_KEYS`.
+2. Migrate all 8 portal EFs: `SUPABASE_SERVICE_ROLE_KEY` →
+   `JSON.parse(Deno.env.get('SUPABASE_SECRET_KEYS'))['default']` (+ anon→`SUPABASE_PUBLISHABLE_KEYS`),
+   redeploy. **Gotcha:** new keys must travel on the `apikey` header only — never `Authorization:
+   Bearer`, which the gateway tries to parse as a JWT and rejects with `Invalid JWT`.
+3. Migrate the browser: Vercel `VITE_SUPABASE_ANON_KEY` → the publishable key, redeploy.
+4. Verify prod works with **both** key sets still active (login + an admin EF action + a sales read).
+5. **Deactivate legacy** (reversible) → leaked token inert.
+6. Delete the dead `VITE_SUPABASE_SERVICE_KEY` line from `.env`.
+
+**Paused at step 1**, awaiting two zero-impact owner dashboard checks: (a) does a `default`
+`sb_secret_…` key already exist, and (b) do `SUPABASE_SECRET_KEYS` / `SUPABASE_PUBLISHABLE_KEYS` appear
+under Edge Functions → Secrets. Owner elected to continue the next day.
+
+**Note for later (separate, not required here):** migrating **JWT signing keys** (moving user session
+tokens off the shared JWT secret) is an independent follow-on migration; it does not close this exposure.

@@ -72,14 +72,23 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 - **Phase 9 residual hardening (9h/9i):** MFA, new-device email, active-sessions page,
   security-monitor cron, file-upload virus scan, PII encryption; plus process items. Untouched.
   Full specs in `docs/history/PORTAL_HISTORY.md` (Phase 9 programme).
-- **🔴 Parked (owner) — rotate the prod `service_role` key (now more than tidiness).** A live prod
+- **🔴 IN PROGRESS (started 2026-07-21) — retire the exposed prod `service_role` key.** A live prod
   `service_role` JWT was hardcoded in two git-tracked scripts (`scripts/run_migration.cjs`,
   `scripts/fix_inactive.cjs`) — fixed 2026-07-17 (commit `f420425`) to read `SUPABASE_URL` +
-  `SUPABASE_SERVICE_KEY` from env, but the key stays valid in git history until rotated, so rotation
-  is the only thing that closes it. **Caveat:** on Supabase's coupled-key model rotating
-  `service_role` also invalidates `anon`, taking prod down until Vercel's `VITE_SUPABASE_ANON_KEY` is
-  updated + redeployed — do it in a quiet window (check the API-keys page first). Also parked: delete
-  the dead `VITE_SUPABASE_SERVICE_KEY` line from `.env`.
+  `SUPABASE_SERVICE_KEY` from env, but **the key stays valid in git history until the legacy keys are
+  retired**. **⚠️ The old "coupled-key → prod outage" caveat is SUPERSEDED:** prod is already on
+  Supabase's **new API keys** system (verified in the dashboard 2026-07-21 — a `sb_publishable_…`
+  `default` key exists; legacy `anon`/`service_role` are a separate tab). New + legacy keys **work
+  simultaneously**, so this is a **reversible, additive migration**, not a coupled rotation
+  ([migration guide](https://supabase.com/docs/guides/getting-started/migrating-to-new-api-keys)).
+  **Verified:** all 8 portal EFs read the injected legacy `SUPABASE_SERVICE_ROLE_KEY` (none hardcode
+  it); the only standalone client key is the browser's `VITE_SUPABASE_ANON_KEY`; ERP EFs use a separate
+  `ERP_SERVICE_ROLE_KEY` (untouched); supabase-js = 2.100.1 (understands new formats). **Catch:** the
+  leaked token only dies when **legacy keys are deactivated**, and legacy `anon`+`service_role`
+  deactivate **together**, so the browser must move to the publishable key first. Deactivation is
+  **reversible** (safety net). **Plan: rehearse end-to-end on staging first, then prod in a quiet
+  window.** Full 6-step runbook + paused state in `memory/project_next_session.md`. Also pending:
+  delete the dead `VITE_SUPABASE_SERVICE_KEY` line from `.env`.
 - **Open issues:** see `memory/known_issues.md` (e.g. C1 PII-read RLS; `next_proforma_number`/
   `next_financier_copy_number` still `anon`-executable).
 
