@@ -16,6 +16,7 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 import { createClient } from "npm:@supabase/supabase-js@2"
+import { secretKey, publishableKey } from "../_shared/keys.ts"
 import { rateLimit } from "../_shared/rateLimit.ts"
 import { jsonResponse, preflight } from "../_shared/cors.ts"
 
@@ -36,8 +37,8 @@ Deno.serve(async (req: Request) => {
   const jwt = authHeader.replace("Bearer ", "")
 
   const url = Deno.env.get("SUPABASE_URL")!
-  const anon = Deno.env.get("SUPABASE_ANON_KEY")!
-  const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+  const anon = publishableKey()
+  const service = secretKey()
 
   // Verify JWT via anon client
   const userClient = createClient(url, anon, {

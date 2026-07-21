@@ -15,6 +15,7 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2"
+import { secretKey, publishableKey } from "../_shared/keys.ts"
 import { rateLimit } from "../_shared/rateLimit.ts"
 import { audit } from "../_shared/auditLog.ts"
 import { jsonResponse, preflight } from "../_shared/cors.ts"
@@ -49,8 +50,8 @@ async function verify(req: Request): Promise<VerifyResult> {
   const jwt = authHeader.replace("Bearer ", "")
 
   const url = Deno.env.get("SUPABASE_URL")!
-  const anon = Deno.env.get("SUPABASE_ANON_KEY")!
-  const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+  const anon = publishableKey()
+  const service = secretKey()
 
   const userClient = createClient(url, anon, {
     global: { headers: { Authorization: authHeader } },

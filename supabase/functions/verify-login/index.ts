@@ -30,6 +30,7 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 import { createClient } from "npm:@supabase/supabase-js@2"
+import { secretKey, publishableKey } from "../_shared/keys.ts"
 import { jsonResponse, preflight } from "../_shared/cors.ts"
 
 // Phase 9c (H3): when REQUIRE_CAPTCHA=true, the EF fails closed if Turnstile
@@ -73,8 +74,8 @@ Deno.serve(async (req: Request) => {
 
     stage = "read-env"
     const url = Deno.env.get("SUPABASE_URL")!
-    const anon = Deno.env.get("SUPABASE_ANON_KEY")!
-    const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    const anon = publishableKey()
+    const service = secretKey()
 
     stage = "parse-body"
     let body: Record<string, unknown> = {}
