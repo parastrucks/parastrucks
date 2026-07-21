@@ -128,7 +128,7 @@ tagged `[FREE]` / `[PAID]` / `[FREE-ALT]` in the history archive.
 - Python is **not installed** — use Node.js or PowerShell for scripting.
 
 **Backend gotchas (see `memory/project_edge_function_auth.md`):**
-- All 7 Edge Functions deploy with **`verify_jwt: false`** (each runs its own stricter `verify()`).
+- All **9** Edge Functions deploy with **`verify_jwt: false`** (each runs its own stricter `verify()`). The nine: `verify-login`, `admin-users`, `admin-access-rules`, `admin-catalog`, `admin-tiv`, `log-error`, `service-jobs`, `erp-sso`, `sync-erp-users` — docs previously said 7/8; deploying fewer than all nine breaks the missed one at the key cutover.
 - Locking down a `SECURITY DEFINER` RPC needs `revoke … from anon` **and** `from authenticated`,
   not just `from public` (Supabase grants EXECUTE to `anon` on function creation).
 - **Never delete DB rows/columns/tables without explicit owner approval** (`memory/feedback_no_schema_deletion.md`).

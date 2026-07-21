@@ -62,7 +62,7 @@ src/
   tiv-forecast/              TIV forecasting module
   index.css                  Global design system (no Tailwind)
 supabase/
-  functions/                 7 Edge Functions (all deploy verify_jwt:false)
+  functions/                 9 Edge Functions (all deploy verify_jwt:false)
   migrations/                Incremental schema history (Phase 5→9.5)
 docs/                        History, reconstruction blueprint, DB dumps, backlog
 ```
