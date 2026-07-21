@@ -97,9 +97,24 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   `ERP_SERVICE_ROLE_KEY` (untouched); supabase-js = 2.100.1 (understands new formats). **Catch:** the
   leaked token only dies when **legacy keys are deactivated**, and legacy `anon`+`service_role`
   deactivate **together**, so the browser must move to the publishable key first. Deactivation is
-  **reversible** (safety net). **Plan: rehearse end-to-end on staging first, then prod in a quiet
-  window.** Full 6-step runbook + paused state in `memory/project_next_session.md`. Also pending:
-  delete the dead `VITE_SUPABASE_SERVICE_KEY` line from `.env`.
+  **reversible** (safety net).
+  **✅ STAGING REHEARSAL COMPLETE 2026-07-21** on branch `svcrole-new-api-keys` (4 commits, **not merged,
+  not on prod**). Staging now runs the **end state** — `USE_NEW_API_KEYS=true` *and legacy keys
+  deactivated* — with login, catalog reads, an Employees write, and all 9 EFs verified healthy.
+  **Cutover = a secret flip, not a deploy** (`USE_NEW_API_KEYS`); ⚠️ **rollback is NOT instant** —
+  `Deno.env` is snapshotted at isolate boot, so flip *and* rollback both need a redeploy; the instant
+  lever is re-enabling legacy keys. **4 red-team lanes** ran against the migration and all fixes are
+  applied — headline: `adminLogoutUser` sent the secret key on `Authorization: Bearer` and swallowed the
+  failure, and `keys.ts` silently fell back to a dead key (which would have made pre-cutover
+  verification meaningless). supabase-js does **not** special-case `sb_` keys — it does send them on
+  `Bearer`; it works because the **gateway tolerates it**, proven by running staging with legacy off.
+  **Before prod:** the **token-refresh test (~1 h)** — the only path staging structurally hasn't covered.
+  Full runbook, prod ordering and the orders that break prod: `memory/project_next_session.md`.
+  **Two NEW independent security items found, each needing its own change** (see `memory/known_issues.md`):
+  🔴 `SYNC_SECRET` is unredacted in git history (3-way coordinated rotation) · 🟠 `adminLogoutUser` 404s,
+  so session revocation has **never** worked (pre-existing; needs a DB migration; not a cutover blocker).
+  The dead `VITE_SUPABASE_SERVICE_KEY` line is gone from the worktree `.env` (the main checkout's and the
+  9.6 worktree's still have it) — and **`.env.prod.bak` does not exist**, contrary to the Task A note above.
 - **Open issues:** see `memory/known_issues.md` (e.g. C1 PII-read RLS; `next_proforma_number`/
   `next_financier_copy_number` still `anon`-executable).
 
