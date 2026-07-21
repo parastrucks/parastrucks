@@ -73,6 +73,10 @@ export default function Employees() {
   const [refOutlets,     setRefOutlets]     = useState([]) // {id, entity_id, city, facility_type}
   const [refSubdepts,    setRefSubdepts]    = useState([]) // {id, code, name}
   const [refOutletBrands,setRefOutletBrands]= useState([]) // {outlet_id, brand_id, entity_id}
+  // Non-null when any reference table failed to load. Editing is disabled while
+  // set, because an empty ref table makes the form render every assignment as
+  // unchecked and a save would strip it (red-team 2026-07-21, M4).
+  const [refLoadError,   setRefLoadError]   = useState(null)
 
   // Modal state
   const [modal, setModal]       = useState(null) // 'add' | 'edit' | 'password' | 'confirm'
@@ -157,6 +161,21 @@ export default function Employees() {
       supabase.from('outlet_brands').select('outlet_id, brand_id, outlets(entity_id)'),
     ]).then(([e, d, dg, b, sv, o, sd, ob]) => {
       if (cancelled) return
+      // Red-team 2026-07-21 (M4, worst case): these errors were discarded.
+      // supabase-js does not throw on HTTP errors, so a failed read (e.g. a
+      // rejected API key) silently produced EMPTY ref tables. The edit modal
+      // then opened with every brand/vertical/outlet checkbox UNCHECKED, and
+      // saving would have written that back — silently STRIPPING a user's real
+      // assignments. Data loss disguised as a normal edit. Refuse to arm the
+      // form when the reference data is incomplete.
+      const refErr = [e, d, dg, b, sv, o, sd, ob].find(r => r?.error)?.error
+      if (refErr) {
+        console.error('Employees: reference table load failed:', refErr.message)
+        setRefLoadError(refErr.message)
+        toast.error('Could not load reference data — editing is disabled. Please reload.')
+        return
+      }
+      setRefLoadError(null)
       setRefEntities(e.data || [])
       setRefDepartments(d.data || [])
       setRefDesignations(dg.data || [])
@@ -255,6 +274,12 @@ export default function Employees() {
   }
 
   async function openEdit(emp) {
+    // Reference data incomplete → every checkbox would render unchecked and a
+    // save would strip the user's assignments (red-team 2026-07-21, M4).
+    if (refLoadError) {
+      toast.error('Reference data failed to load — reload the page before editing.')
+      return
+    }
     setSelected(emp)
     setError('')
     setErrorField(null)
@@ -264,6 +289,16 @@ export default function Employees() {
       supabase.from('user_sales_verticals').select('vertical_id').eq('user_id', emp.id),
       supabase.from('user_outlets').select('outlet_id').eq('user_id', emp.id),
     ])
+    // These three ARE the user's current assignments. If a read fails,
+    // supabase-js returns {data:null,error} without throwing — the form would
+    // then show nothing selected and Save would persist that emptiness,
+    // silently wiping real assignments. Refuse to open instead.
+    const joinErr = [brandRes, vertRes, outletRes].find(r => r?.error)?.error
+    if (joinErr) {
+      console.error('openEdit: user join-table read failed:', joinErr.message)
+      toast.error('Could not load this employee’s current assignments — not opening the editor.')
+      return
+    }
     setForm({
       full_name:          emp.full_name          || '',
       email:              emp.email              || '',

@@ -89,6 +89,10 @@ export function AuthProvider({ children }) {
   const [session,      setSession]      = useState(null)
   const [profile,      setProfile]      = useState(null)
   const [accessRules,  setAccessRules]  = useState([]) // never null
+  // Set when the profile/access-rules read fails. Without this a backend
+  // failure is indistinguishable from "this user has no permissions" — see
+  // loadUserData (red-team 2026-07-21, H2).
+  const [loadError,    setLoadError]    = useState(null)
 
   // dataLoadRef holds the promise from loadUserData so signIn() can await it
   // and ensure profile is populated before Login.jsx navigates.
@@ -120,11 +124,22 @@ export function AuthProvider({ children }) {
     loadingForRef.current = userId
     setPhase('loading-data')
     try {
-      const [{ data: p }, { data: rules }] = await Promise.all([
+      const [{ data: p, error: pErr }, { data: rules, error: rulesErr }] = await Promise.all([
         supabase.from('users').select('*').eq('id', userId).maybeSingle(),
         supabase.from('access_rules').select('*'),
       ])
       if (!mountedRef.current) return
+      // Red-team 2026-07-21 (H2): these errors were discarded. supabase-js does
+      // NOT throw on an HTTP error, so a 401 (e.g. a rejected API key after the
+      // new-key cutover) left profile=null, accessRules=[] and phase='ready' —
+      // the user logged in successfully and landed on a portal with an empty
+      // sidebar, empty nav and NO error message, indistinguishable from "admin
+      // forgot to give me access". Surface it instead of rendering a lie.
+      if (pErr || rulesErr) {
+        const msg = pErr?.message || rulesErr?.message || 'unknown error'
+        console.error('loadUserData: profile/access-rules read failed:', msg)
+        throw new Error(msg)
+      }
       // Shallow-diff: only replace state when the data actually changed.
       // Avoids new object references that would cascade re-renders through
       // every useAuth() consumer.
@@ -133,10 +148,14 @@ export function AuthProvider({ children }) {
       // Mark this user's data as loaded so later SIGNED_IN / USER_UPDATED
       // events for the same user short-circuit instead of flipping phase.
       loadedForRef.current = userId
+      setLoadError(null)
     } catch (e) {
       console.error('loadUserData error:', e)
       if (!mountedRef.current) return
       setAccessRules([])
+      // Record WHY we have no data, so the UI can say "couldn't load" instead
+      // of silently rendering an empty portal (red-team 2026-07-21, H2).
+      setLoadError(e?.message || 'Could not load your profile')
     }
     if (mountedRef.current) setPhase('ready')
     loadingForRef.current = null
@@ -387,6 +406,7 @@ export function AuthProvider({ children }) {
     refreshAccessRules,
     canAccess,
     loading: phase === 'initializing' || phase === 'loading-data',
+    loadError,
     signIn,
     signOut,
     isAdmin: profile?.permission_level === 'admin',
