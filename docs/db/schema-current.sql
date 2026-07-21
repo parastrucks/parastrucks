@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict iAZQg27YMtTVndlArhhUMiYNqTXbw6fKYO5B699NVMIgqrFkimpxMHqlAhT0R5X
+\restrict xKCbwPo01bhdchd1oQacoqworALD9hOHjQsMQr7IQQh71mVKwpxHPwg4WExTJ8L
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 18.4
@@ -1093,6 +1093,37 @@ COMMENT ON FUNCTION public.is_manager_or_above() IS 'Phase 9.5 — true iff acti
 
 
 --
+-- Name: move_cbns_to_family(text[], integer, text, text, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.move_cbns_to_family(p_cbns text[], p_sub_segment_id integer, p_family_name text, p_segment text, p_sales_vertical_id uuid) RETURNS integer
+    LANGUAGE sql
+    SET search_path TO 'public'
+    AS $$
+  WITH moved AS (
+    UPDATE public.vehicle_catalog
+       SET sub_segment_id = p_sub_segment_id,
+           sub_category   = p_family_name,
+           -- COALESCE, not a plain assignment: on unassign (p_segment NULL)
+           -- the CBN keeps whatever segment it had.
+           segment        = COALESCE(p_segment, segment),
+           -- The vertical follows the destination segment. On a REAL move the
+           -- resolved value is applied even when NULL (an unmapped segment
+           -- must clear the old vertical, not keep a stale one — NULL means
+           -- "visible brand-wide", same as every un-backfilled row). Only on
+           -- UNASSIGN (no destination) is the old vertical preserved, exactly
+           -- like segment.
+           sales_vertical_id = CASE WHEN p_sub_segment_id IS NULL
+                                    THEN sales_vertical_id
+                                    ELSE p_sales_vertical_id END
+     WHERE cbn = ANY (p_cbns)
+    RETURNING id
+  )
+  SELECT count(*)::integer FROM moved;
+$$;
+
+
+--
 -- Name: next_financier_copy_number(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -1548,6 +1579,18 @@ begin
                         set_config('request.jwt.claims', claims::text, true);
 
                     execute 'execute walrus_rls_stmt' into subscription_has_access;
+
+                    -- Reset the role on every FOR..LOOP batch execution.
+                    -- The first batch of 10 rows is pre-fetched using the current connection role (PG internal behaviour)
+                    -- then we have to reset it again otherwise it would use the role defined in the `set_config` above
+                    -- to fetch the remaining rows when rows>10, which could be a user-defined role that lacks execution grants.
+                    -- The flow is:
+                    --   1. run batch with conn role
+                    --   2. set_config working_role
+                    --   3. execute walrus
+                    --   4. reset role (revert)
+                    --   5. repeat
+                    perform set_config('role', null, true);
 
                     if subscription_has_access then
                         visible_role_sub_ids = visible_role_sub_ids || subscription_id;
@@ -3921,6 +3964,23 @@ CREATE TABLE public.brands (
 
 
 --
+-- Name: catalog_assign_rules; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.catalog_assign_rules (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    sub_segment_id integer NOT NULL,
+    pattern text NOT NULL,
+    not_terms text[] DEFAULT '{}'::text[] NOT NULL,
+    hits integer DEFAULT 0 NOT NULL,
+    created_by uuid,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT catalog_assign_rules_pattern_len CHECK ((length(pattern) <= 200)),
+    CONSTRAINT catalog_assign_rules_pattern_not_blank CHECK ((length(btrim(pattern)) > 0))
+);
+
+
+--
 -- Name: departments; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -4419,7 +4479,8 @@ CREATE TABLE public.sub_segments (
     brochure_filename text,
     description text,
     is_active boolean DEFAULT true NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    cover_url text
 );
 
 
@@ -4894,7 +4955,8 @@ CREATE TABLE public.vehicle_catalog (
     sub_category text,
     brand text DEFAULT 'al'::text NOT NULL,
     brand_id uuid NOT NULL,
-    sales_vertical_id uuid
+    sales_vertical_id uuid,
+    sub_segment_id integer
 );
 
 
@@ -5615,6 +5677,14 @@ ALTER TABLE ONLY public.brands
 
 ALTER TABLE ONLY public.brands
     ADD CONSTRAINT brands_pkey PRIMARY KEY (code);
+
+
+--
+-- Name: catalog_assign_rules catalog_assign_rules_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.catalog_assign_rules
+    ADD CONSTRAINT catalog_assign_rules_pkey PRIMARY KEY (id);
 
 
 --
@@ -6586,6 +6656,13 @@ CREATE INDEX webauthn_credentials_user_id_idx ON auth.webauthn_credentials USING
 
 
 --
+-- Name: catalog_assign_rules_family_pattern_key; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX catalog_assign_rules_family_pattern_key ON public.catalog_assign_rules USING btree (sub_segment_id, lower(btrim(pattern)));
+
+
+--
 -- Name: error_log_created_at_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6607,6 +6684,13 @@ CREATE INDEX idx_al_actuals_month ON public.tiv_forecast_al_actuals USING btree 
 
 
 --
+-- Name: idx_catalog_assign_rules_sub_segment_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_catalog_assign_rules_sub_segment_id ON public.catalog_assign_rules USING btree (sub_segment_id);
+
+
+--
 -- Name: idx_catalog_cbn; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6625,6 +6709,13 @@ CREATE INDEX idx_catalog_description ON public.vehicle_catalog USING gin (to_tsv
 --
 
 CREATE INDEX idx_catalog_segment ON public.vehicle_catalog USING btree (segment);
+
+
+--
+-- Name: idx_catalog_sub_segment_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_catalog_sub_segment_id ON public.vehicle_catalog USING btree (sub_segment_id);
 
 
 --
@@ -7038,6 +7129,22 @@ ALTER TABLE ONLY public.access_rules
 
 ALTER TABLE ONLY public.access_rules
     ADD CONSTRAINT access_rules_entity_id_fkey FOREIGN KEY (entity_id) REFERENCES public.entities(id) ON DELETE CASCADE;
+
+
+--
+-- Name: catalog_assign_rules catalog_assign_rules_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.catalog_assign_rules
+    ADD CONSTRAINT catalog_assign_rules_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
+-- Name: catalog_assign_rules catalog_assign_rules_sub_segment_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.catalog_assign_rules
+    ADD CONSTRAINT catalog_assign_rules_sub_segment_id_fkey FOREIGN KEY (sub_segment_id) REFERENCES public.sub_segments(id) ON DELETE CASCADE;
 
 
 --
@@ -7545,6 +7652,14 @@ ALTER TABLE ONLY public.vehicle_catalog
 
 
 --
+-- Name: vehicle_catalog vehicle_catalog_sub_segment_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.vehicle_catalog
+    ADD CONSTRAINT vehicle_catalog_sub_segment_id_fkey FOREIGN KEY (sub_segment_id) REFERENCES public.sub_segments(id) ON DELETE SET NULL;
+
+
+--
 -- Name: objects objects_bucketId_fkey; Type: FK CONSTRAINT; Schema: storage; Owner: -
 --
 
@@ -7779,6 +7894,40 @@ CREATE POLICY brands_insert ON public.brands FOR INSERT TO authenticated WITH CH
 --
 
 CREATE POLICY brands_update ON public.brands FOR UPDATE TO authenticated USING ((public.current_user_role() = ANY (ARRAY['admin'::text, 'back_office'::text]))) WITH CHECK ((public.current_user_role() = ANY (ARRAY['admin'::text, 'back_office'::text])));
+
+
+--
+-- Name: catalog_assign_rules; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.catalog_assign_rules ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: catalog_assign_rules catalog_assign_rules_delete; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY catalog_assign_rules_delete ON public.catalog_assign_rules FOR DELETE TO authenticated USING ((public.current_user_role() = ANY (ARRAY['admin'::text, 'back_office'::text])));
+
+
+--
+-- Name: catalog_assign_rules catalog_assign_rules_insert; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY catalog_assign_rules_insert ON public.catalog_assign_rules FOR INSERT TO authenticated WITH CHECK ((public.current_user_role() = ANY (ARRAY['admin'::text, 'back_office'::text])));
+
+
+--
+-- Name: catalog_assign_rules catalog_assign_rules_select; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY catalog_assign_rules_select ON public.catalog_assign_rules FOR SELECT TO authenticated USING ((public.current_user_role() = ANY (ARRAY['admin'::text, 'back_office'::text])));
+
+
+--
+-- Name: catalog_assign_rules catalog_assign_rules_update; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY catalog_assign_rules_update ON public.catalog_assign_rules FOR UPDATE TO authenticated USING ((public.current_user_role() = ANY (ARRAY['admin'::text, 'back_office'::text]))) WITH CHECK ((public.current_user_role() = ANY (ARRAY['admin'::text, 'back_office'::text])));
 
 
 --
@@ -8844,5 +8993,5 @@ CREATE EVENT TRIGGER pgrst_drop_watch ON sql_drop
 -- PostgreSQL database dump complete
 --
 
-\unrestrict iAZQg27YMtTVndlArhhUMiYNqTXbw6fKYO5B699NVMIgqrFkimpxMHqlAhT0R5X
+\unrestrict xKCbwPo01bhdchd1oQacoqworALD9hOHjQsMQr7IQQh71mVKwpxHPwg4WExTJ8L
 
