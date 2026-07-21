@@ -1903,3 +1903,36 @@ have gone unnoticed indefinitely; the backfill button was simply the one place i
 **Standing lesson (carry into R9 / RECONSTRUCTION.md's Storage section):** a prod↔staging Storage
 comparison must cover **bucket settings — allowed MIME types and file size limit — not just policies**,
 and `RECONSTRUCTION.md` must record them so a rebuild reproduces them.
+
+
+---
+
+**Session 2026-07-21 (cont.) — DB dumps refreshed from prod (9.7 tail item 2).**
+
+`docs/db/schema-current.sql` + `seed-reference.sql` had been stale since before Phase 9.7. Regenerated
+from prod `mmmxvjaavdtwlpcnjgzy` (PG 17.6) with local `pg_dump 18.4` — the same tool/flags that made the
+originals (`--no-owner --no-privileges`, 0 GRANT / 0 OWNER lines), seed scoped to the same **14 public
+reference tables**. Commit `b1fd93b`.
+
+**Right-database verification (done BEFORE committing, not after).** Rather than trust the connection
+string, the new dumps were diffed against the committed ones for 9.7 fingerprints — all matched the
+prediction exactly: `sub_segment_id` 0→14 refs, `catalog_assign_rules` 0→27, `cover_url` 0→1,
+`move_cbns_to_family` 0→2, `sub_segments` **44→49** families, `vehicle_catalog` **906→1006** rows (1006
+being the exact prod count from the cutover's 976/1006 keystone backfill). A wrong-DB dump would have
+failed these.
+
+**Secret handling — the PR #75 lesson applied as method, not just a warning.** `pg_dump --schema-only`
+captures DB-webhook triggers *with* their `Authorization` headers, and the `sync_erp_users` `pg_net`
+trigger carries `SYNC_SECRET`. So the dumps were written to a **scratch directory outside the repo
+first** — the live secret never entered the git working tree at any point — then scrubbed to the
+existing placeholder `Bearer __REDACTED_ROTATE_SEE_RECONSTRUCTION__`, re-verified after the copy into
+`docs/db/`, and swept for residuals: **0** raw `eyJ…` JWTs, **0** `sb_secret_`, **0** long hex/base64
+runs, and a check that `sync_erp_users` is still the **only** `http_request` trigger (a new webhook
+would have carried a new secret). `gitleaks` is not on PATH locally and did not catch this pattern in
+PR #75 anyway — GitGuardian did — so the sweep is manual by design.
+
+**Noted, not actioned:** `seed-reference.sql` includes `public.entities`, which carries GSTIN and bank
+details. That was already true of the committed dump, so this changed nothing — but the owner was told,
+in case that table should later be dropped from the seed scope. Also still open: `storage.buckets` is
+**not** in the seed scope, so bucket settings (the allowed-MIME-types field behind today's cover bug)
+still aren't captured by a rebuild — see the R9 entry.

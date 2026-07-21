@@ -63,9 +63,14 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
      *future* brochure upload would silently have produced no cover too. Staging was unaffected because
      the 2026-07-20 Storage repair copied prod's 4 **policies** but not **bucket settings**.
      See `memory/known_issues.md`.
-  2. **Refresh `docs/db/schema-current.sql` + `seed-reference.sql`** — stale now (no `sub_segment_id`,
-     no `catalog_assign_rules`/`cover_url`, 44-vs-49 families). Needs a prod `pg_dump` (owner creds).
-     ⚠️ Scrub webhook `Authorization: Bearer …` headers before commit (PR #75 lesson — gitleaks misses it).
+  2. **✅ DONE 2026-07-21 — refreshed `docs/db/schema-current.sql` + `seed-reference.sql`** from prod
+     (PG 17.6) with `pg_dump 18.4`, flags `--no-owner --no-privileges`, seed = the same 14 reference
+     tables. Confirmed it hit the right DB: `sub_segment_id` 0→14, `catalog_assign_rules` 0→27,
+     `cover_url` 0→1, families 44→**49**, `vehicle_catalog` 906→**1006**. **Method to reuse:** dump to
+     a scratch dir first so the live `SYNC_SECRET` never enters the git working tree, scrub the
+     `sync_erp_users` webhook `Authorization` header to `__REDACTED_ROTATE_SEE_RECONSTRUCTION__`, then
+     sweep for residuals (raw JWTs / `sb_secret_` / long hex runs / any *other* `http_request` trigger)
+     — PR #75 lesson: `gitleaks` misses this hex-in-JSON pattern.
   3. **On-phone Android Web-Share check** — owner opted to test the WhatsApp files→draft path
      directly on prod (couldn't be done from desktop; code verified correct by inspection — H4/H5 fixed).
 - **Post-9.7 follow-up (owner-deferred):** provenance repair — count prod rows with null
