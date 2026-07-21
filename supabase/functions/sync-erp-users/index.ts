@@ -17,7 +17,7 @@
 // nightly cron, the users-table DB webhook, and erp-sso JIT provisioning.
 // Deploy with verify_jwt: false (we check the shared secret ourselves).
 // ============================================================================
-import { createClient } from "npm:@supabase/supabase-js@2"
+import { createClient } from "npm:@supabase/supabase-js@2.100.1"
 import { secretKey } from "../_shared/keys.ts"
 import { corsHeaders, preflight, jsonResponse } from "../_shared/cors.ts"
 

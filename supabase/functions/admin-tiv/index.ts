@@ -10,7 +10,7 @@
 // (kid/JWKS mismatch). The verify() below does stricter validation.
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
-import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2"
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.100.1"
 import { secretKey, publishableKey } from "../_shared/keys.ts"
 import { rateLimit } from "../_shared/rateLimit.ts"
 import { jsonResponse, preflight } from "../_shared/cors.ts"
@@ -51,7 +51,7 @@ async function verify(
 
   // Phase 6c.3: derive the legacy role token from permission_level +
   // departments.code. Admin → 'admin'; others → department code.
-  const { data: prof } = await admin
+  const { data: prof, error: profErr } = await admin
     .from("users")
     .select("id, permission_level, department_id, is_active, full_name, departments(code)")
     .eq("id", u.user.id)
@@ -64,8 +64,17 @@ async function verify(
         full_name: string
         departments: { code: string } | null
       } | null
+      error: { message: string } | null
     }
 
+  // A dead/rejected privileged key makes PostgREST return 401, which
+  // supabase-js reports as an error rather than throwing. Without this
+  // guard prof is null and the caller is told "Profile not found" — i.e.
+  // blamed for a platform failure. Red-team 2026-07-21 (C2).
+  if (profErr) {
+    console.error("verify: privileged profile read failed:", profErr.message)
+    return { err: jsonResponse(req, { error: "backend_unavailable" }, 503) }
+  }
   if (!prof) return { err: jsonResponse(req, { error: "Profile not found" }, 403) }
   if (!prof.is_active) return { err: jsonResponse(req, { error: "Account inactive" }, 403) }
 

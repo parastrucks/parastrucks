@@ -15,7 +15,7 @@
 // (kid/JWKS mismatch). getUser() inline below does the real validation.
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
-import { createClient } from "npm:@supabase/supabase-js@2"
+import { createClient } from "npm:@supabase/supabase-js@2.100.1"
 import { secretKey, publishableKey } from "../_shared/keys.ts"
 import { rateLimit } from "../_shared/rateLimit.ts"
 import { jsonResponse, preflight } from "../_shared/cors.ts"

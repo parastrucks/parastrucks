@@ -16,7 +16,7 @@
 // Deploy with verify_jwt: false (we validate the caller ourselves), same as the
 // other portal EFs. Matches the Phase 9 CORS/getUser pattern.
 // ============================================================================
-import { createClient } from "npm:@supabase/supabase-js@2"
+import { createClient } from "npm:@supabase/supabase-js@2.100.1"
 import { publishableKey } from "../_shared/keys.ts"
 import { corsHeaders, preflight, jsonResponse } from "../_shared/cors.ts"
 
