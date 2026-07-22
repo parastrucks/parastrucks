@@ -4,7 +4,7 @@
 // lock + check + increment atomically inside Postgres. Saves ~200–400 ms per
 // EF call vs the old SELECT+UPSERT helper.
 
-import { SupabaseClient } from "npm:@supabase/supabase-js@2"
+import { SupabaseClient } from "npm:@supabase/supabase-js@2.100.1"
 
 export interface RateLimitResult {
   allowed: boolean
@@ -36,7 +36,17 @@ export async function rateLimit(
   })
 
   if (error || !Array.isArray(data) || data.length === 0) {
-    // Fail open — see rationale above.
+    // Fail open — see rationale above. Keeping that behaviour, but it is now
+    // AUDIBLE: a dead/rejected privileged key makes this RPC fail on every
+    // call, which silently disables rate limiting across all 8 functions with
+    // no external signal whatsoever. Red-team 2026-07-21 (C4) — the gap was
+    // never the fail-open decision, it was that nothing said it had happened.
+    if (error) {
+      console.error(
+        `rateLimit: rate_limit_hit RPC failed for bucket=${bucket} ` +
+          `— FAILING OPEN (limit not enforced): ${error.message}`,
+      )
+    }
     return { allowed: true, retry_after_s: 0 }
   }
 

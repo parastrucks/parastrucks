@@ -17,7 +17,7 @@
 |---|---|---|
 | **DB schema** (tables, RLS, functions, triggers, extensions) | [`docs/db/schema-current.sql`](db/schema-current.sql) | **Gold standard.** Full `pg_dump --schema-only` of prod (75 tables, 112 RLS policies, 66 functions, 9 triggers). Apply this to a fresh project — do **not** replay the migrations. |
 | **Reference / config data** | [`docs/db/seed-reference.sql`](db/seed-reference.sql) | `pg_dump --data-only` of config tables: entities, brands, departments, designations, outlets, operating_units, sales_verticals, access_rules (106 rows), sub_segments, vehicle_catalog (906). **No user PII, no transactional rows.** |
-| **Backend logic** | [`supabase/functions/`](../supabase/functions/) | The 7 Edge Functions + `_shared`. |
+| **Backend logic** | [`supabase/functions/`](../supabase/functions/) | The 9 Edge Functions + `_shared`. |
 | **Frontend** | `src/`, `index.html`, `vite.config.js` | React 18 + Vite SPA. |
 | **Web/CDN config** | [`vercel.json`](../vercel.json) | SPA rewrites, CSP + security headers, cache rules. |
 | **Schema evolution (historical only)** | [`supabase/migrations/`](../supabase/migrations/) | 18 incremental migrations (Phase 5→9.5). **Not a full base** — the earliest is `20260401`; Phases 1–4 DDL is only in `schema-current.sql`. Use for history/audit, not for a fresh build. |
@@ -71,12 +71,20 @@
 
 ---
 
-## 3. Edge Functions (7)
+## 3. Edge Functions (9)
+
+> **Count corrected 2026-07-21.** This section said **7** and omitted `erp-sso` and
+> `sync-erp-users` entirely; `CLAUDE.md` said 7 and the key-cutover runbook said 8. A red-team
+> lane caught it: deploy 7 or 8 of 9 and the missed function silently keeps reading the
+> deprecated key vars and dies the moment legacy keys are deactivated — `sync-erp-users` takes
+> portal→ERP user sync with it, `erp-sso` breaks HD Hyundai SSO. **Always deploy all nine and
+> enumerate them against this list before flipping anything.**
 
 Deploy each function in [`supabase/functions/`](../supabase/functions/): `verify-login`,
-`admin-users`, `admin-access-rules`, `admin-catalog`, `admin-tiv`, `log-error`, `service-jobs`.
+`admin-users`, `admin-access-rules`, `admin-catalog`, `admin-tiv`, `log-error`, `service-jobs`,
+`erp-sso`, `sync-erp-users`.
 
-- **All 7 MUST deploy with `verify_jwt: false`.** Each function runs its own stricter
+- **All 9 MUST deploy with `verify_jwt: false`.** Each function runs its own stricter
   `verify()` (the gateway's JWKS check mismatches). This is critical — see
   `memory/project_edge_function_auth.md`.
 - Set the **Edge Function secrets** (Dashboard → Edge Functions → Secrets, or CLI):
@@ -85,7 +93,17 @@ Deploy each function in [`supabase/functions/`](../supabase/functions/): `verify
   | `ALLOWED_ORIGINS` | `https://team.parastrucks.in` | CORS allow-list (comma-separated; add localhost only on staging) |
   | `REQUIRE_CAPTCHA` | `true` | Fail-closed Turnstile on login (unset/false for local dev) |
   | `TURNSTILE_SECRET` | *(from Cloudflare Turnstile)* | Server-side CAPTCHA verification |
-- The service-role key is available to functions automatically; never ship it to the client.
+  | `SYNC_SECRET` | *(shared secret)* | Gates `sync-erp-users`; also sent by the `sync_erp_users` DB trigger and the ERP repo's GitHub Action. **Rotating it is a coordinated 3-way flip.** |
+  | `ERP_SUPABASE_URL` | *(ERP project URL)* | ERP project (`cloghfqosoapqtltslrp`) — used by `erp-sso` + `sync-erp-users` |
+  | `ERP_SERVICE_ROLE_KEY` | *(ERP service key)* | ERP project privileged key. **Separate project — not affected by the portal key migration.** |
+  | `USE_NEW_API_KEYS` | `true` *(post-cutover)* | Selects new publishable/secret keys over the deprecated legacy vars. See `supabase/functions/_shared/keys.ts`. |
+- **API keys:** the portal is on Supabase's **new API keys**. Functions read them from the
+  injected `SUPABASE_SECRET_KEYS` / `SUPABASE_PUBLISHABLE_KEYS` JSON bags via
+  `_shared/keys.ts` — never directly. The deprecated `SUPABASE_SERVICE_ROLE_KEY` /
+  `SUPABASE_ANON_KEY` are still injected but are **dead once legacy keys are deactivated**.
+  Never ship a secret key to the client.
+- **Header rule:** publishable/secret keys travel on `apikey` only. Any hand-rolled `fetch`
+  must not put one on `Authorization: Bearer` (see `_shared/auditLog.ts`).
 
 ---
 
@@ -114,7 +132,7 @@ Deploy each function in [`supabase/functions/`](../supabase/functions/): `verify
    **not** used by the client; service-role ops go through Edge Functions):
    ```
    VITE_SUPABASE_URL=https://<PROJECT_REF>.supabase.co
-   VITE_SUPABASE_ANON_KEY=<anon key from Dashboard → API>
+   VITE_SUPABASE_ANON_KEY=<PUBLISHABLE key sb_publishable_… from Dashboard → Settings → API Keys>
    VITE_TURNSTILE_SITE_KEY=<Turnstile site key>
    ```
 3. `npm run dev` (port 3000, see `.claude/launch.json`) for local; `npm run build` for prod.
@@ -155,7 +173,7 @@ Deploy each function in [`supabase/functions/`](../supabase/functions/): `verify
 These are **not** in the repo — collect them from their consoles:
 
 - [ ] Supabase project ref + **DB password** (Dashboard → Settings → Database)
-- [ ] Supabase **anon key** + **service-role key** (Dashboard → Settings → API)
+- [ ] Supabase **publishable key** (`sb_publishable_…`) + **secret key** (`sb_secret_…`) (Dashboard → Settings → API Keys). The legacy `anon`/`service_role` JWTs are retired — do NOT wire them up.
 - [ ] **Turnstile** site key + secret (Cloudflare Turnstile)
 - [ ] Vercel account/team/project IDs (`memory/feedback_vercel_api.md`) + `VERCEL_TOKEN`
 - [ ] Domain registrar / Cloudflare DNS access for `parastrucks.in`

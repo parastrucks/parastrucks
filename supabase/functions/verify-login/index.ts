@@ -29,7 +29,8 @@
 //     want to lock them out through no fault of their own.
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
-import { createClient } from "npm:@supabase/supabase-js@2"
+import { createClient } from "npm:@supabase/supabase-js@2.100.1"
+import { secretKey, publishableKey } from "../_shared/keys.ts"
 import { jsonResponse, preflight } from "../_shared/cors.ts"
 
 // Phase 9c (H3): when REQUIRE_CAPTCHA=true, the EF fails closed if Turnstile
@@ -73,8 +74,8 @@ Deno.serve(async (req: Request) => {
 
     stage = "read-env"
     const url = Deno.env.get("SUPABASE_URL")!
-    const anon = Deno.env.get("SUPABASE_ANON_KEY")!
-    const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    const anon = publishableKey()
+    const service = secretKey()
 
     stage = "parse-body"
     let body: Record<string, unknown> = {}
@@ -117,7 +118,16 @@ Deno.serve(async (req: Request) => {
       }
     }
     // If checkErr — fail open and continue. A broken lockout must not deny
-    // legit users; the password check below still runs.
+    // legit users; the password check below still runs. Keeping that, but it is
+    // now audible: during the new-API-key cutover this RPC is the first thing a
+    // dead privileged key breaks, and a silent fail-open here means the lockout
+    // is gone with zero signal. Red-team 2026-07-21 (C3).
+    if (checkErr) {
+      console.error(
+        "verify-login: auth_attempt_check FAILED — FAILING OPEN " +
+          `(lockout not enforced for this attempt): ${checkErr.message}`,
+      )
+    }
 
     stage = "captcha"
     // 2. CAPTCHA verification. Failures here do NOT hit auth_attempt_record —
@@ -144,10 +154,22 @@ Deno.serve(async (req: Request) => {
     if (signInErr || !signInData?.session) {
       stage = "signin-failed"
       // 4a. Failure path — record against the lockout table.
-      const { data: recData } = await admin.rpc("auth_attempt_record", {
+      // Red-team 2026-07-21 (C3): the error was previously discarded here. If
+      // the privileged key is dead/rejected this RPC fails on every attempt,
+      // recData stays null, row?.locked is never true — so the brute-force
+      // lockout silently switches itself OFF on the one unauthenticated,
+      // internet-facing endpoint, and the response is indistinguishable from a
+      // healthy rejection. Failures are still non-fatal, but never silent.
+      const { data: recData, error: recErr } = await admin.rpc("auth_attempt_record", {
         p_email: email,
         p_success: false,
       })
+      if (recErr) {
+        console.error(
+          "verify-login: auth_attempt_record FAILED — lockout counter NOT " +
+            `incremented (brute-force protection degraded): ${recErr.message}`,
+        )
+      }
       const row = Array.isArray(recData) && recData.length > 0
         ? recData[0] as { locked: boolean; retry_after_s: number | null }
         : null

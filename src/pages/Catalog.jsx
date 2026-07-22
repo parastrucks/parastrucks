@@ -2186,6 +2186,7 @@ async function generateAndUploadCover(pdfArrayBuffer) {
 
 /* ── BROCHURE DOWNLOAD BUTTON ────────────────────────────────── */
 function BrochureDownload({ path, filename }) {
+  const toast = useToast()
   const [loading, setLoading] = useState(false)
 
   async function download() {
@@ -2194,14 +2195,20 @@ function BrochureDownload({ path, filename }) {
       .from('brochures')
       .createSignedUrl(path, 3600)
     setLoading(false)
-    if (!error && data?.signedUrl) {
-      const a = document.createElement('a')
-      a.href = data.signedUrl
-      a.download = filename || 'brochure.pdf'
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
+    // Red-team 2026-07-21 (M2): the error branch was empty, so a Storage
+    // failure made the button spin once and do nothing — forever, with no
+    // message. Exactly how the prod-only bucket MIME rejection stayed hidden.
+    if (error || !data?.signedUrl) {
+      console.error('BrochureDownload: createSignedUrl failed:', error?.message)
+      toast.error(`Could not open brochure: ${error?.message || 'no signed URL returned'}`)
+      return
     }
+    const a = document.createElement('a')
+    a.href = data.signedUrl
+    a.download = filename || 'brochure.pdf'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
   }
 
   return (

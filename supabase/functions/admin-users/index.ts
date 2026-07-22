@@ -19,7 +19,8 @@
 // Join-table writes use full-replace semantics (delete-then-insert).
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
-import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2"
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.100.1"
+import { secretKey, publishableKey } from "../_shared/keys.ts"
 import { rateLimit } from "../_shared/rateLimit.ts"
 import { jsonResponse, preflight } from "../_shared/cors.ts"
 import { audit, adminLogoutUser } from "../_shared/auditLog.ts"
@@ -60,8 +61,8 @@ async function verify(
   const jwt = authHeader.replace("Bearer ", "")
 
   const url = Deno.env.get("SUPABASE_URL")!
-  const anon = Deno.env.get("SUPABASE_ANON_KEY")!
-  const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+  const anon = publishableKey()
+  const service = secretKey()
 
   // Verify the JWT belongs to a real auth user
   const userClient = createClient(url, anon, {
@@ -80,7 +81,7 @@ async function verify(
   // in this phase; the `role` field on CallerProfile is now a derived token
   // (permission_level='admin' → 'admin', else departments.code) used by
   // same-department gates like HR Manager writes.
-  const { data: prof } = await admin
+  const { data: prof, error: profErr } = await admin
     .from("users")
     .select("id, permission_level, entity_id, department_id, is_active, full_name, departments(code)")
     .eq("id", u.user.id)
@@ -94,8 +95,17 @@ async function verify(
         full_name: string
         departments: { code: string } | null
       } | null
+      error: { message: string } | null
     }
 
+  // A dead/rejected privileged key makes PostgREST return 401, which
+  // supabase-js reports as an error rather than throwing. Without this
+  // guard prof is null and the caller is told "Profile not found" — i.e.
+  // blamed for a platform failure. Red-team 2026-07-21 (C2).
+  if (profErr) {
+    console.error("verify: privileged profile read failed:", profErr.message)
+    return { err: jsonResponse(req, { error: "backend_unavailable" }, 503) }
+  }
   if (!prof) return { err: jsonResponse(req, { error: "Profile not found" }, 403) }
   if (!prof.is_active) return { err: jsonResponse(req, { error: "Account inactive" }, 403) }
 
@@ -459,7 +469,7 @@ Deno.serve(async (req: Request) => {
         // hour. Best-effort; the RLS is_active gate is the real protection.
         if (!is_active) {
           const url = Deno.env.get("SUPABASE_URL")!
-          const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+          const service = secretKey()
           await adminLogoutUser(url, service, id)
         }
 

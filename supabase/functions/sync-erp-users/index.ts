@@ -17,7 +17,8 @@
 // nightly cron, the users-table DB webhook, and erp-sso JIT provisioning.
 // Deploy with verify_jwt: false (we check the shared secret ourselves).
 // ============================================================================
-import { createClient } from "npm:@supabase/supabase-js@2"
+import { createClient } from "npm:@supabase/supabase-js@2.100.1"
+import { secretKey } from "../_shared/keys.ts"
 import { corsHeaders, preflight, jsonResponse } from "../_shared/cors.ts"
 
 const TIER: Record<string, string> = { admin: "admin", gm: "gm", manager: "manager", executive: "executor" }
@@ -54,7 +55,7 @@ Deno.serve(async (req: Request) => {
   const single = opts.email ? opts.email.toLowerCase() : null
   const dryRun = !!opts.dryRun
 
-  const portal = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  const portal = createClient(Deno.env.get("SUPABASE_URL")!, secretKey(),
     { auth: { persistSession: false, autoRefreshToken: false } })
   const erp = createClient(Deno.env.get("ERP_SUPABASE_URL")!, Deno.env.get("ERP_SERVICE_ROLE_KEY")!,
     { auth: { persistSession: false, autoRefreshToken: false } })

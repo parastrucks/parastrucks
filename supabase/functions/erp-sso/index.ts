@@ -16,7 +16,8 @@
 // Deploy with verify_jwt: false (we validate the caller ourselves), same as the
 // other portal EFs. Matches the Phase 9 CORS/getUser pattern.
 // ============================================================================
-import { createClient } from "npm:@supabase/supabase-js@2"
+import { createClient } from "npm:@supabase/supabase-js@2.100.1"
+import { publishableKey } from "../_shared/keys.ts"
 import { corsHeaders, preflight, jsonResponse } from "../_shared/cors.ts"
 
 const ERP_SSO_URL = "https://erp.parastrucks.in/sso"
@@ -27,7 +28,7 @@ Deno.serve(async (req: Request) => {
 
   try {
     const portalUrl  = Deno.env.get("SUPABASE_URL")!
-    const portalAnon = Deno.env.get("SUPABASE_ANON_KEY")!
+    const portalAnon = publishableKey()
     const erpUrl     = Deno.env.get("ERP_SUPABASE_URL")!
     const erpService = Deno.env.get("ERP_SERVICE_ROLE_KEY")!
 

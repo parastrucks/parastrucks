@@ -23,11 +23,28 @@ export function useErpVisible() {
       .eq('user_id', profile.id)
       .then(({ data, error }) => {
         if (cancelled) return
-        // Fail OPEN on a read error: pre-redesign the ERP entry was always
-        // shown (erp-sso gates the actual click), so a transient brand-lookup
-        // failure must not strip a legitimately-entitled user of every ERP
-        // entry point with no recovery. A successful empty read still hides it.
-        if (error) { setVisible(true); return }
+        // Fail OPEN on a *transient* read error: pre-redesign the ERP entry was
+        // always shown (erp-sso gates the actual click), so a blip must not
+        // strip a legitimately-entitled user of every ERP entry point with no
+        // recovery. A successful empty read still hides it.
+        //
+        // But NOT on an auth/key rejection (red-team 2026-07-21, H3). During the
+        // new-API-key cutover a 401 here would have shown the HD Hyundai card to
+        // EVERY user — including PTB staff with no entitlement — who would then
+        // hit the `no_erp_access` alert on click. Mass confusion on a path
+        // nobody would think to test. Server-side gating in erp-sso still holds
+        // either way; this is about not lying in the UI.
+        if (error) {
+          const status = error.status ?? error.code
+          const authFailure = status === 401 || status === 403 ||
+            /jwt|api ?key|unauthorized|not authorized/i.test(error.message || '')
+          console.error(
+            'useErpVisible: user_brands read failed:', error.message,
+            authFailure ? '— treating as NOT entitled' : '— failing open',
+          )
+          setVisible(!authFailure)
+          return
+        }
         const codes = (data || []).map(r => r.brands?.code).filter(Boolean)
         setVisible(codes.includes('hdh'))
       })

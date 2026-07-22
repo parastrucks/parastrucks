@@ -1936,3 +1936,100 @@ details. That was already true of the committed dump, so this changed nothing �
 in case that table should later be dropped from the seed scope. Also still open: `storage.buckets` is
 **not** in the seed scope, so bucket settings (the allowed-MIME-types field behind today's cover bug)
 still aren't captured by a rebuild — see the R9 entry.
+
+
+---
+
+**Session 2026-07-21 (cont.) — new-API-key migration: staging rehearsal, 4-lane red team, remediation.**
+
+Branch `svcrole-new-api-keys` (worktree `suspicious-snyder-af9361`), 4 commits — `3c2efd0` keys.ts +
+codemod · `6dcb0c1` EF red-team fixes · `0bc2457` UI fixes · `875e285` doc fixes. **Not merged; prod
+untouched throughout.** Staging (`klpnhpnlotcbbovwswmq`) now runs the full END STATE:
+`USE_NEW_API_KEYS=true` **and legacy keys deactivated**.
+
+**Design decision — the cutover is a SECRET FLIP, not a deploy.** All 9 EFs resolve portal keys through
+`_shared/keys.ts`, gated on `USE_NEW_API_KEYS`. Deploying the branch is therefore a **no-op**, which
+decouples "ship the code" from "switch the keys" and means the deploy carries no cutover risk of its own.
+**⚠️ Corrected mid-session:** I claimed repeatedly that rollback was instant. It is not — `Deno.env` is
+snapshotted at **isolate boot**, so a flag change only reaches isolates as they recycle. Deterministic
+flip *and* rollback both require a **redeploy**; the genuinely instant lever is re-enabling legacy keys.
+
+**Rehearsal sequence (all owner-run where creds were needed).** Deploy 9 EFs (flag off) → credential-free
+curl smoke → flip flag → login/catalog/write → swap `.env` to the publishable key → **deactivate staging's
+legacy keys** → re-verify. That ordering matters: because legacy was *off*, a green result cannot be a
+false positive from legacy quietly still being in use — the failure mode a red-team lane later identified
+as the deadliest one. We got that right by sequence, not by luck alone.
+
+**Two false alarms worth recording, both mine.**
+1. Login failed with "Incorrect email or password" and I built a confident root-cause story around the
+   `Authorization: Bearer` gotcha. The owner said *"I think you are simply using the wrong email ID."*
+   He was right — staging is `@parastrucks.test`, not `@parastrucks.in`, and the correct address was
+   **in my own memory file**. I had reconstructed it from the production domain instead of reading it.
+   The evidence I cited never distinguished the two hypotheses; a non-existent user produces exactly the
+   same symptoms. **Lesson: verify your own inputs before diagnosing the system.**
+2. A later "failure" was CORS — Vite fell back to port **3001** because a stale dev server still held
+   3000, and staging only whitelists `http://localhost:3000`.
+
+**Four clean-room red-team lanes** (EF internals · React app · ERP login/users · forgotten consumers).
+
+*Confirmed and fixed (`6dcb0c1`, `0bc2457`):*
+- **`auditLog.adminLogoutUser` — found independently by 3 of 4 lanes.** A hand-rolled `fetch` sent the
+  secret key on **both** `apikey` and `Authorization: Bearer`, and swallowed the failure into a
+  `console.warn` while the caller returned `{ok:true}`. Post-cutover, deactivating an employee would
+  silently not revoke their session. Now: Bearer only for legacy JWT keys, `console.error`, boolean return.
+- **`keys.ts` fail-loud.** The silent fallback would have selected a **dead** key post-deactivation and,
+  worse, made pre-cutover verification meaningless — everything passes green because legacy is quietly
+  still in use, until deactivation breaks it all at once. Now throws, plus a boot log of flag + bag
+  presence (no secret material) and a split-brain guard.
+- **`verify()` ×5** reported a dead key as `403 "Profile not found"` — blaming the user for a platform
+  failure. Now `503 backend_unavailable` + log.
+- **Lockout (`auth_attempt_check`/`record`) and rate limiting** fail open **silently** — a dead key would
+  have switched off brute-force protection on the one unauthenticated internet-facing endpoint with zero
+  signal. Behaviour kept (deliberate), but now audible.
+- **`AuthContext`** discarded its PostgREST error, rendering a key failure as an empty sidebar with no
+  message — the worst diagnostic trap. Now surfaces "Couldn't load your profile" with a retry.
+- **`Employees`** was **data-loss shaped**: reference tables *and* the three per-user join reads discarded
+  errors, so the edit modal would open with everything unchecked and Save would strip real assignments.
+  Both paths now refuse to open and say why.
+- **`useErpVisible`** failed open on any error (every user would see the HD Hyundai card); now
+  distinguishes auth rejection from a transient blip.
+- **supabase-js pinned to `2.100.1`** in all 11 files — it was floating on `@2`, so each function bundled
+  whatever resolved at its own deploy time.
+
+*A claim of mine the red team disproved:* I said supabase-js "handles the `sb_` prefix". **It does not** —
+`fetch.ts` sets `Authorization: Bearer <key>` whenever there is no user session, and a grep of
+`node_modules/@supabase/*` for `sb_publishable`/`sb_secret` returns zero matches. It works anyway because
+**the gateway tolerates it** — and our staging run with legacy fully deactivated is the proof. Right
+outcome, invented mechanism; the correct reasoning is empirical, not from the SDK.
+
+*Docs corrected (`875e285`):* every doc undercounted the Edge Functions — `RECONSTRUCTION.md` said **7**
+and omitted `erp-sso` + `sync-erp-users` entirely, `CLAUDE.md`/`README` said 7, my own runbook said 8.
+There are **9**. Deploy 7 or 8 and the missed function keeps reading the deprecated vars and dies at
+deactivation. Also completed the EF secrets table (`SYNC_SECRET`, `ERP_*`, `USE_NEW_API_KEYS`) and
+repointed the `.env` template + checklist off the retired legacy keys.
+
+**TWO NEW INDEPENDENT SECURITY FINDINGS** (both logged in `memory/known_issues.md`, both deliberately
+NOT bundled into the key cutover so its rollback stays clean):
+1. 🔴 **`SYNC_SECRET` is unredacted in git history** — confirmed by scanning all history of the schema
+   dumps: a 64-char hex value in pre-scrub commits. It is the sole gate on `sync-erp-users`, so a holder
+   can drive arbitrary reconciles and **ERP deactivation sweeps**. Rotation is a coordinated 3-way flip
+   (EF secret → DB trigger header → ERP repo GH Actions secret).
+2. 🟠 **`adminLogoutUser` 404s — session revocation has NEVER worked.** Making the swallowed error audible
+   immediately exposed an older bug underneath: `POST /auth/v1/admin/users/{id}/logout` returns
+   **404 page not found**. Not a key problem (that would be 401), not new. supabase-js's admin API has no
+   by-user-id logout — `signOut(jwt)` takes a JWT — so the fix needs a `SECURITY DEFINER` RPC clearing
+   `auth.refresh_tokens` (the `auth` schema isn't reachable via PostgREST), i.e. a DB migration.
+   Impact is bounded: `verify()` returns 403 `Account inactive` and RLS `is_active` gates still block
+   access, so this was defence-in-depth running on one layer, not an open door.
+
+**Verified on staging after remediation:** all 9 EFs return 401/400 (never 500) · the boot line reads
+`USE_NEW_API_KEYS=true secretBag=true publishableBag=true -> using NEW keys` · login · catalog 798/909 ·
+Employees edit modal fully populated (proving the ref + join reads succeed, and that "unchecked" now
+provably means "no assignment" rather than "read failed") · **an employee deactivate wrote successfully
+(ACTIVE 6→5)** · Vendor Jobs · console zero errors.
+
+**Still open before prod:** the **token-refresh test (~1 h)** — refresh uses the key on `Bearer` with no
+user JWT, and no rehearsal so far has lived long enough to exercise it. If it fails, every user is
+silently signed out about an hour after a clean-looking cutover. Optional extras: `erp-sso` as a
+**non-admin** PTB user (admins short-circuit `useErpVisible`), the three `next_*_number` RPC saves, TIV
+upload. Cleanup: reactivate `abc / tester@parastrucks.test` on staging.
