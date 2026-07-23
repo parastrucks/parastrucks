@@ -2033,3 +2033,64 @@ user JWT, and no rehearsal so far has lived long enough to exercise it. If it fa
 silently signed out about an hour after a clean-looking cutover. Optional extras: `erp-sso` as a
 **non-admin** PTB user (admins short-circuit `useErpVisible`), the three `next_*_number` RPC saves, TIV
 upload. Cleanup: reactivate `abc / tester@parastrucks.test` on staging.
+
+### 2026-07-23 — New-API-key cutover EXECUTED on prod; leaked service_role key retired & verified dead
+
+**Outcome: the whole 7-step cutover ran on prod and the security objective is proven.** Prod
+(`mmmxvjaavdtwlpcnjgzy`) is now on Supabase **new API keys**; legacy `anon`+`service_role` are
+**deactivated**; the leaked `service_role` JWT is inert.
+
+**Pre-flight correction to the deferred token-refresh test.** The "leave a tab idle 1 h" test was a
+false signal: prod JWT expiry is **12 h**, so supabase-js never fires a refresh in an idle hour —
+"still logged in" proves nothing. Auth logs confirmed **zero `POST /token` refresh calls**. Analysis
+then showed the risk was near-zero anyway: refresh is a pure **GoTrue** operation signed by the JWT
+signing secret (an API-key change doesn't touch it), and `Deno.env` snapshotting is irrelevant because
+refresh never hits an EF isolate. Proceeded without the 12 h wait; a fresh **incognito login with
+legacy fully off** later confirmed the whole auth path end-to-end.
+
+**The 7 steps (all executed):**
+1. **Merge + deploy 9 EFs, flag unset.** PR #81 squash-merged to `portal` (`1d9ba17`), CI green,
+   Vercel prod READY (bundle `BRnxcawR`→`Bn6I3eLC`). All 9 EFs deployed. **Gotcha confirmed:** there is
+   **no `supabase/config.toml`** — `verify_jwt:false` is enforced per-deploy by the `--no-verify-jwt`
+   CLI flag; every deploy loop must carry it and `--project-ref mmmxvjaavdtwlpcnjgzy` (the worktree's
+   linked project is *staging*). Deploy noise `!!! FAILED` / `exit != 0` was **PostHog telemetry
+   shutdown timeout**, not a deploy failure — proven by `functions list` (all 9 ACTIVE, versions
+   bumped) and an HTTPS probe (all 9 return *our* error shapes, so verify_jwt is off).
+2. **Flip + redeploy.** Set `USE_NEW_API_KEYS=true` (EF Secrets), redeployed all 9 to force fresh
+   isolates (`Deno.env` snapshots at boot).
+3. **Prove NEW keys.** `sync-erp-users` boot log captured the transition: `12:32:27 (unset)→LEGACY`
+   then `12:50:37 USE_NEW_API_KEYS=true …→NEW keys`. (Runtime `console.log` lives in the **function
+   logs** stream, not the request-log rows and not the Postgres SQL editor — `auth_logs`/`function_logs`
+   are BigQuery log sources, `42P01` in the SQL editor.)
+4. **Vercel → publishable.** PATCHed `VITE_SUPABASE_ANON_KEY` (production target only; no Preview/Dev
+   entries existed) to `sb_publishable_…` via Vercel API. **VITE vars are build-time inlined**, so a
+   redeploy-from-`deploymentId` risked reusing stale output — verified by fetching the live bundle:
+   new hash `index-DMOzaETt.js` contains `sb_publishable_` (×2) and **zero `eyJ` legacy JWTs**. Browser
+   hard-reload → dashboard + catalog (897/1006) load on the publishable key.
+5. **Verify (both key systems live).** Incognito login (verify-login booted NEW at 12:55:49/50),
+   dashboard, Employees list (admin-users on new secret = privileged PII read). All clean.
+6. **Deactivate legacy** (owner, dashboard). Immediately verified: all 9 EFs healthy; keyless
+   PostgREST 401 / publishable 200; **the actual leaked `service_role` JWT (extracted from git
+   `3dcbd75`, decoded `role=service_role`) → prod PostgREST `/rest/v1/users` = 401.** Objective met.
+7. **Cleanup + bug-watch** (this entry + docs).
+
+**Red-team (4 clean-room lanes + direct prod tests) — no cutover blockers.** (1) No dead-key code path:
+every EF client routes through `keys.ts`, which throws rather than falling back; `src/`, `scripts/`, DB
+webhook triggers clean. (2) No external/DB caller depended on legacy: the `sync_erp_users` trigger uses
+`SYNC_SECRET` (not a Supabase key), no pg_cron/Realtime/rogue-webhook/CI dependency, Storage is
+browser-or-EF-mediated. (3) **Verification-gap finding:** unauth probes reject before keys resolve, so
+only key *resolution* is confirmed (boot logs, 5/9 seen `-> using NEW keys`), not each EF's new-key
+*use* — closable by glancing the other 4 boot logs, no smoke test needed. (4) Residual register:
+`SYNC_SECRET` in git history is the **already-rotated dead V1** (tested → 401; the "🔴 rotation pending"
+note was stale); `adminLogoutUser` 404 unchanged by cutover (own DB-migration follow-up);
+`VITE_SUPABASE_SERVICE_KEY` in Vercel is inert clutter (not referenced → not inlined → not in bundle);
+`^2.39.7`-vs-lock-`2.100.1` is a non-issue under `npm ci`.
+
+**Bug collector.** Owner can't run smoke tests, so cutover-bug checking is **opportunistic on any task**
+(see `memory/post_cutover_bugwatch.md`). Passive collector already lives in-app: ErrorBoundary + global
+handlers → `log-error` EF → `error_log` → **Access Rules → Error Log tab**. `log-error` confirmed on new
+keys (boot log); the tab renders clean and empty = genuinely no bugs since cutover. A scheduled cloud
+watchdog was considered and **declined** by the owner in favour of the opportunistic check.
+
+**Corrected belief:** rollback is **NOT** instant — flip *and* rollback both need a redeploy
+(`Deno.env` boot snapshot); the instant incident lever is re-enabling legacy keys (reversible).

@@ -29,8 +29,12 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ---
 
-## Current state (2026-07-20)
+## Current state (2026-07-23)
 
+- **🔐 Prod is on Supabase NEW API keys (cutover LIVE 2026-07-23, PR #81 → `1d9ba17`).** Legacy
+  `anon`+`service_role` DEACTIVATED; the leaked `service_role` JWT is verified DEAD (401). Browser uses
+  `sb_publishable_…`; all 9 EFs use the injected secret/publishable bags via `_shared/keys.ts`
+  (`USE_NEW_API_KEYS=true`). See Next actions + [[post-cutover-bugwatch]].
 - **Deployed & live:** Phases 1A–9 + **Phase 9.5 Vendor Jobs** (`/vendor-jobs`) +
   **Phase 9.6 visual redesign** (LIVE 2026-07-16, PR #78 → `29404b4`) +
   **✅ Phase 9.7 — Catalog UX rework — LIVE ON PROD 2026-07-20** (PR #79 squash-merged →
@@ -83,38 +87,27 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 - **Phase 9 residual hardening (9h/9i):** MFA, new-device email, active-sessions page,
   security-monitor cron, file-upload virus scan, PII encryption; plus process items. Untouched.
   Full specs in `docs/history/PORTAL_HISTORY.md` (Phase 9 programme).
-- **🔴 IN PROGRESS (started 2026-07-21) — retire the exposed prod `service_role` key.** A live prod
-  `service_role` JWT was hardcoded in two git-tracked scripts (`scripts/run_migration.cjs`,
-  `scripts/fix_inactive.cjs`) — fixed 2026-07-17 (commit `f420425`) to read `SUPABASE_URL` +
-  `SUPABASE_SERVICE_KEY` from env, but **the key stays valid in git history until the legacy keys are
-  retired**. **⚠️ The old "coupled-key → prod outage" caveat is SUPERSEDED:** prod is already on
-  Supabase's **new API keys** system (verified in the dashboard 2026-07-21 — a `sb_publishable_…`
-  `default` key exists; legacy `anon`/`service_role` are a separate tab). New + legacy keys **work
-  simultaneously**, so this is a **reversible, additive migration**, not a coupled rotation
-  ([migration guide](https://supabase.com/docs/guides/getting-started/migrating-to-new-api-keys)).
-  **Verified:** all 8 portal EFs read the injected legacy `SUPABASE_SERVICE_ROLE_KEY` (none hardcode
-  it); the only standalone client key is the browser's `VITE_SUPABASE_ANON_KEY`; ERP EFs use a separate
-  `ERP_SERVICE_ROLE_KEY` (untouched); supabase-js = 2.100.1 (understands new formats). **Catch:** the
-  leaked token only dies when **legacy keys are deactivated**, and legacy `anon`+`service_role`
-  deactivate **together**, so the browser must move to the publishable key first. Deactivation is
-  **reversible** (safety net).
-  **✅ STAGING REHEARSAL COMPLETE 2026-07-21** on branch `svcrole-new-api-keys` (4 commits, **not merged,
-  not on prod**). Staging now runs the **end state** — `USE_NEW_API_KEYS=true` *and legacy keys
-  deactivated* — with login, catalog reads, an Employees write, and all 9 EFs verified healthy.
-  **Cutover = a secret flip, not a deploy** (`USE_NEW_API_KEYS`); ⚠️ **rollback is NOT instant** —
-  `Deno.env` is snapshotted at isolate boot, so flip *and* rollback both need a redeploy; the instant
-  lever is re-enabling legacy keys. **4 red-team lanes** ran against the migration and all fixes are
-  applied — headline: `adminLogoutUser` sent the secret key on `Authorization: Bearer` and swallowed the
-  failure, and `keys.ts` silently fell back to a dead key (which would have made pre-cutover
-  verification meaningless). supabase-js does **not** special-case `sb_` keys — it does send them on
-  `Bearer`; it works because the **gateway tolerates it**, proven by running staging with legacy off.
-  **Before prod:** the **token-refresh test (~1 h)** — the only path staging structurally hasn't covered.
-  Full runbook, prod ordering and the orders that break prod: `memory/project_next_session.md`.
-  **Two NEW independent security items found, each needing its own change** (see `memory/known_issues.md`):
-  🔴 `SYNC_SECRET` is unredacted in git history (3-way coordinated rotation) · 🟠 `adminLogoutUser` 404s,
-  so session revocation has **never** worked (pre-existing; needs a DB migration; not a cutover blocker).
-  The dead `VITE_SUPABASE_SERVICE_KEY` line is gone from the worktree `.env` (the main checkout's and the
-  9.6 worktree's still have it) — and **`.env.prod.bak` does not exist**, contrary to the Task A note above.
+- **✅ DONE 2026-07-23 — new-API-key cutover LIVE on prod; leaked `service_role` key retired & verified dead.**
+  PR #81 → `portal` `1d9ba17` (CI green, Vercel READY, prod 200). 7-step cutover all executed: all 9 EFs
+  redeployed with `--no-verify-jwt` (verify_jwt is CLI-flag-enforced — there is **no `supabase/config.toml`**);
+  `USE_NEW_API_KEYS=true` set + redeploy forced fresh isolates (boot logs confirm `-> using NEW keys`); Vercel
+  `VITE_SUPABASE_ANON_KEY` → `sb_publishable_…` (production target only; forced fresh build `dpl_DJgc4i`, verified
+  bundle ships publishable, zero `eyJ` legacy JWTs); **legacy `anon`+`service_role` DEACTIVATED**. **Objective
+  proven with the real credential:** leaked `service_role` JWT from git history (`3dcbd75`) → prod PostgREST
+  **401** (was full `users` table). Fresh incognito login + catalog + Employees all pass with legacy off.
+  ⚠️ Corrected: rollback is **NOT** instant (`Deno.env` snapshots at isolate boot → flip *and* rollback need a
+  redeploy); the instant incident lever is **re-enabling legacy keys** (reversible). **Red-team (4 lanes + direct
+  tests): no cutover blockers** — no dead-key code path, no external/DB caller depended on legacy, refresh is a
+  pure GoTrue op (safe). Runbook/record: [[next-actions]], [[post-cutover-bugwatch]], `known_issues.md`.
+- **🐛 BUG-WATCH (until cleared) — `memory/post_cutover_bugwatch.md`.** Owner can't run smoke tests, so we
+  **check for cutover bugs opportunistically on any task**. Gap: for most EFs the unauth probe rejected before
+  keys resolved, so only key *resolution* is confirmed (via boot logs: 5/9 show `-> using NEW keys`; glance the
+  other 4). Passive collector already live = **Access Rules → Error Log tab** (`log-error` EF confirmed on new
+  keys; empty = genuinely no bugs). Failure signature = one EF 500/503 while others work → redeploy that ONE EF.
+- **Post-cutover follow-ups (each its own change):** 🟠 `adminLogoutUser` 404 — session revocation never worked
+  (needs a DB migration; NOT caused by cutover); cleanup — delete dead `VITE_SUPABASE_SERVICE_KEY` from Vercel
+  prod + `.env` files; optional `package.json` supabase-js caret bump to `^2.100.1`. ✅ RESOLVED: `SYNC_SECRET`
+  git-history value proven DEAD (401) = the already-rotated V1, no rotation pending. `.env.prod.bak` does NOT exist.
 - **Open issues:** see `memory/known_issues.md` (e.g. C1 PII-read RLS; `next_proforma_number`/
   `next_financier_copy_number` still `anon`-executable).
 
