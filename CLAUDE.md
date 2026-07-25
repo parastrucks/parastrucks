@@ -85,21 +85,20 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
      — PR #75 lesson: `gitleaks` misses this hex-in-JSON pattern.
   3. **On-phone Android Web-Share check** — owner opted to test the WhatsApp files→draft path
      directly on prod (couldn't be done from desktop; code verified correct by inspection — H4/H5 fixed).
-- **🔗 ERP sales sync DEPLOYED 2026-07-25 (PR #83 → `bc72d83`; EF live on the portal project, Vercel
-  READY, prod 200) — two things left, both owner-side:**
-  1. **Trigger the first sync.** The code is live but inert until a sync runs. Cleanest trigger is the
-     real user path: the sales GM signs in to the portal and clicks the **HD Hyundai Service ERP** card
-     → `erp-sso` JIT-provisions them via a **single-user** sync (skips the deactivation sweep). Other
-     triggers: re-save the user in Employees (users-table DB webhook → full reconcile), or the nightly
-     cron. ⚠️ If the SSO click errors, suspect a **stale pre-cutover browser session** — full sign-out
-     + sign-in (see `memory/post_cutover_bugwatch.md`).
-  2. **Set their ceilings** in the ERP → User Management → "Approval authority", or they stay inert
-     (every Approvals button disabled, no notifications).
-  **Not verifiable from here:** a functional dry-run needs `SYNC_SECRET` (owner-held, never in the
-  working tree). Deploy + auth gate were smoke-tested (401 on a bad secret, 405 on GET); the *mapping*
-  is proven by the first real run — check `profiles where tier='sales'` on the ERP project afterwards.
-  **Unbounded number:** how many PT + `hdh` + sales-dept portal users exist is unknown from here, and
-  every one of them gets an inert ERP account on the next full reconcile.
+- **✅ 🔗 ERP sales sync DEPLOYED **and synced** 2026-07-25** (PR #83 → `bc72d83`; EF live on the portal
+  project, Vercel READY, prod 200). **4 sales users provisioned** into the ERP — verified on ERP prod:
+  all four `tier=sales · func=sales · branch_id=null · source=portal · role_overridden=false` at
+  **0 / ₹0 / terms_unlimited=false**, and the pre-existing 18 profiles unchanged (admin 2, gm 1,
+  manager 3, executor 12; every manager/executor kept its branch). Both reconciles returned
+  `created:4, updated:16, reactivated:0, deactivated:0, skipped:[]`.
+  **How to run a sync yourself (no secret needed, it lives as a GH Actions secret):** the 30-min
+  backstop cron `.github/workflows/sync-erp-users.yml` **in the ERP repo** has a `workflow_dispatch`
+  with a **`dryRun` input** — `gh workflow run sync-erp-users.yml -f dryRun=true --repo parastrucks/erp-parastrucks`
+  prints the full result JSON with zero writes. That is the way to bound a scope change before it lands.
+  **⏭️ One thing left, owner-side:** **set their ceilings** in ERP → User Management → "Approval
+  authority", or they stay inert. Proven inert, not assumed: `fn_can_authorize_terms` returns **false**
+  for all four across 0/0, 2%, ₹60k and 2%+₹60k (strict false, not NULL). ⚠️ If an SSO click errors,
+  suspect a **stale pre-cutover browser session** — full sign-out + sign-in (`memory/post_cutover_bugwatch.md`).
 - **Post-9.7 follow-up (owner-deferred):** provenance repair — count prod rows with null
   `price_circular`/`effective_date` (from past blank-field imports); every active row reflects the
   current price list, so one filled import re-stamps them all. See backlog.

@@ -2158,9 +2158,34 @@ i.e. the bundle imported and serves. PR #83 squash-merged → `bc72d83`; Vercel 
    `memory/known_issues.md`. PR #83 was merged with it red only after proving the base branch fails
    identically.
 
-**Left to the owner (cannot be done from here):** a functional dry-run needs `SYNC_SECRET`, which is
-owner-held and deliberately never in the working tree. So the *mapping* is proven by the first real run:
-the sales GM signs in and clicks the **HD Hyundai Service ERP** card → `erp-sso` JIT-provisions them via
-a bounded **single-user** sync → then check `profiles where tier='sales'` on the ERP project. Their
-ceilings must then be set in ERP → User Management, or they stay inert (every Approvals button disabled,
-and no notifications, since the 13d notifier only pings people who can actually clear a request).
+**✅ SYNCED AND VERIFIED THE SAME DAY — and the lever that made it possible.** I first wrote that a
+functional dry-run was impossible here because `SYNC_SECRET` is owner-held and deliberately never in the
+working tree. That was wrong: the 30-min backstop cron **in the ERP repo**
+(`.github/workflows/sync-erp-users.yml`) exposes a `workflow_dispatch` with a **`dryRun` input**, and it
+holds the secret as a **GitHub Actions secret**. So the deployed code can be exercised end-to-end without
+the secret ever being visible:
+
+```
+gh workflow run sync-erp-users.yml -f dryRun=true --repo parastrucks/erp-parastrucks
+→ {"created":4,"updated":16,"reactivated":0,"deactivated":0,"skipped":[],"dryRun":true}
+```
+
+That one call **bounded the only unknown in the whole change** — how many PT + `hdh` + sales-department
+users exist (**4**) — and *proved* rather than argued the blast-radius claims: `deactivated:0` (the sweep
+is untouched by a widening), `updated:16` (existing service/spares/accounts mapping unchanged), and
+`skipped:[]` (nobody unmappable — without `BRANCHLESS_TIERS` any sales user whose outlet doesn't map to an
+ERP branch would have surfaced here). **Reusable rule: before landing a scope change to a synced set, look
+for a dry-run path that runs the deployed code; a `workflow_dispatch` holding the secret is one.**
+
+Since the cron fires the real reconcile within 30 minutes regardless, running it **attended** was strictly
+safer than letting it happen unwatched: `dryRun=false` → identical counts. Verified on ERP prod — the 4
+new profiles are `tier=sales · func=sales · branch_id=null · source=portal · role_overridden=false` at
+**0 / ₹0 / terms_unlimited=false**, and the pre-existing 18 are unchanged (admin 2, gm 1, manager 3,
+executor 12, every manager/executor still branched). Inertness proven with the real guard, not inferred
+from the ceilings: `fn_can_authorize_terms` returns **false** for all four at 0/0, 2%, ₹60k *and*
+2%+₹60k — and **strict false, not NULL**, which is the 13d2 lesson (`(not f(...)) is true`) applied.
+
+**⏭️ Left to the owner:** set the ceilings in ERP → User Management → "Approval authority", or the four
+stay inert (every Approvals button disabled, and no notifications, since the 13d notifier only pings
+people who can actually clear a request). Scope is gated on the `hdh` brand assignment — the owner's
+chosen lever — so removing that brand (or deactivating in the ERP) is how to narrow the set of four.
