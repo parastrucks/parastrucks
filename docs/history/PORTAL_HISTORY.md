@@ -2189,3 +2189,37 @@ from the ceilings: `fn_can_authorize_terms` returns **false** for all four at 0/
 stay inert (every Approvals button disabled, and no notifications, since the 13d notifier only pings
 people who can actually clear a request). Scope is gated on the `hdh` brand assignment — the owner's
 chosen lever — so removing that brand (or deactivating in the ERP) is how to narrow the set of four.
+
+### 2026-07-25 (same session) — CI `npm-audit` went red on every PR; cleared the high advisory (PR #84 → `71cfc5d`)
+
+Surfaced the honest way: the owner said *"receiving failure mails"* — GitHub's `security: Some jobs were
+not successful` notice on every push. Only `npm-audit` failed; `gitleaks`, `CodeQL` and `trivy-fs` passed.
+
+**Not caused by any branch.** Newly-published advisories landed against the existing lockfile, so
+`npm audit --audit-level=high` on `portal` itself failed identically (checked before merging PR #83 with
+it red). Last green run on `portal` was 2026-07-23 (`01c8b64`) — **time-based, not change-based**. The real
+cost of leaving it is that it trains everyone to ignore a security gate.
+
+**Fix — `npm audit fix`, semver-compatible only, no `--force`, `package.json` untouched:**
+
+| package | move | severity | scope |
+|---|---|---|---|
+| `postcss` | 8.5.16 → 8.5.23 | **high** — GHSA-r28c-9q8g-f849 (sourceMappingURL path traversal → arbitrary `.map` disclosure) | build-time |
+| `nanoid` | 3.3.15 → 3.3.16 | postcss's dep | build-time |
+| `dompurify` | 3.4.11 → 3.4.12 | low — GHSA-c2j3-45gr-mqc4 | runtime, via jspdf |
+
+**Verified inert instead of trusting "it's only a patch":** rebuilt with the **pre-bump lockfile** and the
+emitted CSS came out **byte-identical** — `sha256 caa1fb6c…`, right down to the same content-hash filename
+`index-5tHxGrvK.css`. The ~20 changed JS chunk hashes are Rollup's cascade from the single changed leaf
+(`purify.es`) through its importers, not 20 independent changes. **Technique worth reusing: to prove a
+build-tool bump is safe, rebuild with the old lockfile and diff the emitted asset hashes — it beats
+eyeballing a screenshot, and it works when the browser pane is unavailable.**
+
+**Deliberately left open:** `react-router` 6.22.3 keeps **2 moderate** advisories (GHSA-wrjc-x8rr-h8h6
+open redirect via backslash in `<Link>`/`useNavigate`; GHSA-337j-9hxr-rhxg `deserializeErrors`, SSR-only
+and we don't SSR). The advisory range covers **all of 6.x**, so the fix is **react-router 7** — a major,
+breaking upgrade that deserves its own routing-verification pass rather than riding a lockfile patch. CI's
+gate is high/critical, so it passes meanwhile. Logged in `memory/known_issues.md`.
+
+**Not exercised:** PDF output. dompurify's fix concerns `CUSTOM_ELEMENT_HANDLING` and the portal's PDF
+templates use standard HTML, so no impact is expected — but no PDF was generated to confirm.
