@@ -2223,3 +2223,39 @@ gate is high/critical, so it passes meanwhile. Logged in `memory/known_issues.md
 
 **Not exercised:** PDF output. dompurify's fix concerns `CUSTOM_ELEMENT_HANDLING` and the portal's PDF
 templates use standard HTML, so no impact is expected — but no PDF was generated to confirm.
+
+### 2026-07-25 — Session summary (2 changes shipped, both verified on prod)
+
+| # | Change | PR → commit | Verified |
+|---|---|---|---|
+| 1 | **13c portal→ERP sales sync** — PT sales dept → ERP branch-less `sales` tier | #83 → `bc72d83` | EF deployed; 4 users provisioned + proven inert; Vercel READY; prod 200 |
+| 2 | **`npm-audit` CI gate restored** — postcss 8.5.16→8.5.23 (+nanoid, dompurify) | #84 → `71cfc5d` | all checks green incl. `npm-audit`; CSS byte-identical; Vercel READY; prod 200 |
+| — | Docs | `7e619c6`, `d21b0df`, `cb61945` | — |
+
+ERP repo (separate) took the matching doc update: `64cff74`.
+
+**Bug-watch progress (new-API-key cutover).** Change 1 also **cleared the `sync-erp-users` half of smoke
+#8** with harder evidence than a boot log: two real reconciles returned HTTP 200 with `skipped:[]`, which
+proves the portal **secret key** works for both a PostgREST privileged read (`public.users` + 5 joins) and
+a **GoTrue admin endpoint on `Authorization: Bearer sb_secret_…`** (`auth.admin.listUsers` resolved an
+email for every user — any failure there would have filled `skipped` with `no email for portal user …`).
+That GoTrue-admin class is exactly what boot logs cannot cover. **`erp-sso` itself remains unexercised**,
+so smoke #8 stays half-open. See `memory/post_cutover_bugwatch.md`.
+
+**Environment facts learned (worth not re-discovering):**
+- `supabase functions deploy` **does not need Docker** (only `db push` does) — it warns and proceeds.
+  Watch that a function importing `_shared/*` uploads *all* its assets.
+- The **Supabase MCP is scoped to the ERP project only**; the portal project returns *"You do not have
+  permission"*. Portal DB questions must go through a dry-run of the deployed code, the CLI, or the
+  dashboard.
+- The prod-creds backup is **`.env .prod .bak`** (spaces, not dots) and contains **legacy `eyJ…` JWTs**
+  for anon + service — **dead** since the 2026-07-23 cutover, so it is useless for prod work. Two earlier
+  notes were wrong about this file: one called it `.env.prod.bak`, another said it did not exist.
+- Local `.env` is correctly on **staging** (`klpnhpnlotcbbovwswmq`) and `npm run dev` boots on `:3000`.
+- The repo carries **3 stale git worktrees** under `.claude/worktrees/` (`9.6-portal-redesign`,
+  `claude/id-login-issue-logs-8810c0`, `docs-cutover-record`) — harmless, but they make repo-wide greps
+  return duplicate hits from old branch copies. Grep with `--include` or ignore that path.
+
+**Method notes carried into memory** (`feedback_prove_dont_argue`): prefer a command that *emits* the
+claim over an argument for it — a `dryRun` `workflow_dispatch` bounded change 1's scope before it landed,
+and an old-lockfile rebuild proved change 2 was inert when the browser pane was unavailable.

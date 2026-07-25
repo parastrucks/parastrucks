@@ -102,10 +102,14 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 - **Post-9.7 follow-up (owner-deferred):** provenance repair — count prod rows with null
   `price_circular`/`effective_date` (from past blank-field imports); every active row reflects the
   current price list, so one filled import re-stamps them all. See backlog.
-- **Task A — restore localhost dev:** keep local `.env` pointed at the **staging** Supabase
-  project (`klpnhpnlotcbbovwswmq`); staging EFs whitelist `http://localhost:3000` in `ALLOWED_ORIGINS`.
-  **Do NOT add localhost to the prod project's `ALLOWED_ORIGINS`** (owner-rejected). Prod creds
-  live in `.env.prod.bak` for occasional prod work.
+- **Task A — restore localhost dev:** ✅ local `.env` **is** pointed at the **staging** Supabase project
+  (`klpnhpnlotcbbovwswmq`, verified 2026-07-25) and `npm run dev` boots on `:3000`; staging EFs whitelist
+  `http://localhost:3000` in `ALLOWED_ORIGINS`. **Do NOT add localhost to the prod project's
+  `ALLOWED_ORIGINS`** (owner-rejected). ⚠️ **The prod-creds backup is a trap now:** the file is really
+  named **`.env .prod .bak`** (spaces, not dots — earlier notes said both "`.env.prod.bak`" and that it
+  "does NOT exist"; both were wrong), and it holds **legacy `eyJ…` JWTs for anon + service**, which are
+  **DEAD** since the 2026-07-23 cutover. It is useless for prod work — get new-format keys from the
+  dashboard instead.
 - **Phase 9 residual hardening (9h/9i):** MFA, new-device email, active-sessions page,
   security-monitor cron, file-upload virus scan, PII encryption; plus process items. Untouched.
   Full specs in `docs/history/PORTAL_HISTORY.md` (Phase 9 programme).
@@ -165,6 +169,19 @@ tagged `[FREE]` / `[PAID]` / `[FREE-ALT]` in the history archive.
 - Supabase migrations were applied via `psql` through the Session Pooler (Supabase CLI `db push`
   needs Docker, not installed). The `supabase/migrations/` folder is **not** a full base — the
   canonical current schema is `docs/db/schema-current.sql`.
+- **`supabase functions deploy` does NOT need Docker** (unlike `db push`). It prints
+  `WARNING: Docker is not running` and deploys fine — verified 2026-07-25:
+  `npx supabase@2.109.1 functions deploy <fn> --project-ref mmmxvjaavdtwlpcnjgzy --no-verify-jwt`.
+  Watch the upload list: a function importing `_shared/*` must show **all** its assets going up
+  (e.g. `index.ts` + `cors.ts` + `keys.ts`), otherwise the key path didn't travel with it.
+- **The Supabase MCP is scoped to the ERP project only.** `execute_sql` etc. work against
+  `cloghfqosoapqtltslrp` but return *"You do not have permission to perform this action"* for the portal
+  project `mmmxvjaavdtwlpcnjgzy`. So **portal DB questions cannot be answered via MCP** — use a dry-run of
+  the deployed code, the CLI, or the dashboard.
+- **⚠️ ALWAYS `git pull --rebase` before touching a portal Edge Function.** On 2026-07-25 the checkout was
+  2 commits behind `origin/portal` and the missing commit was `1d9ba17` (`_shared/keys.ts`); deploying
+  from that stale tree would have shipped the **dead** legacy `SUPABASE_SERVICE_ROLE_KEY` read and
+  silently broken portal→ERP sync. This is the difference between a working and a dead function.
 
 **Design/verification habits:**
 - CSP is enforced from the header on the **document** — verify by curling real page URLs (`/`,
