@@ -4,9 +4,10 @@
 // (Staged in the ERP repo for review; see ../README.md for deploy steps.)
 //
 // Scope (owner decision): entity = PT (Paras Trucks Haryana), linked to the
-// HD Hyundai brand, department in {service, spares, accounts}.
-// Mapping:  permission_level → ERP tier (executive→executor); department → ERP
-//           function; the user's PT outlet → ERP branch (Hisar/Karnal/Rohtak/
+// HD Hyundai brand, department in {service, spares, accounts, sales}.
+// Mapping:  permission_level → ERP tier (executive→executor), EXCEPT the sales
+//           department which pins tier `sales` (see SALES_FUNC below); department
+//           → ERP function; the user's PT outlet → ERP branch (Hisar/Karnal/Rohtak/
 //           Charkhi Dadri/Sirsa). The outlet is read from users.primary_outlet_id
 //           (the portal's compulsory field) with the legacy user_outlets join as a
 //           fallback. Role ownership is HYBRID: seeded from the portal,
@@ -34,7 +35,21 @@ const BRANCH_BY_CITY: Record<string, string> = {
 }
 const cityToBranch = (city?: string | null): string | null =>
   city ? (BRANCH_BY_CITY[city.trim().toLowerCase().replace(/\s+/g, " ")] ?? null) : null
-const ERP_FUNCS = ["service", "spares", "accounts"]
+const ERP_FUNCS = ["service", "spares", "accounts", "sales"]
+// Tiers that ride ALL branches, so branch_id stays null. gm/admin because they
+// are never pinned to one outlet; `sales` because the ERP's sales persona is
+// deliberately branch-less (ERP Phase 13c) and its CHECK constraint
+// `sales_is_branchless_sales_func` REJECTS a sales profile that carries a branch.
+const BRANCHLESS_TIERS = new Set(["gm", "admin", "sales"])
+// The sales department maps to the ERP `sales` tier regardless of the portal
+// permission_level — a sales GM is a portal gm, but ERP `gm` bypasses every
+// functional gate at the DB level, so mapping them there would hand the sales
+// team the whole workshop. The sales tier's ONLY power is approving credit /
+// discount within the per-user ceilings an ERP admin grants (Phase 13a/13b).
+// This pin is deliberately unconditional (it also demotes a portal admin who
+// sits in the sales department); the intended escape hatch for an exception is
+// the ERP's own `role_overridden` flag, which this sync honours.
+const SALES_FUNC = "sales"
 
 type Mapped = {
   portal_id: string; email: string; full_name: string; is_active: boolean;
@@ -93,11 +108,15 @@ Deno.serve(async (req: Request) => {
       const email = emailById.get(r.id)
       if (!email) { skipped.push({ reason: `no email for portal user ${r.id}` }); continue }
       if (single && email !== single) continue
-      const tier = TIER[r.permission_level as string]
       const func = (r.dept as { code: string }).code
+      // permission_level must still be a recognised portal level even for sales —
+      // an unmapped value means a malformed portal record, not a sales user.
+      const tier = func === SALES_FUNC
+        ? (TIER[r.permission_level as string] ? "sales" : undefined)
+        : TIER[r.permission_level as string]
       if (!tier || !ERP_FUNCS.includes(func)) { skipped.push({ email, reason: `unmappable tier/func (${r.permission_level}/${func})` }); continue }
-      // branch: gm/admin ride ALL branches (branch_id stays null — they are never
-      // pinned to one, even though they do have a home outlet in the portal);
+      // branch: gm/admin/sales ride ALL branches (branch_id stays null — they are
+      // never pinned to one, even though they do have a home outlet in the portal);
       // manager/executor MUST resolve to a mapped outlet or they are skipped.
       //
       // The outlet comes from users.primary_outlet_id — the portal employee form's
@@ -106,7 +125,7 @@ Deno.serve(async (req: Request) => {
       // this bug and left 14 of 16 users unprovisioned). primary_outlet FIRST,
       // user_outlets kept only as a fallback.
       let branch_code: string | null = null
-      if (tier !== "gm" && tier !== "admin") {
+      if (!BRANCHLESS_TIERS.has(tier)) {
         const cities = [
           (r.primary_outlet as { city?: string } | null)?.city,
           ...(r.user_outlets ?? []).map((uo: { outlets?: { city?: string } }) => uo.outlets?.city),

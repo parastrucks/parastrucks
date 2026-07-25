@@ -441,3 +441,48 @@ correct, migrations idempotent and order-safe.
 4-arg overload itself) and redeploy `admin-catalog`; then targeted smoke: cross-segment
 move syncs vertical, import preserves untouched fields, unconditional save repairs, R5
 actions still green.
+
+
+---
+
+## 🟠 BACKLOG (opened 2026-07-21) — WhatsApp share drops the caption (9.7d)
+
+**Verified on a real Android device (owner, prod).** The share sheet works and the **brochure PDF
+transfers correctly**, but the **caption never appears in WhatsApp**.
+
+**Not our bug.** `shareFamily()` (`src/pages/Catalog.jsx`) passes both, exactly as the Web Share API
+intends:
+```js
+await navigator.share({ files: [file], text: caption, title: card.name })
+```
+The spec permits file + text together, but honouring them is up to the **receiving** app, and
+**WhatsApp on Android discards the text when a file/stream is attached**. No change to our payload can
+force it. Behaviour varies by WhatsApp version, so some builds may show it.
+
+**The actual defect was an unverified assumption in the code comment** (~line 2660): *"the caption
+arrives in WhatsApp as an editable draft."* Never tested on a device until now; it is false. Fix the
+comment regardless of which option below is chosen.
+
+**Owner decision 2026-07-21: a manual paste is NOT acceptable** ("nobody will do manual paste").
+So the clipboard-copy mitigation is **rejected** — find an alternative or remove the caption.
+
+### Option A (recommended) — put the message in the FILENAME
+Zero extra taps, survives the file transfer, needs no cooperation from WhatsApp. Today the shared file
+is named from the raw upload (`card.brochure_filename`, e.g. `1.Lynx Smart, Strong, Max chassis_Diesel_broch…`).
+Rename on share to something self-describing and branded, e.g.
+`Ashok Leyland - Lynx Smart - Paras Trucks.pdf`.
+Carries brand + model + sender — the essentials the caption existed to convey. Loses the extras
+(segment, variant count, "Prices on request", `team.parastrucks.in`); accept that, or fold a short form in.
+Change is confined to `fetchBrochureFile()`.
+
+### Option B — drop the caption entirely
+Stop passing `text` on the file path, delete `buildShareCaption` from that flow, simplify the toasts.
+Honest and simple; the brochure is self-describing. Keep the text-only path for file-incapable phones.
+
+### Not viable
+- **Clipboard + manual paste** — owner-rejected.
+- **Text-only share** — loses the brochure, which is the commercially important payload.
+- **`wa.me/?text=…` deep link** — sends text but cannot attach a local file; a two-step send is worse.
+
+**Impact if left as-is:** low. The brochure — the thing that matters — transfers fine; the salesperson
+just types their own message. Not blocking.
