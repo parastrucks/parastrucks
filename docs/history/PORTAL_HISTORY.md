@@ -2094,3 +2094,73 @@ watchdog was considered and **declined** by the owner in favour of the opportuni
 
 **Corrected belief:** rollback is **NOT** instant — flip *and* rollback both need a redeploy
 (`Deno.env` boot snapshot); the instant incident lever is re-enabling legacy keys (reversible).
+
+---
+
+### 2026-07-25 — Portal→ERP sales sync: PT sales department maps to the ERP `sales` tier (PR #83 → `bc72d83`)
+
+The portal side of **ERP Phase 13c**. ERP-side 13a/13b/13b.2/13c/13d all shipped on 2026-07-25 (separate
+repo `erp-parastrucks`) and gave the ERP a per-user credit/discount authority model plus a deliberately
+powerless `sales` tier — but **no sales profile could exist**, because nothing created one. This change is
+what does.
+
+**The change** (`supabase/functions/sync-erp-users/index.ts`, 1 file, +27/-8):
+
+| | before | after |
+|---|---|---|
+| `ERP_FUNCS` | service, spares, accounts | **+ sales** |
+| tier for a sales-dept user | `TIER[permission_level]` (a sales GM → ERP `gm`) | pinned **`sales`** |
+| branch-less tiers | gm, admin | **+ sales** (`BRANCHLESS_TIERS`) |
+
+**Why the tier is pinned, not mapped.** A sales GM is a portal `permission_level=gm`, and ERP `gm`
+**bypasses every functional gate at the DB level** — mapping by permission_level would have handed the
+sales team the entire workshop. ERP `sales` can do exactly one thing: approve credit/discount up to the
+per-user ceilings an ERP admin grants. The pin is deliberately **unconditional** — it also demotes a
+portal *admin* who sits in the sales department — because department is the entitlement boundary here and
+the intended exception path is the ERP's own `role_overridden` flag, which this sync already honours.
+
+**Why sales must stay branch-less.** The ERP CHECK `sales_is_branchless_sales_func` **rejects** a sales
+profile carrying a branch. Leaving `sales` out of the branch-less set would have sent it down the
+outlet-resolution path and either failed that constraint on insert or skipped the user outright when
+their outlet doesn't map to an ERP branch. This is the kind of cross-repo coupling that only bites at
+runtime, in a nightly cron, days later.
+
+**Mapping truth table** (checked before shipping, per `feedback_exhaustive_edge_cases`):
+
+| dept | permission_level | tier | func | branch |
+|---|---|---|---|---|
+| service/spares/accounts | admin / gm | admin / gm | dept | null |
+| service/spares/accounts | manager / executive | manager / executor | dept | resolved, else skipped |
+| **sales** | admin / gm / manager / executive | **sales** | sales | **null** |
+| any | unrecognised | — | — | **skipped** |
+
+An unrecognised `permission_level` still skips the row **for sales too**, so a malformed portal record
+can't quietly become a sales approver.
+
+**Pre-deploy verification (ERP prod, read-only):** `user_tier` = admin,gm,manager,executor,**sales** and
+`user_function` = service,spares,accounts,**sales** (both from migration `13c1`); `branch_required_below_gm`
+and `sales_is_branchless_sales_func` both accept `tier=sales, func=sales, branch_id=null`; 18 profiles
+exist, **0** at tier/func `sales`. Portal `departments` carries code `sales` (prod seed dump).
+
+**Deploy:** `supabase functions deploy sync-erp-users --project-ref mmmxvjaavdtwlpcnjgzy --no-verify-jwt`
+(all 3 assets uploaded — `index.ts` + `_shared/cors.ts` + `_shared/keys.ts`, so the new-key path travels
+with it). Smoke-tested live: bad secret → **401 `unauthorized`**, `GET` → **405 `method_not_allowed`**,
+i.e. the bundle imported and serves. PR #83 squash-merged → `bc72d83`; Vercel `portal` production READY;
+`team.parastrucks.in/` + `/login` = 200.
+
+**Two gotchas worth carrying forward:**
+1. **The repo was 2 commits behind `origin/portal` at session start**, and the missing commit was `1d9ba17`
+   — the one that routes every EF key through `_shared/keys.ts`. Deploying `sync-erp-users` from the stale
+   checkout would have shipped `Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")`, which is **DEAD** since the
+   2026-07-23 legacy-key deactivation, silently breaking portal→ERP sync. `git pull --rebase` before
+   touching a portal EF is not hygiene, it is the difference between a working and a dead function.
+2. **`npm-audit` in CI is now red on every PR** for reasons unrelated to any branch — see
+   `memory/known_issues.md`. PR #83 was merged with it red only after proving the base branch fails
+   identically.
+
+**Left to the owner (cannot be done from here):** a functional dry-run needs `SYNC_SECRET`, which is
+owner-held and deliberately never in the working tree. So the *mapping* is proven by the first real run:
+the sales GM signs in and clicks the **HD Hyundai Service ERP** card → `erp-sso` JIT-provisions them via
+a bounded **single-user** sync → then check `profiles where tier='sales'` on the ERP project. Their
+ceilings must then be set in ERP → User Management, or they stay inert (every Approvals button disabled,
+and no notifications, since the 13d notifier only pings people who can actually clear a request).

@@ -51,6 +51,14 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   keystone backfill **976/1006** linked (30 orphans → Triage queue); consolidation `UPDATE 11` +
   retire `UPDATE 1`; b1 rules+5-arg RPC (writes `sales_vertical_id` too — T2) + c2 `cover_url`
   applied; `admin-catalog` EF deployed to prod. Full record: `docs/backlog/phase97-catalog-ux.md`.
+- **🔗 ERP integration (2026-07-25, PR #83 → `bc72d83`):** `sync-erp-users` now carries the **PT sales
+  department** into the ERP as its branch-less **`sales`** tier — the portal side of ERP Phase 13c, and
+  the change that creates a sales user's ERP account at all. `ERP_FUNCS` += `sales`; the sales
+  department **pins** tier `sales` instead of mapping `permission_level` (ERP `gm` bypasses every
+  functional gate at the DB level); `BRANCHLESS_TIERS` = gm/admin/sales because the ERP CHECK
+  `sales_is_branchless_sales_func` rejects a sales profile carrying a branch. Synced sales users arrive
+  at **0 / ₹0 = inert** until an ERP admin sets their ceilings. Entry is gated on the `hdh` brand
+  assignment (owner's chosen lever).
 - **Planned, not started:** **Phase 10 — Vehicle Tracker** (`/tracker`) — `docs/backlog/phase10-vehicle-tracker.md`.
 - **Separate project (not this repo):** the HD Hyundai **ERP** (`erp.parastrucks.in`, repo `erp-parastrucks`) — see `memory/project_hd_hyundai_vertical.md`.
 
@@ -77,6 +85,21 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
      — PR #75 lesson: `gitleaks` misses this hex-in-JSON pattern.
   3. **On-phone Android Web-Share check** — owner opted to test the WhatsApp files→draft path
      directly on prod (couldn't be done from desktop; code verified correct by inspection — H4/H5 fixed).
+- **🔗 ERP sales sync DEPLOYED 2026-07-25 (PR #83 → `bc72d83`; EF live on the portal project, Vercel
+  READY, prod 200) — two things left, both owner-side:**
+  1. **Trigger the first sync.** The code is live but inert until a sync runs. Cleanest trigger is the
+     real user path: the sales GM signs in to the portal and clicks the **HD Hyundai Service ERP** card
+     → `erp-sso` JIT-provisions them via a **single-user** sync (skips the deactivation sweep). Other
+     triggers: re-save the user in Employees (users-table DB webhook → full reconcile), or the nightly
+     cron. ⚠️ If the SSO click errors, suspect a **stale pre-cutover browser session** — full sign-out
+     + sign-in (see `memory/post_cutover_bugwatch.md`).
+  2. **Set their ceilings** in the ERP → User Management → "Approval authority", or they stay inert
+     (every Approvals button disabled, no notifications).
+  **Not verifiable from here:** a functional dry-run needs `SYNC_SECRET` (owner-held, never in the
+  working tree). Deploy + auth gate were smoke-tested (401 on a bad secret, 405 on GET); the *mapping*
+  is proven by the first real run — check `profiles where tier='sales'` on the ERP project afterwards.
+  **Unbounded number:** how many PT + `hdh` + sales-dept portal users exist is unknown from here, and
+  every one of them gets an inert ERP account on the next full reconcile.
 - **Post-9.7 follow-up (owner-deferred):** provenance repair — count prod rows with null
   `price_circular`/`effective_date` (from past blank-field imports); every active row reflects the
   current price list, so one filled import re-stamps them all. See backlog.
