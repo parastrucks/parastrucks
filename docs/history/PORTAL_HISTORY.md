@@ -2259,3 +2259,58 @@ so smoke #8 stays half-open. See `memory/post_cutover_bugwatch.md`.
 **Method notes carried into memory** (`feedback_prove_dont_argue`): prefer a command that *emits* the
 claim over an argument for it — a `dryRun` `workflow_dispatch` bounded change 1's scope before it landed,
 and an old-lockfile rebuild proved change 2 was inert when the browser pane was unavailable.
+
+---
+
+## 2026-07-26 — react-router upgrade investigated and **deliberately reverted** (no code change)
+
+Picked up the standing backlog item *"react-router 6.x → 7 for its 2 moderate advisories"*. **The item was
+wrong about its own destination.** Doing exactly what it said would have re-broken CI. Nothing shipped;
+the outcome is a decision plus documentation.
+
+**What the backlog assumed:** bump `react-router-dom` 6.22.3 → 7, clear GHSA-wrjc-x8rr-h8h6 (open redirect)
+and GHSA-337j-9hxr-rhxg (`deserializeErrors`), done.
+
+**What is actually true.** A third advisory had never been catalogued — **GHSA-qwww-vcr4-c8h2**
+(RSC-mode CSRF bypass, **high**), affecting **`7.12.0 – 8.2.0`**. The two moderates are only fixed *above*
+7.17.0. Those ranges leave no safe 7.x:
+
+| Version | Advisories | `npm audit --audit-level=high` (the CI gate) |
+|---|---|---|
+| **6.22.3 — prod today** | 2 moderate | 🟢 **exit 0 — passes** |
+| 7.18.1 — latest `react-router-dom` | 1 **HIGH** | 🔴 **fails** |
+| React 19 + `react-router` 8.3.0 | none | 🟢 passes |
+
+So the "fix" swaps two moderates that clear the gate for one high that doesn't — re-breaking the
+`npm-audit` job PR #84 (`71cfc5d`) had repaired the day before. The only clean release,
+`react-router@8.3.0`, declares `peerDependencies: { react: ">=19.2.7" }` — the portal is on React **18.2**
+— and `react-router-dom` is a **retired package** (latest 7.18.1; v8 ships as `react-router` only), so the
+clean path is a **React major + two router majors + renaming all 15 import sites**.
+
+**Why it was tabled rather than escalated: all three advisories are unreachable here** — established from
+the call sites, not from the advisory text.
+1. *Open redirect* needs an attacker-influenceable navigation target. There is none: all six `navigate()` /
+   `<Navigate to=>` sites take string literals (`/`, `/login`); every `<Link>`/`<NavLink>` target comes from
+   the static `src/components/layout/navConfig.js`; there is no `?redirect=` / `returnTo` / `?next=`
+   anywhere; and `ProtectedRoute` reads `pathname` only to *check* access, never to navigate to it.
+2. *`deserializeErrors`* — SSR-hydration only; the portal is a static SPA.
+3. *RSC CSRF* — RSC/data-router only; the app uses declarative `<Routes>` with no `createBrowserRouter`
+   and no loaders/actions/fetchers.
+
+**Owner decision: stay on 6.22.3.** Taking a React major across a portal ~36 people use daily, to satisfy a
+scanner for three findings that cannot fire, is a bad trade while the gate is green either way.
+
+**Reverted and proven clean:** `package.json` + `package-lock.json` **byte-identical to `origin/portal`**
+(`git diff --stat origin/portal` empty), `npm audit --audit-level=high` **exit 0**, `npm run build` green
+in 982 ms. **No application source file was modified at any point.**
+
+**Also learned (kept in the backlog file):** most v7/v8 breaking changes are structurally inapplicable here
+because the app has no data router. The two that would need real checking are **`v7_startTransition`** —
+which would stop the route-level `<Suspense>` spinner from appearing on navigation to a `lazy()` page,
+since React keeps the previous screen during a transition — and **`v7_relativeSplatPath`**, harmless today
+because the `path="*"` catch-all at `App.jsx:120` navigates to an absolute path.
+
+**Trigger to revisit** (in `docs/backlog/react19-router8.md`): the portal needs React 19 for its own
+reasons; or a *reachable* advisory appears; or **the app gains a redirect parameter** (`?next=`,
+`returnTo`, post-login "return to where you were") — that single feature makes advisory #1 live, and
+whoever builds it should read the backlog file first.
