@@ -2314,3 +2314,131 @@ because the `path="*"` catch-all at `App.jsx:120` navigates to an absolute path.
 reasons; or a *reachable* advisory appears; or **the app gains a redirect parameter** (`?next=`,
 `returnTo`, post-login "return to where you were") — that single feature makes advisory #1 live, and
 whoever builds it should read the backlog file first.
+
+---
+
+## 2026-07-26 — Security follow-ups: anon-execute lockdown, adminLogoutUser fixed, service-key cleanup, localhost dev restored
+
+The owner-queued "1, 2, 5, 4" batch (relayed from a parallel ERP session) plus one follow-up, all shipped
+and verified on prod the same day. No feature work — hardening + hygiene. Executed in a git worktree off
+the shared tree; the two DB migrations went in as their own PRs, the owner ran all SQL/EF deploys.
+
+### 1. Revoked `anon`/`PUBLIC` EXECUTE on the two document-numbering RPCs (PR #86 → `3316344`)
+`next_proforma_number(uuid)` and `next_financier_copy_number(uuid)` (Phase 7b/8) were `SECURITY DEFINER`
+with **no EXECUTE lockdown**, so an unauthenticated caller holding the browser's publishable key could
+`POST /rest/v1/rpc/…` with any `p_entity_id` and **burn that entity's PI/FC serial counter** (a monotonic
+`serial_counter + 1` side effect; corrupts the FC fiscal-year serial). Same class as the `create_service_job`
+gap (#67), with two twists: (a) their original migrations never revoked the built-in `PUBLIC` grant, so
+`anon` reached them **two ways** — a bare `revoke … from anon` would have left the `PUBLIC` path open;
+(b) unlike `create_service_job`, these are called by the **frontend as `authenticated`**
+(`ProformaInvoice.jsx:295`, `FinancierCopy.jsx:365`), so `authenticated` must keep EXECUTE. Fix (migration
+`20260726_revoke_anon_proforma_financier_number.sql`): `revoke all … from public` + `from anon`, then
+re-`grant execute … to authenticated` + `service_role` — a defensive form correct under any prior ACL.
+Owner ran it in the SQL editor on prod + staging (both Success); committed as PR #86.
+
+### 2. Deleted the dead `VITE_SUPABASE_SERVICE_KEY`
+Removed from Vercel prod (`portal` project env, verified gone via the Management API) and both local `.env`
+files. Grep confirmed no `src/` code reads it (only docs + the `.env.example` explanatory comment). Inert
+since the 2026-07-23 cutover; this only clears the dead value.
+
+### 3. Provenance repair — NON-ISSUE (0 null rows)
+The old blank-import null-erase bug (fixed in 9.7 `dd9e831`) was feared to have nulled
+`price_circular`/`effective_date` on past prod imports. Counted on prod: across the FULL `vehicle_catalog`
+(1006 rows, active + inactive), **0** null `price_circular` and **0** null `effective_date`. Nothing to
+re-stamp — either the bug never ran against prod or a later full import already re-stamped everything.
+
+### 4. `adminLogoutUser` fixed — session revocation now actually works (PR #87 → `4fd2718`)
+Deactivating an employee called GoTrue `POST /auth/v1/admin/users/{id}/logout`, an endpoint that **404s in
+this GoTrue version** — so force-logout-on-deactivation had **never worked** (the failure was swallowed and
+the caller returned ok); the RLS `is_active` gate was the only real lockout. Fix: new `SECURITY DEFINER` RPC
+`admin_revoke_user_sessions(uuid)` (`search_path=''`, `service_role`-only) that
+`delete from auth.sessions where user_id = p_user_id` (cascades to `auth.refresh_tokens`) and returns the
+count; `_shared/auditLog.ts` now calls it via the service-role `admin` client, and `admin-users` passes that
+existing client instead of building one from url+key. Still best-effort: an already-issued ES256 access token
+stays valid until it expires (~1h), so RLS `is_active` remains the real guard. **Proven before prod:** on
+staging the RPC called with a real user's id **deleted all 4 of their live `auth.sessions` → recount 0**. On
+prod: migration applied, the zero-UUID call returned `0` (proves `postgres` CAN delete `auth.sessions` — the
+one runtime risk, since that table is owned by `supabase_auth_admin`; no `owner to supabase_auth_admin` was
+needed), EF deployed with `--no-verify-jwt`, PR #87 squash-merged, CI green, Vercel READY. **Gotcha kept:**
+with **no `supabase/config.toml`** the `verify_jwt:false` posture lives only in the deploy flag, so every EF
+redeploy MUST pass `--no-verify-jwt`. The admin-toggle → EF → RPC wiring self-confirms on the first real prod
+deactivation (`admin-users` log); no regression risk if it hiccups (RLS still guards).
+
+### 5. Restored localhost dev
+Local login against staging had silently broken: staging's **legacy** anon key was disabled during the
+cutover's staging rehearsal, but local `.env` still carried it, so `localhost:3000` login failed with
+*"Legacy API keys are disabled"* (Turnstile showed *Success* — it was the key, not the captcha). Fix:
+swapped `.env`'s `VITE_SUPABASE_ANON_KEY` to the staging **publishable** key (`sb_publishable_…`, public by
+design). Staging Admin login at `localhost:3000` confirmed working. This corrects the earlier CLAUDE.md note
+that claimed local dev already worked.
+
+---
+
+## 2026-07-26 (later) — ERP admin rename, a false sync belief corrected, and a shared-worktree near-miss
+
+Three things, none of them a portal code change. Recorded here because two of them are portal-side facts
+that were **written down wrong**.
+
+### 1. `ceo.hr@parastrucks.in` renamed to "Vallabh Jain" — **ERP only, by owner's choice**
+
+Owner asked to rename this admin. Checked before writing and found the address is not a spare HR login:
+in the **ERP** it is the `username=admin` super-admin profile, and it was carrying **"Dhruv Bothra"** —
+the owner's own name (`user_id d74470d1-…`, `tier=admin`, `source=local`, `portal_user_id=null`).
+Surfaced that first; owner chose **ERP only**. Full record in the ERP repo
+(`docs/history/HISTORY.md` 2026-07-26, commit `eb370de`).
+
+**The portal's own `public.users` row for that address is unchanged and still reads its old name.** The
+two do **not** propagate: `sync-erp-users` carries `full_name` only for users matching PT entity + `hdh`
+brand + dept ∈ {service, spares, accounts, sales}, which an HR/admin user does not. Renaming the portal
+copy is Employees → edit → Full name, which also writes the audit row.
+
+### 2. ⚠️ Correction — `source='local'` does NOT shield an ERP profile from `sync-erp-users`
+
+Portal memory asserted *"the sync never touches `source='local'` rows."* **That is false.** Reading the
+deployed EF (`supabase/functions/sync-erp-users/index.ts`):
+
+    const byEmail = new Map((erpProfiles ?? []).map(p => [p.email?.toLowerCase(), p]))   // <- no source filter
+    const existing = byPortalId.get(m.portal_id) ?? byEmail.get(m.email)
+
+`byEmail` covers **every** profile. On a match the EF **updates** it — overwriting `full_name`, `email`,
+`is_active`, stamping `source='portal'` + `portal_user_id`, and when `role_overridden` is false **also
+rewriting `tier`/`func`/`branch_id`**. A hand-made ERP admin would be **adopted and demoted**, not skipped.
+
+**What actually protects the two admin rows is the sync QUERY, not their `source`:** it uses `!inner`
+joins on `entities`, `departments` and `user_brands`, so a portal user with **no department or no brand
+row never enters the result set**. Neither admin has both. That protection lapses the moment either
+address is given a portal department plus the `hdh` brand. `role_overridden = true` is the only in-band
+lever and guards **only** tier/func/branch — never `full_name`/`email`/`is_active`/`source`.
+
+Corrected in `memory/project_hd_hyundai_vertical.md`; logged in the ERP `docs/BACKLOG.md`.
+
+### 3. Two Claude sessions were sharing this working tree
+
+Mid-session, `supabase/migrations/20260726_revoke_anon_proforma_financier_number.sql` appeared untracked
+in this checkout — written by **another session working on the portal DB**, not by the session writing
+this entry. Consequences worth knowing, because this will happen again:
+
+- **Staging specific files is what saved it.** `git add docs/... docs/...` kept the other session's
+  in-progress migration out of commit `557bf89`. A `git add -A` would have committed someone else's
+  unfinished work. The existing house rule earned its keep.
+- **A path-limited `git stash` is still not free.** Stashing `.claude/settings.local.json` to unblock a
+  rebase collided with the harness rewriting that file mid-turn; the pop left **6** entries where **165**
+  belonged. Recovered by unioning both sets (169, nothing lost) — but the lesson is to prefer committing
+  or leaving a dirty file over stashing it in a shared tree.
+- **`npm install` and `git checkout -- package*.json` hit shared state.** The react-router install/revert
+  churned dependencies under a session that may have been mid-task.
+- After a push, the *other* session is on a stale base and must `git pull --rebase` before it commits.
+
+**Verified anyway (that migration's one load-bearing claim):** it keeps `execute` for `authenticated`,
+which is correct — both RPCs are called from the browser as an authenticated user
+(`ProformaInvoice.jsx:295`, `FinancierCopy.jsx:365`), so revoking only `anon` + `PUBLIC` is right.
+
+### Also — ERP repo audited, clean
+
+`main` in sync with `origin/main`, nothing unpushed, **no open PRs**, only the `sync-erp-users` cron in CI
+and green every 30 min. Two stale ERP docs were corrected (the Phase 13 heading, and a roster table still
+listing the 4 now-provisioned sales users as excluded), and the red-team's **sales-persona** findings were
+**re-graded from latent to live** — they were written when zero sales users existed, and four landed the
+same day. Their *authority* is proven inert (`fn_can_authorize_terms` strict `false` at 0/0, 2%, ₹60k,
+2%+₹60k); their **read surface** (branch-less ⇒ company-wide reads, reachable via Home + Ctrl-K despite
+hidden nav) and **incidental write access** were never bounded. Detail in the ERP repo, commit `eb370de`.

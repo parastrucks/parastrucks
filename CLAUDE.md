@@ -29,12 +29,19 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ---
 
-## Current state (2026-07-23)
+## Current state (2026-07-26)
 
 - **🔐 Prod is on Supabase NEW API keys (cutover LIVE 2026-07-23, PR #81 → `1d9ba17`).** Legacy
   `anon`+`service_role` DEACTIVATED; the leaked `service_role` JWT is verified DEAD (401). Browser uses
   `sb_publishable_…`; all 9 EFs use the injected secret/publishable bags via `_shared/keys.ts`
-  (`USE_NEW_API_KEYS=true`). See Next actions + [[post-cutover-bugwatch]].
+  (`USE_NEW_API_KEYS=true`). Cutover fully verified & closed — see `known_issues.md`.
+- **🔒 2026-07-26 security batch — all live & verified on prod:** revoked `anon`+`PUBLIC` EXECUTE on
+  `next_proforma_number`/`next_financier_copy_number` (PR #86 → `3316344`; the frontend calls them as
+  `authenticated`, which keeps EXECUTE) · **`adminLogoutUser` fixed** — the GoTrue `…/logout` endpoint 404s,
+  replaced by RPC `admin_revoke_user_sessions(uuid)` that deletes `auth.sessions` (PR #87 → `4fd2718`; proven
+  on staging 4→0) · deleted dead `VITE_SUPABASE_SERVICE_KEY` (Vercel prod + `.env`) · provenance repair =
+  **non-issue** (0 null rows) · react-router 6→7 = **WONTFIX** (7.18.1 adds a HIGH RSC-CSRF advisory,
+  unreachable here; clean version needs React 19) · localhost dev restored (`.env` anon → staging publishable).
 - **Deployed & live:** Phases 1A–9 + **Phase 9.5 Vendor Jobs** (`/vendor-jobs`) +
   **Phase 9.6 visual redesign** (LIVE 2026-07-16, PR #78 → `29404b4`) +
   **✅ Phase 9.7 — Catalog UX rework — LIVE ON PROD 2026-07-20** (PR #79 squash-merged →
@@ -98,18 +105,17 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   **⏭️ One thing left, owner-side:** **set their ceilings** in ERP → User Management → "Approval
   authority", or they stay inert. Proven inert, not assumed: `fn_can_authorize_terms` returns **false**
   for all four across 0/0, 2%, ₹60k and 2%+₹60k (strict false, not NULL). ⚠️ If an SSO click errors,
-  suspect a **stale pre-cutover browser session** — full sign-out + sign-in (`memory/post_cutover_bugwatch.md`).
-- **Post-9.7 follow-up (owner-deferred):** provenance repair — count prod rows with null
-  `price_circular`/`effective_date` (from past blank-field imports); every active row reflects the
-  current price list, so one filled import re-stamps them all. See backlog.
-- **Task A — restore localhost dev:** ✅ local `.env` **is** pointed at the **staging** Supabase project
-  (`klpnhpnlotcbbovwswmq`, verified 2026-07-25) and `npm run dev` boots on `:3000`; staging EFs whitelist
-  `http://localhost:3000` in `ALLOWED_ORIGINS`. **Do NOT add localhost to the prod project's
-  `ALLOWED_ORIGINS`** (owner-rejected). ⚠️ **The prod-creds backup is a trap now:** the file is really
-  named **`.env .prod .bak`** (spaces, not dots — earlier notes said both "`.env.prod.bak`" and that it
-  "does NOT exist"; both were wrong), and it holds **legacy `eyJ…` JWTs for anon + service**, which are
-  **DEAD** since the 2026-07-23 cutover. It is useless for prod work — get new-format keys from the
-  dashboard instead.
+  suspect a **stale pre-cutover browser session** — full sign-out + sign-in for a fresh ES256 token.
+- **✅ Post-9.7 provenance repair — NON-ISSUE (checked 2026-07-26):** prod `vehicle_catalog` has **0** null
+  `price_circular`/`effective_date` across all 1006 rows. Nothing to re-stamp.
+- **✅ Task A — localhost dev RESTORED 2026-07-26.** Local `.env` targets **staging** (`klpnhpnlotcbbovwswmq`)
+  and `npm run dev` boots on `:3000` (staging EFs whitelist `http://localhost:3000`). **The catch that had
+  silently broken login:** staging's **legacy** keys were disabled during the cutover rehearsal, but `.env`
+  still held the legacy `anon` JWT → login failed *"Legacy API keys are disabled"*. Fix = `.env`
+  `VITE_SUPABASE_ANON_KEY` → the staging **publishable** key (`sb_publishable_…`, public by design). **Do NOT
+  add localhost to the prod project's `ALLOWED_ORIGINS`** (owner-rejected). ⚠️ The prod-creds backup file is
+  named **`.env .prod .bak`** (spaces) and holds **DEAD** legacy `eyJ…` JWTs — useless post-cutover; get
+  new-format keys from the dashboard.
 - **Phase 9 residual hardening (9h/9i):** MFA, new-device email, active-sessions page,
   security-monitor cron, file-upload virus scan, PII encryption; plus process items. Untouched.
   Full specs in `docs/history/PORTAL_HISTORY.md` (Phase 9 programme).
@@ -124,18 +130,17 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   ⚠️ Corrected: rollback is **NOT** instant (`Deno.env` snapshots at isolate boot → flip *and* rollback need a
   redeploy); the instant incident lever is **re-enabling legacy keys** (reversible). **Red-team (4 lanes + direct
   tests): no cutover blockers** — no dead-key code path, no external/DB caller depended on legacy, refresh is a
-  pure GoTrue op (safe). Runbook/record: [[next-actions]], [[post-cutover-bugwatch]], `known_issues.md`.
-- **🐛 BUG-WATCH (until cleared) — `memory/post_cutover_bugwatch.md`.** Owner can't run smoke tests, so we
-  **check for cutover bugs opportunistically on any task**. Gap: for most EFs the unauth probe rejected before
-  keys resolved, so only key *resolution* is confirmed (via boot logs: 5/9 show `-> using NEW keys`; glance the
-  other 4). Passive collector already live = **Access Rules → Error Log tab** (`log-error` EF confirmed on new
-  keys; empty = genuinely no bugs). Failure signature = one EF 500/503 while others work → redeploy that ONE EF.
-- **Post-cutover follow-ups (each its own change):** 🟠 `adminLogoutUser` 404 — session revocation never worked
-  (needs a DB migration; NOT caused by cutover); cleanup — delete dead `VITE_SUPABASE_SERVICE_KEY` from Vercel
-  prod + `.env` files; optional `package.json` supabase-js caret bump to `^2.100.1`. ✅ RESOLVED: `SYNC_SECRET`
-  git-history value proven DEAD (401) = the already-rotated V1, no rotation pending. `.env.prod.bak` does NOT exist.
-- **Open issues:** see `memory/known_issues.md` (e.g. C1 PII-read RLS; `next_proforma_number`/
-  `next_financier_copy_number` still `anon`-executable).
+  pure GoTrue op (safe). Runbook/record: [[next-actions]], `known_issues.md`.
+- **✅ Cutover bug-watch CLOSED** — all 9 EFs boot-log confirmed `-> using NEW keys`; privileged read + write
+  paths proven on prod; leaked `service_role` dead (401); passive collector (Access Rules → Error Log tab)
+  empty. Bug-watch memory retired. Failure signature if one ever appears: one EF 500/503 while others work →
+  redeploy that ONE EF with `--no-verify-jwt`.
+- **Post-cutover follow-ups:** ✅ **DONE 2026-07-26** — `adminLogoutUser` fixed (PR #87 → `4fd2718`; RPC
+  `admin_revoke_user_sessions`); dead `VITE_SUPABASE_SERVICE_KEY` deleted from Vercel prod + both `.env` files.
+  Remaining: optional `package.json` supabase-js caret bump to `^2.100.1`. ✅ RESOLVED: `SYNC_SECRET`
+  git-history value proven DEAD (401) = the already-rotated V1, no rotation pending.
+- **Open issues:** see `memory/known_issues.md` (e.g. C1 PII-read RLS). ✅ 2026-07-26: `next_proforma_number`/
+  `next_financier_copy_number` anon-execute **CLOSED** (PR #86); `adminLogoutUser` 404 **FIXED** (PR #87).
 
 ---
 
@@ -153,6 +158,11 @@ tagged `[FREE]` / `[PAID]` / `[FREE-ALT]` in the history archive.
 - **After any push to `portal`, verify CI all-green AND the Vercel `portal` deploy = READY**
   before calling it done (`memory/feedback_verify_deploy.md`, `feedback_vercel_api.md`).
 - Commit author is **Dhruv Bothra / ceo@parastrucks.in**, set locally per-repo (never global).
+- **Another Claude session may be working in this SAME working tree.** Signals: untracked files you didn't
+  create appear mid-session; `git status` changes between your own commands. Then: don't stash (a
+  path-limited `git stash` of `.claude/settings.local.json` collided with a mid-turn rewrite and dropped 159
+  of 165 permission entries), don't `npm install`, and never `git add -A` — stage specific files. After any
+  push, tell the owner the other session must `git pull --rebase`.
 
 **Environment:**
 - Local `.env` targets **staging**; `.env.prod.bak` holds prod creds for prod-only operations.
@@ -182,6 +192,14 @@ tagged `[FREE]` / `[PAID]` / `[FREE-ALT]` in the history archive.
   2 commits behind `origin/portal` and the missing commit was `1d9ba17` (`_shared/keys.ts`); deploying
   from that stale tree would have shipped the **dead** legacy `SUPABASE_SERVICE_ROLE_KEY` read and
   silently broken portal→ERP sync. This is the difference between a working and a dead function.
+- **`source='local'` does NOT shield an ERP profile from `sync-erp-users`** (corrected 2026-07-26 — the
+  opposite was in memory and was wrong). The EF matches `byPortalId.get(portal_id) ?? byEmail.get(email)`
+  and **`byEmail` is built from ALL profiles with no `source` filter**. On a hit it overwrites
+  `full_name`/`email`/`is_active`, stamps `source='portal'` + `portal_user_id`, and unless `role_overridden`
+  also rewrites `tier`/`func`/`branch_id` — so a hand-made ERP admin gets adopted and demoted, not skipped.
+  What actually protects the two admin rows (`ceo@`, `ceo.hr@`) is the query's `!inner` joins on
+  entities/departments/user_brands, which exclude a portal user with no department or no brand row.
+  `role_overridden` guards only tier/func/branch.
 
 **Design/verification habits:**
 - CSP is enforced from the header on the **document** — verify by curling real page URLs (`/`,
