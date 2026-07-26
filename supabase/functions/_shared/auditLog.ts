@@ -28,54 +28,40 @@ export async function audit(admin: SupabaseClient, e: AuditEntry): Promise<void>
   }
 }
 
-// Phase 9e H4 — revoke all refresh tokens for a user via the GoTrue admin
-// REST endpoint. supabase-js does not expose admin.signOut(userId); the
-// underlying GoTrue endpoint is POST /admin/users/{user_id}/logout.
+// Phase 9h (2026-07-26) — force-logout a user by revoking their sessions at the
+// DB level, via the SECURITY DEFINER RPC public.admin_revoke_user_sessions(uuid)
+// (migration 20260726_phase9h_admin_revoke_user_sessions.sql). The RPC deletes the
+// user's rows from auth.sessions, which cascades to auth.refresh_tokens — so the
+// user can no longer refresh into a new access token.
 //
-// NEW-API-KEY GOTCHA (red-team 2026-07-21, found by 3 independent lanes):
-// this is a hand-rolled fetch, so nothing in supabase-js can help it. New-format
-// keys (`sb_secret_…`) are NOT JWTs and must travel on `apikey` ONLY — sent as
-// `Authorization: Bearer` the gateway tries to parse them as a JWT and rejects
-// the call. Previously this sent BOTH unconditionally, so after the legacy-key
-// cutover every revocation would have 401'd — silently, because the failure was
-// downgraded to console.warn while the caller still returned {ok:true}.
-// Net effect: a deactivated employee kept a working session until their refresh
-// token expired (up to 12h). Legacy JWT keys still get the Bearer header so
-// behaviour is unchanged until the flip.
+// SUPERSEDES the old GoTrue REST call POST /auth/v1/admin/users/{id}/logout, which
+// returns 404 in this project's GoTrue version — meaning Phase 9e H4 force-logout
+// had silently never worked (the fetch 404'd, the failure was swallowed, and the
+// caller still returned ok). The RLS is_active gate (Phase 9d) was the only thing
+// actually locking a deactivated user out.
 //
-// Failure remains non-fatal (the RLS is_active gate from Phase 9d is the real
-// guard) but is now console.error, not console.warn, so it is greppable in the
-// EF logs, and the boolean return lets callers surface it if they choose.
+// Called through the service-role `admin` client (only service_role has EXECUTE on
+// the RPC). Still best-effort and non-fatal: an already-issued access token (ES256
+// JWT) stays valid until it expires (~1h) regardless — the RLS is_active gate
+// remains the real guard. Failures are console.error (greppable in EF logs) and the
+// boolean return lets callers surface it if they choose.
 export async function adminLogoutUser(
-  supabaseUrl: string,
-  serviceKey: string,
+  admin: SupabaseClient,
   userId: string,
 ): Promise<boolean> {
-  const isLegacyJwt = !serviceKey.startsWith("sb_")
   try {
-    const r = await fetch(
-      `${supabaseUrl}/auth/v1/admin/users/${userId}/logout`,
-      {
-        method: "POST",
-        headers: {
-          apikey: serviceKey,
-          // Only legacy JWT keys may ride Authorization: Bearer.
-          ...(isLegacyJwt ? { Authorization: `Bearer ${serviceKey}` } : {}),
-          "Content-Type": "application/json",
-        },
-      },
-    )
-    if (!r.ok) {
-      const txt = await r.text().catch(() => "")
+    const { error } = await admin.rpc("admin_revoke_user_sessions", {
+      p_user_id: userId,
+    })
+    if (error) {
       console.error(
-        `adminLogoutUser ${userId} FAILED ${r.status}: ${txt} ` +
-          `(session NOT revoked; keyType=${isLegacyJwt ? "legacy" : "new"})`,
+        `adminLogoutUser ${userId} FAILED: ${error.message} (sessions NOT revoked)`,
       )
       return false
     }
     return true
   } catch (err) {
-    console.error(`adminLogoutUser ${userId} fetch threw:`, err)
+    console.error(`adminLogoutUser ${userId} rpc threw:`, err)
     return false
   }
 }

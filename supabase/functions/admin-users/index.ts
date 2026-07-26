@@ -464,13 +464,12 @@ Deno.serve(async (req: Request) => {
           .eq("id", id)
         if (error) return json({ error: error.message }, 400)
 
-        // Phase 9e H4 — when deactivating, revoke all refresh tokens for the
-        // user so an existing JWT can't be silently refreshed for another
-        // hour. Best-effort; the RLS is_active gate is the real protection.
+        // Phase 9e H4 / 9h — when deactivating, revoke the user's sessions so an
+        // existing JWT can't be silently refreshed for another hour. Now via the
+        // service-role `admin` client (DB-level RPC; the old GoTrue REST endpoint
+        // 404'd). Best-effort; the RLS is_active gate is the real protection.
         if (!is_active) {
-          const url = Deno.env.get("SUPABASE_URL")!
-          const service = secretKey()
-          await adminLogoutUser(url, service, id)
+          await adminLogoutUser(admin, id)
         }
 
         // Phase 9e M3 — audit log
