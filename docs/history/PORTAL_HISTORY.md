@@ -2259,3 +2259,37 @@ so smoke #8 stays half-open. See `memory/post_cutover_bugwatch.md`.
 **Method notes carried into memory** (`feedback_prove_dont_argue`): prefer a command that *emits* the
 claim over an argument for it — a `dryRun` `workflow_dispatch` bounded change 1's scope before it landed,
 and an old-lockfile rebuild proved change 2 was inert when the browser pane was unavailable.
+
+### 2026-07-26 — New-API-key cutover FULLY VERIFIED & CLOSED; bug-watch retired
+
+**Outcome: the verification gap from 2026-07-23 is closed and the cutover is signed off.** Nothing about
+the cutover remains unproven; the `memory/post_cutover_bugwatch.md` watch file was deleted.
+
+**Key-resolution — all 9 EFs confirmed `-> using NEW keys`.** The 2026-07-23 red-team left 4 EFs
+boot-log-unconfirmed (`erp-sso`, `admin-tiv`, `service-jobs`, `admin-access-rules`). Cleared them via the
+per-function **Logs** tab: `erp-sso` and `admin-tiv` were seen live with fresh boot lines (3 isolates
+each, every one `USE_NEW_API_KEYS=true secretBag=true publishableBag=true -> using NEW keys`), the other
+two owner-confirmed. No EF fell through to legacy; no `keys.ts CONFIG ERROR` split-brain line anywhere.
+Gotcha for reading these logs: the default **"Last 24 hours"** window hides EFs whose last boot was the
+2026-07-23 probe — widen the range or hit **Test** to boot a fresh isolate.
+
+**Privileged WRITE path proven (the one class boot logs can't cover).** Boot logs prove key *resolution*
+but not that a GoTrue admin *write* on `Authorization: Bearer sb_secret_…` actually succeeds. Exercised it
+end-to-end on prod: admin reset **BALBIR SINGH**'s password via the Employees UI → `admin-users` EF →
+GoTrue `updateUserById` on the new secret key → BALBIR logged in with the **new** password in a fresh
+incognito window (STEP 6 PASS), and the `admin-users` EF log showed clean boots on new keys with no
+`FAILED`/throw (STEP 7 PASS). Combined with the already-proven read path (Employees list, login) this
+closes every EF-side surface.
+
+**Procedure gotcha re-confirmed (kept as a durable note in `CLAUDE.md` + `known_issues.md`).** Before an
+admin write, the operator's own browser session must be **post-cutover**: a stale pre-cutover session
+carries an old HS256 `kid=<nil>` token that admin EFs reject with `invalid JWT … ES256`, and the password
+reset then **silently no-ops** (UI still shows success). Fix = full sign-out + sign-in for a fresh ES256
+token. The BALBIR test was run from a fresh incognito login for exactly this reason.
+
+**Passive collector clean.** **Access Rules → Error Log tab** (`log-error` EF → `error_log`) stayed empty
+across the verification window = no real-user errors since cutover.
+
+**Residual follow-ups unchanged (each its own change):** `adminLogoutUser` 404 (own DB-migration, not a
+cutover regression); delete the inert `VITE_SUPABASE_SERVICE_KEY` from Vercel prod + `.env` files; optional
+`package.json` supabase-js caret bump to `^2.100.1`.

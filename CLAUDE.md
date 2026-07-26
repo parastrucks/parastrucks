@@ -29,12 +29,14 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ---
 
-## Current state (2026-07-23)
+## Current state (2026-07-26)
 
-- **🔐 Prod is on Supabase NEW API keys (cutover LIVE 2026-07-23, PR #81 → `1d9ba17`).** Legacy
-  `anon`+`service_role` DEACTIVATED; the leaked `service_role` JWT is verified DEAD (401). Browser uses
-  `sb_publishable_…`; all 9 EFs use the injected secret/publishable bags via `_shared/keys.ts`
-  (`USE_NEW_API_KEYS=true`). See Next actions + [[post-cutover-bugwatch]].
+- **🔐 Prod is on Supabase NEW API keys (cutover LIVE 2026-07-23, PR #81 → `1d9ba17`; ✅ FULLY VERIFIED
+  2026-07-26).** Legacy `anon`+`service_role` DEACTIVATED; the leaked `service_role` JWT is verified DEAD
+  (401). Browser uses `sb_publishable_…`; all 9 EFs use the injected secret/publishable bags via
+  `_shared/keys.ts` (`USE_NEW_API_KEYS=true`) — all 9 boot-log confirmed `-> using NEW keys`, and both the
+  privileged read (Employees/login) and **write** (BALBIR password reset → new-password login) paths proven
+  on prod. Bug-watch retired. See Next actions.
 - **Deployed & live:** Phases 1A–9 + **Phase 9.5 Vendor Jobs** (`/vendor-jobs`) +
   **Phase 9.6 visual redesign** (LIVE 2026-07-16, PR #78 → `29404b4`) +
   **✅ Phase 9.7 — Catalog UX rework — LIVE ON PROD 2026-07-20** (PR #79 squash-merged →
@@ -98,7 +100,7 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   **⏭️ One thing left, owner-side:** **set their ceilings** in ERP → User Management → "Approval
   authority", or they stay inert. Proven inert, not assumed: `fn_can_authorize_terms` returns **false**
   for all four across 0/0, 2%, ₹60k and 2%+₹60k (strict false, not NULL). ⚠️ If an SSO click errors,
-  suspect a **stale pre-cutover browser session** — full sign-out + sign-in (`memory/post_cutover_bugwatch.md`).
+  suspect a **stale pre-cutover browser session** — full sign-out + sign-in (durable gotcha in `known_issues.md`).
 - **Post-9.7 follow-up (owner-deferred):** provenance repair — count prod rows with null
   `price_circular`/`effective_date` (from past blank-field imports); every active row reflects the
   current price list, so one filled import re-stamps them all. See backlog.
@@ -124,12 +126,16 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   ⚠️ Corrected: rollback is **NOT** instant (`Deno.env` snapshots at isolate boot → flip *and* rollback need a
   redeploy); the instant incident lever is **re-enabling legacy keys** (reversible). **Red-team (4 lanes + direct
   tests): no cutover blockers** — no dead-key code path, no external/DB caller depended on legacy, refresh is a
-  pure GoTrue op (safe). Runbook/record: [[next-actions]], [[post-cutover-bugwatch]], `known_issues.md`.
-- **🐛 BUG-WATCH (until cleared) — `memory/post_cutover_bugwatch.md`.** Owner can't run smoke tests, so we
-  **check for cutover bugs opportunistically on any task**. Gap: for most EFs the unauth probe rejected before
-  keys resolved, so only key *resolution* is confirmed (via boot logs: 5/9 show `-> using NEW keys`; glance the
-  other 4). Passive collector already live = **Access Rules → Error Log tab** (`log-error` EF confirmed on new
-  keys; empty = genuinely no bugs). Failure signature = one EF 500/503 while others work → redeploy that ONE EF.
+  pure GoTrue op (safe). Runbook/record: `known_issues.md`, `docs/history/PORTAL_HISTORY.md` 2026-07-23.
+- **✅ CUTOVER FULLY VERIFIED & CLOSED 2026-07-26 — bug-watch retired.** All 9 EFs boot-log confirmed
+  `-> using NEW keys` (`erp-sso`/`admin-tiv` seen live, the rest owner-confirmed) — no EF fell through to
+  legacy, no split-brain config error. Privileged **read** (Employees list, login) AND **write** (BALBIR
+  SINGH password reset → new-password login in incognito; `admin-users` EF log clean on new secret) both
+  proven on prod. Passive collector = **Access Rules → Error Log tab** stayed empty = no real-user bugs.
+  **Durable gotcha kept:** a stale pre-cutover browser session (old HS256 `kid=<nil>` token) makes admin EFs
+  reject with `invalid JWT … ES256` and a password reset silently no-ops → **fix = full sign-out + sign-in**
+  (fresh ES256 token) before any admin write. Failure signature if a bug ever appears: one EF 500/503 while
+  others work → redeploy that ONE EF with `--no-verify-jwt` to `mmmxvjaavdtwlpcnjgzy` (not a global rollback).
 - **Post-cutover follow-ups (each its own change):** 🟠 `adminLogoutUser` 404 — session revocation never worked
   (needs a DB migration; NOT caused by cutover); cleanup — delete dead `VITE_SUPABASE_SERVICE_KEY` from Vercel
   prod + `.env` files; optional `package.json` supabase-js caret bump to `^2.100.1`. ✅ RESOLVED: `SYNC_SECRET`
