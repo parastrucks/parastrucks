@@ -17,9 +17,17 @@ function getAllowList(): string[] {
   return raw.split(",").map((s) => s.trim()).filter(Boolean)
 }
 
-export function corsHeaders(req: Request): Record<string, string> {
+// Per-function extras. ALLOWED_ORIGINS is shared by every EF on this project,
+// so putting a new origin there widens all of them at once. A function that
+// must answer one extra origin (erp-login, called from erp.parastrucks.in)
+// passes it here instead — the other functions stay exactly as locked down as
+// they were.
+export function corsHeaders(
+  req: Request,
+  extraOrigins: string[] = [],
+): Record<string, string> {
   const origin = req.headers.get("Origin") ?? ""
-  const allowList = getAllowList()
+  const allowList = [...getAllowList(), ...extraOrigins]
 
   const headers: Record<string, string> = {
     "Vary": "Origin",
@@ -32,13 +40,18 @@ export function corsHeaders(req: Request): Record<string, string> {
   return headers
 }
 
-export function preflight(req: Request): Response {
-  return new Response(null, { headers: corsHeaders(req) })
+export function preflight(req: Request, extraOrigins: string[] = []): Response {
+  return new Response(null, { headers: corsHeaders(req, extraOrigins) })
 }
 
-export function jsonResponse(req: Request, body: unknown, status = 200): Response {
+export function jsonResponse(
+  req: Request,
+  body: unknown,
+  status = 200,
+  extraOrigins: string[] = [],
+): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+    headers: { ...corsHeaders(req, extraOrigins), "Content-Type": "application/json" },
   })
 }
