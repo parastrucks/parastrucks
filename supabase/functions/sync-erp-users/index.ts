@@ -142,36 +142,117 @@ Deno.serve(async (req: Request) => {
     const { data: branches } = await erp.from("branches").select("id, code")
     const branchId = new Map((branches ?? []).map((b: { code: string; id: string }) => [b.code, b.id]))
     const { data: erpProfiles } = await erp.from("profiles")
-      .select("user_id, email, portal_user_id, source, role_overridden, is_active, username")
+      .select("user_id, email, portal_user_id, source, role_overridden, is_active, username, suspend_overridden")
     const byPortalId = new Map((erpProfiles ?? []).filter(p => p.portal_user_id).map(p => [p.portal_user_id, p]))
     const byEmail = new Map((erpProfiles ?? []).map(p => [p.email?.toLowerCase(), p]))
+    const byUserId = new Map((erpProfiles ?? []).map(p => [p.user_id, p]))
     const takenUsernames = new Set((erpProfiles ?? []).map(p => p.username))
+
+    // Every ERP auth user, by email. Needed for two things a profiles-only view
+    // cannot see: (a) an auth user whose email has drifted from the portal's —
+    // erp-sso and erp-login both mint BY EMAIL, so drift is a permanent SSO
+    // lockout that no later sync repairs; (b) an auth user with no profile row.
+    // Two such orphans exist on prod (created 2026-07-10 and 2026-07-14) and
+    // would make createUser fail forever for those addresses.
+    const authIdByEmail = new Map<string, string>()
+    const authEmailById = new Map<string, string>()
+    try {
+      for (let page = 1; page <= 20; page++) {
+        const { data: listed, error: lErr } = await erp.auth.admin.listUsers({ page, perPage: 200 })
+        if (lErr) { console.error("sync-erp-users listUsers failed:", lErr.message); break }
+        const users = listed?.users ?? []
+        for (const u of users) {
+          if (!u.email) continue
+          authIdByEmail.set(u.email.toLowerCase(), u.id)
+          authEmailById.set(u.id, u.email.toLowerCase())
+        }
+        if (users.length < 200) break
+      }
+    } catch (e) {
+      console.error("sync-erp-users listUsers threw:", e)
+    }
 
     const result = { created: 0, updated: 0, reactivated: 0, deactivated: 0, skipped, dryRun, single: single ?? undefined }
 
     // 5. upsert each mapped user
     for (const m of mapped) {
+      // Third fallback, via the auth user: a profile whose email has drifted
+      // from the portal's is found by neither portal_user_id (if it was never
+      // stamped) nor by email. Without this it falls to the create path, adopts
+      // that same auth user, and the profile insert dies on the primary key.
+      const authIdForEmail = authIdByEmail.get(m.email.toLowerCase())
       const existing = byPortalId.get(m.portal_id) ?? byEmail.get(m.email)
+        ?? (authIdForEmail ? byUserId.get(authIdForEmail) : undefined)
       const branch = m.branch_code ? branchId.get(m.branch_code) ?? null : null
       if (existing) {
         const patch: Record<string, unknown> = {
-          full_name: m.full_name, email: m.email, is_active: m.is_active,
+          full_name: m.full_name, email: m.email,
           source: "portal", portal_user_id: m.portal_id,
         }
+        // is_active normally flows from the portal — but an ERP admin who
+        // suspends someone must not have it silently undone by the next
+        // reconcile (≤30 min). profiles.suspend_overridden is set on an ERP
+        // suspension and cleared when they are reactivated there.
+        if (existing.suspend_overridden) {
+          if (m.is_active) {
+            console.log(`sync-erp-users: is_active NOT patched for ${m.email} — ERP suspension overrides the portal`)
+          }
+        } else {
+          patch.is_active = m.is_active
+          if (existing.is_active === false && m.is_active) result.reactivated++
+        }
         if (!existing.role_overridden) { patch.tier = m.tier; patch.func = m.func; patch.branch_id = branch }
-        if (existing.is_active === false && m.is_active) result.reactivated++
-        if (!dryRun) await erp.from("profiles").update(patch).eq("user_id", existing.user_id)
+        if (!dryRun) {
+          await erp.from("profiles").update(patch).eq("user_id", existing.user_id)
+          // Repair the ERP AUTH email too. profiles.email alone is not enough:
+          // erp-sso and erp-login mint magic links by auth email, so a portal
+          // email change used to lock the person out of the ERP permanently.
+          const authEmail = authEmailById.get(existing.user_id)
+          if (authEmail && authEmail !== m.email.toLowerCase()) {
+            const { error: uErr } = await erp.auth.admin.updateUserById(existing.user_id, {
+              email: m.email, email_confirm: true,
+            })
+            if (uErr) {
+              skipped.push({ email: m.email, reason: `auth email repair failed: ${uErr.message}` })
+            } else {
+              console.log(`sync-erp-users: repaired auth email ${authEmail} → ${m.email}`)
+            }
+          }
+        }
         result.updated++
       } else {
         if (dryRun) { result.created++; continue }
-        // create the ERP auth user (SSO/magic-link login; no password needed)
-        const { data: created, error: cErr } = await erp.auth.admin.createUser({ email: m.email, email_confirm: true })
-        if (cErr || !created?.user) { skipped.push({ email: m.email, reason: `createUser failed: ${cErr?.message}` }); continue }
+        // ADOPT an existing auth user before trying to create one. An auth user
+        // with no profile row is invisible to the profiles-only view above, so
+        // createUser would fail with "already registered" on every run, forever
+        // — the address could never be provisioned. Two such rows exist on prod.
+        let authUserId = authIdByEmail.get(m.email.toLowerCase()) ?? null
+        if (authUserId) {
+          console.log(`sync-erp-users: adopting existing ERP auth user for ${m.email}`)
+        } else {
+          const { data: created, error: cErr } = await erp.auth.admin.createUser({ email: m.email, email_confirm: true })
+          if (created?.user) {
+            authUserId = created.user.id
+          } else {
+            // Lost a race with a concurrent JIT provision (erp-sso / erp-login
+            // both create users). Re-read rather than skipping: skipping here is
+            // what orphans the auth user in the first place.
+            const { data: relisted } = await erp.auth.admin.listUsers({ page: 1, perPage: 200 })
+            authUserId = (relisted?.users ?? [])
+              .find(u => u.email?.toLowerCase() === m.email.toLowerCase())?.id ?? null
+            if (!authUserId) {
+              skipped.push({ email: m.email, reason: `createUser failed: ${cErr?.message}` })
+              continue
+            }
+            console.log(`sync-erp-users: adopted ${m.email} after createUser race`)
+          }
+        }
+        authIdByEmail.set(m.email.toLowerCase(), authUserId)
         let username = m.email.split("@")[0].toLowerCase().replace(/[^a-z0-9._-]/g, "")
         if (takenUsernames.has(username)) username = `${username}-${m.portal_id.slice(0, 4)}`
         takenUsernames.add(username)
         const { error: pErr } = await erp.from("profiles").insert({
-          user_id: created.user.id, username, full_name: m.full_name, email: m.email,
+          user_id: authUserId, username, full_name: m.full_name, email: m.email,
           tier: m.tier, func: m.func, branch_id: branch, is_active: m.is_active,
           source: "portal", portal_user_id: m.portal_id,
         })
