@@ -29,6 +29,59 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ---
 
+## Current state (2026-08-07)
+
+- **✅ UNIFORM USER SHAPE — SHIPPED & BACKFILLED ON PROD (2026-08-07).** Every portal user in
+  every department now carries the same attributes. Six PRs, all live: **#89** `649a4b7` (stop
+  the join-table wipes) · **#90** `46e66a5` (erp-sso requires an ACTIVE portal user) · **#91**
+  `c8df30f` (audit SQL) · **#92** `b2852cd` (password-min docs) · **#93** `a613b76` (uniform
+  form + server-side shape gate) · **#94** `363201e` (forced password change). Plus ERP **#41**
+  `6995c5f`.
+  - **The defect:** the employee form captured a *different shape per department*. Three
+    mutually-exclusive blocks decided which controls an admin was even shown, and
+    **accounts/hr/pdi matched none of them** — so those users had no brand and no outlet, and
+    nothing reported it. `user_brands` is an **authorization input** (`vehicle_catalog_select`,
+    `quotations_select`, `proforma_invoices_select`, `financier_copies_select`, all 7
+    `tiv_forecast_*_select`), so a missing row silently blanked their catalog **and** dropped
+    them out of the ERP sync's `!inner` brand join — before the query returned, so they never
+    appeared in `skipped` either. That is why the ERP had **never once seen an accounts user**.
+  - **Measured on prod (58 active non-admin users):** 37 missing `primary_outlet`, 2 missing
+    `brands` (PT only), 1 missing `subdept`. **Zero** `(NO ENTITY)`/`(NO DEPARTMENT)` rows and
+    **zero** `set_but_na` — so nobody was RLS-locked-out and there was no stale hidden data.
+  - **Backfill:** all 37 outlets derived from the existing `location` field (exact match,
+    correct entity, active outlet — no guessing), applied in 3 batches after owner review.
+    SUNIL + Siya granted `al+hdh+switch`. **Acceptance test now returns exactly ONE row**
+    (Ashok Prajapati, BO GM — correct by policy, see below).
+  - **The shape** (`src/lib/userShape.js` + Deno mirror `supabase/functions/_shared/userShape.ts`):
+    entity · department · designation · permission_level · **primary_outlet (ALL depts)** ·
+    **≥1 brand (ALL depts)** · sales_verticals (Sales only) · subdept (Back Office, non-GM).
+    A slot that doesn't apply is **rendered with its reason on screen**, never omitted — a blank
+    that means "doesn't apply" is indistinguishable from one nobody filled in, and that
+    ambiguity is what hid this for months. Enforced in the form **and** in `admin-users` on
+    **create AND update** (the form is UX; the EF is the contract).
+  - **No policy/waiver tables.** Considered and dropped on evidence: the audit found **one**
+    exception in 58 users, and it is a *rule* (a BO GM heads EDP+RTO+CRM), not a person. The
+    matrix is ~10 declarative lines; `scripts/user-shape-audit.sql` is the referee that makes
+    drift *detectable*. Revisit only if a genuine per-person exception appears.
+  - **ERP result:** `created:0, updated:21, deactivated:0, skipped:[]` (was `updated:20`).
+    **SUNIL adopted** — `tier=executor · func=accounts · branch=HSR` all **preserved** by
+    `role_overridden=true`; `source` flipped `local`→`portal`. **Both ERP admins untouched.**
+    The accounts arm of the two-stage payment flow is no longer GM+admins only.
+  - **ERP admins hardened** (owner-approved): `role_overridden=true` on `ceo` + `admin`.
+- **✅ FORCED PASSWORD CHANGE — LIVE (PR #94 + ERP #41).** An HR/admin reset now marks the
+  password temporary (`auth.users.app_metadata.must_change_password` — **not** a portal column,
+  which `users_update` RLS would let the user clear themselves), **revokes live sessions**, and
+  traps the user on `/change-password` (rendered outside `AppLayout`) until they choose their
+  own. Both ERP doors refuse a flagged password. Three latent holes closed on the way:
+  `resetPassword` had **no tier guard** (an HR *executive* could reset the admin's or a GM's
+  password), its **failure path was never audited**, and `Profile`'s change-password let a
+  **borrowed session change the password without knowing the old one**.
+  ⚠️ **Not yet tested end-to-end by a human** — staging is INACTIVE so no rehearsal was
+  possible. Run reset → login → trap → change → release once with a throwaway user before
+  resetting anyone real.
+- **⚠️ Staging project `klpnhpnlotcbbovwswmq` is INACTIVE/paused** — no pre-prod rehearsal is
+  available. Factor this into any risky change.
+
 ## Current state (2026-07-26)
 
 - **🔐 Prod is on Supabase NEW API keys (cutover LIVE 2026-07-23, PR #81 → `1d9ba17`).** Legacy
@@ -70,6 +123,34 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 - **Separate project (not this repo):** the HD Hyundai **ERP** (`erp.parastrucks.in`, repo `erp-parastrucks`) — see `memory/project_hd_hyundai_vertical.md`.
 
 ## Next actions
+
+- **⏭️ Owner: run the forced-password-change loop once** with a throwaway user (reset → login →
+  land on `/change-password` → every other route bounces → set new password → released → sign
+  out/in, not prompted again). Untested end-to-end; staging is down.
+- **⏭️ Owner: Ashok Prajapati's sub-department.** Decision taken (2026-08-07): *waiver — a Back
+  Office GM heads EDP, RTO and CRM*, so `subdept` stays NULL and that is **correct by policy**,
+  not an open gap. No table needed; the rule is encoded in `userShape.js`.
+- **Open, deliberately not built (all red-teamed, evidence in `~/.claude/plans/task-make-every-majestic-crane.md`):**
+  - `sync-erp-users` **`incomplete` bucket** — would name users the `!inner` joins drop instead
+    of letting them vanish. **Blocked on a prerequisite:** it is a remediation list, and
+    remediating `ceo@` would adopt the ERP admin — mitigated now that `role_overridden=true` is
+    set, but the bucket must also hard-flag any portal email matching an ERP `source='local'`
+    or `tier='admin'` profile as DO-NOT-SCOPE.
+  - **`signOut` lives only inside the sync's deactivation sweep** (`sync-erp-users:272`); the
+    patch path sets `is_active=false` without revoking. A portal-deactivated user keeps a live
+    ERP session until the next sweep. Fix = move `signOut` into the patch path.
+  - **DELETE latency:** a portal user DELETE only deprovisions via the sweep. Considered gating
+    the sweep to cron; **rejected** — that would take deprovision-on-delete from 0 to ~45 min.
+  - **DB constraints** (indexes, composite FKs, NOT NULL). ⚠️ **`entity_id` AND `department_id`
+    must use `CHECK (… OR permission_level='admin') NOT VALID`, never plain NOT NULL** — the
+    singleton admin (`ceo@parastrucks.in`, `c6faaf5c…`) has **both NULL**, and that NULL pair is
+    the *active protection* keeping the ERP super-admin out of the sync's joins.
+  - **ERP repo `integration/` holds two STALE sync copies** (156 + 127 lines vs live 285) and
+    `README.md:46-47` documents the copy direction as ERP→portal — following that runbook would
+    overwrite the live EF with an ancestor. Delete or invert (needs owner approval).
+  - `Jind` is an active PT outlet **missing from `BRANCH_BY_CITY`** — a Jind manager/executive
+    given `hdh` would enter ERP scope and be skipped forever.
+
 
 - **✅ Phase 9.7 SHIPPED to prod 2026-07-20** (PR #79 → `506d888`, Vercel READY, prod verified). The
   3 pre-existing prod bugs that rode it (1000-row cap, import null-erase, MBP blank dropdown) + R11
