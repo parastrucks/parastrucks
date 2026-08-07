@@ -19,10 +19,18 @@ headers shipped in `vercel.json` (Phase 5 U2) and the CAPTCHA wiring from U8.
 - Rationale: rejects credentials that appear in known breach corpora; zero cost,
   no UX regression for legitimate users choosing strong passwords.
 
-### 2. Minimum password length — SET TO 10
+### 2. Minimum password length — ⚠️ SUPERSEDED: NOW 8, NOT 10
+
+> **Do not follow the `10` below.** Prod and staging are both on **8** as of 2026-07-22.
+> Setting GoTrue to 10 while the app validates 8 is exactly what caused the PCE login
+> lockout: the form accepted an 8–9 character password and GoTrue rejected it, so users
+> who had been told their password was reset simply could not sign in. The app's
+> validators (`Profile.jsx:65`, `Employees.jsx:401`/`:520`, `admin-users:237`/`:493`) have
+> always been 8. Raise both together or neither.
 
 - Navigate: **Authentication → Policies → Password Requirements**
-- Set **"Minimum password length"** → `10`
+- Set **"Minimum password length"** → `8` (the rationale below argued for 10; it lost to
+  the operational reality of the two numbers disagreeing)
 - Rationale: portal stores commercially sensitive dealership data (price lists,
   customer records, sales forecasts). 10 chars is the current OWASP floor for
   low-privilege business apps; keeps brute-force cost high without punishing

@@ -84,7 +84,10 @@ is the canonical phase completion record; the memory copy is kept trimmed to cur
 
 *Manual config (DONE as of 2026-04-13):*
 - JWT expiry set to 43200 (12 hours)
-- Min password length set to 10
+- Min password length set to 10 — ⚠️ **SUPERSEDED 2026-07-22: lowered to 8** on both prod
+  and staging. The app's validators were always 8, and the 10 here is what caused the PCE
+  login lockout (app accepted an 8–9 char password, GoTrue rejected it). Current value is
+  **8**; see `docs/RECONSTRUCTION.md` §4.
 - Leaked-password protection: NOT available on Supabase free plan (skip)
 - Turnstile: LIVE — `VITE_TURNSTILE_SITE_KEY` in Vercel, `TURNSTILE_SECRET` in Supabase EF secrets
 
