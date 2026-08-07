@@ -25,6 +25,7 @@ import { rateLimit } from "../_shared/rateLimit.ts"
 import { jsonResponse, preflight } from "../_shared/cors.ts"
 import { audit, adminLogoutUser } from "../_shared/auditLog.ts"
 import { validateShape } from "../_shared/userShape.ts"
+import { MIN_PASSWORD_LENGTH } from "../_shared/passwordPolicy.ts"
 
 // Phase 9e C2 — tier rank for HR-edit guardrails. Higher number = more
 // privilege. Caller cannot edit a target whose current OR proposed tier is
@@ -166,6 +167,107 @@ async function replaceJoin(
   return null
 }
 
+// ── changeOwnPassword ───────────────────────────────────────────────────────
+// A signed-in employee sets their OWN password. Deliberately self-scoped: the
+// target is always the caller's id from the validated token, never the body.
+//
+// This is the ONLY way the must_change_password flag can be cleared. The client
+// cannot do it itself — supabase.auth.updateUser() is blocked from writing
+// app_metadata, and that restriction is precisely what makes the flag
+// trustworthy. Both halves happen in ONE updateUserById call so there is no
+// window where the password changed but the flag stuck, or vice versa.
+async function changeOwnPassword(
+  req: Request,
+  p: { currentPassword?: string; newPassword?: string },
+): Promise<Response> {
+  const json = (b: unknown, status = 200) => jsonResponse(req, b, status)
+  const url = Deno.env.get("SUPABASE_URL")!
+  const admin = createClient(url, secretKey(), {
+    auth: { persistSession: false, autoRefreshToken: false },
+  })
+
+  const authHeader = req.headers.get("Authorization") ?? ""
+  const token = authHeader.replace(/^Bearer\s+/i, "")
+  if (!token) return json({ error: "Missing auth" }, 401)
+
+  const anon = createClient(url, publishableKey(), {
+    global: { headers: { Authorization: `Bearer ${token}` } },
+    auth: { persistSession: false, autoRefreshToken: false },
+  })
+  const { data: u, error: uErr } = await anon.auth.getUser(token)
+  if (uErr || !u?.user?.email) return json({ error: "Invalid token" }, 401)
+  const callerId = u.user.id
+  const email = u.user.email
+
+  // A suspended employee must not be able to re-establish themselves by setting
+  // a fresh password. getUser() proves the token is unexpired, not that the
+  // account is still live.
+  const { data: prof, error: pErr } = await admin
+    .from("users").select("is_active").eq("id", callerId).maybeSingle()
+  if (pErr) {
+    console.error("changeOwnPassword: profile read failed:", pErr.message)
+    return json({ error: "backend_unavailable" }, 503)
+  }
+  if (!prof || prof.is_active === false) return json({ error: "Account inactive" }, 403)
+
+  // Rate-limit BEFORE the password probe. This action returns early, above the
+  // handler's own rateLimit() call, and it verifies currentPassword with a raw
+  // signInWithPassword that does NOT touch auth_attempt_record — so without
+  // this it is an unmetered password oracle. The realistic attack is a stolen
+  // access token: the holder cannot change the password without knowing the
+  // current one, so unlimited guesses here are what would turn a borrowed
+  // session into a permanent account takeover.
+  // 10 per hour, not the default 60/min: a person changes their password once.
+  const rl = await rateLimit(admin, callerId, "changeOwnPassword", 10, 3600)
+  if (!rl.allowed) {
+    return json({ error: "Too many attempts. Please wait and try again.", retry_after_s: rl.retry_after_s }, 429)
+  }
+
+  const newPassword = p.newPassword ?? ""
+  const currentPassword = p.currentPassword ?? ""
+  if (newPassword.length < MIN_PASSWORD_LENGTH) {
+    return json({ error: `Password must be at least ${MIN_PASSWORD_LENGTH} characters` }, 400)
+  }
+  if (!currentPassword) return json({ error: "Current password is required" }, 400)
+  // Rejecting "new == current" here also covers "you kept the temporary password
+  // HR gave you", which is the whole point of the forced change.
+  if (newPassword === currentPassword) {
+    return json({ error: "Your new password must be different from your current one" }, 400)
+  }
+
+  // Re-authenticate. Going through the Edge Function loses GoTrue's own
+  // self-service reauth, so prove possession of the current password here —
+  // otherwise anyone holding a borrowed access token could change it. The probe
+  // session is discarded immediately; it is never returned to the caller.
+  const probe = createClient(url, publishableKey(), {
+    auth: { persistSession: false, autoRefreshToken: false },
+  })
+  const { error: pwErr } = await probe.auth.signInWithPassword({ email, password: currentPassword })
+  if (pwErr) return json({ error: "Current password is incorrect" }, 401)
+  try { await probe.auth.signOut() } catch { /* probe session is disposable */ }
+
+  // Read-then-spread rather than assuming GoTrue merges app_metadata: correct
+  // whether admin update merges or replaces, and provider/providers survive.
+  const { data: cur } = await admin.auth.admin.getUserById(callerId)
+  const { error: updErr } = await admin.auth.admin.updateUserById(callerId, {
+    password: newPassword,
+    app_metadata: { ...(cur?.user?.app_metadata ?? {}), must_change_password: false },
+  })
+  if (updErr) {
+    await audit(admin, {
+      actorId: callerId, action: "changeOwnPassword", targetId: callerId,
+      after: { ok: false, error: updErr.message },
+    })
+    return json({ error: updErr.message }, 400)
+  }
+
+  await audit(admin, {
+    actorId: callerId, action: "changeOwnPassword", targetId: callerId,
+    after: { ok: true, must_change_password: false },
+  })
+  return json({ ok: true })
+}
+
 Deno.serve(async (req: Request) => {
   const json = (b: unknown, status = 200) => jsonResponse(req, b, status)
   if (req.method === "OPTIONS") return preflight(req)
@@ -180,6 +282,19 @@ Deno.serve(async (req: Request) => {
 
   const action = body.action
   const payload = body.payload ?? {}
+
+  // ── changeOwnPassword — SELF-SCOPED, handled BEFORE the role gate ──────
+  // Everything below requires hr or admin. This action is for the opposite
+  // population: an ordinary employee whose password an admin just reset and who
+  // must now choose their own. Routing it through verify(req, ["admin","hr"])
+  // would 403 exactly the people it exists for — a permanent lockout loop,
+  // since the flag blocks the rest of the app until it is cleared.
+  //
+  // It only ever acts on the CALLER's own id, taken from the validated token
+  // and never from the body, so there is nothing here for a non-admin to abuse.
+  if (action === "changeOwnPassword") {
+    return await changeOwnPassword(req, payload as { currentPassword?: string; newPassword?: string })
+  }
 
   // All actions require hr or admin; `delete` additionally requires admin.
   const auth = await verify(req, ["admin", "hr"])
@@ -235,8 +350,8 @@ Deno.serve(async (req: Request) => {
         }
         if (!p.full_name?.trim()) return json({ error: "Full name is required" }, 400)
         if (!p.email?.trim()) return json({ error: "Email is required" }, 400)
-        if (!p.password || p.password.length < 8) {
-          return json({ error: "Password must be at least 8 characters" }, 400)
+        if (!p.password || p.password.length < MIN_PASSWORD_LENGTH) {
+          return json({ error: `Password must be at least ${MIN_PASSWORD_LENGTH} characters` }, 400)
         }
         const adminErr = rejectAdminTier(null, p.permission_level)
         if (adminErr) return json({ error: adminErr }, 400)
@@ -273,6 +388,11 @@ Deno.serve(async (req: Request) => {
           email: p.email.trim(),
           password: p.password,
           email_confirm: true,
+          // The password an admin types on this form is a TEMPORARY one they
+          // will read out to the new employee, so it is known to at least two
+          // people from the moment it exists. Flag it: the employee is made to
+          // choose their own on first sign-in before anything else opens.
+          app_metadata: { must_change_password: true },
         })
         if (authErr || !authData?.user) {
           return json({ error: authErr?.message || "Failed to create auth user" }, 400)
@@ -559,20 +679,73 @@ Deno.serve(async (req: Request) => {
           password?: string
         }
         if (!id) return json({ error: "Missing id" }, 400)
-        if (!password || password.length < 8) {
-          return json({ error: "Password must be at least 8 characters" }, 400)
+        if (!password || password.length < MIN_PASSWORD_LENGTH) {
+          return json({ error: `Password must be at least ${MIN_PASSWORD_LENGTH} characters` }, 400)
         }
         // Entity-scoping
         const rpEntityErr = await requireSameEntity(await getTargetEntityId(id))
         if (rpEntityErr) return rpEntityErr
-        const { error } = await admin.auth.admin.updateUserById(id, { password })
-        if (error) return json({ error: error.message }, 400)
+
+        // ── Tier guard ────────────────────────────────────────────────────
+        // This was MISSING: `update` has guarded tier-vs-tier since Phase 9e C2,
+        // but resetting a password did not — so an HR *executive* could set the
+        // admin's or a GM's password and then sign in as them. Setting someone's
+        // password is at least as privileged as editing their record.
+        const { data: rpTarget } = await admin
+          .from("users").select("id, permission_level, departments(code)").eq("id", id)
+          .maybeSingle() as unknown as {
+            data: { id: string; permission_level: string | null; departments: { code: string } | null } | null
+          }
+        if (!rpTarget) return json({ error: "User not found" }, 404)
+        if (caller.role !== "admin") {
+          if (tierOf(rpTarget.permission_level) >= tierOf(caller.permission_level)) {
+            return json({ error: "You cannot reset the password of a user at or above your own level" }, 403)
+          }
+          if (rpTarget.departments?.code === "hr" && rpTarget.id !== caller.id) {
+            return json({ error: "You cannot reset another HR user's password" }, 403)
+          }
+        }
+
+        // ── Set the password, mark it temporary, and kill live sessions ───
+        // must_change_password lives in app_metadata, which is NOT writable by
+        // the user from the browser — so nobody can clear their own flag. It is
+        // NOT a portal column, because users_update RLS permits `id = auth.uid()`
+        // and a self-clearable flag would be decoration.
+        //
+        // The existing app_metadata is read and spread rather than assuming
+        // GoTrue merges: that way this is correct whether admin update merges or
+        // replaces, and provider/providers survive either way.
+        const { data: rpAuth } = await admin.auth.admin.getUserById(id)
+        const { error } = await admin.auth.admin.updateUserById(id, {
+          password,
+          app_metadata: { ...(rpAuth?.user?.app_metadata ?? {}), must_change_password: true },
+        })
+        // Audit BOTH outcomes. The failure path used to return here, before the
+        // audit() call below — so a failed reset left no trace at all, which is
+        // exactly the event worth recording.
+        if (error) {
+          await audit(admin, {
+            actorId: caller.id, action: "resetPassword", targetId: id,
+            after: { ok: false, error: error.message },
+          })
+          return json({ error: error.message }, 400)
+        }
+
+        // A reset does not bite until the old token expires (~1h) unless the
+        // session is destroyed now. Without this an admin can "reset" a
+        // compromised account and the attacker keeps working for the hour.
+        try {
+          await adminLogoutUser(admin, id)
+        } catch (e) {
+          console.error("resetPassword: session revoke failed (password WAS changed):", e)
+        }
 
         // Phase 9e M3 — audit log (no before/after for the password itself)
         await audit(admin, {
           actorId: caller.id,
           action: "resetPassword",
           targetId: id,
+          after: { ok: true, must_change_password: true, sessions_revoked: true },
         })
 
         return json({ ok: true })

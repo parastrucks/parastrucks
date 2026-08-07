@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import { supabase } from '../lib/supabase'
+import { callEdge } from '../lib/api'
+import { MIN_PASSWORD_LENGTH } from '../lib/passwordPolicy'
 import useAsyncAction from '../hooks/useAsyncAction'
 
 // Phase 6c.1: permission tiers from the new column. `admin` only appears
@@ -14,6 +16,7 @@ export default function Profile() {
   const { run, loading: pwLoading, error: pwError, setError: setPwError, clearError } = useAsyncAction()
   const [pwErrorField, setPwErrorField] = useState(null) // which password field to flag red
   const [changingPw, setChangingPw] = useState(false)
+  const [currentPw, setCurrentPw] = useState('')
   const [newPw, setNewPw] = useState('')
   const [confirmPw, setConfirmPw] = useState('')
 
@@ -62,8 +65,14 @@ export default function Profile() {
       if (typeof el.focus === 'function') { try { el.focus({ preventScroll: true }) } catch { el.focus() } }
     }
 
-    if (newPw.length < 8) {
-      setPwError('Password must be at least 8 characters.')
+    if (!currentPw) {
+      setPwError('Enter your current password.')
+      setPwErrorField('current')
+      focusEl('profile-current-pw')
+      return
+    }
+    if (newPw.length < MIN_PASSWORD_LENGTH) {
+      setPwError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`)
       setPwErrorField('new')
       focusEl('profile-new-pw')
       return
@@ -75,10 +84,26 @@ export default function Profile() {
       return
     }
     await run(async () => {
-      const { error } = await supabase.auth.updateUser({ password: newPw })
-      if (error) throw error
+      // Routed through admin-users rather than supabase.auth.updateUser() so
+      // there is ONE password-change path in the app. That buys three things a
+      // direct client call cannot: the change is written to the audit log, the
+      // current password must be proved (previously a borrowed session could
+      // change it without knowing the old one), and the same call clears
+      // must_change_password — which lives in app_metadata and is deliberately
+      // not writable from the browser.
+      // callEdge throws on any non-2xx or body.error; useAsyncAction's onError
+      // surfaces the message as a toast.
+      try {
+        await callEdge('admin-users', 'changeOwnPassword', {
+          currentPassword: currentPw,
+          newPassword: newPw,
+        })
+      } catch (err) {
+        if (/current password/i.test(err?.message || '')) setPwErrorField('current')
+        throw err
+      }
       toast.success('Password updated successfully.')
-      setNewPw(''); setConfirmPw(''); setChangingPw(false)
+      setCurrentPw(''); setNewPw(''); setConfirmPw(''); setChangingPw(false)
     }, {
       // Server failures surface as a toast — no banner.
       onError: err => toast.error(err?.message || 'Failed to update password.'),
@@ -153,15 +178,29 @@ export default function Profile() {
         {changingPw && (
           <form onSubmit={handleChangePw}>
             <div className="form-group">
+              <label className="form-label" htmlFor="profile-current-pw">Current Password</label>
+              <input
+                id="profile-current-pw"
+                type="password"
+                autoComplete="current-password"
+                className={`form-input ${pwErrorField === 'current' ? 'error' : ''}`}
+                placeholder="Your current password"
+                value={currentPw}
+                onChange={e => { setCurrentPw(e.target.value); setPwErrorField(f => f === 'current' ? null : f) }}
+                autoFocus
+              />
+              {pwErrorField === 'current' && <div className="form-error">{pwError}</div>}
+            </div>
+            <div className="form-group">
               <label className="form-label" htmlFor="profile-new-pw">New Password</label>
               <input
                 id="profile-new-pw"
                 type="password"
+                autoComplete="new-password"
                 className={`form-input ${pwErrorField === 'new' ? 'error' : ''}`}
-                placeholder="Minimum 8 characters"
+                placeholder={`Minimum ${MIN_PASSWORD_LENGTH} characters`}
                 value={newPw}
                 onChange={e => { setNewPw(e.target.value); setPwErrorField(f => f === 'new' ? null : f) }}
-                autoFocus
               />
               {pwErrorField === 'new' && <div className="form-error">{pwError}</div>}
             </div>
@@ -181,7 +220,7 @@ export default function Profile() {
               <button type="submit" className="btn btn-primary" disabled={pwLoading}>
                 {pwLoading ? <span className="spinner spinner-sm" /> : 'Update Password'}
               </button>
-              <button type="button" className="btn btn-secondary" onClick={() => { setChangingPw(false); clearError(); setPwErrorField(null) }}>
+              <button type="button" className="btn btn-secondary" onClick={() => { setChangingPw(false); clearError(); setPwErrorField(null); setCurrentPw(""); setNewPw(""); setConfirmPw("") }}>
                 Cancel
               </button>
             </div>

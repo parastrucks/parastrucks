@@ -8,3 +8,4 @@ public/Screenshot*.png
 
 .vercel
 MIGRATION.md
+supabase/.temp/

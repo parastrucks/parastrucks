@@ -76,6 +76,14 @@ Deno.serve(async (req: Request) => {
       return jsonResponse(req, { error: "no_erp_access" }, 403)
     }
 
+    // 1c. A temporary password opens nothing, including via SSO. The portal
+    // traps a flagged user on /change-password, but that guard is client-side —
+    // this one is not. Without it the ERP card would be a way around the forced
+    // change for anyone who kept a valid token from before the reset.
+    if (userData.user.app_metadata?.must_change_password === true) {
+      return jsonResponse(req, { error: "must_change_password" }, 403)
+    }
+
     // 2. mint a single-use magic-link token against the ERP project
     const erp = createClient(erpUrl, erpService, {
       auth: { persistSession: false, autoRefreshToken: false },

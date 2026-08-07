@@ -15,6 +15,7 @@ import Dashboard from './pages/Dashboard'
 // Heavier routes stay lazy — each ships its own chunk and a broken page
 // doesn't take down the whole bundle.
 const Profile          = lazy(() => import('./pages/Profile'))
+const ChangePassword   = lazy(() => import('./pages/ChangePassword'))
 const Employees        = lazy(() => import('./pages/Employees'))
 const Quotation        = lazy(() => import('./pages/Quotation'))
 const MyQuotations     = lazy(() => import('./pages/MyQuotations'))
@@ -83,6 +84,12 @@ export default function App() {
             path="/login"
             element={session ? <Navigate to="/" replace /> : <Login />}
           />
+
+          {/* Forced password change — OUTSIDE AppLayout on purpose.
+              Inside it the sidebar and bottom nav would render and every link
+              would bounce straight back here, which reads as a broken app
+              rather than an instruction. One way forward, one way out. */}
+          <Route path="/change-password" element={<ChangePassword />} />
 
           {/* Protected — all roles */}
           <Route element={<ProtectedRoute authOnly><AppLayout /></ProtectedRoute>}>

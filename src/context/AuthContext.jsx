@@ -399,6 +399,16 @@ export function AuthProvider({ children }) {
   // shortcuts disappear with it. Consumers that need a department check
   // should resolve profile.department_id → departments.code at their own
   // layer (e.g. Catalog + Quotation look up the department via the id).
+  // Set by admin-users when HR or an admin resets someone's password (and on
+  // create, where the admin types a temporary one and reads it out). While true
+  // the app traps the user on /change-password.
+  //
+  // Read from the session's app_metadata claim, which GoTrue signs and the user
+  // cannot write — so it survives a page reload without a round-trip, and
+  // clearing it requires the Edge Function. verify-login also returns it
+  // explicitly in the response body at sign-in; this is the reload path.
+  const mustChangePassword = session?.user?.app_metadata?.must_change_password === true
+
   const value = {
     session,
     profile,
@@ -409,6 +419,7 @@ export function AuthProvider({ children }) {
     loadError,
     signIn,
     signOut,
+    mustChangePassword,
     isAdmin: profile?.permission_level === 'admin',
   }
 
