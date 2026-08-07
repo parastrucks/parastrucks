@@ -110,7 +110,14 @@ Deploy each function in [`supabase/functions/`](../supabase/functions/): `verify
 ## 4. Auth configuration (Supabase Dashboard → Authentication)
 
 - **JWT expiry:** `43200` seconds (12 h).
-- **Minimum password length:** `10` (raise to 12 per hardening T4 if desired).
+- **Minimum password length:** `8`. ⚠️ **This MUST equal the app's own checks.** Every
+  client and server validator uses 8 — `src/pages/Profile.jsx:65`,
+  `src/pages/Employees.jsx:401` and `:520`, `supabase/functions/admin-users/index.ts:237`
+  and `:493`. Phase 5 originally set GoTrue to 10 while the app validated 8; the app
+  accepted a 8–9 character password, GoTrue rejected it, and users who had been told
+  their password was reset could not sign in. That was the PCE login lockout, root-caused
+  and fixed on 2026-07-22 by lowering **both** prod and staging to 8. If you want a longer
+  minimum, raise the app validators in the same change — never the dashboard alone.
 - **Refresh-token reuse detection:** ON.
 - **Leaked-password protection** (HaveIBeenPwned): ON if available on the plan.
 - Per-IP / per-email rate limits on `/auth/v1/token` as available.
