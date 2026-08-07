@@ -17,8 +17,8 @@
 // other portal EFs. Matches the Phase 9 CORS/getUser pattern.
 // ============================================================================
 import { createClient } from "npm:@supabase/supabase-js@2.100.1"
-import { publishableKey } from "../_shared/keys.ts"
-import { corsHeaders, preflight, jsonResponse } from "../_shared/cors.ts"
+import { publishableKey, secretKey } from "../_shared/keys.ts"
+import { preflight, jsonResponse } from "../_shared/cors.ts"
 
 const ERP_SSO_URL = "https://erp.parastrucks.in/sso"
 
@@ -27,10 +27,11 @@ Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return jsonResponse(req, { error: "method_not_allowed" }, 405)
 
   try {
-    const portalUrl  = Deno.env.get("SUPABASE_URL")!
-    const portalAnon = publishableKey()
-    const erpUrl     = Deno.env.get("ERP_SUPABASE_URL")!
-    const erpService = Deno.env.get("ERP_SERVICE_ROLE_KEY")!
+    const portalUrl     = Deno.env.get("SUPABASE_URL")!
+    const portalAnon    = publishableKey()
+    const portalService = secretKey()
+    const erpUrl        = Deno.env.get("ERP_SUPABASE_URL")!
+    const erpService    = Deno.env.get("ERP_SERVICE_ROLE_KEY")!
 
     // 1. validate the caller's portal session
     const authHeader = req.headers.get("Authorization") ?? ""
@@ -46,6 +47,34 @@ Deno.serve(async (req: Request) => {
       return jsonResponse(req, { error: "unauthenticated" }, 401)
     }
     const email = userData.user.email
+    const portalUserId = userData.user.id
+
+    // 1b. the caller must still be a CURRENT, ACTIVE portal employee.
+    //
+    // getUser() only proves the JWT is well-formed and unexpired — it says
+    // nothing about is_active. Suspending a user calls adminLogoutUser, which
+    // deletes their auth.sessions rows, but an ALREADY-ISSUED ES256 access
+    // token stays valid until it expires (~1h) regardless. Without this check
+    // that ~1h tail was enough to mint a magic link here and open a FRESH 24h
+    // ERP session — outliving the suspension by a day. The ERP's own
+    // profile.is_active gate only closes once the 30-min sync propagates.
+    //
+    // Mirrors the identical gate in erp-login (`portal-active-check`).
+    // public.users.id IS the auth user id on the portal. Fails CLOSED: no row
+    // means this is not a current portal employee, and an unreadable row means
+    // we cannot say they are active — neither should open the ERP.
+    const admin = createClient(portalUrl, portalService, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    })
+    const { data: pu, error: puErr } = await admin
+      .from("users").select("is_active").eq("id", portalUserId).maybeSingle()
+    if (puErr) {
+      console.error("erp-sso: portal users lookup failed:", puErr.message)
+      return jsonResponse(req, { error: "internal_error" }, 500)
+    }
+    if (!pu || pu.is_active === false) {
+      return jsonResponse(req, { error: "no_erp_access" }, 403)
+    }
 
     // 2. mint a single-use magic-link token against the ERP project
     const erp = createClient(erpUrl, erpService, {
