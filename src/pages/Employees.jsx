@@ -7,6 +7,7 @@ import useFocusTrap from '../hooks/useFocusTrap'
 import Skeleton from '../components/Skeleton'
 import Icon from '../components/Icon'
 import { useAuth } from '../context/AuthContext'
+import { SLOT, REQUIRED, requirementFor, validateSlots, buildSlotPayload } from '../lib/userShape'
 
 /* ── Permission-level tiers shown in the UI ──────────────────────────────
    `admin` is NEVER offered — the singleton admin is seeded at install time
@@ -16,24 +17,12 @@ const PERM_TIERS = ['gm', 'manager', 'executive']
 const PERM_LABEL = { admin: 'Admin', gm: 'GM', manager: 'Manager', executive: 'Executive' }
 const PERM_BADGE = { admin: 'badge-red', gm: 'badge-purple', manager: 'badge-blue', executive: 'badge-green' }
 
-/* Department codes that trigger specialised form sections (match the
-   Phase 6b plan 6b.0 tree — Sales/Service/Spares/Back Office). */
-const DEPT_SALES       = 'sales'
-const DEPT_SERVICE     = 'service'
-const DEPT_SPARES      = 'spares'
-const DEPT_BACK_OFFICE = 'back_office'
-
-/* Which departments actually RENDER a control for each join table. This is the
-   single source of truth for "did the admin get a chance to set this?" — and it
-   is what the payload builders key on.
-
-   It matters because the EF's replaceJoin() treats the two absent-ish values
-   very differently: `undefined` leaves the table untouched, `[]` DELETES every
-   row and inserts none. Sending `[]` for a department whose control was never
-   rendered therefore wipes assignments the admin was never shown and could not
-   have intended to clear. Departments with no control must send NOTHING. */
-const DEPTS_WITH_BRAND_PICKER    = new Set([DEPT_SALES, DEPT_SERVICE, DEPT_SPARES, DEPT_BACK_OFFICE])
-const DEPTS_WITH_VERTICAL_PICKER = new Set([DEPT_SALES])
+/* Department applicability lives in src/lib/userShape.js — the single
+   definition the renderer, the payload builder and the completeness audit all
+   agree on. The old file-local DEPT_* constants are gone: they listed only
+   Sales/Service/Spares/Back Office, so accounts, hr and pdi were absent from
+   the very list that decided which controls an admin was shown. The omission
+   that created incomplete users was encoded in the constants themselves. */
 
 const EMPTY_FORM = {
   full_name: '',
@@ -408,72 +397,47 @@ export default function Employees() {
       return { message: 'Permission level is required.', field: 'permission_level' }
     }
 
-    const deptCode = deptById[form.department_id]?.code
-    if (deptCode === DEPT_SALES && form.brand_ids.length === 0) {
-      return { message: 'Select at least one brand for Sales users.', field: 'brand_ids' }
-    }
-    if (deptCode === DEPT_SALES && form.sales_vertical_ids.length === 0) {
-      return { message: 'Select at least one sales vertical for Sales users.', field: 'sales_vertical_ids' }
-    }
-    if ((deptCode === DEPT_SERVICE || deptCode === DEPT_SPARES) && !form.primary_outlet_id) {
-      return { message: 'Primary outlet is required for Service/Spares users.', field: 'primary_outlet_id' }
-    }
-    if ((deptCode === DEPT_SERVICE || deptCode === DEPT_SPARES) && form.brand_ids.length === 0) {
-      return { message: 'Select at least one brand for Service/Spares users.', field: 'brand_ids' }
-    }
-    if (deptCode === DEPT_BACK_OFFICE && form.permission_level !== 'gm' && !form.subdept_id) {
-      return { message: 'Sub-department is required for Back Office users.', field: 'subdept_id' }
-    }
-    return null
+    // The four conditional slots, validated against the shared shape. This used
+    // to be five department-specific branches that required NOTHING for
+    // accounts, hr or pdi — which is how incomplete users were created.
+    return validateSlots(form, deptById[form.department_id]?.code)
   }
 
   /* ── build the EF payload from the current form state ───────────────── */
   // Phase 6c.3: legacy text columns dropped. Only the 4-axis UUIDs + join
   // tables are sent. `location` stays as informational free text.
-  /* Join-table keys are OMITTED (not sent as []) for any department whose
-     control this form never rendered — see DEPTS_WITH_*_PICKER above. Omitting
-     makes replaceJoin() leave the table alone; `[]` would delete every row.
+  /* The conditional slots come from buildSlotPayload(), which derives from the
+     SAME requirementFor() the renderer uses — so applicability is never
+     reconstructed twice. Two independent copies of a conditional always drift,
+     and that drift is exactly how `[]` got sent for a control nobody was shown,
+     and how a hidden sub-department kept being submitted after a GM promotion.
 
-     `outlet_ids` is never sent at all: there is no outlet multi-select anywhere
-     in this modal, so the form has no opinion on user_outlets and must not
-     express one. (It used to send a hardcoded `[]`, which silently wiped that
-     table on every single employee save.) */
-  function joinKeys(deptCode) {
-    const keys = {}
-    if (DEPTS_WITH_BRAND_PICKER.has(deptCode))    keys.brand_ids          = form.brand_ids
-    if (DEPTS_WITH_VERTICAL_PICKER.has(deptCode)) keys.sales_vertical_ids = form.sales_vertical_ids
-    return keys
-  }
-
+     `outlet_ids` is never sent: this form has no control for user_outlets, so
+     it must not express an opinion. (It used to send a hardcoded `[]`, which
+     silently wiped that table on every single employee save.) */
   function buildCreatePayload() {
-    const deptCode = deptById[form.department_id]?.code
     return {
-      full_name:         form.full_name.trim(),
-      email:             form.email.trim(),
-      password:          form.password,
-      permission_level:  form.permission_level,
-      entity_id:         form.entity_id,
-      department_id:     form.department_id,
-      designation_id:    form.designation_id,
-      primary_outlet_id: form.primary_outlet_id || null,
-      subdept_id:        form.subdept_id || null,
-      location:          form.location || null,
-      ...joinKeys(deptCode),
+      full_name:        form.full_name.trim(),
+      email:            form.email.trim(),
+      password:         form.password,
+      permission_level: form.permission_level,
+      entity_id:        form.entity_id,
+      department_id:    form.department_id,
+      designation_id:   form.designation_id,
+      location:         form.location || null,
+      ...buildSlotPayload(form, deptById[form.department_id]?.code),
     }
   }
 
   function buildUpdatePayload() {
-    const deptCode = deptById[form.department_id]?.code
     return {
-      full_name:         form.full_name.trim(),
-      permission_level:  form.permission_level,
-      entity_id:         form.entity_id,
-      department_id:     form.department_id,
-      designation_id:    form.designation_id,
-      primary_outlet_id: form.primary_outlet_id || null,
-      subdept_id:        form.subdept_id || null,
-      location:          form.location || null,
-      ...joinKeys(deptCode),
+      full_name:        form.full_name.trim(),
+      permission_level: form.permission_level,
+      entity_id:        form.entity_id,
+      department_id:    form.department_id,
+      designation_id:   form.designation_id,
+      location:         form.location || null,
+      ...buildSlotPayload(form, deptById[form.department_id]?.code),
     }
   }
 
@@ -922,6 +886,11 @@ function EmployeeFormModal({
   callerEntityLocked,
 }) {
   const deptCode = selectedDept?.code
+  // Applicability for the two conditional slots, resolved ONCE from the shared
+  // shape and used by both the label and the control — so what is rendered and
+  // what is sent can never disagree.
+  const vertReq    = requirementFor(SLOT.VERTICALS, deptCode, form.permission_level)
+  const subdeptReq = requirementFor(SLOT.SUBDEPT,   deptCode, form.permission_level)
   const F = (field) => ({
     value: form[field],
     onChange: e => {
@@ -1034,114 +1003,118 @@ function EmployeeFormModal({
               </div>
             </div>
 
-            {/* Department-specific section */}
-            {deptCode === 'sales' && (
-              <DeptSection title="Sales details">
-                <MultiCheckbox
-                  id="emp-brands"
-                  label="Brands *"
-                  items={refBrands}
-                  selected={form.brand_ids}
-                  onToggle={id => {
-                    setErrorField(f => f === 'brand_ids' ? null : f)
-                    setForm(f => {
-                      const nextBrands = toggleId(f.brand_ids, id)
-                      // Prune any selected verticals whose brand is no longer checked.
-                      // Uses the full sales_verticals list so we compare against
-                      // ground truth, not the currently-rendered subset.
-                      const nextVerts = f.sales_vertical_ids.filter(vId => {
-                        const row = refSalesVert.find(v => v.id === vId)
-                        return row && nextBrands.includes(row.brand_id)
-                      })
-                      return { ...f, brand_ids: nextBrands, sales_vertical_ids: nextVerts }
-                    })
-                  }}
-                  labelKey="name"
-                  badgeKey="code"
-                  error={errorField === 'brand_ids' ? error : null}
-                />
-                <MultiCheckbox
-                  id="sales-verticals"
-                  label="Sales verticals *"
-                  items={verticalsForBrands}
-                  selected={form.sales_vertical_ids}
-                  onToggle={id => {
-                    setErrorField(f => f === 'sales_vertical_ids' ? null : f)
-                    setForm(f => ({ ...f, sales_vertical_ids: toggleId(f.sales_vertical_ids, id) }))
-                  }}
-                  labelKey="name"
-                  emptyHint={form.brand_ids.length === 0 ? 'Select one or more brands first.' : null}
-                  error={errorField === 'sales_vertical_ids' ? error : null}
-                />
-              </DeptSection>
-            )}
+            {/* ── Assignment section ──────────────────────────────────────
+                Rendered for EVERY department, always, in the same order. This
+                replaces three mutually-exclusive department blocks that between
+                them decided which slots an admin was even shown — which is how
+                accounts/hr/pdi users ended up with no brand and no outlet.
 
-            {(deptCode === 'service' || deptCode === 'spares') && (
-              <DeptSection title={deptCode === 'service' ? 'Service details' : 'Spares details'}>
-                <div className="form-group">
-                  <label className="form-label" htmlFor="emp-outlet">Primary outlet *</label>
-                  <select
-                    id="emp-outlet" className={cls('form-select', 'primary_outlet_id')}
-                    value={form.primary_outlet_id}
-                    onChange={e => {
-                      setForm(f => ({ ...f, primary_outlet_id: e.target.value }))
-                      setErrorField(f => f === 'primary_outlet_id' ? null : f)
-                    }}
-                    disabled={!form.entity_id}
-                  >
-                    <option value="">— Select —</option>
-                    {outletsForEntity.map(o => (
-                      <option key={o.id} value={o.id}>{o.city} ({o.facility_type})</option>
-                    ))}
-                  </select>
-                  <FieldError field="primary_outlet_id" />
+                A slot that does not apply is still rendered, disabled, with the
+                reason on screen. It is never omitted: an absent control is
+                indistinguishable from one nobody filled in. */}
+            <DeptSection title={deptCode ? `Assignment — ${deptById[form.department_id]?.name || deptCode}` : 'Assignment'}>
+              {!deptCode && (
+                <div style={{ fontSize: 12, color: 'var(--gray-500)' }}>
+                  Choose a department to see which assignments apply.
                 </div>
-                <MultiCheckbox
-                  id="emp-brands"
-                  label="Brands *"
-                  items={refBrands}
-                  selected={form.brand_ids}
-                  onToggle={id => {
-                    setErrorField(f => f === 'brand_ids' ? null : f)
-                    setForm(f => ({ ...f, brand_ids: toggleId(f.brand_ids, id) }))
-                  }}
-                  labelKey="name"
-                  badgeKey="code"
-                  error={errorField === 'brand_ids' ? error : null}
-                />
-              </DeptSection>
-            )}
+              )}
 
-            {deptCode === 'back_office' && (
-              <DeptSection title="Back Office details">
-                {form.permission_level !== 'gm' && (
+              {deptCode && (
+                <>
                   <div className="form-group">
-                    <label className="form-label" htmlFor="emp-subdept">Sub-department *</label>
+                    <label className="form-label" htmlFor="emp-outlet">Primary outlet *</label>
                     <select
-                      id="emp-subdept" className={cls('form-select', 'subdept_id')}
-                      value={form.subdept_id}
+                      id="emp-outlet" className={cls('form-select', 'primary_outlet_id')}
+                      value={form.primary_outlet_id}
                       onChange={e => {
-                        setForm(f => ({ ...f, subdept_id: e.target.value }))
-                        setErrorField(f => f === 'subdept_id' ? null : f)
+                        setForm(f => ({ ...f, primary_outlet_id: e.target.value }))
+                        setErrorField(f => f === 'primary_outlet_id' ? null : f)
                       }}
+                      disabled={!form.entity_id}
                     >
                       <option value="">— Select —</option>
-                      {refSubdepts.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                      {outletsForEntity.map(o => (
+                        <option key={o.id} value={o.id}>{o.city} ({o.facility_type})</option>
+                      ))}
                     </select>
-                    <FieldError field="subdept_id" />
+                    <FieldError field="primary_outlet_id" />
+                    {form.entity_id && outletsForEntity.length === 0 && (
+                      <div className="form-error">
+                        This entity has no active outlets — one must be created before staff can be added to it.
+                      </div>
+                    )}
                   </div>
-                )}
-                <MultiCheckbox
-                  id="emp-brands"
-                  label="Brands (for quotation log scope)"
-                  items={refBrands}
-                  selected={form.brand_ids}
-                  onToggle={id => setForm(f => ({ ...f, brand_ids: toggleId(f.brand_ids, id) }))}
-                  labelKey="name"
-                  badgeKey="code"
-                />
-              </DeptSection>
-            )}
+
+                  <MultiCheckbox
+                    id="emp-brands"
+                    label="Brands *"
+                    items={refBrands}
+                    selected={form.brand_ids}
+                    onToggle={id => {
+                      setErrorField(f => f === 'brand_ids' ? null : f)
+                      setForm(f => {
+                        const nextBrands = toggleId(f.brand_ids, id)
+                        // Prune verticals whose brand is no longer checked. Compares
+                        // against the FULL vertical list, not the rendered subset, so
+                        // ground truth wins.
+                        const nextVerts = f.sales_vertical_ids.filter(vId => {
+                          const row = refSalesVert.find(v => v.id === vId)
+                          return row && nextBrands.includes(row.brand_id)
+                        })
+                        return { ...f, brand_ids: nextBrands, sales_vertical_ids: nextVerts }
+                      })
+                    }}
+                    labelKey="name"
+                    badgeKey="code"
+                    emptyHint={!form.entity_id
+                      ? 'Select an entity first.'
+                      : 'This entity sells no brands — check its outlet/brand setup.'}
+                    error={errorField === 'brand_ids' ? error : null}
+                  />
+
+                  <MultiCheckbox
+                    id="sales-verticals"
+                    label={`Sales verticals${vertReq.requirement === REQUIRED ? ' *' : ''}`}
+                    items={vertReq.requirement === REQUIRED ? verticalsForBrands : []}
+                    selected={vertReq.requirement === REQUIRED ? form.sales_vertical_ids : []}
+                    onToggle={id => {
+                      setErrorField(f => f === 'sales_vertical_ids' ? null : f)
+                      setForm(f => ({ ...f, sales_vertical_ids: toggleId(f.sales_vertical_ids, id) }))
+                    }}
+                    labelKey="name"
+                    notApplicable={vertReq.reason}
+                    emptyHint={form.brand_ids.length === 0 ? 'Select one or more brands first.' : null}
+                    error={errorField === 'sales_vertical_ids' ? error : null}
+                  />
+
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="emp-subdept">
+                      Sub-department{subdeptReq.requirement === REQUIRED ? ' *' : ''}
+                    </label>
+                    {subdeptReq.reason ? (
+                      <div style={{ fontSize: 12, color: 'var(--gray-500)', fontStyle: 'italic' }}>
+                        Not applicable — {subdeptReq.reason}
+                      </div>
+                    ) : (
+                      <>
+                        <select
+                          id="emp-subdept" className={cls('form-select', 'subdept_id')}
+                          value={form.subdept_id}
+                          onChange={e => {
+                            setForm(f => ({ ...f, subdept_id: e.target.value }))
+                            setErrorField(f => f === 'subdept_id' ? null : f)
+                          }}
+                        >
+                          <option value="">— Select —</option>
+                          {refSubdepts.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        </select>
+                        <FieldError field="subdept_id" />
+                      </>
+                    )}
+                  </div>
+                </>
+              )}
+            </DeptSection>
 
             {/* Informational legacy location field — free-select from outlet cities */}
             <div className="form-group">
@@ -1182,7 +1155,20 @@ function DeptSection({ title, children }) {
 }
 
 /* Reusable multi-checkbox group — used for brands and sales verticals. */
-function MultiCheckbox({ id, label, items, selected, onToggle, labelKey = 'name', badgeKey, emptyHint, error }) {
+function MultiCheckbox({ id, label, items, selected, onToggle, labelKey = 'name', badgeKey, emptyHint, error, notApplicable }) {
+  // A slot that does not apply is still RENDERED, with the reason stated. It is
+  // never omitted: an absent control is indistinguishable from one nobody
+  // filled in, and that ambiguity is what hid the incomplete-user bug.
+  if (notApplicable) {
+    return (
+      <div className="form-group">
+        <label className="form-label" htmlFor={id}>{label}</label>
+        <div id={id} style={{ fontSize: 12, color: 'var(--gray-500)', fontStyle: 'italic' }}>
+          Not applicable — {notApplicable}
+        </div>
+      </div>
+    )
+  }
   return (
     <div className="form-group">
       <label className="form-label" htmlFor={id}>{label}</label>

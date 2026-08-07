@@ -24,6 +24,7 @@ import { secretKey, publishableKey } from "../_shared/keys.ts"
 import { rateLimit } from "../_shared/rateLimit.ts"
 import { jsonResponse, preflight } from "../_shared/cors.ts"
 import { audit, adminLogoutUser } from "../_shared/auditLog.ts"
+import { validateShape } from "../_shared/userShape.ts"
 
 // Phase 9e C2 — tier rank for HR-edit guardrails. Higher number = more
 // privilege. Caller cannot edit a target whose current OR proposed tier is
@@ -242,10 +243,31 @@ Deno.serve(async (req: Request) => {
         if (!p.entity_id)      return json({ error: "entity_id is required" }, 400)
         if (!p.department_id)  return json({ error: "department_id is required" }, 400)
         if (!p.designation_id) return json({ error: "designation_id is required" }, 400)
+        // rejectAdminTier() returns null when permission_level is absent, so an
+        // omitted tier used to slip through here and surface as an opaque NOT
+        // NULL violation after the auth user had already been created.
+        if (!p.permission_level) return json({ error: "permission_level is required" }, 400)
 
         // Entity-scoping: HR can only create users in their own entity
         const entityErr = await requireSameEntity(p.entity_id)
         if (entityErr) return entityErr
+
+        // ── SHAPE GATE ────────────────────────────────────────────────────
+        // Every user carries the same attributes. Enforced HERE, not just in
+        // the form: the form is UX and can be bypassed by calling this function
+        // directly. Runs BEFORE createUser so a shape rejection never leaves an
+        // orphaned auth user behind for the rollback path to clean up.
+        const { data: cDept } = await admin
+          .from("departments").select("code").eq("id", p.department_id).maybeSingle()
+        const shapeErr = validateShape({
+          department_code: cDept?.code ?? null,
+          permission_level: p.permission_level,
+          primary_outlet_id: p.primary_outlet_id,
+          subdept_id: p.subdept_id,
+          brand_ids: p.brand_ids,
+          sales_vertical_ids: p.sales_vertical_ids,
+        })
+        if (shapeErr) return json({ error: shapeErr }, 400)
 
         const { data: authData, error: authErr } = await admin.auth.admin.createUser({
           email: p.email.trim(),
@@ -406,6 +428,53 @@ Deno.serve(async (req: Request) => {
 
         if (Object.keys(clean).length === 0 && !brandIds && !verticalIds && !outletIds) {
           return json({ error: "No valid fields to update" }, 400)
+        }
+
+        // ── SHAPE GATE (update) ───────────────────────────────────────────
+        // Validate the RESULTING row, not the patch: "is this user complete?"
+        // can only be answered against {…target, …clean} plus effective join
+        // state. An undefined array means "leave the existing rows alone", so
+        // it resolves to the CURRENT count; an empty array is a real request to
+        // clear, and is rejected for a required slot.
+        //
+        // Safe to enforce on update because the 2026-08-07 backfill brought
+        // every existing user up to shape first. Enforcing it before that
+        // would have blocked HR from editing legacy users at all — including
+        // to fix the very gaps being complained about.
+        {
+          const effDeptId = (clean.department_id as string | undefined) ?? target.department_id
+          const effTier   = (clean.permission_level as string | undefined) ?? target.permission_level
+          const effOutlet = ("primary_outlet_id" in clean)
+            ? (clean.primary_outlet_id as string | null)
+            : target.primary_outlet_id
+          const effSubdept = ("subdept_id" in clean)
+            ? (clean.subdept_id as string | null)
+            : target.subdept_id
+
+          // Reuse the department code already fetched with `target` when the
+          // department is not changing; only re-read when it is.
+          const deptChanged = effDeptId !== target.department_id
+          const [{ data: uDept }, curBrands, curVerts] = await Promise.all([
+            deptChanged && effDeptId
+              ? admin.from("departments").select("code").eq("id", effDeptId).maybeSingle()
+              : Promise.resolve({ data: { code: target.departments?.code ?? null } }),
+            brandIds  === undefined
+              ? admin.from("user_brands").select("brand_id").eq("user_id", id)
+              : Promise.resolve({ data: null }),
+            verticalIds === undefined
+              ? admin.from("user_sales_verticals").select("vertical_id").eq("user_id", id)
+              : Promise.resolve({ data: null }),
+          ])
+
+          const shapeErr = validateShape({
+            department_code: uDept?.code ?? null,
+            permission_level: effTier,
+            primary_outlet_id: effOutlet,
+            subdept_id: effSubdept,
+            brand_ids: brandIds ?? (curBrands.data ?? []).map((r: { brand_id: string }) => r.brand_id),
+            sales_vertical_ids: verticalIds ?? (curVerts.data ?? []).map((r: { vertical_id: string }) => r.vertical_id),
+          })
+          if (shapeErr) return json({ error: shapeErr }, 400)
         }
 
         if (Object.keys(clean).length > 0) {
