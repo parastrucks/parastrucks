@@ -23,6 +23,18 @@ const DEPT_SERVICE     = 'service'
 const DEPT_SPARES      = 'spares'
 const DEPT_BACK_OFFICE = 'back_office'
 
+/* Which departments actually RENDER a control for each join table. This is the
+   single source of truth for "did the admin get a chance to set this?" — and it
+   is what the payload builders key on.
+
+   It matters because the EF's replaceJoin() treats the two absent-ish values
+   very differently: `undefined` leaves the table untouched, `[]` DELETES every
+   row and inserts none. Sending `[]` for a department whose control was never
+   rendered therefore wipes assignments the admin was never shown and could not
+   have intended to clear. Departments with no control must send NOTHING. */
+const DEPTS_WITH_BRAND_PICKER    = new Set([DEPT_SALES, DEPT_SERVICE, DEPT_SPARES, DEPT_BACK_OFFICE])
+const DEPTS_WITH_VERTICAL_PICKER = new Set([DEPT_SALES])
+
 const EMPTY_FORM = {
   full_name: '',
   email: '',
@@ -284,16 +296,18 @@ export default function Employees() {
     setError('')
     setErrorField(null)
     // Load current join-table rows for this user. RLS allows admin/HR/BO + self.
-    const [brandRes, vertRes, outletRes] = await Promise.all([
+    // `user_outlets` is deliberately NOT read: this form renders no control for
+    // it and no longer writes it, so a failed read of it must not block the
+    // editor. (It used to be fetched, gated on, and then thrown away.)
+    const [brandRes, vertRes] = await Promise.all([
       supabase.from('user_brands').select('brand_id').eq('user_id', emp.id),
       supabase.from('user_sales_verticals').select('vertical_id').eq('user_id', emp.id),
-      supabase.from('user_outlets').select('outlet_id').eq('user_id', emp.id),
     ])
-    // These three ARE the user's current assignments. If a read fails,
+    // These two ARE the user's current assignments. If a read fails,
     // supabase-js returns {data:null,error} without throwing — the form would
     // then show nothing selected and Save would persist that emptiness,
     // silently wiping real assignments. Refuse to open instead.
-    const joinErr = [brandRes, vertRes, outletRes].find(r => r?.error)?.error
+    const joinErr = [brandRes, vertRes].find(r => r?.error)?.error
     if (joinErr) {
       console.error('openEdit: user join-table read failed:', joinErr.message)
       toast.error('Could not load this employee’s current assignments — not opening the editor.')
@@ -416,6 +430,21 @@ export default function Employees() {
   /* ── build the EF payload from the current form state ───────────────── */
   // Phase 6c.3: legacy text columns dropped. Only the 4-axis UUIDs + join
   // tables are sent. `location` stays as informational free text.
+  /* Join-table keys are OMITTED (not sent as []) for any department whose
+     control this form never rendered — see DEPTS_WITH_*_PICKER above. Omitting
+     makes replaceJoin() leave the table alone; `[]` would delete every row.
+
+     `outlet_ids` is never sent at all: there is no outlet multi-select anywhere
+     in this modal, so the form has no opinion on user_outlets and must not
+     express one. (It used to send a hardcoded `[]`, which silently wiped that
+     table on every single employee save.) */
+  function joinKeys(deptCode) {
+    const keys = {}
+    if (DEPTS_WITH_BRAND_PICKER.has(deptCode))    keys.brand_ids          = form.brand_ids
+    if (DEPTS_WITH_VERTICAL_PICKER.has(deptCode)) keys.sales_vertical_ids = form.sales_vertical_ids
+    return keys
+  }
+
   function buildCreatePayload() {
     const deptCode = deptById[form.department_id]?.code
     return {
@@ -429,12 +458,7 @@ export default function Employees() {
       primary_outlet_id: form.primary_outlet_id || null,
       subdept_id:        form.subdept_id || null,
       location:          form.location || null,
-      brand_ids:          deptCode === DEPT_SALES       ? form.brand_ids
-                        : deptCode === DEPT_SERVICE     ? form.brand_ids
-                        : deptCode === DEPT_SPARES      ? form.brand_ids
-                        : deptCode === DEPT_BACK_OFFICE ? form.brand_ids : [],
-      sales_vertical_ids: deptCode === DEPT_SALES ? form.sales_vertical_ids : [],
-      outlet_ids:         [],
+      ...joinKeys(deptCode),
     }
   }
 
@@ -449,12 +473,7 @@ export default function Employees() {
       primary_outlet_id: form.primary_outlet_id || null,
       subdept_id:        form.subdept_id || null,
       location:          form.location || null,
-      brand_ids:          deptCode === DEPT_SALES       ? form.brand_ids
-                        : deptCode === DEPT_SERVICE     ? form.brand_ids
-                        : deptCode === DEPT_SPARES      ? form.brand_ids
-                        : deptCode === DEPT_BACK_OFFICE ? form.brand_ids : [],
-      sales_vertical_ids: deptCode === DEPT_SALES ? form.sales_vertical_ids : [],
-      outlet_ids:         [],
+      ...joinKeys(deptCode),
     }
   }
 
