@@ -26,6 +26,139 @@
 
 ---
 
+## Session log — 2026-08-07: uniform user shape + forced password change
+
+**Six portal PRs (#89–#94) and one ERP PR (#41), all merged and live on prod.** No phase
+number — owner's numbering is his alone; shipped as `user-shape` / `pw-reset-flow`.
+
+### The defect
+
+The employee form captured a **different shape depending on the department selected**. Three
+mutually-exclusive JSX blocks decided which controls an admin was even shown, and
+**`accounts`, `hr` and `pdi` matched none of them** — the file-local constants
+(`DEPT_SALES/SERVICE/SPARES/BACK_OFFICE`) literally omitted those three, so the omission that
+created incomplete users was encoded in the constant list itself.
+
+Consequences, none of which surfaced anywhere:
+
+1. **`user_brands` is an authorization input, not metadata.** `vehicle_catalog_select`
+   (`schema:8832`), `quotations_select` (`:8235`), `proforma_invoices_select` (`:8192`),
+   `financier_copies_select` (`:8053`) and all seven `tiv_forecast_*_select` (`:8440-8614`)
+   gate on `has_user_brand()`. A user with no brand row sees an **empty catalog**.
+2. **The ERP sync's `!inner` brand join drops such a user BEFORE the query returns**, so they
+   never entered `skipped[]` either — `skipped: []` reported nothing. That is why the ERP had
+   **never once seen an accounts user**, leaving the final stage of the two-stage payment flow
+   reachable only by the GM and two admins.
+3. **Two live data-loss paths.** `replaceJoin` treats `[]` as delete-all
+   (`admin-users:161`): editing any accounts/hr/pdi user wiped their brands + verticals (the
+   admin never saw what they destroyed — a name typo was enough), and editing **any** user
+   wiped `user_outlets` (`outlet_ids: []` was hardcoded in both payload builders).
+
+### What shipped
+
+| PR | Commit | What |
+|---|---|---|
+| #89 | `649a4b7` | **Hotfix** — omit join keys instead of sending `[]`; never send `outlet_ids`; drop the dead `user_outlets` read that blocked the editor on a table nothing writes. No EF change needed (`replaceJoin` already returns early on a non-array). |
+| #90 | `46e66a5` | **`erp-sso` requires an ACTIVE portal user.** `getUser()` proves a JWT is unexpired, not that the account lives. A suspended user's ~1h token tail could mint a **fresh 24h ERP session**. Lifted `erp-login`'s existing gate; fails closed. |
+| #91 | `c8df30f` | `scripts/user-shape-audit.sql` — 4 read-only queries; query 1 is the acceptance test. |
+| #92 | `b2852cd` | Password minimum corrected to **8** in docs. `RECONSTRUCTION.md` said 10 — a rebuild from it would have recreated the PCE lockout. All 5 code validators were already 8. |
+| #93 | `a613b76` | **Uniform form + server-side shape gate.** |
+| #94 | `363201e` | **Forced password change after an HR/admin reset.** |
+| ERP #41 | `6995c5f` | ERP `Login.jsx` terminal branch for `must_change_password` — **shipped first, deliberately.** |
+
+### Measured on prod, then backfilled
+
+58 active non-admin users (PT 24 · PTB 34). **21 complete, 37 with a gap:**
+
+| Gap | Count |
+|---|---|
+| `primary_outlet` | **37** — everyone except service/spares, exactly matching the form |
+| `brands` | **2** — PT accounts ×1, PT hr ×1 (PTB's were backfilled 2026-07-05) |
+| `subdept` | **1** — PTB back_office GM |
+
+**Zero `(NO ENTITY)`/`(NO DEPARTMENT)` rows and zero `set_but_na`** — nobody was RLS-locked-out
+and there was no stale hidden data.
+
+All 37 outlets were **derivable from the existing `location` field** (exact case-insensitive
+match to an active outlet owned by the user's own entity — no guessing, no defaults). Owner
+reviewed the full name→outlet list, then applied in 3 batches (PT 8 · PTB non-sales 7 · PTB
+sales 22). SUNIL + Siya granted `al+hdh+switch`.
+
+**ERP blast radius was exactly one user.** PT service/spares were already complete; PT sales are
+branch-less so an outlet changes nothing for them; hr/back_office are outside `ERP_FUNCS`. Only
+the single PT accounts user (SUNIL) could create an ERP account.
+
+**Result:** dry run `created:0, updated:21, deactivated:0, skipped:[]` (was `updated:20` — the
++1 is SUNIL and nobody else; `deactivated:0` proved 37 outlet updates fired 37 reconciles
+without dropping anyone; 21-not-22 proved Siya was **not** pulled in despite holding `hdh`,
+because `hr ∉ ERP_FUNCS`). Real run identical. **SUNIL adopted with `tier=executor ·
+func=accounts · branch=HSR` all preserved** by `role_overridden=true`; `source` flipped
+`local`→`portal`. Both ERP admins untouched. Then, owner-approved,
+`role_overridden=true` set on `ceo` + `admin` so their protection is two-layered.
+
+### The shape, and why there is no policy table
+
+`src/lib/userShape.js` + Deno mirror `supabase/functions/_shared/userShape.ts`:
+**primary_outlet and ≥1 brand required for EVERY department**; sales_verticals Sales-only;
+subdept Back Office non-GM. A slot that doesn't apply is **rendered with its reason on screen**,
+never omitted — a blank meaning "doesn't apply" is indistinguishable from one nobody filled in,
+and that ambiguity is what hid this for months.
+
+**The Back Office GM exemption was kept, deliberately.** A BO GM heads EDP, RTO *and* CRM, so
+naming one would invent data. The old bug was never the exemption — it was that the control was
+*hidden while its stale value kept being submitted*, so promoting a BO manager to GM silently
+persisted an invisible sub-department. Now the payload builder derives from the **same
+`requirementFor()` the renderer uses**, so what you see is what is sent.
+
+**Both proposed tables (`department_attribute_policy`, `user_attribute_waivers`) were dropped on
+evidence.** The audit found **one** exception in 58 users, and it is a *rule*, not a person. The
+matrix is ~10 declarative lines; the audit SQL encodes it a third time and is the referee that
+makes drift *detectable*. Restoring the GM rule also meant **all 58 users were complete**, which
+is what made update-path enforcement safe immediately.
+
+`scripts/user-shape-truthtable.mjs` exercises **8 departments × 3 tiers = 24 combinations**
+(not a sample) and exits non-zero on any hole.
+
+### Forced password change (#94)
+
+Flag lives in **`auth.users.app_metadata`, not a portal column** — `app_metadata` is not
+browser-writable, whereas a column would be self-clearable (`users_update` RLS permits
+`id = auth.uid()`). Three latent holes closed on the way:
+
+- **`resetPassword` had no tier guard.** `update` has guarded tier-vs-tier since Phase 9e C2,
+  but resetting a password did not — an HR *executive* could set the admin's or a GM's password
+  and sign in as them.
+- **Its failure path was never audited** (returned before `audit()`).
+- **`Profile`'s change-password required no current password** — a borrowed session could change
+  it without knowing the old one.
+
+Also: the reset now **revokes live sessions** (previously it didn't bite for ~1h);
+`changeOwnPassword` is handled **before** the hr/admin role gate (routing it through
+`verify(req,["admin","hr"])` would 403 exactly the population it exists for — a permanent
+lockout loop) and is **rate-limited 10/h** because it returns above the handler's own limiter
+and probes with a raw `signInWithPassword` that skips `auth_attempt_record`, i.e. it was an
+unmetered password oracle. Both ERP doors refuse a flagged password.
+
+⚠️ **Not tested end-to-end by a human** — staging is INACTIVE. Everything verified was boot and
+routing, not the happy path.
+
+### Durable lessons
+
+- **The Supabase SQL editor's "Success. No rows returned" is rows RETURNED, not AFFECTED.** It
+  looks identical whether 37 rows changed or none matched. Always `RETURNING` or a follow-up
+  count. (Same absence-of-signal error as the "19 still locked out" call.)
+- **The singleton admin IS the ERP super-admin** (`ceo@parastrucks.in`, `c6faaf5c…`) and has
+  **NULL entity AND NULL department**. That NULL pair is the *active protection* keeping the ERP
+  admin row out of the sync's `!inner` joins — so `entity_id`/`department_id` must never take a
+  plain NOT NULL, only `CHECK (… OR permission_level='admin')`.
+- **Ship the receiving side first.** ERP #41 went out and was verified in the live bundle before
+  the portal began returning `must_change_password`; otherwise an unrecognised code falls through
+  to the ERP's own password grant and answers "Invalid email or password" to a correct password.
+- **`callEdge` is `(fn, action, payload)`**, not an object — caught by reading `src/lib/api.js:29`
+  rather than assuming.
+
+---
+
 ## Part 1 — Phase-by-phase log
 
 *(Verbatim from `memory/phase_status.md` as of the 2026-07-04 documentation reorg. This
