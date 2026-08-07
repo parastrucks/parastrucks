@@ -167,6 +167,7 @@ Deno.serve(async (req: Request) => {
     // The password was right. Throw the session away — this function never
     // hands a portal session to an ERP page.
     const portalUserId = signInData.user?.id ?? null
+    const mustChangePassword = signInData.user?.app_metadata?.must_change_password === true
     try { await portalAnonClient.auth.signOut() } catch { /* best effort */ }
 
     stage = "signin-success-cleanup"
@@ -194,6 +195,18 @@ Deno.serve(async (req: Request) => {
     }
     // Deliberately indistinguishable from a wrong password.
     if (!pu || pu.is_active === false) return json({ error: "invalid_credentials" }, 401)
+
+    stage = "must-change-password-check"
+    // The portal password is a temporary one an admin or HR just set. It opens
+    // nothing — including the ERP — until the person chooses their own.
+    // Otherwise the forced change is trivially side-stepped: the employee (or
+    // anyone who overheard the temp password) simply signs in over here instead.
+    //
+    // Placed AFTER auth_attempt_record(true) so a correct password still clears
+    // the lockout counter, and AFTER the is_active gate so a suspended account
+    // still reads as invalid_credentials rather than revealing that it exists
+    // and merely needs a password change.
+    if (mustChangePassword) return json({ error: "must_change_password" }, 403)
 
     stage = "erp-profile-check"
     const erp = createClient(erpUrl, erpService, {

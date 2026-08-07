@@ -207,6 +207,13 @@ Deno.serve(async (req: Request) => {
       access_token: s.access_token,
       refresh_token: s.refresh_token,
       expires_at: s.expires_at ?? null,
+      // Returned EXPLICITLY rather than left for the client to dig out of the
+      // JWT. The flag is set by admin-users when HR or an admin resets someone's
+      // password, and it also rides inside the token's app_metadata claim — but
+      // whether supabase-js surfaces that on the user object after setSession()
+      // is an implementation detail we should not depend on for a security
+      // gate. app_metadata is not user-writable, so this value is trustworthy.
+      must_change_password: signInData.user?.app_metadata?.must_change_password === true,
     })
   } catch (e) {
     // Phase 9c H1 — log full detail to stderr (Supabase log explorer) but

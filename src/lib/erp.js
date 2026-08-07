@@ -71,9 +71,17 @@ export function useErp() {
       alert('Could not open the ERP. Please try again.')
     } catch (e) {
       setErpBusy(false)
-      alert(e?.message === 'no_erp_access'
-        ? 'You do not have HD Hyundai Service ERP access yet. Contact an admin if you need it.'
-        : 'Could not open the ERP. Please try again.')
+      // must_change_password: erp-sso refuses to mint ERP access on a temporary
+      // password. In practice the portal has already trapped them on
+      // /change-password, so this is the belt to that braces — but the message
+      // must still say what to do rather than read as a generic failure.
+      alert(
+        e?.message === 'no_erp_access'
+          ? 'You do not have HD Hyundai Service ERP access yet. Contact an admin if you need it.'
+        : e?.message === 'must_change_password'
+          ? 'Your password is temporary. Please set your own password first, then open the ERP.'
+        : 'Could not open the ERP. Please try again.',
+      )
     }
   }
 

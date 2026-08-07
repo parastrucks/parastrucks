@@ -2,7 +2,7 @@ import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
 export default function ProtectedRoute({ children, allowedRoles, authOnly }) {
-  const { session, profile, loading, canAccess, loadError } = useAuth()
+  const { session, profile, loading, canAccess, loadError, mustChangePassword } = useAuth()
   const { pathname } = useLocation()
 
   if (loading) {
@@ -14,6 +14,22 @@ export default function ProtectedRoute({ children, allowedRoles, authOnly }) {
   }
 
   if (!session) return <Navigate to="/login" replace />
+
+  // The password was set by HR or an admin, so it is known to more than one
+  // person. Nothing else opens until they choose their own.
+  //
+  // Placed BEFORE the loadError branch on purpose: a profile read can fail for
+  // reasons that have nothing to do with the password, and a flagged user must
+  // always be able to reach the one page that unblocks them. Placed after the
+  // session check because there is nothing to force on a signed-out visitor.
+  //
+  // This is a forcing function, not a containment control — the token stays
+  // fully privileged against PostgREST. The real gates are server-side: the
+  // reset revokes live sessions, and erp-login and erp-sso both refuse a
+  // flagged user outright.
+  if (mustChangePassword && pathname !== '/change-password') {
+    return <Navigate to="/change-password" replace />
+  }
 
   // Backend read failed (red-team 2026-07-21, H2). Previously profile/accessRules
   // simply stayed empty, canAccess() returned false for everything, and the user
