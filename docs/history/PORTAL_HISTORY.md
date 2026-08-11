@@ -26,6 +26,98 @@
 
 ---
 
+## Session log — 2026-08-11: Phase 10 second design review, plan approved, docs made durable
+
+**Outcome:** Phase 10 planning is closed. A second independent design review re-derived every
+numerical claim in the round-1 findings register against the six real workbooks; the plan was
+corrected, the register resolved, the owner's remaining questions answered, and all four Phase 10
+documents committed to the repo. **No code, no schema, no migration** — docs and read-only
+analysis only.
+
+### Why a second review
+Round 1 reported 100% confidence in a reconstructed pricing formula but missed that the underlying
+CTC figure is sometimes inclusive and sometimes exclusive of other charges, varying row by row,
+with the reasoning recorded only in Excel cell comments. The owner caught it. The brief for round 2
+was therefore to distrust confident conclusions resting on assumed uniformity — and to re-derive
+anything that would change a decision rather than reasoning about it in the abstract.
+
+### Method
+Workbook claims re-derived with Node + SheetJS 0.20.3 (`cellFormula`, `cellComments`, and later
+`cellStyles`) across all six files; codebase claims verified against `origin/portal` @ `85c2c90`
+via `git show`; platform limits checked against current official docs. Scripts are committed
+(`scripts/phase10/`) so nothing rests on faith.
+
+### What round 2 changed
+**Overturned (3):**
+- **TCS basis — a money formula.** Round 1 "corrected" the plan to `tcs = ctc × 1%`. Wrong. The
+  original `tally_bill × 1%` matches **266/266** rows (PTB RETAIL) and 94.6% (FY); `ctc × 1%`
+  matches 65.8%. The two agree wherever `tally_bill == ctc`, which is exactly the assumed-uniformity
+  trap the owner had flagged — round 1 fell into it while fixing a different instance of it.
+- **A5's sampling arithmetic.** A 20-row spot-check catches a 26.5%-frequency defect with ~99.8%
+  probability, not the claimed 0.4%. The full-diff recommendation survives, but for rare classes.
+- **E2's mechanism.** There is no "~8 s browser timeout"; the double-write risk comes from
+  navigation-aborts, EF limits, and user retries.
+
+**Corrected:** A1 (1 in-file duplicate group, not systemic; the claimed whitespace collisions do not
+exist), A2 (CTD 19.8% not 22.2%; customer 22.4% not 30.1%), A4 (206 engine numbers not 54 — but the
+real chassis are recoverable under the mislabeled "Model" header), D2 (the RLS precedent is scoped,
+not blanket), E11 (Catalog *does* have mobile cards). C5 was stale — fixed by #89/#93.
+
+**Confirmed exactly:** the 473-row CTC conflict (26.5%), 186 broken-layout rows, retention at
+100%, diff_TDS on gross, CRETEM raw-entry distribution, all settlement G-series numbers, every
+platform limit, and C7 — quantified at **80 of 116 RLS policies calling `current_user_role()` bare,
+zero using the `(select f())` initplan wrapping**.
+
+**New findings:** rebilled chassis already carry two commercial histories in the data (so the
+unique-chassis model would erase a real sale during migration) · `react-data-grid`'s current
+versions require React 19 while the portal is on React 18 · `canAccess` is exact-pathname match, so
+`/tracker/:id` sub-routes would bounce · an `app_metadata` access flag is stale until token refresh
+· **`INVOICE LIST` `Sheet5` holds ₹3,42,60,755 of pending payments on 10 chassis absent from every
+main sheet** (prior-FY receivables outside the six-file scope) · the plan's own B2 fix was a
+landmine — skipping the recompute trigger on `source_file` freezes derived money on migrated rows
+forever after their first edit.
+
+**Scoped down by measurement:** a formatting census (`cellStyles:true`) found **zero** bold, italic
+or font-colour on any data cell; formatting in real use is one rule-driven column fill plus ~148
+manual yellow/red flags. That turned "build a formatting toolbar" into "build a rule engine plus a
+4-swatch highlight" — smaller *and* closer to how the team actually works. Worth knowing: SheetJS
+**CE does** populate `cell.s`, commonly mis-assumed to be Pro-only.
+
+### Owner decisions taken
+Superseded rows for rebills (both histories survive) · incentive columns visible to **admin + HR**
+only · export separately gated **and audited** · refunds and collections in **one** signed
+settlement system (≈30% of multi-chassis customers are mixed-sign) · grid library settled by a 1 d
+comparative spike (`react-data-grid` beta.48 vs `glide-data-grid`) rather than assumed · React 19
+deferred to its own project · plus two new requirements: a **layout creator** and a **"Copy for
+mail"** button replacing the daily filter→hide→copy→paste-into-Outlook habit.
+
+**Corrected a false memory in passing:** React 19 was never tested and never failed. The rollback
+the owner remembered was the react-router 7.18.1 scratch-tree revert (an npm-audit HIGH, zero code
+changed). All portal dependencies already support React 19; the real cost is the router 6→8
+double-major plus a regression pass.
+
+### Owner principles recorded
+1. *"The closer it is to Excel functionality, the better."*
+2. *"Let us not reinvent the wheel because the current solution also works. It is just that it is
+   scattered and unstructured."*
+Saved as the `feedback_excel_parity` memory; they govern all future portal grid work.
+
+### Durability — the reason this session ends in a commit
+Every Phase 10 artifact was one lost folder away from gone: the consolidated handoff and the
+execution plan lived only in `~/.claude/plans/`, the 39.6 KB evidence file was **untracked**, the
+derivation scripts lived in a session scratchpad, and the repo's own
+`docs/backlog/phase10-vehicle-tracker.md` was a 15-line stub whose "single source of truth" pointer
+was a `~/.claude/plans/` path — a durable file pointing at an ephemeral one, which is precisely how
+the previous Phase 10 plan was lost. All four documents plus the scripts are now in the repo and
+cross-linked, and no Phase 10 doc cites a plans-folder path any more.
+
+### Also fixed
+A stale `known_issues.md` entry: the `resetPassword` failure path **is** audited (PR #94,
+`admin-users/index.ts:723-732`) and tier-guarded — the old `:499/:503` references are obsolete.
+Only UX remnants remain (modal pre-validation, weak success confirmation).
+
+---
+
 ## Session log — 2026-08-07: uniform user shape + forced password change
 
 **Six portal PRs (#89–#94) and one ERP PR (#41), all merged and live on prod.** No phase

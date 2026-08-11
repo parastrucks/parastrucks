@@ -119,7 +119,12 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   `sales_is_branchless_sales_func` rejects a sales profile carrying a branch. Synced sales users arrive
   at **0 / ₹0 = inert** until an ERP admin sets their ceilings. Entry is gated on the `hdh` brand
   assignment (owner's chosen lever).
-- **Planned, not started:** **Phase 10 — Vehicle Tracker** (`/tracker`) — `docs/backlog/phase10-vehicle-tracker.md`.
+- **📋 Phase 10 — Vehicle Tracker (`/tracker`): planning COMPLETE, plan APPROVED 2026-08-11, build
+  not started.** Six back-office Excel workbooks → one grid, **one row = one chassis**; success
+  metric is **adoption**. Two design reviews merged, every number re-derived from the real workbooks.
+  ⭐ **Start at `docs/backlog/phase10-execution-plan.md`** (+ `phase10-vehicle-tracker.md` design
+  reference, `phase10-review-round2.md` evidence, `scripts/phase10/` derivations).
+  ⚠️ Phase 10 docs live **only in the repo** — never cite a `~/.claude/plans/` path for it.
 - **Separate project (not this repo):** the HD Hyundai **ERP** (`erp.parastrucks.in`, repo `erp-parastrucks`) — see `memory/project_hd_hyundai_vertical.md`.
 
 ## Next actions
