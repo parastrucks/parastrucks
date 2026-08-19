@@ -22,7 +22,7 @@
 > **[R2✗]** overturned or stale · new round-2 findings in **§5H**. Three round-1 items
 > were overturned — one of them a money formula (**TCS**, §4) — and all fixes are merged
 > in place. §7's open questions are **answered** (see the execution plan's decision
-> table). Next: the 1 d comparative grid spike, then 10a.
+> table). Next: the 1 d comparative grid spike, then stage 1 (foundation). ⚠️ Build order is **pilot-first** since 2026-08-11 — see the execution plan §2.5.
 
 ---
 
@@ -62,7 +62,7 @@ Pivot tabs (AO Figures, FINANCE DATA, SUMMARY) are derived reports, not data.
 
 | # | Topic | Decision |
 |---|---|---|
-| 1 | Grid library | `react-data-grid` (verified: virtualizes both axes; paste/fill/sort/frozen cols). **[R2±] MUST PIN `7.0.0-beta.48`** — every later version requires React 19.2 and the portal is React 18 (React 19 upgrade was rejected in the router WONTFIX). Paste/fill are event hooks (`onCellPaste`/`onFill`) — we write the clipboard-parse + fill reducers, not zero-code. **0.5 d spike on React 18 before committing to 10d**, or reopen the React 19 question (§7 Q5) |
+| 1 | Grid library | `react-data-grid` (verified: virtualizes both axes; paste/fill/sort/frozen cols). **[R2±] MUST PIN `7.0.0-beta.48`** — every later version requires React 19.2 and the portal is React 18 (React 19 upgrade was rejected in the router WONTFIX). Paste/fill are event hooks (`onCellPaste`/`onFill`) — we write the clipboard-parse + fill reducers, not zero-code. **[SUPERSEDED 2026-08-11 — owner principle "closer to Excel is better"]** The library is no longer pre-decided: a **1 d comparative spike** scores `react-data-grid@7.0.0-beta.48` against **`@glideapps/glide-data-grid@6.0.3`** (MIT, React 18, ships native Excel-grade range selection / drag-copy-out / paste / fill; trade-off is canvas rendering, so custom editors and accessibility are harder). Winner = highest score on the Excel-parity checklist in the execution plan §2.3. React 19 stays deferred either way |
 | 2 | URL + menu | `/tracker` + "Vehicle Tracker" top-level |
 | 3 | Row identity | One row per chassis; customer stays free-text |
 | 4 | Table shape | One wide table (~88 cols); unique on `chassis_no` |
@@ -77,7 +77,7 @@ Pivot tabs (AO Figures, FINANCE DATA, SUMMARY) are derived reports, not data.
 | 13 | Settlement ID | `{TYPE}-{INITIALS}-{SEGMENT\|MIX}-{LATEST_TALLY_YYMM}-{SEQ}` e.g. `REF-KISH-HAU-2604-001` |
 | 14 | **Access flag location** | **`auth.users.app_metadata`** — same pattern as PR #94's `must_change_password`. NOT a column on `users` (self-grantable). **[R2✓ + rider]** Pattern verified end-to-end (client-readable in JWT via `AuthContext`, service-role-only writable). Rider: **the JWT is a snapshot** — grant/revoke lands only on token refresh (up to ~1 h). `setTrackerAccess` must also call `admin_revoke_user_sessions` (exists since PR #87) on every flag change, and the EF-side gate should use fresh `getUser()` (as `erp-sso/index.ts:83` does), not the JWT claim |
 | 15 | **Adoption essentials** | **In scope for Phase 10** (new step 10d3): single-row create, undo, notes/scratch cols, colour rules, cell comments |
-| 16 | **Source-data conflicts** | **Back-office resolves in Excel BEFORE migration.** We produce the conflict report; they correct; we import clean files. **[R2±] Conflict-report scope additions:** (a) the inter-dealer population overlaps THREE files (FY Sheet1 embeds dealer-layout rows; INVOICE LIST `DEALERS`; IT `OTHER DEALER`) — reconcile that trio or transfers import twice/zero; (b) stray live side-sheets — `INVOICE LIST` `Sheet5` holds **₹3.43 Cr** of pending payments on **10 chassis absent from every main sheet** (prior-FY receivables): ask which stray sheets are live, add a prior-FY open-items import; (c) the 124-comment census + ~221 deviant input-formula cells (§3) go in the same report |
+| 16 | **Source-data conflicts** | **Back-office resolves in Excel BEFORE migration** (they know which number is right; we never guess). We produce the conflict report; they correct; we import clean files. **[SEQUENCING CHANGED 2026-08-11 — owner]** The report is produced **AFTER the sandbox trial**, not before the build: pilot first → feedback → *then* clean. Rationale: cleaning is a large ask with no visible payoff until they want the tool, and a clerk who has *seen* one truck showing two different prices on screen needs no report to explain the problem. See the execution plan §2.5. **[R2±] Conflict-report scope additions:** (a) the inter-dealer population overlaps THREE files (FY Sheet1 embeds dealer-layout rows; INVOICE LIST `DEALERS`; IT `OTHER DEALER`) — reconcile that trio or transfers import twice/zero; (b) stray live side-sheets — `INVOICE LIST` `Sheet5` holds **₹3.43 Cr** of pending payments on **10 chassis absent from every main sheet** (prior-FY receivables): ask which stray sheets are live, add a prior-FY open-items import; (c) the 124-comment census + ~221 deviant input-formula cells (§3) go in the same report |
 | 17 | Per-cell formula bar (HyperFormula) | **CUT permanently** — binds to grid position, silently writes wrong numbers into money columns when a view reorders/sorts |
 | 18 | Out of scope | Indents (no 1:many link to chassis), cancellation/rebill, e-invoice IRN, e-way bill, telematics, tyre/battery serials, first-service/warranty, driver training |
 
@@ -449,7 +449,16 @@ column, not money — never sum it.
 
 ---
 
-## 6. Build order (re-estimated)
+## 6. Build order — ⚠️ SUPERSEDED 2026-08-11
+
+> **The live build order is in [`phase10-execution-plan.md`](phase10-execution-plan.md) §2.5.**
+> The owner reversed the sequencing to **pilot-first**: build the capability → back-office
+> trials it on a real sandbox → collect feedback → *then* produce the conflict report and clean
+> the data → then migrate. Access control also moved from last to first, because the sandbox
+> holds real cost and margin figures. Total ≈8–9 weeks, first hands-on version ~week 4.
+>
+> The table below is the **per-step effort estimate** that fed those stages and is kept for
+> that purpose. **Ignore its ordering (10a → 10h); it is no longer the sequence.**
 
 | Step | What | Orig | Reality |
 |---|---|---|---|

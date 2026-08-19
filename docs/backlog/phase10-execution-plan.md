@@ -54,9 +54,13 @@ The last open questions were resolved by the owner this session:
 
 **Who sees what.** Only admin plus a hand-picked back-office list can open the page at all. Staff-incentive columns are hidden from everyone except admin and HR. Downloading the full book to Excel needs its own permission and leaves a log entry. Nobody can grant themselves access — the switch lives where only admin can flip it, and flipping it off logs the person out everywhere.
 
-**How the switchover works.** We produce a conflict report showing exactly where the six files disagree; the back-office fixes those in Excel (they know which number is right — we don't guess); we import the clean files; the computer re-checks every formula on every row against the originals; then on an agreed date the Excel files go read-only and the portal is the book.
+**How the switchover works — try it before we clean anything.** We build the tool first and load a copy of the real data into it as a **practice sandbox**. The back-office uses it for a week and tells us what's wrong or missing. We fix that. *Then* we produce the report showing where the six files disagree, and the back-office corrects those in Excel (they know which number is right — we don't guess). Then we import the clean files, the computer re-checks every formula on every row against the originals, and on an agreed date the Excel files go read-only and the portal becomes the book.
 
-**Time: about 7–8 weeks**, in stages — the grid appears early and grows features weekly, so the team can start touching it long before cutover.
+Doing it in this order means nobody is asked to clean up hundreds of disagreements before they've seen what they get for it — and by then they'll have watched the disagreements on screen themselves, which explains the problem better than any report could.
+
+⚠️ **The sandbox is practice, and it gets erased.** It will carry a permanent on-screen warning and an agreed wipe date. Anything typed into it during the trial is exported and handed back before the wipe, so no real work is ever lost — but nothing entered there should be treated as the real record.
+
+**Time: about 8–9 weeks**, with the first hands-on version in front of the back-office at roughly week four.
 
 ---
 
@@ -140,20 +144,50 @@ The last open questions were resolved by the owner this session:
 - **Conflict report to back-office (10a, decision 16), scope:** cross-file value conflicts (CTC 26.5%, CTD ~20%, customer 22%), the 3-file inter-dealer overlap (R2-27), stray-sheet sweep — explicitly including `Sheet5`'s ₹3.43 Cr prior-FY receivables (R2-24) — the 124-comment census, the ~148 manual cell highlights, the ~221 deviant input-formula cells (R2-11), the refund-status normalization map (11 variants — R2-26), and the ~6 duplicate rows.
 - **Cutover:** back-office corrects Excel → import → **full recompute-and-diff of every formula on all rows** (not spot-checks — A5/R2-22) → dual-run window → hard "Excel goes read-only" date (set by back-office in 10a).
 
-### 2.5 Build order (≈7–8 weeks)
+### 2.5 Build order — PILOT-FIRST (owner decision, 2026-08-11) ≈8–9 weeks
 
-| Step | What | Est |
+**The sequencing changed.** The original order did data-cleaning first (conflict report →
+back-office fixes Excel → build → migrate). The owner reversed it: **build the capability → let
+the back-office play with it on real data → collect their feedback → then clean the data → then
+migrate.**
+
+**Why this is right — three reasons, the third being the one that decides it:**
+1. **Adoption is the success metric**, and the original order deferred first contact until week 6.
+   If the feel is wrong, that is the worst possible moment to find out.
+2. **The conflict report is a large, boring ask.** Reconciling 473 CTC disagreements before seeing
+   any benefit is pure cost with no payoff yet. After they want the tool, it becomes worth doing.
+3. **Dirty data in the sandbox makes the conflicts self-evident.** A clerk who sees the same truck
+   showing two different prices on screen understands the problem instantly — better than any
+   report we could write. The pilot doesn't just delay the cleanup; **it is the best possible
+   briefing for it.**
+
+**Cost, stated honestly:** this adds roughly a week (feedback → rework) and risks some rework of
+already-built screens. That is the correct trade when adoption is the thing being bought.
+
+| Stage | What | Est |
 |---|---|---|
-| 10-pre | Comparative grid spike: react-data-grid beta.48 vs glide-data-grid 6.0.3 on the Excel-parity checklist | 1 d |
-| 10a | Column sign-off + conflict report (widened scope) + cutover date | 2.5 d |
-| 10b | DB: tables, triggers, RLS `(select …)`-wrapped, audit, grants, settlement schema | 3.5 d |
-| 10c | EF `admin-vehicle-units` + `setTrackerAccess` | 2.5 d |
-| 10d | Grid core: RDG, keyboard, paste, views, search | 7–10 d |
-| 10d3 | Adoption essentials (F1–F3, F6, F7, drawer) | 4–5 d |
-| 10e | Import wizard + comment extraction + conflict review | 4 d |
-| 10f | Client export, summary views, settlement UI + RTGS PDF | 4 d |
-| 10g | Migration of 6 files + prior-FY open items + recompute-diff | 3.5 d |
-| 10h | Access control: app_metadata flags + canAccess branch + revoke-on-change | 2.5–3.5 d |
+| **0** | Grid spike: react-data-grid beta.48 vs glide-data-grid 6.0.3 on the Excel-parity checklist | 1 d |
+| **1 — Foundation** | DB (tables, triggers, RLS `(select …)`-wrapped, audit, grants) · EF `admin-vehicle-units` · **access control moved UP from last** (see below) | 8.5–9.5 d |
+| **2 — Playable slice** | Grid core (keyboard, paste, fill, frozen cols, filter, search) + adoption essentials (quick entry, undo, notes/scratch, colour + highlight, cell comments, row drawer) + a **one-off scripted sandbox load** (not the full import wizard) | 11–14 d |
+| **3 — SANDBOX TRIAL** | Back-office uses it on a real snapshot. Watch what they do; collect feedback. **This is the gate — do not proceed while they still prefer Excel.** | ~1 wk (their time) |
+| **4 — Iterate** | Act on the trial feedback | 3–5 d |
+| **5 — Data cleanup** | Conflict report (widened scope) → back-office corrects in Excel → cutover date agreed. **Runs in parallel with stage 6** | 2.5 d ours |
+| **6 — Remaining features** | Import wizard + comment/highlight extraction · layout creator · copy-for-mail · client export · summary views · settlement UI + RTGS PDF | 8 d |
+| **7 — Cutover** | Migration of the 6 files + prior-FY open items + full recompute-and-diff → dual-run → Excel goes read-only | 3.5 d |
+
+**Two consequences of the reversal that must not be missed:**
+
+- **Access control moves from last to first (stage 1).** The sandbox holds *real* cost prices,
+  margins and incentive figures — "test data" only in the sense that it is disposable, not in the
+  sense that it is harmless. Staging is INACTIVE, so the pilot realistically runs on prod behind the
+  access flag. The gate has to be real before anyone is invited in.
+- **The sandbox must be unmistakably a sandbox, and disposable.** The danger is that it quietly
+  becomes the real book: someone enters a genuine new truck during the trial, we wipe the sandbox
+  for the real migration, and their work vanishes. That is precisely the F2 failure mode — *one bad
+  wipe in week two and the team never trusts it again.* Mitigations, all required: a permanent
+  on-screen banner ("PRACTICE DATA — will be erased on <date>"), an explicit reset button, a
+  stated wipe date agreed up front, and — before the wipe — an export of anything they entered, so
+  no work is lost even if they ignored the banner.
 
 ### 2.6 Appendix — load-bearing facts (so this file alone can rebuild the rest)
 
