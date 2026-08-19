@@ -3,7 +3,7 @@
 import { useMemo, useState, useCallback, useRef } from 'react'
 import { DataGrid } from 'react-data-grid'
 import 'react-data-grid/lib/styles.css'
-import { DataEditor, GridCellKind } from '@glideapps/glide-data-grid'
+import { DataEditor, GridCellKind, CompactSelection } from '@glideapps/glide-data-grid'
 import '@glideapps/glide-data-grid/dist/index.css'
 import { COLUMNS, makeRows } from './trackerData'
 
@@ -49,6 +49,7 @@ function RdgPane({ rows, setRows }) {
 /* ---------------- glide-data-grid ---------------- */
 function GlidePane({ rows, setRows }) {
   const cols = useMemo(() => COLUMNS.map(c => ({ title: c.name, id: c.key, width: c.width })), [])
+  const [sel, setSel] = useState({ columns: CompactSelection.empty(), rows: CompactSelection.empty() })
 
   // NOTE: this MUST depend on `rows`. Glide repaints only when getCellContent's
   // identity changes (or you call gridRef.updateCells). Memoising it with [] and
@@ -67,6 +68,11 @@ function GlidePane({ rows, setRows }) {
     }
   }, [rows])
 
+  // Excel leaves the pasted (or filled) block selected afterwards. Glide does not,
+  // so the range is reconstructed from the edit list and set as the selection.
+  // Coordinates line up: onCellsEdited hands back locations with rowMarkerOffset
+  // already subtracted, and the gridSelection prop is shifted by the same offset
+  // internally — so both sides speak the same external coordinate space.
   const onCellsEdited = useCallback(edits => {
     setRows(prev => {
       const next = [...prev]
@@ -76,6 +82,26 @@ function GlidePane({ rows, setRows }) {
       }
       return next
     })
+
+    if (edits.length > 1) {          // paste / fill — a single typed cell keeps Excel's own behaviour
+      let minC = Infinity, minR = Infinity, maxC = -Infinity, maxR = -Infinity
+      for (const e of edits) {
+        const [c, r] = e.location
+        if (c < minC) minC = c
+        if (c > maxC) maxC = c
+        if (r < minR) minR = r
+        if (r > maxR) maxR = r
+      }
+      setSel({
+        current: {
+          cell: [minC, minR],
+          range: { x: minC, y: minR, width: maxC - minC + 1, height: maxR - minR + 1 },
+          rangeStack: [],
+        },
+        columns: CompactSelection.empty(),
+        rows: CompactSelection.empty(),
+      })
+    }
     return true
   }, [setRows])
 
@@ -89,6 +115,7 @@ function GlidePane({ rows, setRows }) {
         <DataEditor
           columns={cols} rows={rows.length} getCellContent={getCellContent}
           onCellsEdited={onCellsEdited}
+          gridSelection={sel} onGridSelectionChange={setSel}
           rangeSelect="multi-rect" fillHandle rowMarkers="number"
           keybindings={{ activateCell: ' |Enter|shift+Enter|f2' }}
           freezeColumns={3} rowHeight={30} headerHeight={34}
