@@ -31,8 +31,8 @@ const FinancierCopy    = lazy(() => import('./pages/FinancierCopy'))
 const MyFinancierCopies = lazy(() => import('./pages/MyFinancierCopies'))
 const FinancierCopyLog = lazy(() => import('./pages/FinancierCopyLog'))
 const ServiceJobs      = lazy(() => import('./pages/ServiceJobs'))
-// SPIKE ONLY (Phase 10 grid decision) — admin-only, not in navConfig. Remove with the spike.
-const GridSpike        = lazy(() => import('./spike/GridSpike'))
+
+
 
 // Placeholder for pages not yet built
 const Soon = ({ name }) => (
@@ -93,9 +93,6 @@ export default function App() {
               rather than an instruction. One way forward, one way out. */}
           <Route path="/change-password" element={<ChangePassword />} />
 
-          {/* SPIKE ONLY — outside AppLayout so the grid gets the full viewport.
-              Admin-only. Delete together with src/spike/ once the grid is chosen. */}
-          <Route path="/grid-spike" element={<ProtectedRoute allowedRoles={['admin']}><GridSpike /></ProtectedRoute>} />
 
           {/* Protected — all roles */}
           <Route element={<ProtectedRoute authOnly><AppLayout /></ProtectedRoute>}>

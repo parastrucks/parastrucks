@@ -25,14 +25,34 @@ window.addEventListener('unhandledrejection', (e) => reportError(
   { kind: 'unhandledrejection', url: location.href },
 ))
 
-ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <BrowserRouter>
-      <AuthProvider>
-        <ToastProvider>
-          <App />
-        </ToastProvider>
-      </AuthProvider>
-    </BrowserRouter>
-  </React.StrictMode>
-)
+// ---------------------------------------------------------------------------
+// SPIKE ONLY (Phase 10 grid decision). Mounted BEFORE AuthProvider on purpose:
+// the staging Supabase project is hibernated, so auth can never resolve and the
+// normal app sits on its loading gate forever. The spike needs no backend at
+// all — its data is generated in the browser.
+//
+// `import.meta.env.DEV` is statically replaced at build time, so this whole
+// branch is stripped from any production bundle and the route cannot exist on
+// prod. Delete this block together with src/spike/ once the grid is chosen.
+// ---------------------------------------------------------------------------
+if (import.meta.env.DEV && window.location.pathname === '/grid-spike') {
+  import('./spike/GridSpike').then(({ default: GridSpike }) => {
+    ReactDOM.createRoot(document.getElementById('root')).render(
+      <React.StrictMode>
+        <GridSpike />
+      </React.StrictMode>
+    )
+  })
+} else {
+  ReactDOM.createRoot(document.getElementById('root')).render(
+    <React.StrictMode>
+      <BrowserRouter>
+        <AuthProvider>
+          <ToastProvider>
+            <App />
+          </ToastProvider>
+        </AuthProvider>
+      </BrowserRouter>
+    </React.StrictMode>
+  )
+}
