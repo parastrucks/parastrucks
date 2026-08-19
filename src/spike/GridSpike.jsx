@@ -49,10 +49,13 @@ function RdgPane({ rows, setRows }) {
 /* ---------------- glide-data-grid ---------------- */
 function GlidePane({ rows, setRows }) {
   const cols = useMemo(() => COLUMNS.map(c => ({ title: c.name, id: c.key, width: c.width })), [])
-  const rowsRef = useRef(rows); rowsRef.current = rows
 
+  // NOTE: this MUST depend on `rows`. Glide repaints only when getCellContent's
+  // identity changes (or you call gridRef.updateCells). Memoising it with [] and
+  // reading rows from a ref makes every edit and paste land in state but never
+  // appear on the canvas — which reads exactly like "editing is broken".
   const getCellContent = useCallback(([col, row]) => {
-    const c = COLUMNS[col], r = rowsRef.current[row]
+    const c = COLUMNS[col], r = rows[row]
     const raw = r?.[c.key]
     return {
       kind: GridCellKind.Text,
@@ -62,7 +65,7 @@ function GlidePane({ rows, setRows }) {
       readonly: !!c.computed,
       contentAlign: c.money ? 'right' : undefined,
     }
-  }, [])
+  }, [rows])
 
   const onCellsEdited = useCallback(edits => {
     setRows(prev => {
@@ -87,6 +90,7 @@ function GlidePane({ rows, setRows }) {
           columns={cols} rows={rows.length} getCellContent={getCellContent}
           onCellsEdited={onCellsEdited}
           rangeSelect="multi-rect" fillHandle rowMarkers="number"
+          keybindings={{ activateCell: ' |Enter|shift+Enter|f2' }}
           freezeColumns={3} rowHeight={30} headerHeight={34}
           getCellsForSelection={true}
           onPaste={true}
