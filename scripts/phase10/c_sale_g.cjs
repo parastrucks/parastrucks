@@ -1,5 +1,5 @@
 // Sale-side formulas (INV_LIST PTB RETAIL + FY), G-series, 3-way retention, VIN, DSE slab
-const XLSX = require('D:/PTB/Website/portal_phase1a_setup/portal/node_modules/xlsx');
+const XLSX = require('xlsx');
 const rd = p => XLSX.readFile(p, {cellFormula:true, raw:true});
 const invList = rd('C:/Users/dhruv/Downloads/PAYMENT TRACKER LIST 2025-26/PAYMENT TRACKER LIST 2025-26/INVOICE LIST - MAR 26.xlsx');
 const fy = rd('C:/Users/dhruv/Downloads/PAYMENT TRACKER LIST 2025-26/PAYMENT TRACKER LIST 2025-26/2025-26.xlsx');
@@ -84,7 +84,7 @@ function mixedSign(name, R, custC, nrC) {
   }
   const multi = [...by.entries()].filter(([k,v]) => v.length > 1);
   let mixed = 0;
-  for (const [k, v] of multi) {
+  for (const [, v] of multi) {
     const hasPos = v.some(x => x > 1), hasNeg = v.some(x => x < -1);
     if (hasPos && hasNeg) mixed++;
   }
@@ -140,7 +140,7 @@ dist('G5 RefStatus FY(29)', fyr, 29);
 // ---- VIN decode ----
 {
   const all = [];
-  for (const [wbx, sheet, c] of [[invTrk,'INVOICE TRACKER',5],[invTrk,'OTHER DEALER',5],[fy,'Sheet1',5]]) {
+  for (const [wbx, sheet] of [[invTrk,'INVOICE TRACKER',5],[invTrk,'OTHER DEALER',5],[fy,'Sheet1',5]]) {
     const R = rows(wbx, sheet);
     for (let r=1; r<R.length; r++) { const t=String(R[r][5]||'').trim(); if (CH.test(t)) all.push(t); }
   }

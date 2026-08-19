@@ -1,5 +1,5 @@
 // A-series: duplicates, cross-file conflicts, layout breaks, DEALERS columns
-const XLSX = require('D:/PTB/Website/portal_phase1a_setup/portal/node_modules/xlsx');
+const XLSX = require('xlsx');
 const rd = p => XLSX.readFile(p, {cellFormula:true, raw:true});
 
 const invTrk = rd('D:/PTB/Finances/2025-26/INVOICE TRACKER 2025-26.xlsx');
@@ -12,7 +12,7 @@ const CH = /^MB1[A-Z0-9]{14}$/;
 // ---- A1: duplicate chassis in INVOICE TRACKER ----
 const it = rows(invTrk, 'INVOICE TRACKER'); // F=5 chassis
 {
-  const seen = new Map(), exact = new Map(), trimOnly = new Set();
+  const seen = new Map();
   for (let r = 1; r < it.length; r++) {
     const raw = it[r][5];
     if (raw == null || String(raw).trim() === '') continue;
@@ -22,7 +22,7 @@ const it = rows(invTrk, 'INVOICE TRACKER'); // F=5 chassis
     seen.get(t).push({r: r+1, raw: s});
   }
   let dupGroups = 0, dupRows = 0, wsCollide = 0;
-  for (const [t, list] of seen) {
+  for (const [, list] of seen) {
     if (list.length > 1) {
       dupGroups++; dupRows += list.length;
       const rawSet = new Set(list.map(x => x.raw));
@@ -59,7 +59,7 @@ const fyr = rows(fy, 'Sheet1'); // F=5 chassis, J=9 customer, AC=28 net refund
   if (c) for (const r of c) console.log(`   JU4480 r${r}: cust=${fyr[r-1][9]} netRefund=${fyr[r-1][28]}`);
   // how many dup groups have DIFFERENT customers?
   let diffCust = 0;
-  for (const [k, rs] of dups) {
+  for (const [, rs] of dups) {
     const custs = new Set(rs.map(r => String(fyr[r-1][9]||'').trim().toUpperCase()));
     if (custs.size > 1) diffCust++;
   }

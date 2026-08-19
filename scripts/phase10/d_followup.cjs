@@ -1,5 +1,5 @@
 // Follow-ups: INT.Retention vs AL.Diff; VIN pos10/pos12 empirical mapping vs real dates; qty elsewhere
-const XLSX = require('D:/PTB/Website/portal_phase1a_setup/portal/node_modules/xlsx');
+const XLSX = require('xlsx');
 const rd = p => XLSX.readFile(p, {cellFormula:true, raw:true});
 const invTrk = rd('D:/PTB/Finances/2025-26/INVOICE TRACKER 2025-26.xlsx');
 const retInt = rd("D:/PTB/Finances/2025-26/2026-03 - MARCH/RETENTION TRACKER - MAR'26 -INTERNAL.xlsx");

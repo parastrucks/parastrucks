@@ -1,5 +1,5 @@
 // INVOICE TRACKER: formula patterns, retention claim, diff_tds, variance scan, comments
-const XLSX = require('D:/PTB/Website/portal_phase1a_setup/portal/node_modules/xlsx');
+const XLSX = require('xlsx');
 const wb = XLSX.readFile('D:/PTB/Finances/2025-26/INVOICE TRACKER 2025-26.xlsx', {cellFormula:true, cellComments:true});
 const ws = wb.Sheets['INVOICE TRACKER'];
 const range = XLSX.utils.decode_range(ws['!ref']);
@@ -88,7 +88,7 @@ const frm = (r,c) => { const x = ws[XLSX.utils.encode_cell({r,c})]; return x ? x
     if (addr[0] === '!') continue;
     const cell = ws[addr];
     if (!cell.c || !cell.c.length) continue;
-    const {r, c} = XLSX.utils.decode_cell(addr);
+    const { r } = XLSX.utils.decode_cell(addr);
     if (!byCol.has(c)) byCol.set(c, []);
     const txt = cell.c.map(x => (x.t||'')).join(' / ').replace(/\s+/g,' ').trim();
     byCol.get(c).push(`${addr}: "${txt.slice(0,90)}"`);

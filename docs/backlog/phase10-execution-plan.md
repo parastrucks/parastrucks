@@ -13,7 +13,7 @@ Planning is now **closed** and this plan was **approved by the owner on 2026-08-
 | `docs/backlog/phase10-execution-plan.md` (this file) | ⭐ The approved plan — layman's explanation, build order, and the appendix of load-bearing facts |
 | `docs/backlog/phase10-vehicle-tracker.md` | Design reference — every decision, formula, and the full findings register |
 | `docs/backlog/phase10-review-round2.md` | Round-2 evidence — every number independently re-derived |
-| `scripts/phase10/*.js` | The SheetJS scripts behind those numbers, re-runnable against the real workbooks |
+| `scripts/phase10/*.cjs` | The SheetJS scripts behind those numbers, re-runnable against the real workbooks |
 
 The last open questions were resolved by the owner this session:
 
@@ -86,7 +86,7 @@ Doing it in this order means nobody is asked to clean up hundreds of disagreemen
 2. **`docs/backlog/phase10-vehicle-tracker.md`** — replace the 15-line stub with the full consolidated handoff (contents of `proud-brewing-flute.md`, which already carries every round-2 merge and the six owner decisions). Delete the `~/.claude/plans/…` pointer; nothing in the repo may cite a plans-folder path as a source of truth again.
 3. **`docs/backlog/phase10-review-round2.md`** — commit the untracked evidence file as-is.
 4. **`docs/backlog/phase10-execution-plan.md`** — this file (both halves: layman's explanation + technical outline).
-5. **`scripts/phase10/*.js`** — the five SheetJS re-derivation scripts, so every empirical number (26.5% CTC conflict, 266/266 TCS, 124 comments, ₹3.43 Cr Sheet5) can be re-run by anyone against the real workbooks instead of trusted on faith.
+5. **`scripts/phase10/*.cjs`** — the five SheetJS re-derivation scripts, so every empirical number (26.5% CTC conflict, 266/266 TCS, 124 comments, ₹3.43 Cr Sheet5) can be re-run by anyone against the real workbooks instead of trusted on faith.
 6. Cross-link the four docs to each other; add a Phase 10 line to `CLAUDE.md`'s current-state section and a `MEMORY.md` hook.
 7. Push → CI green → merge to `portal`. After merge, tell the owner the other session must `git pull --rebase`.
 

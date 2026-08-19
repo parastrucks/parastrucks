@@ -8,7 +8,7 @@
 > | **`phase10-execution-plan.md`** | ⭐ **START HERE** — the approved plan: layman's explanation + build order + the appendix of load-bearing facts |
 > | `phase10-vehicle-tracker.md` (this file) | The design reference — decisions, formulas, full findings register |
 > | `phase10-review-round2.md` | The round-2 evidence: every number independently re-derived |
-> | `scripts/phase10/*.js` | The SheetJS scripts that produced those numbers — re-runnable against the real workbooks |
+> | `scripts/phase10/*.cjs` | The SheetJS scripts that produced those numbers — re-runnable against the real workbooks |
 >
 > ⚠️ **Nothing here may cite a `~/.claude/plans/` path as a source of truth.** Those
 > files are ephemeral and a Phase 10 plan has already been lost that way once. The repo

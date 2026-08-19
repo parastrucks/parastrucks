@@ -1,4 +1,4 @@
-const XLSX = require('D:/PTB/Website/portal_phase1a_setup/portal/node_modules/xlsx');
+const XLSX = require('xlsx');
 const files = [
   ['INV_TRK', 'D:/PTB/Finances/2025-26/INVOICE TRACKER 2025-26.xlsx'],
   ['RET_INT', "D:/PTB/Finances/2025-26/2026-03 - MARCH/RETENTION TRACKER - MAR'26 -INTERNAL.xlsx"],
@@ -17,7 +17,7 @@ for (const [tag, path] of files) {
     const ref = ws['!ref'] || '(empty)';
     let comments = 0, formulas = 0;
     if (ws['!ref']) {
-      const range = XLSX.utils.decode_range(ws['!ref']);
+
       for (const addr in ws) {
         if (addr[0] === '!') continue;
         const c = ws[addr];
