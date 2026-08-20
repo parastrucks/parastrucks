@@ -273,3 +273,66 @@ actually adopts it — the one thing that decides success.
 - **Formulas:** the recompute-and-diff harness re-runs the round-2 scripts' logic against migrated data — every derived column must match the source workbooks row-for-row before cutover; edge cases exercised explicitly (ctc=0 ×101 rows, negative-ageing clamp, mixed-sign batches, ±₹1 dead-band, sub-rupee rows ×40).
 - **Pre-ship:** owner screen-by-screen review (9.6/9.7 pattern) + clean-room red-team lanes against the built schema/EF/grid — the point where a red team earns its keep.
 - **Every push:** CI all-green + Vercel `portal` READY before calling it done; EF deploys watch the upload list for all `_shared/*` assets.
+
+---
+
+## SCOPE CHANGE — 2026-08-20: "replace Excel entirely" (owner decision)
+
+**Asked and reaffirmed.** Reviewing the spike the owner listed: formatting toolbar,
+right-click menu, filters, formulae, bold/italics, cell borders, pivots. I flagged that
+this describes Excel itself, that a 6-month-plus rebuild would still be a weaker Excel,
+and that it collides with the owner's own "don't reinvent the wheel" principle. **The
+owner reaffirmed: replace Excel entirely.** That is the decision; this section scopes it
+honestly rather than re-arguing it.
+
+### The same conversation made it far cheaper than the raw list implied
+
+Asked what the formatting is actually *for*, the owner answered: **flagging rows needing
+attention.** That resolves three of the seven items at a stroke — bold, italics and cell
+borders are not needed as a formatting toolbar. Coloured highlighting plus rule-based
+colouring covers the real need, and does it better: filterable, structured, survives
+export, and consistent with the measured evidence (0 bold / 0 italic / 0 borders across
+all six workbooks; the only formatting in use is one rule-driven column and ~148
+yellow/red flags). **Already in the plan — no new work.**
+
+### What genuinely remains
+
+| Ask | Verdict | Cost |
+|---|---|---|
+| Formatting toolbar, bold/italic, borders | **Resolved** → highlight + colour rules, already planned | — |
+| Filters | Already core | — |
+| Right-click context menu | **NEW — build it.** Copy, paste, insert row, clear, freeze, highlight. Glide supports `onCellContextMenu` | ~3 d |
+| Ctrl+F | **Cannot work on canvas** — browser search cannot see canvas pixels. In-app search was already planned (F5, find by last 6 digits) and must now also cover all columns | already planned, widen ~1 d |
+| Formulae | **Build — but column-level, not cell-level.** See below | ~5 d |
+| Pivots | **Build a group-by + aggregate panel**, not a full pivot builder | ~7 d |
+
+**Revised estimate: ~12 weeks** (was 8–9). Sequencing stays pilot-first.
+
+### Formulae: column-level, and why that is better here — not a compromise
+
+Cell-level formulas stay **cut** (decision 17), and the spike reinforces why: a formula
+bound to a grid position silently computes the wrong number the moment a view sorts or
+filters, and every one of these columns is money.
+
+The replacement is strictly stronger for this book: **a formula belongs to a COLUMN**, e.g.
+`retention = ctc − ctd − amc − dsa − ad_blue`, defined once and applied to every row.
+It cannot drift, cannot be half-copied down, cannot break under sorting, and it is exactly
+how the six workbooks already behave — the variance scan found **zero** hand-edited
+formulas in any derived column across 24,856 formula cells. Excel forces you to copy a
+formula down 2,050 rows and then hope nobody breaks row 1,400. A column formula removes
+that class of error entirely while giving the same expressive power.
+
+Admin-editable, versioned, with a preview of affected rows before it applies.
+
+### Pivots: group-by panel, and the honest limit
+
+Pick group-by columns, a measure and an aggregate (sum / count / average); get a summary
+table, drillable back to the underlying rows. That covers the recurring month-end
+questions. It is **not** a full pivot builder — no drag-and-drop field wells, no calculated
+fields inside the pivot, no slicers. If a genuinely ad-hoc analysis is needed, the
+one-click current-view export to xlsx remains, and Excel does what Excel is good at.
+
+**Stated plainly so it is not a surprise later:** "replace Excel entirely" will hold for
+the daily book — entry, tracking, flagging, month-end summaries. It will not hold for
+open-ended analysis. Anyone who wants to build an arbitrary model will still reach for
+Excel, and the export exists for exactly that.
