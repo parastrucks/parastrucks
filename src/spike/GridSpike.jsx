@@ -6,6 +6,7 @@ import 'react-data-grid/lib/styles.css'
 import { DataEditor, GridCellKind, CompactSelection } from '@glideapps/glide-data-grid'
 import '@glideapps/glide-data-grid/dist/index.css'
 import { COLUMNS, makeRows } from './trackerData'
+import ErrorBox from './ErrorBox'
 
 const fmt = v => typeof v === 'number' ? v.toLocaleString('en-IN') : (v ?? '')
 
@@ -157,7 +158,9 @@ export default function GridSpike() {
         <button className="spk-tab" data-on={which === 'rdg'} onClick={() => setWhich('rdg')}>react-data-grid</button>
       </div>
       <div className="spk-body">
-        {which === 'rdg' ? <RdgPane rows={rows} setRows={setRows} /> : <GlidePane rows={rows} setRows={setRows} />}
+        {which === 'rdg'
+          ? <ErrorBox label="react-data-grid" key="rdg"><RdgPane rows={rows} setRows={setRows} /></ErrorBox>
+          : <ErrorBox label="Glide" key="glide"><GlidePane rows={rows} setRows={setRows} /></ErrorBox>}
       </div>
       <div className="spk-try">
         <b>Try on each:</b> drag-select a block of cells → Ctrl+C → paste into Excel · copy a block from Excel → Ctrl+V here ·
