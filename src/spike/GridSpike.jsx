@@ -1,6 +1,6 @@
 // SPIKE ONLY — throwaway comparison page for the Phase 10 grid decision.
 // Not linked from navConfig; reachable at /grid-spike. Delete once the winner is chosen.
-import { useMemo, useState, useCallback, useRef } from 'react'
+import { useMemo, useState, useCallback, useRef, useEffect } from 'react'
 import { DataGrid } from 'react-data-grid'
 import 'react-data-grid/lib/styles.css'
 import { DataEditor, GridCellKind, CompactSelection } from '@glideapps/glide-data-grid'
@@ -49,8 +49,21 @@ function RdgPane({ rows, setRows }) {
 
 /* ---------------- glide-data-grid ---------------- */
 function GlidePane({ rows, setRows }) {
+  // Glide renders its overlay editor into #portal and returns NULL without it, so
+  // double-click/Enter/F2 activate the cell and then nothing opens. Injected here to
+  // keep the spike self-contained; the real build puts it in index.html as Glide documents.
+  useEffect(() => {
+    if (document.getElementById("portal")) return
+    const d = document.createElement("div")
+    d.id = "portal"
+    d.style.cssText = "position:fixed;left:0;top:0;z-index:9999"
+    document.body.appendChild(d)
+  }, [])
+
   const cols = useMemo(() => COLUMNS.map(c => ({ title: c.name, id: c.key, width: c.width })), [])
   const [sel, setSel] = useState({ columns: CompactSelection.empty(), rows: CompactSelection.empty() })
+  const [log, setLog] = useState([])
+  const note = m => setLog(l => [m, ...l].slice(0, 4))
 
   // NOTE: this MUST depend on `rows`. Glide repaints only when getCellContent's
   // identity changes (or you call gridRef.updateCells). Memoising it with [] and
@@ -75,6 +88,7 @@ function GlidePane({ rows, setRows }) {
   // already subtracted, and the gridSelection prop is shifted by the same offset
   // internally — so both sides speak the same external coordinate space.
   const onCellsEdited = useCallback(edits => {
+    note(`onCellsEdited x${edits.length}`)
     setRows(prev => {
       const next = [...prev]
       for (const e of edits) {
@@ -111,12 +125,16 @@ function GlidePane({ rows, setRows }) {
       <div className="spk-bar">
         <Stopwatch label="Glide" />
         <span className="spk-ok">Range select · fill handle · block copy/paste — native</span>
+        <span className="spk-ms">sel: <b>{sel?.current ? `col ${sel.current.cell[0]}, row ${sel.current.cell[1]}` : "(none)"}</b></span>
+        <span className="spk-ms">{log[0] ?? "no events yet"}</span>
       </div>
       <div className="fill-grid">
         <DataEditor
           columns={cols} rows={rows.length} getCellContent={getCellContent}
           onCellsEdited={onCellsEdited}
-          gridSelection={sel} onGridSelectionChange={setSel}
+          gridSelection={sel} onGridSelectionChange={s2 => { setSel(s2); note(s2?.current ? `select col ${s2.current.cell[0]} row ${s2.current.cell[1]}` : "select cleared") }}
+          onCellActivated={c => note(`ACTIVATED col ${c[0]} row ${c[1]}`)}
+          onCellClicked={c => note(`click col ${c[0]} row ${c[1]}`)}
           rangeSelect="multi-rect" fillHandle rowMarkers="number"
           keybindings={{ activateCell: ' |Enter|shift+Enter|f2' }}
           freezeColumns={3} rowHeight={30} headerHeight={34}
