@@ -136,7 +136,7 @@ function GlidePane({ rows, setRows }) {
           onCellActivated={c => note(`ACTIVATED col ${c[0]} row ${c[1]}`)}
           onCellClicked={c => note(`click col ${c[0]} row ${c[1]}`)}
           rangeSelect="multi-rect" fillHandle rowMarkers="number"
-          keybindings={{ activateCell: ' |Enter|shift+Enter|f2' }}
+          keybindings={{ activateCell: ' |Enter|shift+Enter|F2' }}
           freezeColumns={3} rowHeight={30} headerHeight={34}
           getCellsForSelection={true}
           onPaste={true}
