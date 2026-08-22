@@ -26,6 +26,83 @@
 
 ---
 
+## Session log — 2026-08-19/20: Phase 10 grid spike, scope widened, then parked
+
+**Outcome:** Phase 10 is **parked again** (owner instruction). Planning is complete and nothing
+is half-built — no schema, no Edge Function, no production code. One question remains open:
+which grid library. Full state and evidence live in `docs/backlog/phase10-execution-plan.md`,
+PARKED section.
+
+### What happened
+
+Built a throwaway side-by-side grid spike (branch `10-pre-grid-spike`, 8 commits) with 2050
+synthetic rows × 88 columns, shaped like the real book. The owner drove it and found three real
+problems. Each was root-caused from the library source rather than guessed at — after I got it
+wrong twice by reasoning from type definitions alone.
+
+### Findings that must survive
+
+- **react-data-grid cannot run on React 18.** It renders its contexts as `jsx(Ctx,{value})` —
+  the React 19 shorthand — with **zero** uses of the React-18-compatible `.Provider` form, so it
+  throws `TypeError: render is not a function` in `updateContextConsumer`. Its
+  `peerDependencies` declare `^18.0 || ^19.0`; that declaration is **wrong**. The latest release
+  also has zero range-selection types, so upgrading React would not have helped either.
+- **glide-data-grid works end to end** — range select, block copy/paste, fill handle, F2, Enter
+  commits and moves down, click-away commits, editor opens with the value pre-selected.
+  **10–13 ms** first paint at 2050×88. Two gotchas, both found the hard way: it renders its
+  editor into `document.getElementById("portal")` and returns **null** without it (so
+  double-click activates the cell and then nothing opens), and the F2 keybinding must be `"F2"`
+  — lowercase `"f2"` never matches, because Glide's `checkKey` ends in `key === event.key`.
+- **AG Grid Community has no range selection** — `CellSelectionModule` and `ClipboardModule` sit
+  in the package's Enterprise module type-union beside `AllEnterpriseModule`. ⚠️ A web search
+  confidently claimed the opposite; inspecting the package contradicted it. Worth remembering
+  before trusting a search summary on a licensing question.
+- **Paid options excluded** by the owner's free-tier rule: AG Grid Enterprise (USD 999/dev
+  perpetual), Handsontable (USD 999/dev **per year**, free tier forbids commercial use), Univer
+  (its own docs put pivot, **xlsx import/export**, print and charts behind Pro, and *"Univer Pro
+  advanced capabilities require the server"*).
+- **`@silevis/reactgrid`** (MIT) is the unspiked free alternative: `enableRangeSelection`,
+  `enableFillHandle`, `onCellsChanged` and a **built-in `onContextMenu`** in its types, plus
+  sticky columns and virtual scrolling. DOM-based, so browser Ctrl+F works and editors are
+  ordinary React. Risks: last published April 2025, and DOM rendering at 2050×88 is unmeasured.
+
+### Scope widened, then costed honestly
+
+Reviewing the spike the owner asked for a formatting toolbar, right-click menu, filters,
+formulae, bold/italics, cell borders and pivots. I flagged that this describes Excel itself, that
+a rebuild would still be a weaker Excel, and that it collides with the owner's own
+don't-reinvent-the-wheel principle. **The owner reaffirmed: replace Excel entirely.**
+
+Asking what the formatting was actually *for* cut most of the cost: the answer — *"flagging rows
+needing attention"* — resolved bold, italics and borders into the highlight-plus-colour-rules
+feature already planned, and matches the measured evidence (0 bold / 0 italic / 0 borders across
+all six workbooks). Estimate moved 8–9 → **~12 weeks**.
+
+Formulae stay **column-level, not cell-level**: a position-bound formula silently miscomputes the
+moment a view sorts, and every one of these columns is money. The variance scan found zero
+hand-edited formulas in any derived column across 24,856 formula cells, so a column formula also
+matches how the book already works.
+
+### Corrections to my own earlier claims
+
+- *"Enter does not commit"* — **wrong**, and a test-harness artifact, not a defect. The browser
+  automation tool's Return sends a keydown with `key:""`, `keyCode:0`, which can never match
+  Glide's `event.key === "Enter"`. A properly dispatched Enter commits and advances down.
+- *"The in-app browser has an isolated loopback"* — **wrong twice** (the first theory was that
+  the dev server was down). Vite binds **IPv6 only** here: `netstat` shows `[::1]:3000`
+  listening and nothing on IPv4, so `localhost` and `127.0.0.1` both fail from tooling while
+  `http://[::1]:3000/grid-spike` loads fine. The browser pane also does **not** crash the app —
+  that older memory did not reproduce across ~20 calls.
+
+### Still owner-side
+
+Un-pause staging (`klpnhpnlotcbbovwswmq`, hibernated — DNS does not resolve). More pressing now
+that pivots and column formulas are in scope: Stage 1 is schema + RLS + permissions with
+**nowhere to rehearse**, and the pilot sandbox will hold real cost and margin data on prod. Also
+outstanding: the date Excel goes read-only. The trial group is the **entire back-office team**.
+
+---
+
 ## Session log — 2026-08-11: Phase 10 second design review, plan approved, docs made durable
 
 **Outcome:** Phase 10 planning is closed. A second independent design review re-derived every
