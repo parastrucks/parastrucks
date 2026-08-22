@@ -273,3 +273,130 @@ actually adopts it — the one thing that decides success.
 - **Formulas:** the recompute-and-diff harness re-runs the round-2 scripts' logic against migrated data — every derived column must match the source workbooks row-for-row before cutover; edge cases exercised explicitly (ctc=0 ×101 rows, negative-ageing clamp, mixed-sign batches, ±₹1 dead-band, sub-rupee rows ×40).
 - **Pre-ship:** owner screen-by-screen review (9.6/9.7 pattern) + clean-room red-team lanes against the built schema/EF/grid — the point where a red team earns its keep.
 - **Every push:** CI all-green + Vercel `portal` READY before calling it done; EF deploys watch the upload list for all `_shared/*` assets.
+
+---
+
+## SCOPE CHANGE — 2026-08-20: "replace Excel entirely" (owner decision)
+
+**Asked and reaffirmed.** Reviewing the spike the owner listed: formatting toolbar,
+right-click menu, filters, formulae, bold/italics, cell borders, pivots. I flagged that
+this describes Excel itself, that a 6-month-plus rebuild would still be a weaker Excel,
+and that it collides with the owner's own "don't reinvent the wheel" principle. **The
+owner reaffirmed: replace Excel entirely.** That is the decision; this section scopes it
+honestly rather than re-arguing it.
+
+### The same conversation made it far cheaper than the raw list implied
+
+Asked what the formatting is actually *for*, the owner answered: **flagging rows needing
+attention.** That resolves three of the seven items at a stroke — bold, italics and cell
+borders are not needed as a formatting toolbar. Coloured highlighting plus rule-based
+colouring covers the real need, and does it better: filterable, structured, survives
+export, and consistent with the measured evidence (0 bold / 0 italic / 0 borders across
+all six workbooks; the only formatting in use is one rule-driven column and ~148
+yellow/red flags). **Already in the plan — no new work.**
+
+### What genuinely remains
+
+| Ask | Verdict | Cost |
+|---|---|---|
+| Formatting toolbar, bold/italic, borders | **Resolved** → highlight + colour rules, already planned | — |
+| Filters | Already core | — |
+| Right-click context menu | **NEW — build it.** Copy, paste, insert row, clear, freeze, highlight. Glide supports `onCellContextMenu` | ~3 d |
+| Ctrl+F | **Cannot work on canvas** — browser search cannot see canvas pixels. In-app search was already planned (F5, find by last 6 digits) and must now also cover all columns | already planned, widen ~1 d |
+| Formulae | **Build — but column-level, not cell-level.** See below | ~5 d |
+| Pivots | **Build a group-by + aggregate panel**, not a full pivot builder | ~7 d |
+
+**Revised estimate: ~12 weeks** (was 8–9). Sequencing stays pilot-first.
+
+### Formulae: column-level, and why that is better here — not a compromise
+
+Cell-level formulas stay **cut** (decision 17), and the spike reinforces why: a formula
+bound to a grid position silently computes the wrong number the moment a view sorts or
+filters, and every one of these columns is money.
+
+The replacement is strictly stronger for this book: **a formula belongs to a COLUMN**, e.g.
+`retention = ctc − ctd − amc − dsa − ad_blue`, defined once and applied to every row.
+It cannot drift, cannot be half-copied down, cannot break under sorting, and it is exactly
+how the six workbooks already behave — the variance scan found **zero** hand-edited
+formulas in any derived column across 24,856 formula cells. Excel forces you to copy a
+formula down 2,050 rows and then hope nobody breaks row 1,400. A column formula removes
+that class of error entirely while giving the same expressive power.
+
+Admin-editable, versioned, with a preview of affected rows before it applies.
+
+### Pivots: group-by panel, and the honest limit
+
+Pick group-by columns, a measure and an aggregate (sum / count / average); get a summary
+table, drillable back to the underlying rows. That covers the recurring month-end
+questions. It is **not** a full pivot builder — no drag-and-drop field wells, no calculated
+fields inside the pivot, no slicers. If a genuinely ad-hoc analysis is needed, the
+one-click current-view export to xlsx remains, and Excel does what Excel is good at.
+
+**Stated plainly so it is not a surprise later:** "replace Excel entirely" will hold for
+the daily book — entry, tracking, flagging, month-end summaries. It will not hold for
+open-ended analysis. Anyone who wants to build an arbitrary model will still reach for
+Excel, and the export exists for exactly that.
+
+---
+
+## ⏸️ PARKED — 2026-08-20 (owner: "put this on the back burner again")
+
+**Planning is complete and approved. Nothing is half-built.** No schema, no Edge Function,
+no production code — the only code written is a throwaway spike on a separate branch. Phase
+10 can be picked up cold from this file.
+
+### Owner decisions taken this session
+
+| Decision | Choice |
+|---|---|
+| Scope | **Replace Excel entirely** (reaffirmed after I flagged the cost — see the scope-change section above) |
+| Formatting | Resolved to **flagging rows needing attention** → highlight + colour rules, already planned |
+| **Budget** | **FREE-TIER ONLY. No paid dependencies.** This rules out the best-fit libraries — see below |
+| Trial group | **The entire back-office team** |
+| Grid library | **STILL OPEN** — see below |
+
+### Grid library — the one genuinely open question
+
+Verified empirically, not from documentation summaries:
+
+| Candidate | Verdict | Evidence |
+|---|---|---|
+| **glide-data-grid 6.0.3** (MIT) | ✅ **works, proven end to end** | Range select, block copy/paste, fill handle, F2, Enter-commits-and-moves-down, click-away-commits, editor opens with value pre-selected. First paint **10–13 ms** at 2050×88. Two gotchas found and fixed: it needs `<div id="portal">` in the DOM or the editor silently never opens, and the F2 keybinding must be `"F2"` not `"f2"`. Weaknesses: canvas, so **browser Ctrl+F cannot work**, and dropdown/date editors need overlay work |
+| **@silevis/reactgrid 4.1.17** (MIT) | ⚠️ **UNSPIKED — the open question** | Type definitions confirm `enableRangeSelection`, `enableFillHandle`, `onCellsChanged`, **`onContextMenu` (built-in right-click menu)**, `stickyLeftColumns`, virtual scrolling. DOM-based, so **Ctrl+F works** and editors are ordinary React. Risks: last published **April 2025**, and DOM rendering at 2050×88 is exactly where canvas wins — unmeasured |
+| ~~react-data-grid 7.0.0-beta.48~~ | ❌ **cannot run on React 18** | Renders contexts as `jsx(Ctx,{value})` — the React 19 shorthand — with **zero** `.Provider` uses. Crashes `TypeError: render is not a function`. Its `peerDependencies` claim `^18.0 \|\| ^19.0`; that is **wrong**. Latest release also has zero range-selection types, so upgrading React would not have helped |
+| ~~AG Grid Community~~ | ❌ **no range selection** | `CellSelectionModule` / `ClipboardModule` sit in the package's Enterprise module type-union next to `AllEnterpriseModule`. ⚠️ A web search confidently claimed the opposite — checking the package contradicted it |
+| ~~AG Grid Enterprise~~ | ❌ paid | $999/dev **perpetual**. Would have removed ~2 weeks (pivot + context menu built in, DOM so Ctrl+F works). Excluded by the free-tier rule |
+| ~~Handsontable 18~~ | ❌ paid | **$999/dev per year**, recurring; free tier explicitly forbids commercial use |
+| ~~Univer~~ | ❌ paid + infrastructure | Its own docs: pivot, **xlsx import/export**, print and charts are all Pro, and *"Univer Pro advanced capabilities require the server"*. Unlicensed use gets watermarks and import-size limits. v0.25.x |
+
+**No free library provides pivot tables.** That is a build either way (~7 d), unchanged.
+
+### ⏭️ First action on resume
+
+**Half-day ReactGrid spike** against the same checklist Glide passed — range select, block
+paste from Excel, fill handle, F2/Enter/Tab/Esc, frozen columns, and above all **render
+performance at 2050×88**. Add it as a third tab in the existing spike.
+
+- If it holds up it beats Glide on Ctrl+F, editors and the built-in context menu, at the same price (zero).
+- If it is slow or creaky, **ship Glide** — already proven working, nothing further to prove.
+
+Do not re-litigate the ruled-out options; the evidence is in the table above.
+
+### Still owner-side, unchanged
+
+1. **Un-pause staging** (`klpnhpnlotcbbovwswmq`, hibernated — DNS does not resolve). More
+   pressing now that pivots and column formulas are in scope: Stage 1 is schema + RLS +
+   permissions with **nowhere to rehearse**, and the pilot sandbox will hold real cost and
+   margin data on prod.
+2. **The date Excel goes read-only.**
+3. Estimate stands at **~12 weeks**, pilot-first.
+
+### Where the code lives
+
+Branch **`10-pre-grid-spike`** (8 commits, pushed) — `src/spike/` plus a dev-only mount in
+`src/main.jsx`. Verified stripped from production builds: no chunk, no route string, neither
+grid library in `dist/`. **Do not merge it**; `package.json` there carries both grid
+libraries. Delete `src/spike/` once the grid is chosen.
+
+⚠️ Run the spike at **`http://[::1]:3000/grid-spike`** — vite binds IPv6 only on this
+machine, so `localhost` and `127.0.0.1` both fail from tooling.
