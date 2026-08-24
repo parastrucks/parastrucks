@@ -236,7 +236,7 @@ export default function AccuracyTrackerTab({ tivActuals, judgmentTiv, modelParam
             {' · '}
             <span style={{ color: 'var(--red)', fontWeight: 600 }}>● &gt;25%</span>
           </div>
-          <div style={{ color: 'var(--gray-400)', fontStyle: 'italic' }}>
+          <div style={{ color: 'var(--gray-500)', fontStyle: 'italic' }}>
             Hover a cell for forecast/actual
           </div>
         </div>
