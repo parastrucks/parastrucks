@@ -2,6 +2,7 @@
 // Parses the 6-sheet Market_Data_YY-YY.xlsx workbook into structured arrays.
 import * as XLSX from 'xlsx'
 import { SEGMENTS, SEG_COL, RAW_SEGMENT_ROWS, RAW_COLS_PER_MONTH, RAW_COL_OFFSET } from '../constants'
+import { currentIstMonth, monthCursor } from './istMonth'
 
 // Convert "Apr-22" → { year: 2022, month_num: 4, month_index: 0 }
 // Apr-22 is index 0 (fiscal year start)
@@ -45,16 +46,54 @@ export function parseMonthLabel(label) {
   return { year, month_num: monthNum, month_index: monthIndex, canonicalLabel }
 }
 
+// ── Shared validation helpers (audit 2026-08-25 — findings A2, A6, A8) ──────
+// The parser is the ONLY place that still knows whether a cell was blank or a
+// genuine zero; every consumer downstream just sees a number. So the
+// distinction has to be resolved here: an all-blank month is dropped, a real
+// zero is preserved. (The 2022 PTB ramp-up months are genuine zeros — they must
+// survive. A pre-typed future month with empty cells must not.)
+const SEG_HEADERS = ['Bus PVT', 'Haulage', 'MAV', 'Tractor', 'Tipper', 'ICV Trucks']
+
+const norm       = v => String(v ?? '').trim().toLowerCase().replace(/\s+/g, ' ')
+const isBlank    = v => String(v ?? '').trim() === ''
+const colLetter  = i => String.fromCharCode(65 + i)
+
+// True when every segment cell is blank — the pre-typed-future-month signature.
+function allSegmentsBlank(row) {
+  for (let c = 1; c <= 6; c++) if (!isBlank(row[c])) return false
+  return true
+}
+
+function findHeaderRow(rows) {
+  for (let i = 0; i < rows.length; i++) {
+    if (String(rows[i][0]).toLowerCase().includes('month')) return i
+  }
+  return -1
+}
+
+// Column POSITIONS are load-bearing (row[1]→Bus PVT … row[6]→ICV Trucks) but
+// were never verified, so inserting a helper column in Excel — a reflex for
+// spreadsheet users — silently loaded every segment into the wrong bucket and
+// then retrained the model on it. Fail loudly, in the workbook's own vocabulary.
+function assertSegmentHeaders(headerCells, sheetLabel) {
+  for (let c = 1; c <= 6; c++) {
+    if (norm(headerCells[c]) !== norm(SEG_HEADERS[c - 1])) {
+      const found = isBlank(headerCells[c]) ? '(blank)' : `"${String(headerCells[c]).trim()}"`
+      throw new Error(
+        `${sheetLabel}: column ${colLetter(c)} should be "${SEG_HEADERS[c - 1]}" but found ${found}. ` +
+        'Remove or move the extra column so the segment columns line up.'
+      )
+    }
+  }
+}
+
 // ── Sheet 2: Segment wise data - TIV ────────────────────────────────
 // Columns: Month | Bus PVT | Haulage | MAV | Tractor | Tipper | ICV Trucks | TIV
-function parseTivSheet(ws) {
+function parseTivSheet(ws, warnings) {
   const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: true })
-  // Find header row
-  let headerRow = -1
-  for (let i = 0; i < rows.length; i++) {
-    if (String(rows[i][0]).toLowerCase().includes('month')) { headerRow = i; break }
-  }
+  const headerRow = findHeaderRow(rows)
   if (headerRow === -1) throw new Error('TIV sheet: cannot find header row')
+  assertSegmentHeaders(rows[headerRow], 'TIV sheet')
 
   const result = []
   for (let i = headerRow + 1; i < rows.length; i++) {
@@ -63,8 +102,19 @@ function parseTivSheet(ws) {
     if (!label) continue
     const meta = parseMonthLabel(label)
     if (!meta) continue
+    // A month row whose segment cells are all empty carries no data — it is a
+    // placeholder the owner typed ahead. Reading it as six zeros poisoned
+    // last_data_month, the YoY cap and the seasonal indices.
+    if (allSegmentsBlank(row)) continue
+    // Row-level reconciliation: a mismatch means the columns shifted or the
+    // Total is hand-typed. Surfaced, not fatal — the owner's arithmetic is his.
+    const segSum = [1, 2, 3, 4, 5, 6].reduce((s, c) => s + (Number(row[c]) || 0), 0)
+    const stated = Number(row[7]) || 0
+    if (stated && Math.abs(stated - segSum) > 1) {
+      warnings.push(`TIV ${meta.canonicalLabel}: Total column says ${stated} but the six segments sum to ${segSum}.`)
+    }
     result.push({
-      month_label: label,
+      month_label: meta.canonicalLabel,
       year:        meta.year,
       month_num:   meta.month_num,
       month_index: meta.month_index,
@@ -84,11 +134,9 @@ function parseTivSheet(ws) {
 // Same structure, last col is "Total Sale"
 function parsePtbSheet(ws) {
   const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: true })
-  let headerRow = -1
-  for (let i = 0; i < rows.length; i++) {
-    if (String(rows[i][0]).toLowerCase().includes('month')) { headerRow = i; break }
-  }
+  const headerRow = findHeaderRow(rows)
   if (headerRow === -1) throw new Error('PTB sheet: cannot find header row')
+  assertSegmentHeaders(rows[headerRow], 'PTB sheet')
 
   const result = []
   for (let i = headerRow + 1; i < rows.length; i++) {
@@ -97,8 +145,9 @@ function parsePtbSheet(ws) {
     if (!label) continue
     const meta = parseMonthLabel(label)
     if (!meta) continue
+    if (allSegmentsBlank(row)) continue
     result.push({
-      month_label: label,
+      month_label: meta.canonicalLabel,
       year:        meta.year,
       month_num:   meta.month_num,
       month_index: meta.month_index,
@@ -117,10 +166,7 @@ function parsePtbSheet(ws) {
 // ── Sheet 4: Segment wise prediction - TIV ──────────────────────────
 function parseJudgmentTivSheet(ws) {
   const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: true })
-  let headerRow = -1
-  for (let i = 0; i < rows.length; i++) {
-    if (String(rows[i][0]).toLowerCase().includes('month')) { headerRow = i; break }
-  }
+  const headerRow = findHeaderRow(rows)
   if (headerRow === -1) return []  // Optional sheet
 
   const result = []
@@ -128,9 +174,11 @@ function parseJudgmentTivSheet(ws) {
     const row = rows[i]
     const label = String(row[0]).trim()
     if (!label) continue
-    if (!parseMonthLabel(label)) continue
+    const meta = parseMonthLabel(label)
+    if (!meta) continue
+    if (allSegmentsBlank(row)) continue
     result.push({
-      month_label: label,
+      month_label: meta.canonicalLabel,
       bus_pvt:     row[1] !== '' ? Number(row[1]) : null,
       haulage:     row[2] !== '' ? Number(row[2]) : null,
       mav:         row[3] !== '' ? Number(row[3]) : null,
@@ -146,10 +194,7 @@ function parseJudgmentTivSheet(ws) {
 // ── Sheet 5: Segment wise prediction - PTB ──────────────────────────
 function parseJudgmentPtbSheet(ws) {
   const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: true })
-  let headerRow = -1
-  for (let i = 0; i < rows.length; i++) {
-    if (String(rows[i][0]).toLowerCase().includes('month')) { headerRow = i; break }
-  }
+  const headerRow = findHeaderRow(rows)
   if (headerRow === -1) return []
 
   const result = []
@@ -157,9 +202,11 @@ function parseJudgmentPtbSheet(ws) {
     const row = rows[i]
     const label = String(row[0]).trim()
     if (!label) continue
-    if (!parseMonthLabel(label)) continue
+    const meta = parseMonthLabel(label)
+    if (!meta) continue
+    if (allSegmentsBlank(row)) continue
     result.push({
-      month_label: label,
+      month_label: meta.canonicalLabel,
       bus_pvt:     row[1] !== '' ? Number(row[1]) : null,
       haulage:     row[2] !== '' ? Number(row[2]) : null,
       mav:         row[3] !== '' ? Number(row[3]) : null,
@@ -207,19 +254,25 @@ function parseRawDataSheet(ws) {
     if (h === 'AL') { alOffset = c - firstStart; break }
   }
 
-  // AL actuals: read the AL column at each segment total row for each month
-  const alActuals = months.map(m => {
-    const row = {
-      month_label: m.label,
-      month_index: m.month_index,
-    }
+  // AL actuals: read the AL column at each segment total row for each month.
+  // A month header can exist while its AL cells are still empty (the AL/LM
+  // split lags the TIV data). Emitting a zero row for those months advanced
+  // lastAlMonth to match last_data_month, which SILENTLY HID the "AL share as
+  // of …" staleness chip — the one safeguard against a stale share cascade —
+  // and dragged al_share_recent toward the floor. Only emit a month that
+  // actually carries AL data.
+  const alActuals = []
+  for (const m of months) {
+    const row = { month_label: m.label, month_index: m.month_index }
+    let hasData = false
     for (const seg of SEGMENTS) {
-      const segRowIdx = RAW_SEGMENT_ROWS[seg]
-      const segRow = rows[segRowIdx] || []
-      row[SEG_COL[seg]] = Number(segRow[m.startCol + alOffset]) || 0
+      const segRow = rows[RAW_SEGMENT_ROWS[seg]] || []
+      const cell = segRow[m.startCol + alOffset]
+      if (!isBlank(cell)) hasData = true
+      row[SEG_COL[seg]] = Number(cell) || 0
     }
-    return row
-  })
+    if (hasData) alActuals.push(row)
+  }
 
   // Raw JSONB data: for each month, capture all segment rows using detected offsets
   const rawRows = months.map(m => {
@@ -292,22 +345,65 @@ export function downloadMarketDataTemplate() {
 }
 
 // ── Main export ──────────────────────────────────────────────────────
-export function parseExcelFile(arrayBuffer) {
+// Sheets were addressed purely by position, so a scratch sheet inserted
+// anywhere before position 5 — the other reflex of a spreadsheet user — made
+// the parser read the wrong sheet and then blame the right one. Match by name
+// first; fall back to position, but say so.
+const SHEET_NAMES = {
+  tiv:      'Segment wise data - TIV',
+  ptb:      'Segment wise data - PTB',
+  judgTiv:  'Segment wise prediction - TIV',
+  judgPtb:  'Segment wise prediction - PTB',
+  raw:      'Raw Data',
+}
+
+function resolveSheet(wb, canonical, fallbackIdx, warnings) {
+  const hit = wb.SheetNames.find(n => norm(n) === norm(canonical))
+  if (hit) return wb.Sheets[hit]
+  const fallbackName = wb.SheetNames[fallbackIdx]
+  if (!fallbackName) {
+    throw new Error(`Cannot find a sheet named "${canonical}", and there is no sheet at position ${fallbackIdx + 1}.`)
+  }
+  warnings.push(`No sheet named "${canonical}" — read "${fallbackName}" (position ${fallbackIdx + 1}) instead.`)
+  return wb.Sheets[fallbackName]
+}
+
+export function parseExcelFile(arrayBuffer, now = new Date()) {
   const wb = XLSX.read(new Uint8Array(arrayBuffer), { type: 'array', cellDates: false, raw: true })
   const sheetNames = wb.SheetNames
+  const warnings = []
 
-  // Sheet index by position: 0=Metadata, 1=TIV, 2=PTB, 3=JudgTIV, 4=JudgPTB, 5=RawData
+  // Sheet order by position: 0=Metadata, 1=TIV, 2=PTB, 3=JudgTIV, 4=JudgPTB, 5=RawData
   if (sheetNames.length < 6) {
-    throw new Error(`Expected 6 sheets, found ${sheetNames.length}. Check the file format.`)
+    throw new Error(
+      `Expected 6 sheets, found ${sheetNames.length} (${sheetNames.join(', ') || 'none'}). Check the file format.`
+    )
   }
 
-  const tivActuals     = parseTivSheet(wb.Sheets[sheetNames[1]])
-  const ptbActuals     = parsePtbSheet(wb.Sheets[sheetNames[2]])
-  const judgmentTiv    = parseJudgmentTivSheet(wb.Sheets[sheetNames[3]])
-  const judgmentPtb    = parseJudgmentPtbSheet(wb.Sheets[sheetNames[4]])
-  const { alActuals, rawRows } = parseRawDataSheet(wb.Sheets[sheetNames[5]])
+  const tivActuals  = parseTivSheet(resolveSheet(wb, SHEET_NAMES.tiv, 1, warnings), warnings)
+  const ptbActuals  = parsePtbSheet(resolveSheet(wb, SHEET_NAMES.ptb, 2, warnings))
+  const judgmentTiv = parseJudgmentTivSheet(resolveSheet(wb, SHEET_NAMES.judgTiv, 3, warnings))
+  const judgmentPtb = parseJudgmentPtbSheet(resolveSheet(wb, SHEET_NAMES.judgPtb, 4, warnings))
+  const { alActuals, rawRows } = parseRawDataSheet(resolveSheet(wb, SHEET_NAMES.raw, 5, warnings))
 
-  const lastMonth = tivActuals.length > 0 ? tivActuals[tivActuals.length - 1].month_label : '?'
+  if (tivActuals.length === 0) throw new Error('TIV sheet: no month rows with data were found.')
+
+  // Pick the latest month by INDEX. Sheet order is not guaranteed, and the
+  // label is text — 'May-26' sorts above 'Jul-26'.
+  const latest = tivActuals.reduce((a, b) => (a.month_index > b.month_index ? a : b))
+
+  // A month that has not happened yet cannot have actuals. This is the second
+  // half of the pre-typed-future-month guard: blank rows are dropped above, but
+  // a row of real-looking zeros typed ahead would still sail through.
+  const nowIst = currentIstMonth(now)
+  if (monthCursor(latest.year, latest.month_num) > monthCursor(nowIst.year, nowIst.month_num)) {
+    throw new Error(
+      `TIV sheet: the last month with data is ${latest.month_label}, which is in the future. ` +
+      'Remove the rows for months that have not closed yet.'
+    )
+  }
+
+  if (alActuals.length === 0) warnings.push('Raw Data sheet: no AL figures were found — the AL and PTB share layers cannot be updated.')
 
   return {
     tivActuals,
@@ -318,7 +414,21 @@ export function parseExcelFile(arrayBuffer) {
     rawRows,
     summary: {
       monthsLoaded: tivActuals.length,
-      lastDataMonth: lastMonth,
+      lastDataMonth: latest.month_label,
+      warnings,
+      // Per-sheet counts: a preview that only reports TIV cannot reveal that a
+      // sheet parsed to nothing, which is how the AL layer froze silently.
+      counts: {
+        tiv:       tivActuals.length,
+        ptb:       ptbActuals.length,
+        al:        alActuals.length,
+        judgTiv:   judgmentTiv.length,
+        judgPtb:   judgmentPtb.length,
+        raw:       rawRows.length,
+      },
+      lastAlMonth: alActuals.length
+        ? alActuals.reduce((a, b) => (a.month_index > b.month_index ? a : b)).month_label
+        : null,
     },
   }
 }
