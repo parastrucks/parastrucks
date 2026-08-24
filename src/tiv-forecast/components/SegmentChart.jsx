@@ -76,7 +76,10 @@ export default function SegmentChart({ type = 'line', data = [], xKey = 'month',
               strokeDasharray={s.dashed ? '5 4' : undefined}
               strokeWidth={s.bold ? 2.5 : 1.5}
               dot={false}
-              connectNulls
+              /* connectNulls was unconditional, so a month with no data was
+                 bridged with a straight line that looked like measurement.
+                 Opt in per series; a gap in actuals should read as a gap. */
+              connectNulls={s.connectNulls === true}
             />
           ))}
         </LineChart>

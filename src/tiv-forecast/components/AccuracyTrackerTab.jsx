@@ -33,16 +33,25 @@ function buildJudgmentBacktest(tivActuals, judgmentTiv) {
     const aRow = actualMap[jRow.month_label]
     if (!aRow) continue
     lookup[jRow.month_label] = {}
+    // The parser deliberately preserves a blank judgment cell as null — nobody
+    // made a call that month. `Number(null)` is 0, which turned "no judgment"
+    // into "judgment said zero": a fake 100% error, shown in red, asserting a
+    // prediction nobody made. Every one of those also inflated the judgment
+    // MAPE, biasing the model-vs-judgment comparison this tab exists to make.
+    let jComplete = true
     for (const seg of SEGMENTS) {
       const col = SEG_COL[seg]
-      const jVal = Number(jRow[col])
+      const raw = jRow[col]
+      const jVal = raw === null || raw === undefined || raw === '' ? null : Number(raw)
+      if (jVal === null) jComplete = false
       const aVal = Number(aRow[col])
-      lookup[jRow.month_label][seg] = { jVal, aVal, ae: absErr(jVal, aVal) }
+      lookup[jRow.month_label][seg] = { jVal, aVal, ae: jVal === null ? null : absErr(jVal, aVal) }
     }
-    // Total TIV
-    const jTot = SEGMENTS.reduce((s, seg) => s + (Number(jRow[SEG_COL[seg]]) || 0), 0)
+    // Total TIV — only when every segment was judged; a total summed over the
+    // segments that happen to be present is not comparable to the model's.
+    const jTot = jComplete ? SEGMENTS.reduce((s, seg) => s + Number(jRow[SEG_COL[seg]]), 0) : null
     const aTot = SEGMENTS.reduce((s, seg) => s + (Number(aRow[SEG_COL[seg]]) || 0), 0)
-    lookup[jRow.month_label]['Total'] = { jVal: jTot, aVal: aTot, ae: absErr(jTot, aTot) }
+    lookup[jRow.month_label]['Total'] = { jVal: jTot, aVal: aTot, ae: jTot === null ? null : absErr(jTot, aTot) }
   }
   return lookup
 }

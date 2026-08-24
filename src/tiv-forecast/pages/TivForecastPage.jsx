@@ -26,6 +26,9 @@ const DEBOUNCE_MS = 400
 
 export default function TivForecastPage() {
   const { profile } = useAuth()
+  // Mirrors UploadPanel's gate — used only to address the reader correctly
+  // ("upload it" vs "ask an administrator"), never to grant anything.
+  const isAdmin = profile?.permission_level === 'admin'
   const toast = useToast()   // load failures
   const [activeTab, setActiveTab]       = useState('forecast')
   const [loading, setLoading]           = useState(true)
@@ -154,6 +157,27 @@ export default function TivForecastPage() {
               ⚠ AL/PTB share layer as of {lastAlMonth}
             </span>
           )}
+        </div>
+      )}
+
+      {/* Stale-model banner.
+          The trained model carries anchors for exactly three months after its
+          last data month. Once the calendar rolls past them without a new
+          upload, those columns have no basis at all — which used to render as
+          a confident zero. This says so out loud, to everyone, not just to the
+          admin who can fix it. */}
+      {forecastResult?.staleMonths?.length > 0 && (
+        <div className="tiv-banner tiv-banner-danger" role="alert">
+          <strong>Model out of date.</strong>{' '}
+          {forecastResult.staleMonths.length === forecastResult.forecastMonths.length
+            ? 'No forecast can be produced for any of the months shown'
+            : `No forecast can be produced for ${forecastResult.staleMonths.join(', ')}`}
+          {' '}— the model was trained on data through{' '}
+          <strong>{modelParams?.last_data_month}</strong>, and its forecast window only
+          reaches three months past that. Those columns show “—”, not zero.
+          {isAdmin
+            ? ' Upload the latest Market Data workbook to refresh it.'
+            : ' Ask an administrator to upload the latest Market Data workbook.'}
         </div>
       )}
 

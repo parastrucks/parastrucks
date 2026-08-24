@@ -7,13 +7,24 @@ import SegmentChart from './SegmentChart'
 export default function SegmentAnalysisTab({ tivActuals, alActuals, ptbActuals, forecastResult }) {
   const [activeSeg, setActiveSeg] = useState(SEGMENTS[0])
 
+  // A real zero and a missing month are different facts and must plot
+  // differently. `|| 0` fabricated a zero for a missing TIV month; `|| null`
+  // erased genuine zeros from PTB — and the dealership really did sell nothing
+  // in six of the 2022 ramp-up months, so the chart drew a straight
+  // interpolated line over the truth.
+  const num = v => {
+    if (v === null || v === undefined || v === '') return null
+    const n = Number(v)
+    return Number.isFinite(n) ? n : null
+  }
+
   // Build historical + forecast line chart data for the selected segment
   const historicalChartData = useMemo(() => {
     if (!tivActuals?.length) return []
     return tivActuals.map(row => ({
       month: row.month_label,
-      TIV:   Number(row[SEG_COL[activeSeg]]) || 0,
-      PTB:   ptbActuals?.find(p => p.month_label === row.month_label)?.[SEG_COL[activeSeg]] || null,
+      TIV:   num(row[SEG_COL[activeSeg]]),
+      PTB:   num(ptbActuals?.find(p => p.month_label === row.month_label)?.[SEG_COL[activeSeg]]),
     }))
   }, [tivActuals, ptbActuals, activeSeg])
 
@@ -41,11 +52,13 @@ export default function SegmentAnalysisTab({ tivActuals, alActuals, ptbActuals, 
     if (!tivActuals?.length || !alActuals?.length) return []
     return tivActuals.map(tRow => {
       const aRow = alActuals.find(a => a.month_label === tRow.month_label)
-      const tiv = Number(tRow[SEG_COL[activeSeg]]) || 0
-      const al  = Number(aRow?.[SEG_COL[activeSeg]]) || 0
+      const tiv = num(tRow[SEG_COL[activeSeg]])
+      // A month with no AL row has no known share. Reading it as 0 plotted a
+      // 0% point that looked like "AL sold nothing" rather than "not reported".
+      const al  = aRow ? num(aRow[SEG_COL[activeSeg]]) : null
       return {
         month:    tRow.month_label,
-        'AL Share': tiv > 0 ? parseFloat((al / tiv * 100).toFixed(1)) : null,
+        'AL Share': tiv > 0 && al !== null ? parseFloat((al / tiv * 100).toFixed(1)) : null,
       }
     }).filter(r => r['AL Share'] !== null)
   }, [tivActuals, alActuals, activeSeg])
@@ -57,7 +70,9 @@ export default function SegmentAnalysisTab({ tivActuals, alActuals, ptbActuals, 
       const row = { month: fm.label }
       for (const seg of SEGMENTS) {
         const r = forecastResult.bySegment[seg]?.find(s => s.month === fm.label)
-        row[seg] = r?.tiv || 0
+        // A stale month has no forecast; `|| 0` drew it as a zero-height slice
+        // of a real-looking bar. null makes recharts leave it out.
+        row[seg] = r?.tiv ?? null
       }
       return row
     })

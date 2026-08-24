@@ -792,6 +792,15 @@ tbody tr:hover td { background: var(--gray-50); }
   margin-bottom: 12px;
   font-size: 13px;
 }
+/* A stale model is not a caution, it is a stop: the columns it refers to have
+   no forecast at all. Red separates it from the amber "share layer is older
+   than the TIV layer" notice, which is a real but partial degradation. */
+.tiv-banner-danger {
+  background: var(--red-light);
+  border-color: var(--red);
+  color: var(--ink);
+}
+
 .tiv-scroll { overflow-x: auto; }
 
 

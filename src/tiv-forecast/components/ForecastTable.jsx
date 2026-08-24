@@ -108,22 +108,35 @@ export default function ForecastTable({
                 })}
               </tr>
             ))}
-            {/* Total row */}
+            {/* Total row.
+                A total assembled from only some of its segments is worse than
+                no total, so a single missing segment makes the whole cell '—'.
+                And `||` was conflating a legitimate zero with missing data —
+                a real 0 must read as 0, not as a dash. */}
             <tr className="tiv-row-total">
               <th scope="row">Total</th>
               {forecastMonths.map(fm => {
-                const total = SEGMENTS.reduce((s, seg) => s + (readCell(seg, fm.label) || 0), 0)
-                const jRow  = judgmentRows[fm.label]
+                const cells  = SEGMENTS.map(seg => readCell(seg, fm.label))
+                const total  = cells.some(v => v === null || v === undefined)
+                  ? null
+                  : cells.reduce((s, v) => s + v, 0)
+                const jRow   = judgmentRows[fm.label]
                 if (jRow) {
-                  const jTotal = SEGMENTS.reduce((s, seg) => s + (jRow[seg] || 0), 0)
+                  // Judgment rows are legitimately partial. Summing the present
+                  // segments and showing it beside a complete model total
+                  // invited a comparison between different things.
+                  const jCells = SEGMENTS.map(seg => jRow[seg])
+                  const jTotal = jCells.some(v => v === null || v === undefined)
+                    ? null
+                    : jCells.reduce((s, v) => s + v, 0)
                   return (
                     <Fragment key={fm.label}>
-                      <td className="tiv-num">{total || '—'}</td>
-                      <td className="tiv-num tiv-judg">{jTotal || '—'}</td>
+                      <td className="tiv-num">{total ?? '—'}</td>
+                      <td className="tiv-num tiv-judg">{jTotal ?? '—'}</td>
                     </Fragment>
                   )
                 }
-                return <td key={fm.label} className="tiv-num">{total || '—'}</td>
+                return <td key={fm.label} className="tiv-num">{total ?? '—'}</td>
               })}
             </tr>
           </tbody>
