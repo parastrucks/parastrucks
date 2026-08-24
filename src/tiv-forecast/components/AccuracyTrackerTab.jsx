@@ -84,10 +84,42 @@ function computeMAPE(lookup) {
 // Cell styles
 const cellBase = { textAlign: 'center', padding: '5px 6px', fontSize: 12 }
 
-function ErrCell({ ae, style = {} }) {
+function fmtNum(v) {
+  return v === null || v === undefined || isNaN(v) ? '—' : Math.round(v)
+}
+
+// Error % at rest; forecast/actual on hover. `title` carries the fully labelled
+// breakdown including the other estimate, so one hover answers "how far off was
+// the model, and did judgment do better?" without reading across the table.
+function ErrCell({ ae, forecast, actual, kind, peerLabel, peerForecast, peerAe, style = {} }) {
+  const hasVals = forecast !== undefined && actual !== undefined
+
+  let title
+  if (hasVals) {
+    const lines = [
+      `Actual ${fmtNum(actual)}`,
+      `${kind} ${fmtNum(forecast)}  (${fmtPct(ae ?? null)} error)`,
+    ]
+    if (peerForecast !== undefined && peerForecast !== null) {
+      lines.push(`${peerLabel} ${fmtNum(peerForecast)}  (${fmtPct(peerAe ?? null)} error)`)
+    }
+    title = lines.join('\n')
+  }
+
   return (
-    <td style={{ ...cellBase, fontWeight: 700, color: errColor(ae ?? null), ...style }}>
-      {fmtPct(ae ?? null)}
+    <td
+      className={hasVals ? 'tiv-cell' : undefined}
+      title={title}
+      style={{ ...cellBase, fontWeight: 700, color: errColor(ae ?? null), whiteSpace: 'nowrap', ...style }}
+    >
+      <span className="tiv-cell-err">{fmtPct(ae ?? null)}</span>
+      {hasVals && (
+        <span className="tiv-cell-val">
+          {fmtNum(forecast)}
+          <span className="tiv-cell-sep">/</span>
+          <span className="tiv-cell-actual">{fmtNum(actual)}</span>
+        </span>
+      )}
     </td>
   )
 }
@@ -204,6 +236,9 @@ export default function AccuracyTrackerTab({ tivActuals, judgmentTiv, modelParam
             {' · '}
             <span style={{ color: 'var(--red)', fontWeight: 600 }}>● &gt;25%</span>
           </div>
+          <div style={{ color: 'var(--gray-400)', fontStyle: 'italic' }}>
+            Hover a cell for forecast/actual
+          </div>
         </div>
 
         <div style={{ overflowX: 'auto' }}>
@@ -288,79 +323,75 @@ export default function AccuracyTrackerTab({ tivActuals, judgmentTiv, modelParam
                   <td style={{ fontWeight: 600, padding: '5px 8px', whiteSpace: 'nowrap', fontSize: 11 }}>
                     {month}
                   </td>
-                  {SEGMENTS.map(seg => {
-                    const mCell = mdlLookup[month]?.[seg]
-                    const jCell = jLookup[month]?.[seg]
+                  {ALL_COLS.map(col => {
+                    const isTotal = col === 'Total'
+                    const mCell = mdlLookup[month]?.[col]
+                    const jCell = jLookup[month]?.[col]
+                    const edge  = isTotal
+                      ? { borderLeft: '2px solid var(--gray-300)' }
+                      : { borderLeft: '1px solid var(--gray-100)' }
 
                     if (hasBoth) {
                       return (
-                        <>
-                          <ErrCell key={`${month}-${seg}-m`} ae={mCell?.ae ?? null} style={{ borderLeft: '1px solid var(--gray-100)' }} />
-                          <ErrCell key={`${month}-${seg}-j`} ae={jCell?.ae ?? null} />
-                        </>
+                        <Fragment key={`${month}-${col}`}>
+                          <ErrCell
+                            ae={mCell?.ae ?? null}
+                            forecast={mCell?.mVal}
+                            actual={mCell?.aVal}
+                            kind="Model"
+                            peerLabel="Judgment"
+                            peerForecast={jCell?.jVal}
+                            peerAe={jCell?.ae}
+                            style={edge}
+                          />
+                          <ErrCell
+                            ae={jCell?.ae ?? null}
+                            forecast={jCell?.jVal}
+                            actual={jCell?.aVal}
+                            kind="Judgment"
+                            peerLabel="Model"
+                            peerForecast={mCell?.mVal}
+                            peerAe={mCell?.ae}
+                          />
+                        </Fragment>
                       )
                     }
                     const cell = mCell ?? jCell
                     return (
                       <ErrCell
-                        key={`${month}-${seg}`}
+                        key={`${month}-${col}`}
                         ae={cell?.ae ?? null}
-                        style={{ borderLeft: '1px solid var(--gray-100)' }}
+                        forecast={mCell ? mCell.mVal : jCell?.jVal}
+                        actual={cell?.aVal}
+                        kind={mCell ? 'Model' : 'Judgment'}
+                        style={edge}
                       />
                     )
                   })}
-                  {/* Total TIV cells */}
-                  {hasBoth ? (
-                    <>
-                      <ErrCell key={`${month}-total-m`} ae={mdlLookup[month]?.['Total']?.ae ?? null} style={{ borderLeft: '2px solid var(--gray-300)' }} />
-                      <ErrCell key={`${month}-total-j`} ae={jLookup[month]?.['Total']?.ae ?? null} />
-                    </>
-                  ) : (
-                    <ErrCell
-                      key={`${month}-total`}
-                      ae={(hasMdl ? mdlLookup : jLookup)[month]?.['Total']?.ae ?? null}
-                      style={{ borderLeft: '2px solid var(--gray-300)' }}
-                    />
-                  )}
                 </tr>
               ))}
 
               {/* MAPE summary row */}
               <tr style={{ borderTop: '2px solid var(--gray-200)', background: 'var(--gray-50)' }}>
                 <td style={{ fontWeight: 700, padding: '5px 8px', fontSize: 11 }}>MAPE</td>
-                {SEGMENTS.map(seg => {
-                  const mdlAe = mdlMape[seg] !== null ? mdlMape[seg] / 100 : null
-                  const jdgAe = jMape[seg]   !== null ? jMape[seg]   / 100 : null
+                {ALL_COLS.map(col => {
+                  const mdlAe = mdlMape[col] !== null ? mdlMape[col] / 100 : null
+                  const jdgAe = jMape[col]   !== null ? jMape[col]   / 100 : null
+                  const edge  = col === 'Total'
+                    ? { borderLeft: '2px solid var(--gray-300)' }
+                    : { borderLeft: '1px solid var(--gray-100)' }
 
+                  // Aggregates, not a forecast/actual pair — no hover swap here.
                   if (hasBoth) {
                     return (
-                      <>
-                        <ErrCell key={`mape-${seg}-m`} ae={mdlAe} style={{ borderLeft: '1px solid var(--gray-100)' }} />
-                        <ErrCell key={`mape-${seg}-j`} ae={jdgAe} />
-                      </>
+                      <Fragment key={`mape-${col}`}>
+                        <ErrCell ae={mdlAe} style={edge} />
+                        <ErrCell ae={jdgAe} />
+                      </Fragment>
                     )
                   }
-                  return (
-                    <ErrCell
-                      key={`mape-${seg}`}
-                      ae={hasMdl ? mdlAe : jdgAe}
-                      style={{ borderLeft: '1px solid var(--gray-100)' }}
-                    />
-                  )
+                  return <ErrCell key={`mape-${col}`} ae={hasMdl ? mdlAe : jdgAe} style={edge} />
                 })}
-                {/* Total TIV MAPE */}
-                {hasBoth ? (
-                  <>
-                    <ErrCell key="mape-total-m" ae={mdlMape['Total'] !== null ? mdlMape['Total'] / 100 : null} style={{ borderLeft: '2px solid var(--gray-300)' }} />
-                    <ErrCell key="mape-total-j" ae={jMape['Total'] !== null ? jMape['Total'] / 100 : null} />
-                  </>
-                ) : (
-                  <ErrCell
-                    key="mape-total"
-                    ae={(hasMdl ? mdlMape : jMape)['Total'] !== null ? (hasMdl ? mdlMape : jMape)['Total'] / 100 : null}
-                    style={{ borderLeft: '2px solid var(--gray-300)' }}
-                  />
-                )}
               </tr>
             </tbody>
           </table>

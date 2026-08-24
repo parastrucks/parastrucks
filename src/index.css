@@ -618,6 +618,20 @@ td {
 tr:last-child td { border-bottom: none; }
 tbody tr:hover td { background: var(--gray-50); }
 
+/* ─── TIV accuracy cell: error % at rest, the numbers on hover ──
+   The accuracy table lives in an `overflow-x: auto` wrapper, which computes
+   overflow-y to `auto` as well — so an absolutely-positioned popover would be
+   clipped at the container edge. Swapping the cell's own content avoids that
+   entirely, costs no React state on a ~170-cell grid, and keeps the column
+   width stable because both faces are numeric and roughly equal width. */
+.tiv-cell { cursor: help; }
+.tiv-cell .tiv-cell-val { display: none; }
+.tiv-cell:hover { background: var(--gray-100) !important; }
+.tiv-cell:hover .tiv-cell-err { display: none; }
+.tiv-cell:hover .tiv-cell-val { display: inline; }
+.tiv-cell .tiv-cell-actual { color: var(--gray-500); font-weight: 400; }
+.tiv-cell .tiv-cell-sep { color: var(--gray-300); font-weight: 400; }
+
 /* ─── MODAL ─────────────────────────────────────────────────── */
 .modal-overlay {
   position: fixed;
