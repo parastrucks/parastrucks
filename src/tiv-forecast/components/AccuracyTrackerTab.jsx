@@ -192,10 +192,24 @@ export default function AccuracyTrackerTab({ tivActuals, judgmentTiv, modelParam
           How to read this
         </div>
         <div>
-          Corrected <strong>12-month walk-forward</strong> backtest (Aug-25 to Jul-26): for each month
+          Corrected <strong>{months.length}-month walk-forward</strong> backtest
+          {months.length > 0 && <> ({months[0]} to {months[months.length - 1]})</>}: for each month
           the model is refit on data <em>strictly prior</em> to it, then forecasts one step ahead.
-          Reference result on the source workbook — <strong>model 26.4%</strong> vs
-          {' '}<strong>judgment 28.6%</strong>.
+          {mdlMape.Total !== null && jMape.Total !== null && (
+            <> On the data loaded now — <strong>model {mdlMape.Total.toFixed(1)}%</strong> vs
+            {' '}<strong>judgment {jMape.Total.toFixed(1)}%</strong> on the Total-TIV column.</>
+          )}
+          {' '}Reference result on the source workbook — model 26.4% vs judgment 28.6%
+          (mean of the per-segment errors).
+        </div>
+        {/* The 15% tolerance and the headline MAPE are different measurements,
+            and printing them next to each other without saying so read as "the
+            model misses tolerance by nearly 2x". Segment errors partly cancel
+            in the combined number, which is the one actually submitted. */}
+        <div style={{ marginTop: 6 }}>
+          A segment MAPE is the average error of <em>one segment in one month</em>. The Ashok
+          Leyland <strong>15% tolerance applies to the combined Total-TIV number</strong> in the
+          right-hand column, which is typically lower because segment errors partly offset.
         </div>
         <div style={{ marginTop: 6 }}>
           Judgment is a <strong>benchmark column only</strong>; it never enters the forecast.
