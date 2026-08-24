@@ -14,6 +14,7 @@ import {
   BLEND_THETA_WEIGHT,
 } from '../constants'
 import { TRIGGER_DEFS } from './triggerDefs'
+import { currentIstMonth } from './istMonth'
 
 // ── Apply all active triggers to a baseline forecast ─────────────────
 function applyTriggers(base, segment, monthNum, triggerState) {
@@ -73,7 +74,7 @@ function applyTriggers(base, segment, monthNum, triggerState) {
 // "pure forecast only" rule the original 2026-04-23 hotfix enforced.
 // Horizon math is preserved — skipped months still increment horizon so the
 // damped-trend equation stays consistent.
-function computeForecastMonths(lastDataMonth) {
+function computeForecastMonths(lastDataMonth, now) {
   const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
   const m = lastDataMonth?.match(/^([A-Za-z]{3})-(\d{2})$/)
   if (!m) return []
@@ -86,11 +87,12 @@ function computeForecastMonths(lastDataMonth) {
   let horizon = 1
   let cursor = year * 12 + monthIdx
 
-  // Current real month (today's month, regardless of how far through it we are)
-  const now = new Date()
-  const currentMonthIdx = now.getMonth()
-  const currentYear = now.getFullYear()
-  const currentMonthCursor = currentYear * 12 + currentMonthIdx
+  // Current real month, in IST — the dealership's calendar, not the viewer's
+  // laptop. A machine an hour either side of the boundary otherwise shifts the
+  // whole grid and changes the horizon that feeds the Theta term.
+  const ist = currentIstMonth(now)
+  const currentMonthIdx = ist.month_num - 1
+  const currentMonthCursor = ist.year * 12 + currentMonthIdx
 
   // Skip ahead until we're at or past the current month — preserving true
   // horizon so damped-trend math stays valid for skipped months.
@@ -126,8 +128,19 @@ function computeForecastMonths(lastDataMonth) {
 // stored map and the code constant cannot silently diverge.
 function baseForecast(segment, monthNum, horizon, targetLabel, params) {
   const method = (params.v3_method || V3_METHOD)[segment] || 'ROB'
-  const plain  = params.smly_plain?.[targetLabel]?.[segment]  ?? 0
-  const robust = params.smly_robust?.[targetLabel]?.[segment] ?? 0
+
+  // Anchors exist only for the three months after last_data_month. Once the
+  // calendar rolls past them without a new upload, the forecast window outruns
+  // its anchors — and `?? 0` used to turn that into a bold, confident ZERO for
+  // ROB segments and a plausible number ~60% low for THETA. Missing anchor is
+  // not a value of zero; it is an absence, and it has to stay one all the way
+  // to the screen.
+  const plainAnchor  = params.smly_plain?.[targetLabel]?.[segment]
+  const robustAnchor = params.smly_robust?.[targetLabel]?.[segment]
+  if (plainAnchor === undefined && robustAnchor === undefined) return null
+
+  const plain  = plainAnchor  ?? 0
+  const robust = robustAnchor ?? 0
   const t12    = params.yoy_t12?.[segment] ?? 0
 
   if (method === 'ROB') return robust * (1 + t12)
@@ -150,11 +163,18 @@ function baseForecast(segment, monthNum, horizon, targetLabel, params) {
 }
 
 // ── Main forecast engine ─────────────────────────────────────────────
-export function runForecast(modelParams, triggerState) {
+export function runForecast(modelParams, triggerState, now = new Date()) {
   if (!modelParams) return null
 
-  const forecastMonths = computeForecastMonths(modelParams.last_data_month)
+  const forecastMonths = computeForecastMonths(modelParams.last_data_month, now)
   const bySegment = {}
+
+  // Months the trained model has no anchor for. Reported so the page can say
+  // "the model is stale" instead of quietly showing dashes that look like a
+  // data-entry gap.
+  const staleMonths = forecastMonths
+    .filter(fm => !modelParams.smly_plain?.[fm.label] && !modelParams.smly_robust?.[fm.label])
+    .map(fm => fm.label)
 
   for (const seg of SEGMENTS) {
     bySegment[seg] = []
@@ -162,7 +182,18 @@ export function runForecast(modelParams, triggerState) {
     const ptbShare = Math.min(PTB_SHARE_CAP, modelParams.ptb_share_recent[seg] || 0.5)
 
     for (const fm of forecastMonths) {
-      const baseline    = baseForecast(seg, fm.month_num, fm.horizon, fm.label, modelParams)
+      const baseline = baseForecast(seg, fm.month_num, fm.horizon, fm.label, modelParams)
+
+      // No anchor -> no forecast. Carry the absence through the whole cascade;
+      // Math.round(null * share) would silently resurrect it as 0.
+      if (baseline === null) {
+        bySegment[seg].push({
+          month: fm.label, month_num: fm.month_num, horizon: fm.horizon,
+          tiv: null, al: null, ptb: null, alShare, ptbShare, stale: true,
+        })
+        continue
+      }
+
       const tivForecast = Math.max(0, Math.round(applyTriggers(baseline, seg, fm.month_num, triggerState)))
       const alForecast  = Math.round(tivForecast * alShare)
       const ptbForecast = Math.round(alForecast  * ptbShare)
@@ -181,14 +212,19 @@ export function runForecast(modelParams, triggerState) {
   }
 
   const totals = forecastMonths.map((fm, idx) => {
-    let tiv = 0, al = 0, ptb = 0
+    let tiv = 0, al = 0, ptb = 0, stale = false
     for (const seg of SEGMENTS) {
-      tiv += bySegment[seg][idx].tiv
-      al  += bySegment[seg][idx].al
-      ptb += bySegment[seg][idx].ptb
+      const cell = bySegment[seg][idx]
+      if (cell.tiv === null) { stale = true; continue }
+      tiv += cell.tiv
+      al  += cell.al
+      ptb += cell.ptb
     }
-    return { month: fm.label, tiv, al, ptb }
+    // A total built from only some of its segments is worse than no total.
+    return stale
+      ? { month: fm.label, tiv: null, al: null, ptb: null, stale: true }
+      : { month: fm.label, tiv, al, ptb }
   })
 
-  return { forecastMonths, bySegment, totals }
+  return { forecastMonths, bySegment, totals, staleMonths }
 }

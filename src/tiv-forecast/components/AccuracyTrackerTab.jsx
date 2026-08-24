@@ -33,16 +33,25 @@ function buildJudgmentBacktest(tivActuals, judgmentTiv) {
     const aRow = actualMap[jRow.month_label]
     if (!aRow) continue
     lookup[jRow.month_label] = {}
+    // The parser deliberately preserves a blank judgment cell as null — nobody
+    // made a call that month. `Number(null)` is 0, which turned "no judgment"
+    // into "judgment said zero": a fake 100% error, shown in red, asserting a
+    // prediction nobody made. Every one of those also inflated the judgment
+    // MAPE, biasing the model-vs-judgment comparison this tab exists to make.
+    let jComplete = true
     for (const seg of SEGMENTS) {
       const col = SEG_COL[seg]
-      const jVal = Number(jRow[col])
+      const raw = jRow[col]
+      const jVal = raw === null || raw === undefined || raw === '' ? null : Number(raw)
+      if (jVal === null) jComplete = false
       const aVal = Number(aRow[col])
-      lookup[jRow.month_label][seg] = { jVal, aVal, ae: absErr(jVal, aVal) }
+      lookup[jRow.month_label][seg] = { jVal, aVal, ae: jVal === null ? null : absErr(jVal, aVal) }
     }
-    // Total TIV
-    const jTot = SEGMENTS.reduce((s, seg) => s + (Number(jRow[SEG_COL[seg]]) || 0), 0)
+    // Total TIV — only when every segment was judged; a total summed over the
+    // segments that happen to be present is not comparable to the model's.
+    const jTot = jComplete ? SEGMENTS.reduce((s, seg) => s + Number(jRow[SEG_COL[seg]]), 0) : null
     const aTot = SEGMENTS.reduce((s, seg) => s + (Number(aRow[SEG_COL[seg]]) || 0), 0)
-    lookup[jRow.month_label]['Total'] = { jVal: jTot, aVal: aTot, ae: absErr(jTot, aTot) }
+    lookup[jRow.month_label]['Total'] = { jVal: jTot, aVal: aTot, ae: jTot === null ? null : absErr(jTot, aTot) }
   }
   return lookup
 }
@@ -183,10 +192,24 @@ export default function AccuracyTrackerTab({ tivActuals, judgmentTiv, modelParam
           How to read this
         </div>
         <div>
-          Corrected <strong>12-month walk-forward</strong> backtest (Aug-25 to Jul-26): for each month
+          Corrected <strong>{months.length}-month walk-forward</strong> backtest
+          {months.length > 0 && <> ({months[0]} to {months[months.length - 1]})</>}: for each month
           the model is refit on data <em>strictly prior</em> to it, then forecasts one step ahead.
-          Reference result on the source workbook — <strong>model 26.4%</strong> vs
-          {' '}<strong>judgment 28.6%</strong>.
+          {mdlMape.Total !== null && jMape.Total !== null && (
+            <> On the data loaded now — <strong>model {mdlMape.Total.toFixed(1)}%</strong> vs
+            {' '}<strong>judgment {jMape.Total.toFixed(1)}%</strong> on the Total-TIV column.</>
+          )}
+          {' '}Reference result on the source workbook — model 26.4% vs judgment 28.6%
+          (mean of the per-segment errors).
+        </div>
+        {/* The 15% tolerance and the headline MAPE are different measurements,
+            and printing them next to each other without saying so read as "the
+            model misses tolerance by nearly 2x". Segment errors partly cancel
+            in the combined number, which is the one actually submitted. */}
+        <div style={{ marginTop: 6 }}>
+          A segment MAPE is the average error of <em>one segment in one month</em>. The Ashok
+          Leyland <strong>15% tolerance applies to the combined Total-TIV number</strong> in the
+          right-hand column, which is typically lower because segment errors partly offset.
         </div>
         <div style={{ marginTop: 6 }}>
           Judgment is a <strong>benchmark column only</strong>; it never enters the forecast.
