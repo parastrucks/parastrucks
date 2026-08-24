@@ -202,11 +202,11 @@ export default function UploadPanel({ onUploadComplete }) {
       >
         <div>
           <div style={{ fontWeight: 700, fontSize: 15 }}>Data Upload</div>
-          <div style={{ fontSize: 13, color: 'var(--gray-400)', marginTop: 2 }}>
+          <div style={{ fontSize: 13, color: 'var(--gray-500)', marginTop: 2 }}>
             Upload Market_Data_YY-YY.xlsx to update actuals and retrain the model
           </div>
         </div>
-        <span style={{ fontSize: 18, color: 'var(--gray-400)' }}>{collapsed ? '▸' : '▾'}</span>
+        <span style={{ fontSize: 18, color: 'var(--gray-500)' }}>{collapsed ? '▸' : '▾'}</span>
       </div>
 
       {!collapsed && (
@@ -265,7 +265,7 @@ export default function UploadPanel({ onUploadComplete }) {
 
           {preview && (
             <div style={{ marginTop: 12, padding: '10px 14px', background: 'var(--gray-50)', borderRadius: 6, fontSize: 13 }}>
-              <span style={{ fontWeight: 600 }}>Preview: </span>
+              <span style={{ fontWeight: 700 }}>Preview: </span>
               {preview.monthsLoaded} months found · Last data month: <strong>{preview.lastDataMonth}</strong>
             </div>
           )}
@@ -313,9 +313,9 @@ export default function UploadPanel({ onUploadComplete }) {
             {showHistory && (
               <div style={{ marginTop: 12 }}>
                 {history === null ? (
-                  <div style={{ fontSize: 13, color: 'var(--gray-400)' }}>Loading…</div>
+                  <div style={{ fontSize: 13, color: 'var(--gray-500)' }}>Loading…</div>
                 ) : history.length === 0 ? (
-                  <div style={{ fontSize: 13, color: 'var(--gray-400)' }}>No uploads yet.</div>
+                  <div style={{ fontSize: 13, color: 'var(--gray-500)' }}>No uploads yet.</div>
                 ) : (
                   <div className="table-wrap">
                     <table>

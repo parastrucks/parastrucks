@@ -3,82 +3,103 @@
 import { Fragment } from 'react'
 import { SEGMENTS } from '../constants'
 
+// Which layer's number this table renders. Previously inferred by string-matching
+// the `title` prop (`title.includes('Layer 1') || title.toLowerCase().includes('tiv')`),
+// which meant renaming a heading silently changed the data shown — and "Layer 2 — AL
+// Forecast" only matched via the substring 'al '. Now an explicit contract.
+const LAYER_KEY = { tiv: 'tiv', al: 'al', ptb: 'ptb' }
+
 function fmtSharePct(val) {
   if (val === null || val === undefined || isNaN(val)) return '—'
   return `${(val * 100).toFixed(1)}%`
 }
 
-export function errorColor(absErr) {
-  if (absErr <= 0.15) return 'var(--green)'
-  if (absErr <= 0.25) return 'var(--amber)'
-  return 'var(--red)'
-}
-
-export default function ForecastTable({ title, subtitle, showTitle = true, forecastMonths = [], bySegment = {}, showShare, shareKey, judgmentRows = {} }) {
+export default function ForecastTable({
+  layer = 'tiv',
+  title,
+  subtitle,
+  showTitle = true,
+  forecastMonths = [],
+  bySegment = {},
+  showShare,
+  shareKey,
+  judgmentRows = {},
+}) {
   if (!forecastMonths.length) return null
+
+  const valueKey = LAYER_KEY[layer] || 'tiv'
+  const anyJudgment = forecastMonths.some(fm => judgmentRows[fm.label])
+
+  const readCell = (seg, label) => {
+    const row = bySegment[seg]?.find(r => r.month === label)
+    return row ? row[valueKey] : null
+  }
 
   return (
     <div style={{ marginBottom: 16 }}>
       {showTitle && <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>{title}</div>}
-      {showTitle && subtitle && <div style={{ fontSize: 13, color: 'var(--gray-400)', marginBottom: 8 }}>{subtitle}</div>}
-      <div style={{ width: '100%' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+      <div className="tiv-scroll">
+        <table className="tiv-table">
+          {/* The caption carries the layer's meaning. It used to live in a
+              `subtitle` prop that every caller passed but no caller rendered
+              (showTitle={false} everywhere), so the share basis and the 75% cap
+              were written down and then never shown. */}
+          {subtitle && <caption>{subtitle}</caption>}
           <thead>
             <tr>
-              <th style={{ textAlign: 'left', padding: '8px 10px', borderBottom: '2px solid var(--gray-200)', fontSize: 13 }}>Segment</th>
+              <th scope="col" style={{ textAlign: 'left' }}>
+                Segment
+              </th>
               {forecastMonths.map(fm => (
-                <th key={fm.label} colSpan={judgmentRows[fm.label] ? 2 : 1}
-                  style={{ textAlign: 'center', padding: '8px 10px', borderBottom: '2px solid var(--gray-200)', fontSize: 13 }}>
+                <th
+                  key={fm.label}
+                  scope="col"
+                  colSpan={judgmentRows[fm.label] ? 2 : 1}
+                >
                   {fm.label}
-                  {showShare && <div style={{ fontSize: 11, fontWeight: 400, color: 'var(--gray-400)' }}>Fcst · Share</div>}
+                  {showShare && <div className="tiv-sub">Fcst · Share</div>}
                 </th>
               ))}
             </tr>
-            {forecastMonths.some(fm => judgmentRows[fm.label]) && (
-              <tr style={{ background: 'var(--gray-50)', fontSize: 11 }}>
-                <th></th>
+            {anyJudgment && (
+              <tr style={{ background: 'var(--gray-50)' }}>
+                <td />
                 {forecastMonths.map(fm =>
                   judgmentRows[fm.label]
                     ? (
                       <Fragment key={fm.label}>
-                        <th style={{ textAlign: 'center', fontWeight: 500, padding: '4px 8px' }}>Model</th>
-                        <th style={{ textAlign: 'center', fontWeight: 500, color: 'var(--amber)', padding: '4px 8px' }}>Judg</th>
+                        <th scope="col" className="tiv-sub">Model</th>
+                        <th scope="col" className="tiv-sub tiv-judg">Judg</th>
                       </Fragment>
                     )
-                    : <th key={fm.label}></th>
+                    : <td key={fm.label} />
                 )}
               </tr>
             )}
           </thead>
           <tbody>
             {SEGMENTS.map(seg => (
-              <tr key={seg} style={{ borderBottom: '1px solid var(--gray-100)' }}>
-                <td style={{ fontWeight: 600, whiteSpace: 'nowrap', padding: '7px 10px', fontSize: 13 }}>{seg}</td>
+              <tr key={seg}>
+                <th scope="row">{seg}</th>
                 {forecastMonths.map(fm => {
-                  const row = bySegment[seg]?.find(r => r.month === fm.label)
-                  let dispVal = null
-                  if (row) {
-                    if (title.includes('Layer 1') || title.toLowerCase().includes('tiv')) dispVal = row.tiv
-                    else if (title.includes('Layer 2') || title.toLowerCase().includes('al ')) dispVal = row.al
-                    else dispVal = row.ptb
-                  }
-                  const share = showShare && row ? row[shareKey] : null
-                  const jRow  = judgmentRows[fm.label]
-                  const jVal  = jRow ? jRow[seg] : null
+                  const dispVal = readCell(seg, fm.label)
+                  const row     = bySegment[seg]?.find(r => r.month === fm.label)
+                  const share   = showShare && row ? row[shareKey] : null
+                  const jRow    = judgmentRows[fm.label]
 
                   if (jRow) {
                     return (
                       <Fragment key={fm.label}>
-                        <td style={{ textAlign: 'right', padding: '7px 10px', fontSize: 13 }}>{dispVal ?? '—'}</td>
-                        <td style={{ textAlign: 'right', padding: '7px 10px', fontSize: 13, color: 'var(--amber)' }}>{jVal ?? '—'}</td>
+                        <td className="tiv-num">{dispVal ?? '—'}</td>
+                        <td className="tiv-num tiv-judg">{jRow[seg] ?? '—'}</td>
                       </Fragment>
                     )
                   }
                   return (
-                    <td key={fm.label} style={{ textAlign: 'right', padding: '7px 10px', fontSize: 13 }}>
-                      <span style={{ fontWeight: 600 }}>{dispVal ?? '—'}</span>
+                    <td key={fm.label} className="tiv-num">
+                      <span style={{ fontWeight: 700 }}>{dispVal ?? '—'}</span>
                       {showShare && share !== null && (
-                        <span style={{ fontSize: 11, color: 'var(--gray-400)', marginLeft: 4 }}>
+                        <span className="tiv-sub" style={{ marginLeft: 4 }}>
                           {fmtSharePct(share)}
                         </span>
                       )}
@@ -88,29 +109,21 @@ export default function ForecastTable({ title, subtitle, showTitle = true, forec
               </tr>
             ))}
             {/* Total row */}
-            <tr style={{ borderTop: '2px solid var(--gray-200)', fontWeight: 700 }}>
-              <td style={{ padding: '7px 10px', fontSize: 13 }}>Total</td>
+            <tr className="tiv-row-total">
+              <th scope="row">Total</th>
               {forecastMonths.map(fm => {
-                let total = 0
-                for (const seg of SEGMENTS) {
-                  const row = bySegment[seg]?.find(r => r.month === fm.label)
-                  if (row) {
-                    if (title.includes('Layer 1') || title.toLowerCase().includes('tiv')) total += row.tiv || 0
-                    else if (title.includes('Layer 2') || title.toLowerCase().includes('al ')) total += row.al || 0
-                    else total += row.ptb || 0
-                  }
-                }
-                const jRow = judgmentRows[fm.label]
+                const total = SEGMENTS.reduce((s, seg) => s + (readCell(seg, fm.label) || 0), 0)
+                const jRow  = judgmentRows[fm.label]
                 if (jRow) {
                   const jTotal = SEGMENTS.reduce((s, seg) => s + (jRow[seg] || 0), 0)
                   return (
                     <Fragment key={fm.label}>
-                      <td style={{ textAlign: 'right', padding: '7px 10px', fontSize: 13 }}>{total || '—'}</td>
-                      <td style={{ textAlign: 'right', padding: '7px 10px', fontSize: 13, color: 'var(--amber)' }}>{jTotal || '—'}</td>
+                      <td className="tiv-num">{total || '—'}</td>
+                      <td className="tiv-num tiv-judg">{jTotal || '—'}</td>
                     </Fragment>
                   )
                 }
-                return <td key={fm.label} style={{ textAlign: 'right', padding: '7px 10px', fontSize: 13 }}>{total || '—'}</td>
+                return <td key={fm.label} className="tiv-num">{total || '—'}</td>
               })}
             </tr>
           </tbody>

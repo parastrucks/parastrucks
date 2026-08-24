@@ -124,7 +124,7 @@ export default function TriggerControlsTab({ triggerState, onTriggerChange }) {
                           className="tiv-slider"
                           style={{ flex: 1 }}
                         />
-                        <span style={{ fontSize: 11, color: 'var(--gray-400)', whiteSpace: 'nowrap' }}>max {def.max}%</span>
+                        <span style={{ fontSize: 11, color: 'var(--gray-500)', whiteSpace: 'nowrap' }}>max {def.max}%</span>
                       </div>
 
                       {/* Direction toggle for "both" type triggers */}
