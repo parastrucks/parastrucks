@@ -7,7 +7,7 @@ export const TRIGGER_DEFS = [
   {
     id: 'fyPush',
     name: 'FY End Push / Hangover',
-    desc: 'March billing push amplification, April hangover, slight May drag',
+    desc: 'March billing push amplification, April hangover, slight May drag. ⚠ Premise failed forward testing — Apr-26 came in ABOVE forecast (683) despite a record Mar-26. Retained as a manual knob only.',
     affected: ALL_SEGMENTS,
     // effect multiplier per month: +sev% in Mar, -sev% in Apr, -40% of sev in May
     monthEffect: { 3: 1, 4: -1, 5: -0.4 },
@@ -28,7 +28,7 @@ export const TRIGGER_DEFS = [
   {
     id: 'monsoon',
     name: 'Monsoon Dampening',
-    desc: 'Jul–Sep construction slowdown affecting Tippers',
+    desc: 'Jul–Sep construction slowdown affecting Tippers. ⚠ Leave OFF for 2026 — IMD forecasts a below-normal monsoon (~90% LPA, El Niño developing), and the base seasonal indices already carry the normal Jul–Sep dip.',
     affected: ['Tipper'],
     months: [7, 8, 9],
     type: 'dampen',
@@ -69,20 +69,17 @@ export const TRIGGER_DEFS = [
     defaultSev: 0,
     max: 15,
   },
-  {
-    id: 'fuelCrisis',
-    name: 'Iran War + Input Cost',
-    desc: 'Strait of Hormuz disruption. Fuel-cost-sensitive segments defer purchases. 2% OEM cost pass-through expected.',
-    affected: ['Haulage', 'MAV', 'Tractor'],
-    months: [1,2,3,4,5,6,7,8,9,10,11,12],
-    type: 'dampen',
-    defaultSev: 12,
-    max: 30,
-  },
 ]
 
-// Triggers that should be ON by default when no saved state exists
-export const DEFAULT_ON_TRIGGERS = ['fyPush', 'fuelCrisis']
+// ⚠ DELETED in v3.0 — do not reintroduce: `fuelCrisis` ("Iran War + Input Cost").
+// The war ended Jun-26, and both the corrected backtest and market research showed
+// its premise was inverted: CV demand ROSE through the war (GST 2.0 dominated, and
+// buyers pulled purchases forward as an inflation hedge). It dampened exactly the
+// segments that were booming. Spec §6, handoff §8.
+
+// ALL triggers default OFF in v3.0. They are manual scenario knobs; the base
+// forecast is untouched historical data. (Spec §6 "Domain knowledge behind triggers".)
+export const DEFAULT_ON_TRIGGERS = []
 
 // Build initial trigger state from defaults
 export function buildDefaultTriggerState() {

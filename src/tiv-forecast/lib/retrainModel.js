@@ -1,17 +1,54 @@
-// TIV Forecast — model retraining (spec v2.1: champion model + calendar normalization)
+// TIV Forecast — model retraining (spec v3.0: judgment-free, audited estimators)
 // Pure JS, no ML libraries. Runs client-side after every upload.
+//
+// Pipeline (spec §4 "Retraining pipeline"):
+//   1. PPP-clean Bus PVT (idx 20–28)
+//   2. Seasonal indices, all six segments
+//   3. Theta params — Haulage and MAV only
+//   4. yoy_t12 per segment (trailing 12 vs prior 12, cap ±15%)
+//   5. adapt_params.g — ICV Trucks only
+//   6. smly_plain + smly_robust anchors for the next 3-month horizon
+//   7. AL / PTB shares, recent 6 months
+//   8. Regenerate model_backtest — walk-forward, PERIOD-MATCHED estimators only
+//
+// ⚠ Read spec §5.4a before touching any YoY code. The v2.x harness compared
+// FY-to-date against a FULL prior fiscal year; that ratio is structurally ≪1
+// early in a FY, so capped growth pinned at −15% in 56 of 72 backtest
+// segment-months when the true value was +15%. Every YoY comparison here is
+// period-matched by construction. Never reintroduce the FY-to-date form.
 import {
   SEGMENTS, SEG_COL,
   PPP_START_IDX, PPP_END_IDX,
-  HW_ALPHA, HW_BETA,
   YOY_CAP, SHARE_LOOKBACK_MONTHS,
-  CHAMPION, THETA_ALPHA, WEEK_INTENSITY, HOLIDAYS,
+  V3_METHOD, THETA_ALPHA, THETA_SEGMENTS,
+  ADAPT_WINDOW, ADAPT_SHRINK, ADAPT_CAP,
+  BLEND_SMLY_WEIGHT, BLEND_THETA_WEIGHT,
 } from '../constants'
 
 const BACKTEST_MONTHS = 12
 const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
+// ── Small helpers ────────────────────────────────────────────────────
+function median(vals) {
+  const v = vals.filter(x => typeof x === 'number' && !Number.isNaN(x)).sort((a, b) => a - b)
+  if (v.length === 0) return 0
+  const mid = Math.floor(v.length / 2)
+  return v.length % 2 !== 0 ? v[mid] : (v[mid - 1] + v[mid]) / 2
+}
+
+function clamp(x, lo, hi) { return Math.max(lo, Math.min(hi, x)) }
+
+// Label for `offset` months after the month at monthsMeta[baseIdx].
+function labelAfter(year, monthNum, offset) {
+  let mIdx = monthNum - 1 + offset
+  let y = year + Math.floor(mIdx / 12)
+  mIdx = ((mIdx % 12) + 12) % 12
+  return `${MONTH_ABBR[mIdx]}-${String(y).slice(-2)}`
+}
+
 // ── PPP outlier cleaning (Bus PVT only) ──────────────────────────────
+// Dec-23..Aug-24: a one-time 270-unit PPP bus order. Replace with same-calendar-
+// month averages drawn from OUTSIDE the window before fitting anything.
 function cleanBusPVT(data, monthsMeta) {
   const cleaned = [...data]
   for (let i = PPP_START_IDX; i <= PPP_END_IDX && i < data.length; i++) {
@@ -28,12 +65,13 @@ function cleanBusPVT(data, monthsMeta) {
   return cleaned
 }
 
-// ── Seasonal indices (multiplicative, normalized to avg = 1.0) ───────
+// ── Seasonal indices (multiplicative, normalized to mean 1.0) ────────
+// ±6 centered moving average → ratio-to-MA → average by calendar month → scale.
 function computeSeasonalIndices(data, monthsMeta) {
   const n = data.length
   const windowSize = 12
   const centeredMA = new Array(n).fill(null)
-  for (let i = Math.floor(windowSize / 2); i < n - Math.floor(windowSize / 2); i++) {
+  for (let i = 6; i < n - 6; i++) {
     let sum = 0
     for (let j = i - 6; j < i + 6; j++) sum += data[j]
     centeredMA[i] = sum / windowSize
@@ -52,102 +90,24 @@ function computeSeasonalIndices(data, monthsMeta) {
     si[m] = vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : 1.0
     siSum += si[m]
   }
-  const scaleFactor = 12 / siSum
+  const scaleFactor = siSum > 0 ? 12 / siSum : 1
   for (let m = 1; m <= 12; m++) si[m] *= scaleFactor
   return si
 }
 
-// ── Holt linear trend — returns terminal state + full arrays ──────────
-function holtLinear(data) {
-  const n = data.length
-  if (n === 0) return { level: 0, trend: 0, levelArr: [], trendArr: [] }
-  const levelArr = new Array(n).fill(0)
-  const trendArr = new Array(n).fill(0)
-  levelArr[0] = data[0]
-  trendArr[0] = n > 1 ? (data[Math.min(11, n - 1)] - data[0]) / Math.min(11, n - 1) : 0
-  for (let t = 1; t < n; t++) {
-    levelArr[t] = HW_ALPHA * data[t] + (1 - HW_ALPHA) * (levelArr[t - 1] + trendArr[t - 1])
-    trendArr[t] = HW_BETA  * (levelArr[t] - levelArr[t - 1]) + (1 - HW_BETA) * trendArr[t - 1]
-  }
-  return { level: levelArr[n - 1], trend: trendArr[n - 1], levelArr, trendArr }
-}
-
-// ── Deseasonalize → Holt ─────────────────────────────────────────────
-function trainHoltForSegment(rawData, seasonalIndices, monthsMeta) {
-  const deseasonalized = rawData.map((v, i) => {
-    const si = seasonalIndices[monthsMeta[i].month_num]
-    return si > 0 ? v / si : v
+function deseasonalize(data, si, monthsMeta) {
+  return data.map((v, i) => {
+    const s = si[monthsMeta[i].month_num]
+    return s > 0 ? v / s : v
   })
-  const { level, trend, levelArr, trendArr } = holtLinear(deseasonalized)
-  const fitted = rawData.map((v, t) => {
-    if (t === 0) return Math.round(v)
-    const si = seasonalIndices[monthsMeta[t].month_num] || 1
-    return Math.max(0, Math.round((levelArr[t - 1] + trendArr[t - 1]) * si))
-  })
-  return { level, trend, fitted, deseasonalized }
 }
 
-// ── SMLY for forecast horizon months ─────────────────────────────────
-function computeSMLY(data, monthsMeta, lastIdx) {
-  const smly = {}
-  for (let h = 1; h <= 3; h++) {
-    const forecastIdx = lastIdx + h
-    const forecastMonthNum = monthsMeta[forecastIdx]?.month_num
-      ?? ((monthsMeta[lastIdx].month_num - 1 + h) % 12) + 1
-    const sameMonthLastYear = forecastIdx - 12
-    if (sameMonthLastYear >= 0 && sameMonthLastYear < data.length) {
-      smly[forecastMonthNum] = data[sameMonthLastYear]
-    } else {
-      smly[forecastMonthNum] = 0
-    }
-  }
-  return smly
-}
-
-// ── YoY growth: FY-to-date sum, capped ±15% ──────────────────────────
-function computeYoYSum(data, monthsMeta) {
-  const n = data.length
-  if (n < 13) return 0
-  const lastFYAprilIdx = (() => {
-    for (let i = n - 1; i >= 0; i--) {
-      if (monthsMeta[i].month_num === 4) return i
-    }
-    return -1
-  })()
-  if (lastFYAprilIdx === -1) return 0
-  let fySum = 0, prevFYSum = 0
-  for (let i = lastFYAprilIdx; i < n; i++) {
-    fySum += data[i]
-    const prevYearIdx = i - 12
-    if (prevYearIdx >= 0) prevFYSum += data[prevYearIdx]
-  }
-  if (prevFYSum === 0) return 0
-  return Math.max(-YOY_CAP, Math.min(YOY_CAP, fySum / prevFYSum - 1))
-}
-
-// ── YoY growth: median of all 12-month rolling ratios, capped ±15% ───
-function computeYoYMedian(data, monthsMeta) {
-  const n = data.length
-  const ratios = []
-  for (let i = 12; i < n; i++) {
-    if (data[i - 12] > 0) ratios.push(data[i] / data[i - 12] - 1)
-  }
-  if (ratios.length === 0) return 0
-  ratios.sort((a, b) => a - b)
-  const mid = Math.floor(ratios.length / 2)
-  const median = ratios.length % 2 !== 0
-    ? ratios[mid]
-    : (ratios[mid - 1] + ratios[mid]) / 2
-  return Math.max(-YOY_CAP, Math.min(YOY_CAP, median))
-}
-
-// ── Theta method params (M4) ─────────────────────────────────────────
-// Fit on deseasonalized series. Returns {slope, intercept, ses, n}.
-// Forecast step: f0 = intercept + slope*(n+h-1);  f2 = ses
-// Theta forecast (deseasonalized) = (f0 + f2) / 2
+// ── Theta params (Haulage, MAV) ──────────────────────────────────────
+// Linear (OLS) fit + SES(α=0.5) on the deseasonalized series.
+// Forecast at horizon h: (intercept + slope·(n+h−1) + ses) / 2 × SI[m]
 function computeThetaParams(deseasData) {
   const n = deseasData.length
-  // OLS linear regression (x = 0..n-1)
+  if (n === 0) return { slope: 0, intercept: 0, ses: 0, n: 0 }
   let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0
   for (let i = 0; i < n; i++) {
     sumX  += i
@@ -160,32 +120,44 @@ function computeThetaParams(deseasData) {
   const denom = sumX2 - n * xMean * xMean
   const slope     = denom !== 0 ? (sumXY - n * xMean * yMean) / denom : 0
   const intercept = yMean - slope * xMean
-  // SES (alpha = THETA_ALPHA)
   let ses = deseasData[0]
-  for (let i = 1; i < n; i++) {
-    ses = THETA_ALPHA * deseasData[i] + (1 - THETA_ALPHA) * ses
-  }
+  for (let i = 1; i < n; i++) ses = THETA_ALPHA * deseasData[i] + (1 - THETA_ALPHA) * ses
   return { slope, intercept, ses, n }
 }
 
-// ── Calendar capacity score for Tipper (M3_CAL) ──────────────────────
-// Returns a score ≈ 85–90 for a typical month (Mon–Sat working days,
-// weighted by weekly booking intensity 10/20/30/40).
-// Sundays and HOLIDAYS (from constants) are excluded.
-function computeCapacityScore(year, month) {
-  const nDays = new Date(year, month, 0).getDate()
-  const daysPerWeek = { 1: 7, 2: 7, 3: 7, 4: nDays - 21 }
-  let cap = 0
-  for (let d = 1; d <= nDays; d++) {
-    const wk = d <= 7 ? 1 : d <= 14 ? 2 : d <= 21 ? 3 : 4
-    const dt = new Date(year, month - 1, d)
-    if (dt.getDay() === 0) continue  // Sunday — closed
-    const key = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`
-    if (HOLIDAYS.has(key)) continue  // Public holiday
-    cap += WEEK_INTENSITY[wk] / daysPerWeek[wk]
-  }
-  return cap
+// ── Trailing-12M YoY, capped ±15% (spec §5.4) ────────────────────────
+// Period-matched by construction: 12 months against the immediately preceding
+// 12 months. This REPLACES the v2.x FY-to-date estimator entirely (§5.4a).
+function computeYoYT12(d) {
+  const n = d.length
+  if (n < 24) return 0
+  const cur = d.slice(n - 12).reduce((a, b) => a + b, 0)
+  const prv = d.slice(n - 24, n - 12).reduce((a, b) => a + b, 0)
+  return prv > 0 ? clamp(cur / prv - 1, -YOY_CAP, YOY_CAP) : 0
 }
+
+// ── ADAPT level-shift adapter, ICV Trucks (spec §5.5) ────────────────
+// g = clamp(shrink × mean_{k=1..6}( d[t−k] / d[t−12−k] ) − shrink, ±cap)
+// with t = the forecast origin, so k=1..6 are the last six OBSERVED months
+// matched against the same six months a year earlier.
+function computeAdaptG(d) {
+  const t = d.length                       // forecast origin (one past last index)
+  const ratios = []
+  for (let k = 1; k <= ADAPT_WINDOW; k++) {
+    const cur = d[t - k]
+    const prv = d[t - k - 12]
+    if (cur !== undefined && prv !== undefined && prv > 0) ratios.push(cur / prv)
+  }
+  if (ratios.length === 0) return 0
+  const mean = ratios.reduce((a, b) => a + b, 0) / ratios.length
+  return clamp(ADAPT_SHRINK * mean - ADAPT_SHRINK, -ADAPT_CAP, ADAPT_CAP)
+}
+
+// ── SMLY anchors ─────────────────────────────────────────────────────
+// plain  = same calendar month, prior year
+// robust = median(month−1, month, month+1) of the prior year
+function smlyPlain(d, i)  { return d[i] ?? 0 }
+function smlyRobust(d, i) { return median([d[i - 1], d[i], d[i + 1]].filter(v => v !== undefined)) }
 
 // ── Market share averages (recent N months) ──────────────────────────
 function computeRecentShares(numeratorActuals, denominatorActuals) {
@@ -209,7 +181,24 @@ function computeRecentShares(numeratorActuals, denominatorActuals) {
   return shares
 }
 
-// ── Main retrain function ─────────────────────────────────────────────
+// ── One baseline forecast from an already-fitted parameter set ───────
+// Shared by the forward path and the walk-forward backtest so the two can
+// never drift apart. `anchors` supplies the plain/robust SMLY for this target.
+function baseFromParams(seg, monthNum, h, p) {
+  const method = V3_METHOD[seg]
+  if (method === 'ROB')   return p.robust * (1 + p.t12)
+  if (method === 'ADAPT') return p.plain  * (1 + p.g)
+  if (method === 'THETA') {
+    const smly  = p.plain * (1 + p.t12)
+    const tp    = p.theta
+    if (!tp) return smly
+    const theta = (tp.intercept + tp.slope * (tp.n + h - 1) + tp.ses) / 2 * (p.si[monthNum] || 1)
+    return BLEND_SMLY_WEIGHT * smly + BLEND_THETA_WEIGHT * theta
+  }
+  return p.plain
+}
+
+// ── Main retrain ─────────────────────────────────────────────────────
 export function retrainModel(tivActuals, ptbActuals, alActuals) {
   if (!tivActuals.length) throw new Error('No TIV data to retrain on')
 
@@ -221,109 +210,81 @@ export function retrainModel(tivActuals, ptbActuals, alActuals) {
   const n = tiv.length
   const lastIdx = n - 1
 
+  // Step 1–2: cleaned series + seasonal indices
+  const segRawData      = {}
   const seasonalIndices = {}
-  const hwParams        = {}
-  const smly            = {}
-  const yoySum          = {}
-  const yoyMedian       = {}
-  const thetaParams     = {}
-  const segRawData      = {}  // for champion backtest
-
   for (const seg of SEGMENTS) {
     const col = SEG_COL[seg]
     let rawData = tiv.map(r => Number(r[col]) || 0)
     if (seg === 'Bus PVT') rawData = cleanBusPVT(rawData, monthsMeta)
     segRawData[seg] = rawData
-
     seasonalIndices[seg] = computeSeasonalIndices(rawData, monthsMeta)
-    const hwResult = trainHoltForSegment(rawData, seasonalIndices[seg], monthsMeta)
-    hwParams[seg]  = { level: hwResult.level, trend: hwResult.trend }
-    smly[seg]      = computeSMLY(rawData, monthsMeta, lastIdx)
-    yoySum[seg]    = computeYoYSum(rawData, monthsMeta)
-    yoyMedian[seg] = computeYoYMedian(rawData, monthsMeta)
-    thetaParams[seg] = computeThetaParams(hwResult.deseasonalized)
   }
 
-  // ── Tipper calendar normalization (M3_CAL) ──────────────────────────
-  // Step 1: compute capacity score for every historical month
-  const historicalCapScores = {}
-  for (const row of tiv) {
-    historicalCapScores[row.month_label] = computeCapacityScore(row.year, row.month_num)
+  // Step 3–5: method-specific params
+  const thetaParams = {}
+  const yoyT12      = {}
+  const adaptParams = {}
+  for (const seg of SEGMENTS) {
+    const d = segRawData[seg]
+    yoyT12[seg] = computeYoYT12(d)
+    if (THETA_SEGMENTS.includes(seg)) {
+      thetaParams[seg] = computeThetaParams(deseasonalize(d, seasonalIndices[seg], monthsMeta))
+    }
+    if (V3_METHOD[seg] === 'ADAPT') {
+      adaptParams[seg] = {
+        g: computeAdaptG(d), window: ADAPT_WINDOW, shrink: ADAPT_SHRINK, cap: ADAPT_CAP,
+      }
+    }
   }
 
-  // Step 2: normalize Tipper history (units: TIV per 100 capacity points)
-  const tipperRaw  = segRawData['Tipper']
-  const tipperNorm = tipperRaw.map((v, i) => {
-    const cap = historicalCapScores[tiv[i].month_label]
-    return cap > 0 ? v / cap * 100 : v
-  })
-
-  // Step 3: fit HW + SI on normalized Tipper
-  const tipperNormSI     = computeSeasonalIndices(tipperNorm, monthsMeta)
-  const tipperNormHWRes  = trainHoltForSegment(tipperNorm, tipperNormSI, monthsMeta)
-  const tipperNormHW     = { level: tipperNormHWRes.level, trend: tipperNormHWRes.trend }
-
-  // Step 4: SMLY in normalized space
-  const tipperNormSmly   = computeSMLY(tipperNorm, monthsMeta, lastIdx)
-
-  // Step 5: capacity scores for forecast horizon months (for denormalization in engine)
-  // Compute forecast month labels/dates from last data month
-  const capScores = {}
-  let fMonthIdx = monthsMeta[lastIdx].month_num - 1  // 0-based
-  let fYear     = tiv[lastIdx].year
+  // Step 6: anchors for the next 3-month horizon, keyed by target label
+  const smlyPlainOut  = {}
+  const smlyRobustOut = {}
   for (let h = 1; h <= 3; h++) {
-    fMonthIdx = (fMonthIdx + 1) % 12
-    if (fMonthIdx === 0) fYear++
-    const fLabel = `${MONTH_ABBR[fMonthIdx]}-${String(fYear).slice(-2)}`
-    capScores[fLabel] = computeCapacityScore(fYear, fMonthIdx + 1)
+    const label = labelAfter(tiv[lastIdx].year, monthsMeta[lastIdx].month_num, h)
+    smlyPlainOut[label]  = {}
+    smlyRobustOut[label] = {}
+    const sameMonthLastYear = lastIdx + h - 12
+    for (const seg of SEGMENTS) {
+      const d = segRawData[seg]
+      smlyPlainOut[label][seg]  = sameMonthLastYear >= 0 ? smlyPlain(d, sameMonthLastYear)  : 0
+      smlyRobustOut[label][seg] = sameMonthLastYear >= 0 ? smlyRobust(d, sameMonthLastYear) : 0
+    }
   }
 
-  // Market shares
+  // Step 7: cascade shares
+  // ⚠ AL/LM split is absent from the upload file for Apr-26 onward, so
+  // al_share_recent is STALE as of the last month AL data exists (§9 open item).
   const alShareRecent  = computeRecentShares(al, tiv)
   const ptbShareRecent = computeRecentShares(ptb, al)
 
-  // ── Champion backtest (last BACKTEST_MONTHS in-sample, champion dispatch) ──
-  // Uses global model params — not strictly walk-forward but representative.
-  // Each segment uses its champion method for fitted values.
-  const dampedSum = (h) => { let s = 0; for (let i = 1; i <= h; i++) s += Math.pow(0.65, i); return s }
-
-  const backtestStart = Math.max(12, n - BACKTEST_MONTHS)
+  // Step 8: walk-forward backtest — retrain on data STRICTLY PRIOR to each
+  // target month, then forecast 1 step ahead. Period-matched estimators only.
+  const backtestStart = Math.max(24, n - BACKTEST_MONTHS)
   const modelBacktest = []
   for (let i = backtestStart; i < n; i++) {
     const record = { month_label: tiv[i].month_label }
     const m = monthsMeta[i].month_num
+    const trainMeta = monthsMeta.slice(0, i)
 
     for (const seg of SEGMENTS) {
-      const col    = SEG_COL[seg]
-      const raw    = segRawData[seg]
-      const method = CHAMPION[seg]
-      const smlyVal = i >= 12 ? raw[i - 12] : 0
-      let fitted = 0
+      const full  = segRawData[seg]
+      const train = full.slice(0, i)
+      const si    = computeSeasonalIndices(train, trainMeta)
+      const sameMonthLastYear = i - 12
 
-      if (method === 'M1') {
-        fitted = Math.round(smlyVal * (1 + yoySum[seg]))
-      } else if (method === 'M2') {
-        fitted = Math.round(smlyVal * (1 + yoyMedian[seg]))
-      } else if (method === 'M4') {
-        const tp   = thetaParams[seg]
-        const f0   = tp.intercept + tp.slope * i  // x=i in the regression (0-indexed)
-        const f2   = tp.ses
-        const tDes = (f0 + f2) / 2
-        const si   = seasonalIndices[seg][m] || 1
-        const smlyFc = Math.round(smlyVal * (1 + yoySum[seg]))
-        fitted = Math.round(0.6 * smlyFc + 0.4 * tDes * si)
-      } else if (method === 'M3_CAL') {
-        // Tipper: work in normalized space, denormalize with historical cap score
-        const normSmlyVal = i >= 12 ? tipperNorm[i - 12] : 0
-        const smlyFcNorm  = normSmlyVal * (1 + yoySum['Tipper'])
-        const si          = tipperNormSI[m] || 1
-        const hwNorm      = (tipperNormHW.level + tipperNormHW.trend * dampedSum(1)) * si
-        const blendedNorm = 0.6 * smlyFcNorm + 0.4 * hwNorm
-        const cap         = historicalCapScores[tiv[i].month_label] || 87
-        fitted = Math.round(blendedNorm * cap / 100)
+      const p = {
+        t12:    computeYoYT12(train),
+        g:      V3_METHOD[seg] === 'ADAPT' ? computeAdaptG(train) : 0,
+        theta:  THETA_SEGMENTS.includes(seg)
+          ? computeThetaParams(deseasonalize(train, si, trainMeta))
+          : null,
+        si,
+        plain:  sameMonthLastYear >= 0 ? smlyPlain(full, sameMonthLastYear)  : 0,
+        robust: sameMonthLastYear >= 0 ? smlyRobust(full, sameMonthLastYear) : 0,
       }
-
-      record[col] = Math.max(0, fitted)
+      record[SEG_COL[seg]] = Math.max(0, Math.round(baseFromParams(seg, m, 1, p)))
     }
     modelBacktest.push(record)
   }
@@ -332,18 +293,12 @@ export function retrainModel(tivActuals, ptbActuals, alActuals) {
     last_data_month:  tiv[lastIdx].month_label,
     total_months:     n,
     seasonal_indices: seasonalIndices,
-    hw_params:        hwParams,
-    smly,
-    yoy_sum:          yoySum,
-    yoy_median:       yoyMedian,
-    // Keep yoy_capped for backward compat with any existing UI reading old rows
-    yoy_capped:       yoySum,
+    yoy_t12:          yoyT12,
+    smly_plain:       smlyPlainOut,
+    smly_robust:      smlyRobustOut,
     theta_params:     thetaParams,
-    tipper_norm_hw:   tipperNormHW,
-    tipper_norm_si:   tipperNormSI,
-    tipper_norm_smly: tipperNormSmly,
-    cap_scores:       capScores,
-    champion:         CHAMPION,
+    adapt_params:     adaptParams,
+    v3_method:        V3_METHOD,
     al_share_recent:  alShareRecent,
     ptb_share_recent: ptbShareRecent,
     model_backtest:   modelBacktest,

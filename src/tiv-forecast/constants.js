@@ -36,18 +36,21 @@ export const PPP_END_IDX   = 28
 export const PPP_OUTLIER_START = 'Dec-23'
 export const PPP_OUTLIER_END   = 'Aug-24'
 
-// Holt-Winters smoothing parameters
+// Holt-Winters smoothing parameters.
+// ⚠ v3.0: NO method uses Holt any more (ROB/THETA/ADAPT all avoid it). Retained
+// only because spec §13 still lists them; safe to delete once §5.3 is retired.
 export const HW_ALPHA = 0.3
 export const HW_BETA  = 0.1
-
-// Dampening factor for multi-step Holt-Winters forecast
 export const HW_DAMPENING_PHI = 0.65
 
-// Blend weights: 60% SMLY anchor + 40% HW signal
+// Blend weights — used INSIDE the THETA method only (0.6 SMLY + 0.4 Theta)
 export const BLEND_SMLY_WEIGHT = 0.6
-export const BLEND_HW_WEIGHT   = 0.4
+export const BLEND_THETA_WEIGHT = 0.4
 
-// YoY growth cap: ±15% max
+// YoY growth cap: ±15% max.
+// The estimator MUST be trailing-12M vs prior-12M — never FY-to-date vs full FY.
+// See spec §5.4a: the FY-to-date form pinned growth at -15% in 56 of 72 backtest
+// segment-months and invalidated every v2.x model selection.
 export const YOY_CAP = 0.15
 
 // PTB share of AL: hard cap (LM must survive)
@@ -82,49 +85,48 @@ export const RAW_COLS_PER_MONTH = 11  // 10 data cols + 1 spacer
 // Recent N months for market share averages
 export const SHARE_LOOKBACK_MONTHS = 6
 
-// ── v2.1 Champion model ──────────────────────────────────────────────
-
-// Per-segment champion method after 8-month walk-forward backtest (Aug-25 to Mar-26)
-// M1=SMLY×(1+yoy_sum)  M2=SMLY×(1+yoy_median)  M4=Theta  M3_CAL=CalNorm+HW
-// Do NOT auto-update on retrain — re-run trial framework after Jun-26 forward validation
-export const CHAMPION = {
-  'Bus PVT':   'M1',
-  'Haulage':   'M2',
-  'MAV':       'M1',
-  'Tractor':   'M4',
-  'Tipper':    'M3_CAL',
-  'ICV Trucks':'M2',
+// ── v3.0 method map ──────────────────────────────────────────────────
+// Adopted from the CORRECTED 12-month walk-forward backtest (Aug-25..Jul-26).
+// The v2.1 champion map (M1/M2/M4/M3_CAL) is WITHDRAWN — it was selected on a
+// harness with the §5.4a YoY defect and none of its evidence stands.
+//
+//   ROB   robust-anchor SMLY × (1 + trailing-12M YoY, ±15%)
+//   THETA 0.6·plain SMLY·(1+t12) + 0.4·Theta(h)·SI[m]
+//   ADAPT plain SMLY × (1 + g), level-shift adapter
+//
+// Per-segment 12-mo MAPE: 28.2 / 29.9 / 30.0 / 33.5 / 23.1 / 13.8
+// Overall model 26.4% vs judgment benchmark 28.6%.
+//
+// ⚠ Do NOT recompute this map on routine retrains — it is a code constant.
+// Changing it requires a deliberate re-trial with period-matched estimators.
+// Next re-trial checkpoint: after Oct-26 actuals (15-month window).
+export const V3_METHOD = {
+  'Bus PVT':   'ROB',
+  'Haulage':   'THETA',
+  'MAV':       'THETA',
+  'Tractor':   'ROB',
+  'Tipper':    'ROB',
+  'ICV Trucks':'ADAPT',
 }
 
-// SES smoothing parameter for Theta method (M4)
-export const THETA_ALPHA = 0.3
+// Theta method (Haulage + MAV only): linear fit + SES on the deseasonalized series
+export const THETA_ALPHA    = 0.5
+export const THETA_SEGMENTS = ['Haulage', 'MAV']
 
-// Tipper calendar normalization: weekly booking intensity (must sum to 100)
-// Week 1 (days 1-7) = 10%, Week 2 (8-14) = 20%, Week 3 (15-21) = 30%, Week 4 (22-end) = 40%
-export const WEEK_INTENSITY = { 1: 10, 2: 20, 3: 30, 4: 40 }
+// Robust anchor = median(month-1, month, month+1) of the prior year.
+// Halves Tractor error and neutralizes one-month spikes arithmetically
+// (e.g. Jun-26 Bus PVT 239 STU tender → median(87,239,85) = 87).
+// Wrong for MAV, whose sharp seasonality is real signal — hence per-segment.
+export const ROBUST_ANCHOR_SEGMENTS = ['Bus PVT', 'Tractor', 'Tipper']
 
-// PTB closed days: Sundays (computed) + these public holidays (YYYY-MM-DD)
-// Fixed: Republic Day Jan 26, Independence Day Aug 15, Gandhi Jayanti Oct 2
-// Variable: Holi (1 day), Diwali block (5 days from Diwali day)
-// Note: Jan 1 and Dec 25 are NOT PTB holidays; Uttarayan (Jan 14-15) included for Gujarat
-export const HOLIDAYS = new Set([
-  // Republic Day
-  '2022-01-26','2023-01-26','2024-01-26','2025-01-26','2026-01-26','2027-01-26',
-  // Uttarayan (Makar Sankranti) — Jan 14-15
-  '2022-01-14','2022-01-15','2023-01-14','2023-01-15',
-  '2024-01-14','2024-01-15','2025-01-14','2025-01-15',
-  '2026-01-14','2026-01-15','2027-01-14','2027-01-15',
-  // Holi (1 day)
-  '2022-03-18','2023-03-08','2024-03-25','2025-03-14','2026-03-03','2027-03-22',
-  // Independence Day
-  '2022-08-15','2023-08-15','2024-08-15','2025-08-15','2026-08-15','2027-08-15',
-  // Gandhi Jayanti
-  '2022-10-02','2023-10-02','2024-10-02','2025-10-02','2026-10-02','2027-10-02',
-  // Diwali block (5 working days starting Diwali)
-  '2022-10-24','2022-10-25','2022-10-26','2022-10-27','2022-10-28',
-  '2023-11-12','2023-11-13','2023-11-14','2023-11-15','2023-11-16',
-  '2024-11-01','2024-11-02','2024-11-03','2024-11-04','2024-11-05',
-  '2025-10-20','2025-10-21','2025-10-22','2025-10-23','2025-10-24',
-  '2026-11-08','2026-11-09','2026-11-10','2026-11-11','2026-11-12',
-  '2027-10-29','2027-10-30','2027-10-31','2027-11-01','2027-11-02',
-])
+// ADAPT — level-shift adapter (ICV Trucks only).
+// Exists because GST 2.0 (CV rate 28%→18%, Sep-25) shifted demand beyond what a
+// ±15%-capped estimator can express; ICV raw t12 growth is +43.6%.
+export const ADAPT_WINDOW = 6     // seasonally-matched trailing months
+export const ADAPT_SHRINK = 0.7
+export const ADAPT_CAP    = 0.30
+
+// RETIRED in v3.0: calendar-capacity normalization (WEEK_INTENSITY, HOLIDAYS,
+// cap_scores, tipper_norm_*). Its 2.8pp Tipper advantage was an artefact of the
+// defective harness; under corrected estimators plain t12 + robust anchor wins
+// (23.1% vs 24.6%). Do not reintroduce without a fresh trial.

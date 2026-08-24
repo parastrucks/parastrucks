@@ -1,21 +1,19 @@
-// TIV Forecast — core forecast engine (spec v2.1: champion dispatch)
+// TIV Forecast — core forecast engine (spec v3.0: ROB / THETA / ADAPT dispatch)
+//
+// The forecast is JUDGMENT-FREE. No judgment value enters any computation here.
+// Judgment appears in the UI only as a comparison row on the forecast tab and a
+// benchmark column in the Accuracy Tracker (spec §5.5, handoff §1).
 import {
   SEGMENTS,
-  HW_DAMPENING_PHI,
   AL_SHARE_MIN,
   AL_SHARE_MAX,
   PTB_SHARE_CAP,
   FORECAST_HORIZON_LENGTH,
-  CHAMPION,
+  V3_METHOD,
+  BLEND_SMLY_WEIGHT,
+  BLEND_THETA_WEIGHT,
 } from '../constants'
 import { TRIGGER_DEFS } from './triggerDefs'
-
-// ── Damped trend sum: Σ φ^i for i=1..h ──────────────────────────────
-function dampedTrendSum(h) {
-  let s = 0
-  for (let i = 1; i <= h; i++) s += Math.pow(HW_DAMPENING_PHI, i)
-  return s
-}
 
 // ── Apply all active triggers to a baseline forecast ─────────────────
 function applyTriggers(base, segment, monthNum, triggerState) {
@@ -117,52 +115,38 @@ function computeForecastMonths(lastDataMonth) {
   return result
 }
 
-// ── Champion baseline forecast dispatcher ────────────────────────────
-// Dispatches to the per-segment method that minimised MAPE in backtest.
-// Falls back gracefully if v2.1 params not yet present (old DB rows).
+// ── v3.0 baseline forecast dispatcher (spec §5.5) ────────────────────
+//   ROB   robust-anchor SMLY × (1 + trailing-12M YoY)   Bus PVT, Tractor, Tipper
+//   THETA 0.6·plain SMLY·(1+t12) + 0.4·Theta(h)·SI[m]   Haulage, MAV
+//   ADAPT plain SMLY × (1 + g)                          ICV Trucks
+//
+// Anchors are keyed by TARGET LABEL (e.g. "Aug-26"), not month number — the
+// robust anchor spans three prior-year months, so a bare month number can no
+// longer identify it. `v3_method` is read from the params row when present so a
+// stored map and the code constant cannot silently diverge.
 function baseForecast(segment, monthNum, horizon, targetLabel, params) {
-  const method  = (params.champion || CHAMPION)[segment] || 'M1'
-  const smlyMap = params.smly[segment] || {}
-  const smlyVal = smlyMap[monthNum] || 0
+  const method = (params.v3_method || V3_METHOD)[segment] || 'ROB'
+  const plain  = params.smly_plain?.[targetLabel]?.[segment]  ?? 0
+  const robust = params.smly_robust?.[targetLabel]?.[segment] ?? 0
+  const t12    = params.yoy_t12?.[segment] ?? 0
 
-  if (method === 'M1') {
-    const yoy = params.yoy_sum?.[segment] ?? params.yoy_capped?.[segment] ?? 0
-    return smlyVal * (1 + yoy)
+  if (method === 'ROB') return robust * (1 + t12)
+
+  if (method === 'ADAPT') {
+    const g = params.adapt_params?.[segment]?.g ?? 0
+    return plain * (1 + g)
   }
 
-  if (method === 'M2') {
-    const yoy = params.yoy_median?.[segment] ?? params.yoy_capped?.[segment] ?? 0
-    return smlyVal * (1 + yoy)
+  if (method === 'THETA') {
+    const smly = plain * (1 + t12)
+    const tp   = params.theta_params?.[segment]
+    if (!tp) return smly
+    const si    = (params.seasonal_indices?.[segment] || {})[monthNum] || 1
+    const theta = (tp.intercept + tp.slope * (tp.n + horizon - 1) + tp.ses) / 2 * si
+    return BLEND_SMLY_WEIGHT * smly + BLEND_THETA_WEIGHT * theta
   }
 
-  if (method === 'M4') {
-    // 60% SMLY-sum + 40% Theta (linear extrapolation + SES blend in deseasonalized space)
-    const yoy    = params.yoy_sum?.[segment] ?? params.yoy_capped?.[segment] ?? 0
-    const smlyFc = smlyVal * (1 + yoy)
-    const tp     = params.theta_params?.[segment]
-    if (!tp) return smlyFc
-    const f0          = tp.intercept + tp.slope * (tp.n + horizon - 1)
-    const thetaDeseas = (f0 + tp.ses) / 2
-    const si          = (params.seasonal_indices[segment] || {})[monthNum] || 1
-    return 0.6 * smlyFc + 0.4 * thetaDeseas * si
-  }
-
-  if (method === 'M3_CAL') {
-    // Tipper: HW+SMLY in capacity-normalized space, then × (cap/100) to denormalize
-    const yoy        = params.yoy_sum?.['Tipper'] ?? params.yoy_capped?.['Tipper'] ?? 0
-    const normSmly   = (params.tipper_norm_smly || {})[monthNum] || 0
-    const normHW     = params.tipper_norm_hw
-    if (!normHW) return smlyVal  // fallback: old DB row without cal-norm data
-    const si         = (params.tipper_norm_si || {})[monthNum] || 1
-    const hwNorm     = (normHW.level + normHW.trend * dampedTrendSum(horizon)) * si
-    const blendedNorm = 0.6 * (normSmly * (1 + yoy)) + 0.4 * hwNorm
-    const cap        = (params.cap_scores || {})[targetLabel] || 87
-    return blendedNorm * cap / 100
-  }
-
-  // Default fallback: M1
-  const yoy = params.yoy_sum?.[segment] ?? params.yoy_capped?.[segment] ?? 0
-  return smlyVal * (1 + yoy)
+  return plain
 }
 
 // ── Main forecast engine ─────────────────────────────────────────────
