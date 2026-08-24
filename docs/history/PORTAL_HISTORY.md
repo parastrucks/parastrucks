@@ -26,6 +26,261 @@
 
 ---
 
+## Session log — 2026-08-24: TIV Forecast v3.0 ported, verified against real data, and shipped
+
+**Outcome:** the TIV forecast engine is **live on prod at v3.0** (PR #99 → `5bd2c2f`), CI
+fully green for the first time in months (PR #100 → `d06cb08`), the schema migration is
+applied, and the owner's Jul-26 workbook has been uploaded and **independently verified to
+reproduce the specification's expected numbers exactly**. One new latent defect was found
+and is documented but deliberately **not** fixed (see §6).
+
+### 1. What triggered it
+
+Two documents sat **untracked** in the owner's working copy — `TIV_FORECAST_MIGRATION_SPEC.md`
+(v3.0) and `V3_EXECUTION_HANDOFF.md`, later joined by `WEBSITE_BUILD_HANDOFF.md`. Because they
+were untracked they were invisible to the worktree, which is why the first search for "the TIV
+methodology documents" found only the **v1** spec in `docs/history/`. All three are now
+committed to the repo so the methodology of record lives in git.
+
+⚠️ **Generalisable lesson:** a clean worktree that is level with `origin/portal` does **not**
+see untracked files in the main checkout. When the owner references a document that cannot be
+found, check the main checkout's `git status` before concluding it does not exist.
+
+### 2. Why v2.1 was withdrawn, not merely superseded
+
+The v2.x walk-forward harness computed YoY as **FY-to-date sum ÷ FULL prior-FY sum**. Early in
+a fiscal year that ratio is structurally much less than 1, so the ±15%-capped growth term pinned
+at **−15% in 56 of 72 backtest segment-months** when the correct capped value was **+15%** — a
+30-point error in the growth input of every sum-based method.
+
+Consequences: every v2.1 champion selection rested on corrupted evaluations and is withdrawn;
+and the backtested model was never the deployed model, because production constants were computed
+correctly at train time. **The shipped forecasts were sound; the evidence for them was not.**
+
+**Standing rule, now encoded in `constants.js`, the migration's column COMMENT, and the UI:**
+every YoY comparison must be *period-matched* — N months against the same N calendar months of
+the prior year, or trailing-12M vs prior-12M. Never a partial period against a full year.
+
+### 3. The v3.0 model
+
+| Segment | Method | Formula | 12-mo MAPE |
+|---|---|---|---|
+| Bus PVT | ROB | robust SMLY x (1 + t12) | 28.2% |
+| Haulage | THETA | 0.6 x plain SMLY x (1+t12) + 0.4 x Theta(h) x SI[m] | 29.9% |
+| MAV | THETA | same | 30.0% |
+| Tractor | ROB | robust SMLY x (1 + t12) | 33.5% |
+| Tipper | ROB | robust SMLY x (1 + t12) | 23.1% |
+| ICV Trucks | ADAPT | plain SMLY x (1 + g) | 13.8% |
+
+Model **26.4%** vs judgment benchmark **28.6%** (Aug-25..Jul-26).
+
+- **Trailing-12M YoY** replaces FY-to-date everywhere; period-matched by construction.
+- **Robust anchor** = median(m-1, m, m+1) of the prior year. Neutralises one-month spikes
+  arithmetically — Jun-26 Bus PVT 239 (a confirmed STU tender) gives median(87, 239, 85) = 87 — so
+  **no manual outlier list is needed or permitted**. Wrong for MAV, whose sharp seasonality is
+  real signal, hence per-segment assignment.
+- **ADAPT** is new: `g = clamp(0.7 * mean6(seasonally-matched ratios) - 0.7, +/-0.30)`. Exists
+  because GST 2.0 (Sep-25, CV rate 28% to 18%) shifted the demand level beyond what a ±15% cap can
+  express; ICV raw t12 growth is +43.6%.
+- **Calendar-capacity normalisation retired** — its 2.8pp Tipper advantage was an artefact of the
+  defective harness (23.1% plain vs 24.6% cal-norm). `WEEK_INTENSITY` and the `HOLIDAYS` calendar
+  through 2027 are deleted.
+- **Holt-Winters is now unused by every method.** `HW_ALPHA`/`HW_BETA`/`HW_DAMPENING_PHI` are
+  retained only because spec §13 still lists them.
+- **`fuelCrisis` deleted, not disabled** — the war ended Jun-26 and its premise was inverted:
+  CV demand rose *through* it. **All triggers now default OFF.**
+- The forecast is **judgment-free**. Judgment appears only as a comparison column.
+
+### 4. The one real bug — and how it was found
+
+Spec §5.5 describes Theta as *"linear fit + SES(alpha=0.5) on deseasonalized series"* with
+`f(h) = (intercept + slope*(n+h-1) + ses)/2`. **Implemented literally, that is not the Theta
+method.** In classic Theta the theta-2 line is `2*Y - regression`, and it is *that* line the SES
+runs on. The literal reading put **Haulage 11-19 units low and MAV 2-3 low at every horizon**,
+while the four non-THETA segments were already exact.
+
+**Diagnosed, not guessed** — worth repeating as a technique:
+1. The parity gate reported which segments failed and by how much.
+2. The theta value *required* to hit the expected output was computed and found to be nearly
+   **constant across horizons** (Haulage 194.3 / 196.2 / 196.1) and sitting just above `ses` —
+   the signature of an SES level dominating a weak-slope extrapolation.
+3. Because SES is a **linear operator**, `SES(2Y - LRL) = 2*SES(Y) - SES(LRL)` predicted
+   **194.9 / 195.9 / 197.0** against the required values — all inside the ±1.6 rounding band —
+   **before a single line of code changed**.
+4. Implementing it confirmed the prediction: 21/21 exact, MAPE 26.6% became **26.4%**.
+
+### 5. Verification — what was proven, and how
+
+**Parity gate (`scripts/tiv/parity-gate.mjs`).** Runs the **real shipped modules** —
+`parseExcel`, `retrainModel`, `forecastEngine`, `triggerDefs` — against the real workbook.
+Nothing is reimplemented, per the standing rule about dry-running deployed code.
+
+```
+Aug-26   64 109 125  88 147 203  = 736   PASS
+Sep-26   89 184 102  92 147 165  = 779   PASS
+Oct-26   94 159 157  92 170 178  = 850   PASS
+backtest 12 rows, Aug-25..Jul-26, mean MAPE 26.4%
+```
+
+Run it with:
+```
+npx esbuild scripts/tiv/parity-gate.mjs --bundle --platform=node --format=esm --outfile=<tmp>/parity.mjs
+node <tmp>/parity.mjs "docs/Market Data 22-27.xlsx"
+```
+
+**Insert probe (`scripts/tiv/emit-insert-probe.mjs`).** The gate bypasses `admin-tiv`, which
+inserts the retrain output as a **spread** — so one missing column breaks upload at the worst
+moment. The probe issues a real INSERT of the v3 payload wrapped in a `DO` block that raises
+unconditionally: Postgres validates the entire column set, then the raise discards it.
+Result: `PROBE_OK`, 14 columns accepted, id 17 never committed, 16 rows unchanged.
+
+**Estimator self-tests.** 9/9 against the spec's own worked examples, including a regression
+proving the old FY-to-date form returns −15% on a perfectly flat series where trailing-12M
+correctly returns 0.
+
+**End-to-end on prod (owner's upload, row id 19).** Every stored parameter matches the gate,
+including `theta_params.Haulage.ses = 264.32347` (the theta-2 value — proof the fix is what runs).
+Aug-26 recomputed by hand from prod's own row = **736**. `hw_params` came back **NULL**, which is
+real proof the NOT NULL relaxation was load-bearing — without it the upload would have failed.
+
+### 6. NEW DEFECT FOUND — multi-entity/brand uploads silently destroy data
+
+Raised by the owner: *"we can upload multiple identities and multiple brand data, but there is no
+change in the viewing option available."* Investigation showed the missing dropdown is the
+**smaller** half of the problem.
+
+- All six data tables carry **`UNIQUE (month_label)` — global, not `(entity_id, brand_id,
+  month_label)`**, and `admin-tiv` upserts with `onConflict: "month_label"`
+  (`supabase/functions/admin-tiv/index.ts:95`).
+- Therefore a second entity/brand upload **does not create a parallel dataset — it overwrites the
+  first one in place** and re-stamps its `entity_id`/`brand_id`. No error; the upload reports
+  success. **Silent data loss.**
+- `tiv_forecast_model_params` has no unique constraint, so its rows accumulate — but
+  `fetchLatestModelParams()` takes the **globally latest by `trained_at` with no entity/brand
+  filter**, so after a second brand's upload everyone gets that brand's model.
+- **Every read in `dataQueries.js` is unscoped** — no `.eq('entity_id', ...)` anywhere. Only
+  `fetchTriggerState` filters, and that is by `user_id`.
+- RLS is `admin OR (entity matches AND has_user_brand(brand_id))`, so **admin sees every brand
+  merged**, and a multi-brand user (SUNIL, Siya = `al+hdh+switch`) would see several brands'
+  rows concatenated with colliding month labels.
+
+**Currently latent — measured, not assumed:** all four tables hold exactly **1** entity/brand
+pair, so nothing has been lost. The entity+brand selector added in PR #46 is a promise the
+schema cannot keep.
+
+**Deliberately NOT fixed this session.** It needs a constraint change
+(`UNIQUE (entity_id, brand_id, month_label)`), a matching `onConflict`, scoped reads, and only
+*then* a selector — adding a dropdown first would merely make the overwrite easier to trigger.
+Constraint changes are destructive to get wrong and need explicit owner approval. Full write-up:
+`docs/backlog/tiv-multi-entity-brand.md`.
+
+### 7. UI/UX audit — nine findings, all fixed
+
+1. `ForecastTable` chose which layer to render by **string-matching its own title**
+   (`title.includes('Layer 1') || title.toLowerCase().includes('tiv')`, Layer 2 matching only via
+   the substring `'al '`). Renaming a heading silently changed the data shown. Now an explicit
+   `layer` prop.
+2. Every caller passed `subtitle` with `showTitle={false}`, so captions **never rendered** — the
+   share basis and the 75% PTB cap were written down and hidden. Now `<caption>` elements.
+3. Table semantics: `scope` on all headers, month/segment cells promoted to row headers, captions
+   on both tables. Previously **zero** `aria-*`/`role`/`scope`/`<caption>` in all 8 components.
+4. **Contrast, measured:** `--gray-400` = 2.81:1 and `--gray-300` = 1.84:1 on white, both failing
+   AA for body text, moved to `--gray-500` (4.54:1). Chart *series* colours deliberately left
+   alone: graphical objects are held to 3:1 and recolouring would collide with adjacent series.
+5. Severity was **colour-only** (WCAG 1.4.1). Each band now carries a distinct **shape** —
+   circle within tolerance, triangle to 25%, square beyond — surviving greyscale.
+6. The hover reveal was pointer-only. Cells are now focusable, reveal on `:focus-visible`, carry
+   an `aria-label` with the full breakdown, and a **"Show forecast/actual" toggle** switches the
+   whole table for touch users.
+7. Both tab bars are real tablists (`role`, `aria-selected`, `aria-controls`, focus ring).
+8. **Tabular figures.** The design system defines `tabular-nums` but only for two unrelated
+   components; the TIV tables were plain `<table>` and inherited proportional digits.
+9. Inline styles **126 to 92**, structure moved to a tokenised `.tiv-*` block in `index.css`.
+
+Plus: the dead `errorColor` export removed; three **phantom font weights** fixed (Carlito ships
+only 400 and 700, so 500/600 snap at render); and a React key violation where `.map()`
+returned bare fragments with keys on the children instead of the fragment.
+
+**Owner request implemented:** accuracy cells show the error % at rest and swap to
+**forecast/actual on hover**, with the `title` carrying the labelled breakdown *including the
+other estimate*, so one hover answers both "how far off was the model" and "did judgment do
+better". Built as an in-cell content swap rather than a positioned popover because the table sits
+in an `overflow-x: auto` wrapper — CSS computes the other axis to `auto`, so a floating tooltip
+would be clipped at the container edge — and because a swap costs no React state across ~170 cells.
+
+### 8. Migration — applied to prod 2026-08-24
+
+`supabase/migrations/20260824_tiv_v3_model_params.sql`, applied via MCP `apply_migration`
+(migration ledger: `20260824180758 tiv_v3_model_params`).
+
+- **Added:** `yoy_t12`, `smly_plain`, `smly_robust`, `adapt_params`, `v3_method` (all jsonb,
+  nullable so historical v2.1 rows stay valid). Each carries a `COMMENT`, including the
+  "NEVER FY-to-date vs full FY" rule on `yoy_t12` — the constraint travels with the schema.
+- **Relaxed:** `hw_params`, `smly`, `yoy_capped` `DROP NOT NULL`. v3 no longer emits them and
+  `admin-tiv` inserts as a spread, so without this every upload would fail.
+- **Dropped: nothing.** The ten obsolete v2.1 columns keep their data per the no-schema-deletion
+  rule, and are the rollback path. 16 existing rows verified intact afterwards.
+- The live v2.1 code was unaffected (added columns nullable; it still wrote the three relaxed
+  ones), so prod stayed consistent between migration and deploy.
+
+### 9. CI turned fully green (PR #100 → `d06cb08`)
+
+`npm-audit` had been red on **every** PR (`portal` itself was red at `14b9191`). Root cause:
+`GHSA-2v37-7h3g-55p8`, **nanoid <3.3.18, HIGH**. The gate is `npm audit --audit-level=high`, so
+this single HIGH was the whole failure; the three moderates do not fail it.
+
+Fix is 3 lines: nanoid is a **dev-only transitive of postcss**, which requires `^3.3.16`, and
+3.3.18 is inside that range — so `npm update nanoid` moves exactly one package. `package.json`
+untouched. **`npm audit fix` wholesale was deliberately avoided**: it also pulls react-router to
+7.x, trading two moderates for a HIGH and requiring React 19. react-router + dompurify moderates
+remain, as previously decided.
+
+⚠️ **Methodology note worth keeping.** The first attempt to prove the bump inert reported the
+emitted assets had *changed* — alarming and wrong. Cause: `node_modules` drift from earlier
+`npx eslint` / `npx esbuild` invocations, not the bump. It was caught only by running a
+**control** — two builds with zero changes — which came back identical and proved the build is
+reproducible run-to-run. That control is what made the real A/B (clean `npm ci` on each lockfile)
+trustworthy: **all 34 emitted assets byte-identical**. Without the control the comparison would
+have been uninterpretable in either direction.
+
+### 10. Environment findings
+
+- **The Supabase MCP DOES reach the portal project** — the previous note that it was ERP-only was
+  wrong or has since changed. `list_projects` returns **only** the ERP project, so the portal
+  *looks* unreachable, but passing `project_id: "mmmxvjaavdtwlpcnjgzy"` explicitly works. Never
+  infer reachability from `list_projects`.
+- **`execute_sql` runs in a READ-ONLY transaction** (rejects INSERT with SQLSTATE `25006`).
+  Writes must go through `apply_migration`, which gets a writable session.
+- **The browser pane crashed the Claude app twice.** The second crash deliberately avoided
+  `preview_start {name}` (Bash-started Vite plus `{url}` instead) and died anyway, so the
+  "preview_start spawns the server" theory is **disproven**. Vite survived both with a clean log;
+  both crashes happened on the login page. Cause unknown — avoid the pane against this dev server.
+- **Vite binds IPv6 only here:** `curl 127.0.0.1:3000` refused, `curl localhost:3000` returns 200,
+  netstat shows `[::1]:3000`. This **inverts** the older "prefer 127.0.0.1" advice.
+- **`max()` on a text month column lies.** `max(last_data_month)` returned `'May-26'` because
+  `'M' > 'J'` alphabetically; the true newest was `Jul-26`. Sort by `month_index`, never the label.
+- **Rebasing with a dirty `.claude/settings.local.json`:** `git update-index --assume-unchanged`
+  then rebase then `--no-assume-unchanged` works cleanly and **never moves the file**, avoiding
+  the `git stash` that once dropped 159 of 165 permission entries. Verified byte-identical
+  (sha256 plus `cmp`, 75 allow entries) after both rebases.
+
+### 11. Shipped
+
+| PR | Commit | What |
+|---|---|---|
+| #100 | `d06cb08` | nanoid 3.3.16 to 3.3.18; CI green |
+| #99 | `5bd2c2f` | v3.0 engine + UI/UX audit fixes + docs + migration |
+
+Prod verified after deploy: `team.parastrucks.in/` and `/login` return 200, CSP/HSTS/X-Frame
+present on the document, and the live chunk contains `Engine v3.0`/`ADAPT`/`THETA`/`robust-anchor`
+with **zero** `fuelCrisis`/`M3_CAL`/`champion` — the v2.1 model is gone from production.
+
+The source workbook (`docs/Market Data 22-27.xlsx`, 233 KB of commercial market data) is
+**deliberately gitignored** at the owner's instruction; the parity gate takes its path as an
+argument.
+
+---
+
 ## Session log — 2026-08-19/20: Phase 10 grid spike, scope widened, then parked
 
 **Outcome:** Phase 10 is **parked again** (owner instruction). Planning is complete and nothing
