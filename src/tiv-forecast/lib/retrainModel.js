@@ -103,8 +103,17 @@ function deseasonalize(data, si, monthsMeta) {
 }
 
 // ── Theta params (Haulage, MAV) ──────────────────────────────────────
-// Linear (OLS) fit + SES(α=0.5) on the deseasonalized series.
-// Forecast at horizon h: (intercept + slope·(n+h−1) + ses) / 2 × SI[m]
+// Classic Theta (Assimakopoulos & Nikolopoulos) on the deseasonalized series:
+//   theta-0 line  = the OLS linear fit (long-run trend)
+//   theta-2 line  = 2*Y - theta-0  (deviations from the line, doubled)
+//   forecast(h)   = ( theta0(n+h-1) + SES(theta-2) ) / 2  x  SI[m]
+//
+// ⚠ `ses` is the SES of the **theta-2 line**, NOT of the deseasonalized series.
+// The spec's prose ("linear fit + SES on deseasonalized series", section 5.5)
+// compresses this and reads as if SES runs on Y directly. Implementing it that
+// way puts Haulage and MAV ~11-19 units low and fails the section 5 parity gate;
+// every other segment is unaffected because only THETA uses this. Verified
+// against the real workbook -- see scripts/tiv/parity-gate.mjs.
 function computeThetaParams(deseasData) {
   const n = deseasData.length
   if (n === 0) return { slope: 0, intercept: 0, ses: 0, n: 0 }
@@ -120,8 +129,13 @@ function computeThetaParams(deseasData) {
   const denom = sumX2 - n * xMean * xMean
   const slope     = denom !== 0 ? (sumXY - n * xMean * yMean) / denom : 0
   const intercept = yMean - slope * xMean
-  let ses = deseasData[0]
-  for (let i = 1; i < n; i++) ses = THETA_ALPHA * deseasData[i] + (1 - THETA_ALPHA) * ses
+
+  // SES over the theta-2 line.
+  let ses = 2 * deseasData[0] - intercept
+  for (let i = 1; i < n; i++) {
+    const y2 = 2 * deseasData[i] - (intercept + slope * i)
+    ses = THETA_ALPHA * y2 + (1 - THETA_ALPHA) * ses
+  }
   return { slope, intercept, ses, n }
 }
 
