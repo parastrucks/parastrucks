@@ -128,6 +128,23 @@ export default function ForecastOutputTab({ forecastResult, judgmentTiv, judgmen
           judgmentRows={jPtbRows}
         />
       )}
+
+      {/* Method map — which estimator produced each row (spec §5.5) */}
+      <div style={{
+        marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--gray-100)',
+        fontSize: 12, color: 'var(--gray-500)', lineHeight: 1.7,
+      }}>
+        <div style={{ marginBottom: 4 }}>
+          <strong style={{ color: 'var(--gray-600)' }}>Method per segment</strong>
+          {' · '}Bus PVT, Tractor, Tipper <strong>ROB</strong> (robust-anchor SMLY × trailing-12M growth)
+          {' · '}Haulage, MAV <strong>THETA</strong> (60% SMLY + 40% Theta)
+          {' · '}ICV Trucks <strong>ADAPT</strong> (level-shift adapter)
+        </div>
+        <div>
+          All triggers are OFF by default — the base forecast is untouched historical data.
+          Judgment is shown for comparison only and never enters the forecast.
+        </div>
+      </div>
     </div>
   )
 }

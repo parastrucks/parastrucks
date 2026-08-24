@@ -74,6 +74,15 @@ export default function TivForecastPage() {
 
   useEffect(() => { loadData() }, [loadData])
 
+  // Latest month for which the AL/LM split exists. The upload file carries AL
+  // only through Mar-26 at time of writing, so the AL and PTB share layers are
+  // frozen there while Layer 1 (TIV) keeps advancing. Surfaced in the banner so
+  // a stale cascade can never be mistaken for a current one (handoff §7.1).
+  const lastAlMonth = useMemo(() => {
+    if (!alActuals?.length) return null
+    return alActuals.reduce((a, b) => (a.month_index > b.month_index ? a : b)).month_label
+  }, [alActuals])
+
   // ── Run forecast whenever params or triggers change ──────────────
   const forecastResult = useMemo(() => {
     if (!modelParams || !triggerState) return null
@@ -134,11 +143,25 @@ export default function TivForecastPage() {
         <div style={{
           fontSize: 13, color: 'var(--gray-500)',
           marginBottom: 16,
-          display: 'flex', gap: 16, flexWrap: 'wrap',
+          display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center',
         }}>
+          <span style={{
+            fontWeight: 700, fontSize: 11, letterSpacing: '.04em', textTransform: 'uppercase',
+            color: 'var(--blue)', background: 'var(--blue-light, var(--gray-50))',
+            border: '1px solid var(--blue)', borderRadius: 'var(--radius-sm)', padding: '2px 7px',
+          }}>Engine v3.0</span>
           <span>Last data: <strong>{modelParams.last_data_month}</strong></span>
           <span>Total months: <strong>{modelParams.total_months}</strong></span>
           <span>Model trained: <strong>{new Date(modelParams.trained_at).toLocaleDateString('en-IN')}</strong></span>
+          <span title="No judgment value enters any forecast computation. Judgment appears only as a comparison column.">
+            Judgment-free forecast
+          </span>
+          {lastAlMonth && lastAlMonth !== modelParams.last_data_month && (
+            <span style={{ color: 'var(--amber)', fontWeight: 600 }}
+              title={`The AL/LM split is only present in the upload file through ${lastAlMonth}, so the AL and PTB share layers are frozen at that month. Layer 1 (TIV) is unaffected.`}>
+              ⚠ AL/PTB share layer as of {lastAlMonth}
+            </span>
+          )}
         </div>
       )}
 

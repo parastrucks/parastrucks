@@ -141,6 +141,29 @@ export default function AccuracyTrackerTab({ tivActuals, judgmentTiv, modelParam
 
   return (
     <div>
+      {/* Methodology caption — what this backtest is, and what it replaced */}
+      <div className="card mb-16" style={{ fontSize: 12.5, lineHeight: 1.75, color: 'var(--gray-500)' }}>
+        <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--ink)', marginBottom: 4 }}>
+          How to read this
+        </div>
+        <div>
+          Corrected <strong>12-month walk-forward</strong> backtest (Aug-25 to Jul-26): for each month
+          the model is refit on data <em>strictly prior</em> to it, then forecasts one step ahead.
+          Reference result on the source workbook — <strong>model 26.4%</strong> vs
+          {' '}<strong>judgment 28.6%</strong>.
+        </div>
+        <div style={{ marginTop: 6 }}>
+          Judgment is a <strong>benchmark column only</strong>; it never enters the forecast.
+          Colour thresholds: ≤15% (the Ashok Leyland tolerance) green, ≤25% amber, above that red.
+        </div>
+        <div style={{ marginTop: 6, color: 'var(--amber)' }}>
+          ⚠ The earlier v2.x backtest is <strong>withdrawn</strong>, not merely superseded. It compared
+          fiscal-year-to-date against a <em>full</em> prior fiscal year, which pinned growth at −15% in
+          56 of 72 segment-months and invalidated every model selection made on it. All figures here use
+          period-matched estimators.
+        </div>
+      </div>
+
       {/* MAPE bar chart */}
       {mapeChartData.length > 0 && (
         <div className="card mb-16">
