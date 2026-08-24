@@ -618,6 +618,184 @@ td {
 tr:last-child td { border-bottom: none; }
 tbody tr:hover td { background: var(--gray-50); }
 
+/* ─── TIV FORECAST ──────────────────────────────────────────────
+   Replaces the hand-rolled inline styles the tool shipped with. Everything
+   here is token-driven so the palette stays consistent with the rest of the
+   portal and contrast is auditable in one place. */
+
+/* Data tables: tabular figures so digits align down a column. The design
+   system already defines this for two other components; the TIV tables were
+   plain <table> and inherited proportional figures, which visually staggers
+   a dense numeric grid. */
+.tiv-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+.tiv-table caption {
+  caption-side: top;
+  text-align: left;
+  font-size: 12px;
+  color: var(--gray-500);
+  padding: 0 0 8px;
+}
+.tiv-table th { font-weight: 700; }
+.tiv-table th[scope="col"]    { text-align: center; }
+.tiv-table th[scope="row"]    { text-align: left; white-space: nowrap; }
+.tiv-table .tiv-num           { text-align: right; white-space: nowrap; }
+.tiv-table .tiv-rule-strong   { border-left: 2px solid var(--gray-300); }
+.tiv-table .tiv-rule-faint    { border-left: 1px solid var(--gray-100); }
+/* Cell rhythm lives here rather than being repeated on ~50 JSX elements. */
+.tiv-table th,
+.tiv-table td            { padding: 7px 10px; font-size: 13px; }
+.tiv-table thead th      { border-bottom: 2px solid var(--gray-200); }
+.tiv-table tbody tr      { border-bottom: 1px solid var(--gray-100); }
+.tiv-table .tiv-row-total { border-top: 2px solid var(--gray-200); font-weight: 700; }
+.tiv-table .tiv-judg      { color: var(--amber); }
+
+/* Dense variant: the accuracy grid carries 15 columns. */
+.tiv-table-dense th,
+.tiv-table-dense td      { padding: 5px 6px; font-size: 12px; }
+.tiv-table-dense .tiv-sub { font-size: 11px; font-weight: 400; }
+.tiv-table-dense thead th { border-bottom: none; }
+.tiv-table-dense .tiv-head-rule th { border-bottom: 2px solid var(--gray-200); }
+.tiv-table-dense .tiv-row-mape { border-top: 2px solid var(--gray-200); background: var(--gray-50); }
+
+/* Severity: never colour alone (WCAG 1.4.1). Each band carries a distinct
+   SHAPE — circle / triangle / square — so the ranking survives greyscale and
+   every form of colour blindness. */
+.tiv-sev::before {
+  content: '';
+  margin-right: 4px;
+  font-size: 9px;
+  vertical-align: 1px;
+}
+.tiv-sev-good { color: var(--green); }
+.tiv-sev-warn { color: var(--amber); }
+.tiv-sev-bad  { color: var(--red); }
+.tiv-sev-none { color: var(--gray-500); }
+.tiv-sev-good::before { content: '\25CF'; }  /* ● circle   — within tolerance */
+.tiv-sev-warn::before { content: '\25B2'; }  /* ▲ triangle — over tolerance */
+.tiv-sev-bad::before  { content: '\25A0'; }  /* ■ square   — well over */
+.tiv-sev-none::before { content: ''; }
+
+/* Accuracy cell: error % at rest, forecast/actual on reveal.
+   The table lives in an overflow-x:auto wrapper, and CSS computes the other
+   axis to `auto` too — so a positioned popover would be clipped at the
+   container edge. Swapping the cell's own content avoids that entirely and
+   costs no React state across ~170 cells.
+   Reveal is driven by hover, by keyboard focus, AND by a table-level toggle,
+   so the data is reachable without a pointer. */
+.tiv-cell { cursor: help; }
+.tiv-cell .tiv-cell-val { display: none; }
+.tiv-cell .tiv-cell-err { display: inline; }
+/* Ring rather than a darker fill: the error text is semantic green/amber,
+   which fall to ~4.4:1 on gray-100 — below AA for 12px text. gray-50 keeps
+   them at 4.8:1, so the affordance comes from the ring instead. */
+.tiv-cell:hover,
+.tiv-cell:focus-visible {
+  background: var(--gray-50) !important;
+  box-shadow: inset 0 0 0 1px var(--gray-300);
+  outline: none;
+}
+.tiv-cell:hover .tiv-cell-err,
+.tiv-cell:focus-visible .tiv-cell-err,
+.tiv-values-shown .tiv-cell .tiv-cell-err { display: none; }
+.tiv-cell:hover .tiv-cell-val,
+.tiv-cell:focus-visible .tiv-cell-val,
+.tiv-values-shown .tiv-cell .tiv-cell-val { display: inline; }
+.tiv-cell .tiv-cell-actual { color: var(--gray-500); font-weight: 400; }
+.tiv-cell .tiv-cell-sep    { color: var(--gray-500); font-weight: 400; }
+
+/* Tab bars (page-level and layer-level) */
+.tiv-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 16px;
+  border-bottom: 2px solid var(--gray-200);
+}
+.tiv-tabs-sm { gap: 4px; border-bottom-width: 2px; border-bottom-color: var(--gray-100); }
+.tiv-tab {
+  padding: 8px 20px;
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--gray-500);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color .15s;
+}
+.tiv-tabs-sm .tiv-tab { padding: 7px 16px; font-size: 13px; }
+.tiv-tab:hover { color: var(--gray-800); }
+.tiv-tab[aria-selected="true"] {
+  font-weight: 700;
+  color: var(--blue);
+  border-bottom-color: var(--blue);
+}
+.tiv-tab:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: -2px;
+}
+
+/* Meta strip under the page title */
+.tiv-meta {
+  font-size: 13px;
+  color: var(--gray-500);
+  margin-bottom: 16px;
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.tiv-chip {
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--blue);
+  background: var(--blue-light);
+  border: 1px solid var(--blue);
+  border-radius: var(--radius-sm);
+  padding: 2px 7px;
+}
+.tiv-warn { color: var(--amber); font-weight: 700; }
+
+/* Small print: notes, legends, footnotes */
+.tiv-note {
+  font-size: 12px;
+  color: var(--gray-500);
+  line-height: 1.7;
+}
+.tiv-note-top {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--gray-100);
+}
+.tiv-legend {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: center;
+  font-size: 12px;
+  color: var(--gray-500);
+  margin-bottom: 10px;
+}
+.tiv-banner {
+  background: var(--amber-light);
+  border: 1px solid var(--amber);
+  border-radius: var(--radius-sm);
+  padding: 7px 12px;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+.tiv-scroll { overflow-x: auto; }
+
+
+
 /* ─── MODAL ─────────────────────────────────────────────────── */
 .modal-overlay {
   position: fixed;

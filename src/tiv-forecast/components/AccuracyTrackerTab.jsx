@@ -1,6 +1,6 @@
 // TIV Forecast — Accuracy Tracker Tab
 // Pivot: rows = months, columns = segment × (MDL | JDG) as separate <td> columns
-import { useMemo, Fragment } from 'react'
+import { useMemo, useState, Fragment } from 'react'
 import Icon from '../../components/Icon'
 import { SEGMENTS, SEG_COL, AL_TOLERANCE } from '../constants'
 import SegmentChart from './SegmentChart'
@@ -10,11 +10,11 @@ function absErr(forecast, actual) {
   return Math.abs((forecast - actual) / actual)
 }
 
-function errColor(ae) {
-  if (ae === null) return 'var(--gray-300)'
-  if (ae <= AL_TOLERANCE) return 'var(--green)'
-  if (ae <= 0.25) return 'var(--amber)'
-  return 'var(--red)'
+function sevClass(ae) {
+  if (ae === null || ae === undefined) return 'tiv-sev tiv-sev-none'
+  if (ae <= AL_TOLERANCE) return 'tiv-sev tiv-sev-good'
+  if (ae <= 0.25) return 'tiv-sev tiv-sev-warn'
+  return 'tiv-sev tiv-sev-bad'
 }
 
 function fmtPct(val) {
@@ -82,17 +82,53 @@ function computeMAPE(lookup) {
 }
 
 // Cell styles
-const cellBase = { textAlign: 'center', padding: '5px 6px', fontSize: 12 }
 
-function ErrCell({ ae, style = {} }) {
+function fmtNum(v) {
+  return v === null || v === undefined || isNaN(v) ? '—' : Math.round(v)
+}
+
+// Error % at rest; forecast/actual on hover. `title` carries the fully labelled
+// breakdown including the other estimate, so one hover answers "how far off was
+// the model, and did judgment do better?" without reading across the table.
+function ErrCell({ ae, forecast, actual, kind, peerLabel, peerForecast, peerAe, style = {} }) {
+  const hasVals = forecast !== undefined && actual !== undefined
+
+  let title
+  if (hasVals) {
+    const lines = [
+      `Actual ${fmtNum(actual)}`,
+      `${kind} ${fmtNum(forecast)}  (${fmtPct(ae ?? null)} error)`,
+    ]
+    if (peerForecast !== undefined && peerForecast !== null) {
+      lines.push(`${peerLabel} ${fmtNum(peerForecast)}  (${fmtPct(peerAe ?? null)} error)`)
+    }
+    title = lines.join('\n')
+  }
+
   return (
-    <td style={{ ...cellBase, fontWeight: 700, color: errColor(ae ?? null), ...style }}>
-      {fmtPct(ae ?? null)}
+    <td
+      className={[hasVals ? 'tiv-cell' : '', 'tiv-num', sevClass(ae ?? null)].filter(Boolean).join(' ')}
+      title={title}
+      aria-label={title ? title.split(String.fromCharCode(10)).join(', ') : undefined}
+      tabIndex={hasVals ? 0 : undefined}
+      style={{ fontWeight: 700, whiteSpace: 'nowrap', ...style }}
+    >
+      <span className="tiv-cell-err">{fmtPct(ae ?? null)}</span>
+      {hasVals && (
+        <span className="tiv-cell-val">
+          {fmtNum(forecast)}
+          <span className="tiv-cell-sep">/</span>
+          <span className="tiv-cell-actual">{fmtNum(actual)}</span>
+        </span>
+      )}
     </td>
   )
 }
 
 export default function AccuracyTrackerTab({ tivActuals, judgmentTiv, modelParams }) {
+  // Hover alone would put the underlying numbers out of reach for keyboard and
+  // touch users, so the same reveal is available as an explicit toggle.
+  const [showValues, setShowValues] = useState(false)
   const modelBacktest = modelParams?.model_backtest || []
 
   const jLookup   = useMemo(() => buildJudgmentBacktest(tivActuals, judgmentTiv), [tivActuals, judgmentTiv])
@@ -141,11 +177,34 @@ export default function AccuracyTrackerTab({ tivActuals, judgmentTiv, modelParam
 
   return (
     <div>
+      {/* Methodology caption — what this backtest is, and what it replaced */}
+      <div className="card mb-16" style={{ fontSize: 12.5, lineHeight: 1.75, color: 'var(--gray-500)' }}>
+        <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--ink)', marginBottom: 4 }}>
+          How to read this
+        </div>
+        <div>
+          Corrected <strong>12-month walk-forward</strong> backtest (Aug-25 to Jul-26): for each month
+          the model is refit on data <em>strictly prior</em> to it, then forecasts one step ahead.
+          Reference result on the source workbook — <strong>model 26.4%</strong> vs
+          {' '}<strong>judgment 28.6%</strong>.
+        </div>
+        <div style={{ marginTop: 6 }}>
+          Judgment is a <strong>benchmark column only</strong>; it never enters the forecast.
+          Colour thresholds: ≤15% (the Ashok Leyland tolerance) green, ≤25% amber, above that red.
+        </div>
+        <div style={{ marginTop: 6, color: 'var(--amber)' }}>
+          ⚠ The earlier v2.x backtest is <strong>withdrawn</strong>, not merely superseded. It compared
+          fiscal-year-to-date against a <em>full</em> prior fiscal year, which pinned growth at −15% in
+          56 of 72 segment-months and invalidated every model selection made on it. All figures here use
+          period-matched estimators.
+        </div>
+      </div>
+
       {/* MAPE bar chart */}
       {mapeChartData.length > 0 && (
         <div className="card mb-16">
           <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 2 }}>MAPE by Segment</div>
-          <div style={{ fontSize: 12, color: 'var(--gray-400)', marginBottom: 10 }}>
+          <div style={{ fontSize: 12, color: 'var(--gray-500)', marginBottom: 10 }}>
             Mean absolute % error vs actuals
           </div>
           <SegmentChart
@@ -170,30 +229,43 @@ export default function AccuracyTrackerTab({ tivActuals, judgmentTiv, modelParam
             {months[0]} — {months[months.length - 1]}
           </div>
           <div style={{ color: 'var(--gray-500)' }}>
-            {hasMdl && <span style={{ color: 'var(--blue)', fontWeight: 600 }}>● Model</span>}
-            {hasBoth && <span style={{ color: 'var(--gray-300)' }}> · </span>}
-            {hasJdg && <span style={{ color: 'var(--ink)', fontWeight: 600 }}>● Judgment</span>}
+            {hasMdl && <span style={{ color: 'var(--blue)', fontWeight: 700 }}>● Model</span>}
+            {hasBoth && <span style={{ color: 'var(--gray-500)' }}> · </span>}
+            {hasJdg && <span style={{ color: 'var(--ink)', fontWeight: 700 }}>● Judgment</span>}
           </div>
-          <div style={{ color: 'var(--gray-500)' }}>
-            <span style={{ color: 'var(--green)', fontWeight: 600 }}>● ≤15%</span>
+          <div className="tiv-note">
+            <span className="tiv-sev tiv-sev-good">within 15%</span>
             {' · '}
-            <span style={{ color: 'var(--amber)', fontWeight: 600 }}>● ≤25%</span>
+            <span className="tiv-sev tiv-sev-warn">to 25%</span>
             {' · '}
-            <span style={{ color: 'var(--red)', fontWeight: 600 }}>● &gt;25%</span>
+            <span className="tiv-sev tiv-sev-bad">over 25%</span>
           </div>
+          <button
+            type="button"
+            className="btn-ghost"
+            aria-pressed={showValues}
+            onClick={() => setShowValues(v => !v)}
+            style={{ fontSize: 12, padding: 0, background: 'none', border: 'none', cursor: 'pointer' }}
+          >
+            {showValues ? 'Show error %' : 'Show forecast/actual'}
+          </button>
         </div>
-
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ borderCollapse: 'collapse', fontSize: 12, minWidth: '100%' }}>
+        <div className="tiv-scroll">
+          <table className={'tiv-table tiv-table-dense' + (showValues ? ' tiv-values-shown' : '')} style={{ minWidth: '100%' }}>
+            <caption>
+              Absolute percentage error per segment per month. Cells show the error;
+              hover, focus, or use the toggle above to read forecast/actual instead.
+            </caption>
             <thead>
               {/* Row 1: Month + segment group headers */}
               <tr style={{ borderBottom: hasBoth ? '1px solid var(--gray-200)' : '2px solid var(--gray-200)' }}>
-                <th style={{ textAlign: 'left', padding: '6px 8px', whiteSpace: 'nowrap', minWidth: 64, borderBottom: hasBoth ? 'none' : undefined }}>
+                <th scope="col" style={{ textAlign: 'left', padding: '6px 8px', whiteSpace: 'nowrap', minWidth: 64, borderBottom: hasBoth ? 'none' : undefined }}>
                   Month
                 </th>
                 {SEGMENTS.map(seg => (
                   <th
                     key={seg}
+                    scope="col"
                     colSpan={segCols}
                     style={{
                       textAlign: 'center',
@@ -208,6 +280,7 @@ export default function AccuracyTrackerTab({ tivActuals, judgmentTiv, modelParam
                 ))}
                 {/* Total TIV column header */}
                 <th
+                  scope="col"
                   colSpan={segCols}
                   style={{
                     textAlign: 'center',
@@ -224,13 +297,14 @@ export default function AccuracyTrackerTab({ tivActuals, judgmentTiv, modelParam
               {/* Row 2: MDL | JDG sub-headers (only when both sources present) */}
               {hasBoth && (
                 <tr style={{ borderBottom: '2px solid var(--gray-200)', background: 'var(--gray-50)' }}>
-                  <th style={{ padding: '3px 8px' }} />
+                  <td  />
                   {SEGMENTS.map(seg => (
                     <Fragment key={seg}>
                       <th
+                        scope="col"
                         style={{
                           textAlign: 'center',
-                          fontWeight: 600,
+                          fontWeight: 700,
                           fontSize: 11,
                           color: 'var(--blue)',
                           padding: '3px 6px',
@@ -240,9 +314,10 @@ export default function AccuracyTrackerTab({ tivActuals, judgmentTiv, modelParam
                         MDL
                       </th>
                       <th
+                        scope="col"
                         style={{
                           textAlign: 'center',
-                          fontWeight: 600,
+                          fontWeight: 700,
                           fontSize: 11,
                           color: 'var(--ink)',
                           padding: '3px 6px',
@@ -253,91 +328,87 @@ export default function AccuracyTrackerTab({ tivActuals, judgmentTiv, modelParam
                     </Fragment>
                   ))}
                   {/* Total sub-headers */}
-                  <th style={{ textAlign: 'center', fontWeight: 600, fontSize: 11, color: 'var(--blue)', padding: '3px 6px', borderLeft: '2px solid var(--gray-300)' }}>MDL</th>
-                  <th style={{ textAlign: 'center', fontWeight: 600, fontSize: 11, color: 'var(--ink)', padding: '3px 6px' }}>JDG</th>
+                  <th scope="col" style={{ textAlign: 'center', fontWeight: 700, color: 'var(--blue)', borderLeft: '2px solid var(--gray-300)' }}>MDL</th>
+                  <th scope="col" style={{ textAlign: 'center', fontWeight: 700, color: 'var(--ink)' }}>JDG</th>
                 </tr>
               )}
             </thead>
 
             <tbody>
               {months.map(month => (
-                <tr key={month} style={{ borderBottom: '1px solid var(--gray-100)' }}>
-                  <td style={{ fontWeight: 600, padding: '5px 8px', whiteSpace: 'nowrap', fontSize: 11 }}>
+                <tr key={month}>
+                  <th scope="row" style={{ whiteSpace: 'nowrap' }}>
                     {month}
-                  </td>
-                  {SEGMENTS.map(seg => {
-                    const mCell = mdlLookup[month]?.[seg]
-                    const jCell = jLookup[month]?.[seg]
+                  </th>
+                  {ALL_COLS.map(col => {
+                    const isTotal = col === 'Total'
+                    const mCell = mdlLookup[month]?.[col]
+                    const jCell = jLookup[month]?.[col]
+                    const edge  = isTotal
+                      ? { borderLeft: '2px solid var(--gray-300)' }
+                      : { borderLeft: '1px solid var(--gray-100)' }
 
                     if (hasBoth) {
                       return (
-                        <>
-                          <ErrCell key={`${month}-${seg}-m`} ae={mCell?.ae ?? null} style={{ borderLeft: '1px solid var(--gray-100)' }} />
-                          <ErrCell key={`${month}-${seg}-j`} ae={jCell?.ae ?? null} />
-                        </>
+                        <Fragment key={`${month}-${col}`}>
+                          <ErrCell
+                            ae={mCell?.ae ?? null}
+                            forecast={mCell?.mVal}
+                            actual={mCell?.aVal}
+                            kind="Model"
+                            peerLabel="Judgment"
+                            peerForecast={jCell?.jVal}
+                            peerAe={jCell?.ae}
+                            style={edge}
+                          />
+                          <ErrCell
+                            ae={jCell?.ae ?? null}
+                            forecast={jCell?.jVal}
+                            actual={jCell?.aVal}
+                            kind="Judgment"
+                            peerLabel="Model"
+                            peerForecast={mCell?.mVal}
+                            peerAe={mCell?.ae}
+                          />
+                        </Fragment>
                       )
                     }
                     const cell = mCell ?? jCell
                     return (
                       <ErrCell
-                        key={`${month}-${seg}`}
+                        key={`${month}-${col}`}
                         ae={cell?.ae ?? null}
-                        style={{ borderLeft: '1px solid var(--gray-100)' }}
+                        forecast={mCell ? mCell.mVal : jCell?.jVal}
+                        actual={cell?.aVal}
+                        kind={mCell ? 'Model' : 'Judgment'}
+                        style={edge}
                       />
                     )
                   })}
-                  {/* Total TIV cells */}
-                  {hasBoth ? (
-                    <>
-                      <ErrCell key={`${month}-total-m`} ae={mdlLookup[month]?.['Total']?.ae ?? null} style={{ borderLeft: '2px solid var(--gray-300)' }} />
-                      <ErrCell key={`${month}-total-j`} ae={jLookup[month]?.['Total']?.ae ?? null} />
-                    </>
-                  ) : (
-                    <ErrCell
-                      key={`${month}-total`}
-                      ae={(hasMdl ? mdlLookup : jLookup)[month]?.['Total']?.ae ?? null}
-                      style={{ borderLeft: '2px solid var(--gray-300)' }}
-                    />
-                  )}
                 </tr>
               ))}
 
               {/* MAPE summary row */}
-              <tr style={{ borderTop: '2px solid var(--gray-200)', background: 'var(--gray-50)' }}>
-                <td style={{ fontWeight: 700, padding: '5px 8px', fontSize: 11 }}>MAPE</td>
-                {SEGMENTS.map(seg => {
-                  const mdlAe = mdlMape[seg] !== null ? mdlMape[seg] / 100 : null
-                  const jdgAe = jMape[seg]   !== null ? jMape[seg]   / 100 : null
+              <tr className="tiv-row-mape">
+                <th scope="row" >MAPE</th>
+                {ALL_COLS.map(col => {
+                  const mdlAe = mdlMape[col] !== null ? mdlMape[col] / 100 : null
+                  const jdgAe = jMape[col]   !== null ? jMape[col]   / 100 : null
+                  const edge  = col === 'Total'
+                    ? { borderLeft: '2px solid var(--gray-300)' }
+                    : { borderLeft: '1px solid var(--gray-100)' }
 
+                  // Aggregates, not a forecast/actual pair — no hover swap here.
                   if (hasBoth) {
                     return (
-                      <>
-                        <ErrCell key={`mape-${seg}-m`} ae={mdlAe} style={{ borderLeft: '1px solid var(--gray-100)' }} />
-                        <ErrCell key={`mape-${seg}-j`} ae={jdgAe} />
-                      </>
+                      <Fragment key={`mape-${col}`}>
+                        <ErrCell ae={mdlAe} style={edge} />
+                        <ErrCell ae={jdgAe} />
+                      </Fragment>
                     )
                   }
-                  return (
-                    <ErrCell
-                      key={`mape-${seg}`}
-                      ae={hasMdl ? mdlAe : jdgAe}
-                      style={{ borderLeft: '1px solid var(--gray-100)' }}
-                    />
-                  )
+                  return <ErrCell key={`mape-${col}`} ae={hasMdl ? mdlAe : jdgAe} style={edge} />
                 })}
-                {/* Total TIV MAPE */}
-                {hasBoth ? (
-                  <>
-                    <ErrCell key="mape-total-m" ae={mdlMape['Total'] !== null ? mdlMape['Total'] / 100 : null} style={{ borderLeft: '2px solid var(--gray-300)' }} />
-                    <ErrCell key="mape-total-j" ae={jMape['Total'] !== null ? jMape['Total'] / 100 : null} />
-                  </>
-                ) : (
-                  <ErrCell
-                    key="mape-total"
-                    ae={(hasMdl ? mdlMape : jMape)['Total'] !== null ? (hasMdl ? mdlMape : jMape)['Total'] / 100 : null}
-                    style={{ borderLeft: '2px solid var(--gray-300)' }}
-                  />
-                )}
               </tr>
             </tbody>
           </table>

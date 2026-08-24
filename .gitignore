@@ -9,3 +9,7 @@ public/Screenshot*.png
 .vercel
 MIGRATION.md
 supabase/.temp/
+
+# TIV source workbooks — commercial market data, deliberately not tracked.
+# scripts/tiv/parity-gate.mjs takes the path as an argument; keep the file local.
+docs/Market Data*.xlsx
