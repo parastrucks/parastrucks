@@ -60,20 +60,20 @@ A wave is DONE when: its checklist is `[x]`, `npm run build` clean, the parity g
 The unifying insight: **almost every lie is a blank-vs-zero conflation at a boundary** (parser,
 anchor lookup, judgment join, chart mapper). Fix the boundaries; the middle is sound.
 
-- [ ] **W1.1 (A6) Canonical month labels** — in `parseExcel.js`, all four sheet parsers store
+- [x] **W1.1 (A6) Canonical month labels** — in `parseExcel.js`, all four sheet parsers store
   `meta.canonicalLabel` instead of the raw `label` (Raw-Data path already does; copy it). ~4 lines.
   **Do this FIRST** — several later checks assume label canonicality.
   *Accept:* feed a workbook cell "April 2026" through `parseExcelFile` in a node harness → row's
   `month_label === 'Apr-26'`.
-- [ ] **W1.2 (A2a) Skip all-blank actuals rows** — in `parseTivSheet`/`parsePtbSheet` (and the
+- [x] **W1.2 (A2a) Skip all-blank actuals rows** — in `parseTivSheet`/`parsePtbSheet` (and the
   judgment parsers), skip a row when **all six segment cells are `''`**; keep rows with partial
   data. Then reject (throw, parser-level) when the derived `lastDataMonth` is in the future
   relative to today. *Accept:* pre-typed FY workbook → months stop at the last month with data.
-- [ ] **W1.3 (A2b) AL rows only when non-blank** — `parseRawDataSheet`: emit an AL row only when
+- [x] **W1.3 (A2b) AL rows only when non-blank** — `parseRawDataSheet`: emit an AL row only when
   ≥1 AL cell is non-blank; in `retrainModel.computeRecentShares`, skip (don't zero) blank
   numerators. *Accept:* workbook with Apr-26+ headers but blank AL cells → `alActuals` ends
   Mar-26 → the "⚠ AL share as of Mar-26" chip **stays visible** (this is the real prize).
-- [ ] **W1.4 (A1) Anchor-miss → stale state, not zero** — `forecastEngine.baseForecast` returns
+- [x] **W1.4 (A1) Anchor-miss → stale state, not zero** — `forecastEngine.baseForecast` returns
   `null` when `smly_plain?.[targetLabel]` is undefined (all three methods); `runForecast`
   propagates; page renders '—' cells + a red banner "Model stale — forecast columns exceed
   trained anchors. Upload the latest workbook." Guard the AL/PTB cascade (`Math.round(null*x)` is
@@ -81,21 +81,21 @@ anchor lookup, judgment join, chart mapper). Fix the boundaries; the middle is s
   mocked system date of Nov-15 → all cells '—', banner text present, **no 0 anywhere**.
   ⚠️ Uses the browser clock (A8) — while here, derive "current month" in IST
   (`Asia/Kolkata` via `toLocaleString`) so the boundary is deterministic.
-- [ ] **W1.5 (A3) Judgment blanks stay blank** — `AccuracyTrackerTab.buildJudgmentBacktest`:
+- [x] **W1.5 (A3) Judgment blanks stay blank** — `AccuracyTrackerTab.buildJudgmentBacktest`:
   `jRow[col] === null || jRow[col] === ''` → cell `{jVal: null, ae: null}` excluded from MAPE;
   Total only when all six present. *Accept:* unit-style harness — a 5-of-6 judgment row produces
   no 100% cell, judgment MAPE excludes it, Total renders '—'.
-- [ ] **W1.6 (A7) Zero-vs-missing cluster** — `SegmentAnalysisTab.jsx:16` → `Number.isFinite`
+- [x] **W1.6 (A7) Zero-vs-missing cluster** — `SegmentAnalysisTab.jsx:16` → `Number.isFinite`
   check with `?? null` (real 0 survives, missing stays null) for BOTH TIV and PTB;
   `connectNulls={false}` on actual series (keep it for none — forecast series has no holes);
   `ForecastTable` totals → `?? '—'` semantics; flag partial `jTotal` (render only when complete).
-- [ ] **W1.7 (A8) Header + sheet validation in the parser** — assert `row[1..7]` header labels
+- [x] **W1.7 (A8) Header + sheet validation in the parser** — assert `row[1..7]` header labels
   (case/space-insensitive) against the canonical names the template generator already encodes
   (`parseExcel.js:264-289`); match sheets by normalized name with positional fallback; per-row
   reconcile `tiv_total` vs Σ segments (tolerance ±1 for rounding), reject with an Excel-shaped
   message naming sheet + cell. *Accept:* insert a "Notes" column after Month in a test workbook →
   error says `expected 'Bus PVT' at column B, found 'Notes'`, nothing uploads.
-- [ ] **W1.8 (B7) MAPE framing + live caption** — one caption sentence ("26.4% is the average
+- [x] **W1.8 (B7) MAPE framing + live caption** — one caption sentence ("26.4% is the average
   error of a single segment in a single month; the AL 15% tolerance applies to the Total-TIV
   column") + interpolate the backtest window from `months[]` instead of the hardcoded
   "(Aug-25 to Jul-26)". Keep "reference result 26.4/28.6" as-is (correctly labeled).
@@ -104,6 +104,36 @@ anchor lookup, judgment join, chart mapper). Fix the boundaries; the middle is s
 sees. Against the REAL Jul-26 workbook this must be a no-op — prove it with the parity gate (§5)
 before and after. If parity moves, you changed behavior for real data, not just degenerate data —
 stop and diagnose.
+
+#### ✅ Wave 1 SHIPPED 2026-08-25 — branch `tiv-uiux-w1`
+
+Commits: `a45b454` (docs) · `3798972` (parser) · `6a50352` (absence handling) · `af5aa81` (caption).
+Verification at each step: parity gate **21/21 exact, 736/779/850, backtest 26.4%** (never moved),
+`selftest-parser` **13/13**, `selftest-stale-anchors` **14/14**, `npm run build` clean.
+
+**Four findings from executing it — read these before wave 2:**
+
+1. **The 2022 PTB zeros are GENUINE zeros, verified cell by cell in the source** (`Apr-22`…`Oct-22`,
+   with `Sep-22` showing 62 Haulage only — a real ramp-up). This is exactly why the guard skips
+   **all-blank** rows and never all-**zero** rows: the obvious-looking version of this fix would
+   have deleted six months of real history and moved the forecast. Tooling to re-check on any
+   workbook: `scripts/tiv/diag-blank-zero.mjs` and `diag-raw-cells.mjs`.
+2. **A1 was not hypothetical — it fires on 1 Sep 2026**, seven days after the audit. The current
+   model is trained through Jul-26 with anchors Aug/Sep/Oct-26; on 1 Sep the window becomes
+   Sep/Oct/**Nov**-26 and Nov had no anchor. Proven by running the real trained model at a mocked
+   date. Now dashes + a red banner. **If the owner has since uploaded, re-run the self-test to
+   confirm the window still fits before assuming it's quiet.**
+3. **`docs`/`CLAUDE.md` next-action "Owner: supply AL/LM split for Apr-26 onward" is STALE.** The
+   workbook now carries real AL figures through Jul-26 (Apr-26 = 10/95/31/24/30/44 …), so the AL
+   share layer is *not* frozen at Mar-26 any more and the ⚠ chip is correctly hidden. Update that
+   next-action rather than chasing it.
+4. **There is no ESLint config in the repo** (`npx eslint` fails on missing flat config, and
+   `package.json` has no lint script). `npm run build` is the real gate — don't report a lint pass.
+
+Follow-on noted while in the code, deliberately deferred: the forecast series is keyed separately
+from the actual series with no bridging datum, so the Segments chart draws a one-month visual gap
+between history and forecast, and `SegmentChart` supports only horizontal (`y`) reference lines so
+there is no "actuals end here" marker. Both are chart work — wave 3.
 
 ---
 
