@@ -29,6 +29,47 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ---
 
+## Current state (2026-08-24)
+
+- **✅ TIV FORECAST v3.0 — SHIPPED, VERIFIED ON PROD, AND UPLOADED (2026-08-24).**
+  PR **#99** → `5bd2c2f` (engine + UI/UX) and PR **#100** → `d06cb08` (nanoid; **CI is fully
+  green again**). Migration `20260824_tiv_v3_model_params.sql` applied to prod. Owner's Jul-26
+  workbook uploaded (`model_params` id 19) and independently verified.
+  - **v2.1 is WITHDRAWN, not superseded.** Its backtest harness compared **FY-to-date against a
+    FULL prior FY**, pinning capped growth at **−15% in 56 of 72 segment-months** when the true
+    value was +15%. Every v2.1 method selection rested on that. Production constants were computed
+    correctly at train time, so *shipped forecasts were sound — the evidence for them was not*.
+    **Rule: every YoY comparison must be period-matched. Never FY-to-date vs a full FY.**
+  - **v3.0 method map** (a code constant — do **NOT** recompute on retrain):
+    Bus PVT / Tractor / Tipper = `ROB` (robust-anchor SMLY × trailing-12M) · Haulage / MAV =
+    `THETA` (0.6 SMLY + 0.4 Theta) · ICV Trucks = `ADAPT` (level-shift adapter, exists because
+    GST 2.0 shifted demand past what a ±15% cap can express). Model **26.4%** vs judgment **28.6%**.
+    Calendar normalisation **retired**; Holt-Winters now unused; `fuelCrisis` **deleted**; all
+    triggers default **OFF**; forecast is **judgment-free**.
+  - **Robust anchor = median(m−1, m, m+1) of the prior year** — neutralises one-month spikes
+    arithmetically, so **no manual outlier list is needed or permitted**.
+  - **Spec bug found and fixed:** §5.5 describes Theta as SES on the deseasonalized series. Classic
+    Theta runs SES on the **θ=2 line** (`2·Y − regression`). The literal reading put Haulage 11–19
+    units low. Predicted analytically (SES is linear) *before* changing code, then confirmed.
+  - **Verified with real data, not asserted:** `scripts/tiv/parity-gate.mjs` runs the **real
+    shipped modules** against the real workbook → **21/21 exact** (Aug/Sep/Oct-26 =
+    **736 / 779 / 850**), backtest 12 rows @ **26.4%**. Prod row id 19 reproduces 736 by hand.
+  - **⚠️ NEW LATENT DEFECT — multi-entity/brand uploads silently destroy data.** All six tables
+    have **`UNIQUE (month_label)`** (global, not per entity+brand) and `admin-tiv` upserts on
+    `month_label`, so a second brand's upload **overwrites the first in place** with no error.
+    Reads are entirely unscoped. Latent today (prod holds exactly **1** entity/brand pair).
+    ⭐ **Full write-up + fix order: `docs/backlog/tiv-multi-entity-brand.md`.** Needs owner approval
+    (constraint change). **Do not add a viewing dropdown first** — that makes the destructive path
+    easier to reach.
+  - Methodology docs now live in the repo: `docs/TIV_FORECAST_MIGRATION_SPEC.md` (v3.0, authority),
+    `docs/WEBSITE_BUILD_HANDOFF.md`, `docs/V3_EXECUTION_HANDOFF.md` (superseded, kept for the record).
+    The source workbook is **gitignored** (commercial data); the gate takes its path as an argument.
+- **✅ CI fully green (2026-08-24).** The long-running `npm-audit` red was `nanoid <3.3.18` (HIGH),
+  a **dev-only transitive of postcss** whose `^3.3.16` range already admitted the patch. 3-line
+  lockfile bump, proven inert (clean `npm ci` A/B → **all 34 emitted assets byte-identical**).
+  react-router + dompurify **moderates remain by decision** — the gate is `--audit-level=high`, and
+  react-router 7.x trades them for a HIGH and needs React 19.
+
 ## Current state (2026-08-07)
 
 - **✅ UNIFORM USER SHAPE — SHIPPED & BACKFILLED ON PROD (2026-08-07).** Every portal user in
@@ -129,6 +170,21 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ## Next actions
 
+- **⏭️ DECISION NEEDED — TIV multi-entity/brand.** A second entity/brand upload **silently
+  overwrites** the first dataset (global `UNIQUE (month_label)` + `onConflict: "month_label"`).
+  Latent only because prod holds exactly one pair. Fix order is **constraint → scoped reads →
+  selector**, never the selector first. Needs owner approval for the constraint change.
+  ⭐ `docs/backlog/tiv-multi-entity-brand.md`. Cheap interim: make `admin-tiv` reject an upsert
+  whose `month_label` exists under a different `(entity_id, brand_id)` → turns silent loss into a
+  409 (~10 lines, no schema change).
+- **⏭️ TIV re-trial checkpoint: after Oct-26 actuals** (15-month window). Re-examine ADAPT
+  stability for ICV Trucks and whether Haulage should move to ADAPT (it was second-best there and
+  carries a persistent −19% to −37% bias under capped methods). **Do not change `V3_METHOD`
+  before then** — it is a code constant, not a retrained field.
+- **⏭️ Owner: supply AL/LM split for Apr-26 onward.** The upload file lacks it, so
+  `al_share_recent` / `ptb_share_recent` and the AL share chart are frozen at Mar-26. The UI now
+  labels this ("AL/PTB share layer as of …"), so it is visible rather than silent. Layer 1 (TIV)
+  is unaffected.
 - **⏭️ Owner: run the forced-password-change loop once** with a throwaway user (reset → login →
   land on `/change-password` → every other route bounces → set new password → released → sign
   out/in, not prompted again). Untested end-to-end; staging is down.
