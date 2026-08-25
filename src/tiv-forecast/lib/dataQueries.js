@@ -110,52 +110,6 @@ export async function saveTriggerStateRow(userId, triggerId, { on, severity, dir
   if (error) throw error
 }
 
-// ── Upload helpers (route through admin-tiv Edge Function) ───────────
-
-export async function upsertTivActuals(rows, entityId, brandId) {
-  if (!rows.length) return
-  await callEdge('admin-tiv', 'upsertRows', { table: 'tiv_forecast_tiv_actuals', rows, entity_id: entityId, brand_id: brandId })
-}
-
-export async function upsertPtbActuals(rows, entityId, brandId) {
-  if (!rows.length) return
-  await callEdge('admin-tiv', 'upsertRows', { table: 'tiv_forecast_ptb_actuals', rows, entity_id: entityId, brand_id: brandId })
-}
-
-export async function upsertAlActuals(rows, entityId, brandId) {
-  if (!rows.length) return
-  await callEdge('admin-tiv', 'upsertRows', { table: 'tiv_forecast_al_actuals', rows, entity_id: entityId, brand_id: brandId })
-}
-
-export async function upsertJudgmentTiv(rows, entityId, brandId) {
-  if (!rows.length) return
-  await callEdge('admin-tiv', 'upsertRows', { table: 'tiv_forecast_judgment_tiv', rows, entity_id: entityId, brand_id: brandId })
-}
-
-export async function upsertJudgmentPtb(rows, entityId, brandId) {
-  if (!rows.length) return
-  await callEdge('admin-tiv', 'upsertRows', { table: 'tiv_forecast_judgment_ptb', rows, entity_id: entityId, brand_id: brandId })
-}
-
-export async function upsertRawData(rows, entityId, brandId) {
-  if (!rows.length) return
-  await callEdge('admin-tiv', 'upsertRows', { table: 'tiv_forecast_raw_data', rows, entity_id: entityId, brand_id: brandId })
-}
-
-export async function insertModelParams(params, entityId, brandId) {
-  await callEdge('admin-tiv', 'insertModelParams', { params, entity_id: entityId, brand_id: brandId })
-}
-
-export async function insertUploadHistory({ userId, uploaderName, fileName, monthsLoaded, lastDataMonth }) {
-  // userId is ignored — the Edge Function sets uploaded_by from the verified JWT.
-  await callEdge('admin-tiv', 'insertUploadHistory', {
-    uploader_name:   uploaderName,
-    file_name:       fileName,
-    months_loaded:   monthsLoaded,
-    last_data_month: lastDataMonth,
-  })
-}
-
 // ── Atomic upload (audit finding A4) ─────────────────────────────────
 // Replaces the eight separate calls above with ONE, so a failure part-way can
 // no longer leave production half-overwritten -- new actuals sitting under the

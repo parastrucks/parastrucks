@@ -67,10 +67,16 @@ export default function SegmentAnalysisTab({ tivActuals, alActuals, ptbActuals, 
           data={chartDataWithForecast}
           xKey="month"
           series={[
+            // PTB is deliberately subordinate to TIV, but muted is not the same
+            // as invisible: gray-400 drew at 2.5:1 against white and gray-300 at
+            // 1.8:1, both under the 3:1 a graphical object needs to be made out
+            // at all. gray-500 clears it at 4.5:1 and still reads as the quieter
+            // line. Actual vs forecast is carried by the dash, not by fading the
+            // forecast until it disappears.
             { key: 'TIV',      name: 'TIV (actual)',    color: SEG_COLORS[activeSeg], bold: true },
-            { key: 'PTB',      name: 'PTB (actual)',    color: 'var(--gray-400)' },
+            { key: 'PTB',      name: 'PTB (actual)',    color: 'var(--gray-500)' },
             { key: 'TIV Fcst', name: 'TIV (forecast)', color: SEG_COLORS[activeSeg], dashed: true },
-            { key: 'PTB Fcst', name: 'PTB (forecast)', color: 'var(--gray-300)', dashed: true },
+            { key: 'PTB Fcst', name: 'PTB (forecast)', color: 'var(--gray-500)', dashed: true },
           ]}
           height={260}
         />

@@ -39,7 +39,17 @@ export default function SegmentChart({ type = 'line', data = [], xKey = 'month',
       labelStyle={{ color: 'var(--text-secondary)', fontWeight: 700, marginBottom: 2 }}
       cursor={{ fill: 'var(--accent-wash)', stroke: 'var(--border-default)' }}
     />,
-    legend: <Legend wrapperStyle={{ fontSize: 12 }} />,
+    // Recharts colours the legend's LABEL TEXT with the series colour. That is
+    // fine for a saturated line and unreadable for a deliberately muted one —
+    // the PTB forecast label came out around 1.8:1 against white, well under
+    // the 4.5:1 that body text needs. The swatch still carries the colour, so
+    // the mapping survives; only the words are forced to a readable ink.
+    legend: (
+      <Legend
+        wrapperStyle={{ fontSize: 12 }}
+        formatter={value => <span style={{ color: 'var(--gray-600)' }}>{value}</span>}
+      />
+    ),
   }
 
   return (
