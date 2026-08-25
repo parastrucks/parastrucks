@@ -300,6 +300,36 @@ checked directly and carries the rule (`function ie(e=new Date){return re(e).day
 the KPI memo), and `selftest-kpi-month` is 13/13 — so the most likely explanation is a **cached
 pre-#108 chunk in a long-lived browser tab**, resolved by a hard refresh. Flagged, not assumed.
 
+### 7d. Hard refresh — one confirmed, one new (PR #114 `b0ebe31`)
+
+**The Aug-26 tile was a stale bundle, not a bug.** After Ctrl+Shift+R the summary led with
+**Sep-26 · 779 · judgment 830** and the strip read **"Model trained: 25/8/2026"**. Both the KPI
+month rule and the `formatTrainedAt` fix were confirmed working on prod.
+
+⭐ **Method worth keeping: to date what a user is actually running, fetch the deployed HTML, read
+the hashed asset name, curl that chunk and grep the minified logic.** That turned "is #108 live?"
+from an argument into a measurement — `function ie(e=new Date){return re(e).day>19}` was provably
+in the served bundle, which is what made "your tab is stale" a diagnosis rather than a guess.
+
+**The refresh also exposed a second-order effect of the ghost cleanup.** With judgment present for
+Aug-26 and Sep-26 but not Oct-26, the sub-header read `Model | Judg · Model | Judg · <blank>`:
+Oct-26's number sat under an empty cell. The empty `<td>` had always been there, but was invisible
+while *every* month carried a judgment row — including the all-zero ghosts. Deleting them exposed
+it. Scanning across, a reader cannot tell whether **94** is the model's figure or a person's; a
+blank header cannot answer that, it broke the column's header association for a screen reader, and
+it put a `<td>` inside a semantic header row. Now renders the same `Model` label — no new column,
+no dash placeholder, nothing pushed further down the page.
+
+⭐ **The rule generalises: "when adding a UI element, state what it pushes further down the page"
+now has a twin — when REMOVING data, check what shape it was holding up.** A deletion is a UI
+change.
+
+`selftest-table-header` (**18/18**) renders the real component through `react-dom/server.browser`
+and asserts four judgment shapes — today's Aug+Sep, none (the AL layer), all three (pre-cleanup),
+and only-the-last (mirror) — plus the invariant that the header spans exactly as many columns as
+the body row fills. First test in this estate that renders a component rather than calling a
+library, which is precisely the gap §7c identified.
+
 ### 8. Owner decisions taken this session
 
 | Decision | Choice |
