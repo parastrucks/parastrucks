@@ -79,7 +79,14 @@ export default function ForecastTable({
                         <th scope="col" className="tiv-sub tiv-judg">Judg</th>
                       </Fragment>
                     )
-                    : <td key={fm.label} />
+                    // A month with no judgment still needs its "Model" label. It used
+                    // to render an empty cell, which was invisible while every month
+                    // carried a judgment row — including the all-zero ghosts. Once
+                    // those were cleared, Oct-26 became a lone unlabelled number
+                    // beside two labelled columns: is it the model's or a person's?
+                    // A blank header cannot answer that, and it left the column with
+                    // no header association for a screen reader either.
+                    : <th key={fm.label} scope="col" className="tiv-sub">Model</th>
                 )}
               </tr>
             )}
