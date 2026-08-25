@@ -374,6 +374,44 @@ and a future re-mute fails the test. It also deleted the superseded upload actio
 and updated the multi-brand backlog, which had told a future session to edit a constant that no
 longer exists.
 
+### 7f. The last two picks — tap-for-detail and the previous vintage (PR #120 `ade925c`)
+
+**The derivation already existed; it was unreachable.** The trigger was `onClick` on a `<td>`,
+which is not focusable — so a keyboard user could not open it and a screen reader never announced
+it — explained by a `title`, which **never fires on touch**, so on a phone nothing indicated those
+numbers did anything. One `<button>` fixed all three at once. The receipt became a real dialog
+(focus in on open, Escape to close, focus back to the number) that pins to the bottom of the
+viewport under 720px, because the tables scroll sideways in their own box and a card rendered
+below them lands where nobody looks. Deliberately **not** `aria-modal` — the page behind stays
+readable, which is what separates a detail sheet from an interruption.
+
+⭐ **The vintage line's rules were written by three rows already sitting in production**, not by
+reasoning in the abstract:
+
+| the trap | what prod actually holds |
+|---|---|
+| comparing a model against itself | **three** params rows for `Jul-26` — re-uploading the same workbook writes a new one |
+| picking corrupt residue | a row stamped `last_data_month = 'Mar-27'` — 2026-08-21 parser residue, and **newer** by `trained_at`, so "first row that differs" selects it |
+| advertising a blank line | everything before v3.0 carries no anchors and cannot be replayed |
+
+So a vintage must **differ**, be **strictly earlier**, and be **replayable**. Checking the real
+table before writing the selector is what turned an obvious two-line `history[1]` into a correct
+one — the naive version would have quietly compared today's forecast against corrupt data.
+
+It is also replayed at **its own original horizons**, by standing mid-month in the month after its
+last data month. `runForecast` derives the window from the current date, so replaying an old
+vintage today would hand it horizons 2, 3, 4 rather than the 1, 2, 3 it forecast at — and horizon
+feeds the damped trend in THETA, so that is a different number, not what the model said.
+
+Only the overlap is drawn, only where the old model produced a number, and when there is no
+overlap the series is not offered at all rather than promised and left blank. **On prod it draws
+nothing today, correctly**, and starts working when August data lands.
+
+⚠️ **Stated limit, not implied:** `selftest-detail-sheet` (19/19) renders the real components to
+static markup, so it asserts *structure*. The Escape handler and the focus moves are effects that
+need a DOM, and **jsdom is not installed here** — they were verified by reading the component. That
+sentence lives in the test file itself so the next reader is not misled by a green line.
+
 ### 8. Owner decisions taken this session
 
 | Decision | Choice |
