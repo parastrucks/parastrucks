@@ -32,11 +32,12 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 ## Current state (2026-08-25)
 
 - **✅ TIV FORECAST UI/UX — AUDITED, REMEDIATED IN FOUR WAVES, AND COURSE-CORRECTED. ALL LIVE.**
-  Sixteen PRs: **#102 `485430e`** (W1 stop the lies) · **#103 `5446ac8`** (W2 atomic upload) ·
+  Eighteen PRs: **#102 `485430e`** (W1 stop the lies) · **#103 `5446ac8`** (W2 atomic upload) ·
   **#104 `868857f`** (W3 shell) · **#105 `bdba3a4`** (W4 value layer) · **#106 `0649493`**
   (simplify) · **#107 `65adccb`** (chart handover) · **#108 `fe517fa`** (KPI month rule) · **#109 `d821b94`** (docs) · **#110** (judgment ghosts) · **#112 `dafa33a`** (Invalid Date) · **#114 `b0ebe31`** (lone Model column) ·
   **#116 `dfe73d7`** (data cadence) · **#117 `50048b3`** (contrast + dead code) ·
-  **#118 `0807489`** (prune on upload).
+  **#118 `0807489`** (prune on upload) ·
+  **#120 `ade925c`** (tap-for-detail + previous vintage).
   ⭐ **Full record: `docs/history/PORTAL_HISTORY.md` (2026-08-25 entry).** Findings:
   `docs/backlog/tiv-uiux-audit-2026-08-25.md`. Remaining work: `docs/backlog/tiv-uiux-fix-roadmap.md`.
   - **The parity gate never moved: 21/21 exact (736 / 779 / 850, backtest 26.4%)** before and after
@@ -111,7 +112,8 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   `parity-gate` **21/21** · `selftest-parser` 13/13 · `selftest-stale-anchors` 14/14 ·
   `selftest-upload-diff` 27/27 · `selftest-quality` 31/31 · `selftest-chart` 22/22 ·
   `selftest-kpi-month` 13/13 · `selftest-trained-at` 14/14 · `selftest-table-header` 18/18 ·
-  `selftest-data-cadence` 38/38 · `selftest-removals` 25/25 · `selftest-contrast` 8/8
+  `selftest-data-cadence` 38/38 · `selftest-removals` 25/25 · `selftest-contrast` 8/8 ·
+  `selftest-vintage` 33/33 · `selftest-detail-sheet` 19/19
   (renders the real component via `react-dom/server.browser`). Plus `diag-blank-zero` / `diag-raw-cells` workbook inspectors.
 - ⚠️ **`npm run build` does NOT catch a stray top-level `x={y}`** — it parses as a valid non-strict
   assignment, but ES modules are strict so it throws on every page load. A `perl -0pi` JSX edit
@@ -273,22 +275,28 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   `dafa33a`) and the unlabelled lone Model column (PR #114 → `b0ebe31`). Hard refresh verified the
   summary tile leads with **Sep-26 779 · judgment 830** and the strip reads **25/8/2026**; the
   earlier Aug-26 tile was a **stale cached chunk**, not a bug. Nothing outstanding here.
-- **⏭️ TIV UI/UX tail (all documented, none silently dropped)** —
-  ⭐ `docs/backlog/tiv-uiux-fix-roadmap.md`: **W4.6** xlsx download / round-trip export in the
-  workbook's own sheet shape / print stylesheet · **W4.7** forecast-vintage ghost line · roving
-  tabindex on the accuracy grid (168 tab stops kept; the toggle is the keyboard path) ·
-  tap-for-detail bottom sheet (CSS `.tiv-detail` exists, no component) · Recharts `Legend` inherits
-  the series colour (PTB forecast label ≈1.84:1).
-- **⏭️ Remove the superseded `admin-tiv` actions** (`upsertRows`, `insertModelParams`,
-  `insertUploadHistory`). Kept deliberately, now admin-only, so a stale cached browser tab could not
-  break mid-deploy. Safe to delete once the release has fully rolled out.
-- **⏭️ DECISION NEEDED — TIV multi-entity/brand.** A second entity/brand upload **silently
-  overwrites** the first dataset (global `UNIQUE (month_label)` + `onConflict: "month_label"`).
-  Latent only because prod holds exactly one pair. Fix order is **constraint → scoped reads →
-  selector**, never the selector first. Needs owner approval for the constraint change.
-  ⭐ `docs/backlog/tiv-multi-entity-brand.md`. **The cheap interim IS NOW SHIPPED** — `tiv_upload_all()`
-  refuses with 409 an upload whose months belong to a different `(entity_id, brand_id)`. That
-  converts silent data loss into a clear refusal; it does **not** replace the constraint fix.
+- ✅ **TIV UI/UX tail — the owner's picks are all built** (PR #120 → `ade925c`): tap a number for
+  its derivation (a real button + a bottom sheet under 720px), and the previous-vintage line.
+  ⚠️ **The vintage line draws nothing on prod yet, by design** — every stored vintage is either
+  `Jul-26` (same as the current model) or pre-v3 with no anchors. It begins working when August
+  data lands. ⭐ **Prod rows wrote the rule:** three `Jul-26` re-upload rows (comparing a model
+  against itself), a `Mar-27` row that is 2026-08-21 parser residue and is *newer* by
+  `trained_at`, and pre-v3 rows the engine cannot replay — so a vintage must differ, be earlier,
+  **and** be replayable.
+- **⏭️ Not built — and NOT picked by the owner when asked (2026-08-25):** **W4.6** xlsx download /
+  round-trip export / print stylesheet (Copy table + Copy summary already cover the daily need) ·
+  roving tabindex on the accuracy grid (168 tab stops kept; the *Show forecast/actual* toggle is
+  the keyboard path, so nothing is unreachable). Both stay available if he asks.
+  ⭐ `docs/backlog/tiv-uiux-fix-roadmap.md` §1b.
+- ~~**Remove the superseded `admin-tiv` actions.**~~ ✅ **DONE** (PR #117 → `50048b3`) — `upsertRows`,
+  `insertModelParams`, `insertUploadHistory` deleted with their 8 client wrappers and the now-dead
+  `TABLE_CONFIG` + `injectTivIds`. **−133 lines**, and one fewer service-role path.
+- **⏭️ TIV multi-entity/brand — OWNER SAID "EVENTUALLY, NOT NOW" (2026-08-25). Do not start it.**
+  A second entity/brand upload would still hit the global `UNIQUE (month_label)`, but the **409
+  guard makes that a refusal, not silent data loss**. When it is wanted, the order is
+  **constraint → scoped reads → selector**, never the selector first, and the constraint change
+  needs explicit approval. ⚠️ `fetchModelParamsHistory` and `fetchStoredMonths` are also unscoped —
+  scope them in the same pass. ⭐ `docs/backlog/tiv-multi-entity-brand.md`.
 - **⏭️ TIV re-trial checkpoint: after Oct-26 actuals** (15-month window). Re-examine ADAPT
   stability for ICV Trucks and whether Haulage should move to ADAPT (it was second-best there and
   carries a persistent −19% to −37% bias under capped methods). **Do not change `V3_METHOD`

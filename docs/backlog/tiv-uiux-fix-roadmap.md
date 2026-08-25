@@ -390,23 +390,31 @@ New module `src/tiv-forecast/lib/forecastQuality.js` + `scripts/tiv/selftest-qua
   teach the upload to delete months absent from the workbook (needs owner approval — silent
   deletion is its own hazard), or accept SQL-only cleanup and keep the preview honest. Do not
   leave it undecided; "the series got shorter" is a case the upload path does not handle.
-- ⏭️ **Owner picked, still to build (2026-08-25):** tap-a-number bottom sheet for phone (C9), and
-  the previous-vintage ghost line (W4.7). He did **not** pick xlsx export.
+- ✅ **DONE — tap-a-number detail sheet (C9) + previous-vintage line (W4.7)** (PR #120 → `ade925c`).
+  The derivation already existed and was *unreachable*: `onClick` on a `<td>` (not focusable, so no
+  keyboard and no screen reader) explained by a `title` (never fires on touch). Now a real button,
+  and the receipt is a dialog that pins to the bottom of the viewport under 720px.
+  ⚠️ **The vintage line draws nothing on prod yet, by design** — every stored vintage is either
+  `Jul-26` (same as current) or pre-v3 (no anchors). It begins working when August data lands.
+  ⭐ **Three production rows shaped that rule:** three `Jul-26` params rows from re-uploads (a model
+  would have been compared against itself), a `Mar-27` row that is 2026-08-21 parser residue and is
+  *newer* by `trained_at` (so "first row that differs" picks the corrupt one), and pre-v3 rows the
+  engine cannot replay. A vintage must differ, be **earlier**, and be **replayable**.
+- ⏭️ **Not built, and not picked by the owner:** xlsx download / round-trip export / print stylesheet
+  (W4.6), and the roving tabindex on the accuracy grid. Both remain available if asked for.
 - ⏭️ **Owner declined for now:** multi-entity/brand — *"eventually, but not now"*. Keep the 409
   guard; do not start the constraint work. ⭐ `docs/backlog/tiv-multi-entity-brand.md`.
 - ✅ **DONE — legend contrast + dead `admin-tiv` actions** (PR #117 → `50048b3`).
 - ✅ **DONE — the monthly data-gap rhythm** (PR #116 → `dfe73d7`). Owner: market data arrives
   **5th–7th of the following month**; the model runs out on the 1st, so the gap is normal.
-- **W4.6** — xlsx download · round-trip export in the workbook's own prediction-sheet shape ·
-  print stylesheet. *Copy table (TSV) and Copy summary line already cover the daily need, so this
-  is a nice-to-have, not a gap.*
-- **W4.7** — forecast-vintage ghost line (needs `fetchModelParamsHistory`). ⚠️MB: scope that fetch
-  once the multi-brand constraint lands.
+- ~~**W4.6**~~ — xlsx download · round-trip export · print stylesheet. **Owner did not pick it**;
+  Copy table (TSV) and Copy summary already cover the daily need.
+- ~~**W4.7**~~ — ✅ done (PR #120). ⚠️MB: `fetchModelParamsHistory` is **unscoped** — scope it when
+  the multi-brand constraint lands, along with every other read.
 - Roving tabindex on the accuracy grid — 168 tab stops kept; the *Show forecast/actual* toggle is
   the keyboard path and now has a real 44px target, so nothing is keyboard-unreachable.
-- Tap-for-detail bottom sheet (C9) — CSS `.tiv-detail` is in place, **no component yet**.
-- Recharts `Legend` colours its label text with the series colour (PTB forecast ≈1.84:1) — needs a
-  `formatter`, and the PTB series colours themselves want darkening.
+- ~~Tap-for-detail bottom sheet (C9)~~ — ✅ done (PR #120), `ForecastDetail.jsx`.
+- ~~Recharts `Legend` contrast~~ — ✅ done (PR #117); measured 1.84:1, now 7.34:1.
 - Delete the superseded `admin-tiv` actions (`upsertRows`, `insertModelParams`,
   `insertUploadHistory`) once the release has fully rolled out. Kept, admin-only, so a stale cached
   tab could not break mid-deploy.
