@@ -6,6 +6,7 @@ import { useToast } from '../../context/ToastContext'
 import { runForecast } from '../lib/forecastEngine'
 import { SEGMENTS, SEG_COL } from '../constants'
 import { shouldLeadWithNextMonth } from '../lib/istMonth'
+import { formatTrainedAt } from '../lib/formatTrainedAt'
 import { buildDefaultTriggerState, TRIGGER_DEFS } from '../lib/triggerDefs'
 import {
   fetchTivActuals, fetchPtbActuals, fetchAlActuals,
@@ -179,15 +180,23 @@ export default function TivForecastPage() {
   }, [triggerState])
 
   // ── After upload: refresh model params and actuals ───────────────
+  // `newParams` is the object retrainModel built in the browser. It is complete
+  // enough to forecast from — which is why it is applied immediately — but it
+  // carries no `trained_at`: that column is stamped by the database. Showing it
+  // unfixed rendered "Model trained: Invalid Date" in the status strip at the
+  // exact moment the user is watching hardest. So re-read the stored row and
+  // prefer it; the local object stays the fallback if the read fails.
   async function handleUploadComplete(newParams) {
     setModelParams(newParams)
     try {
-      const [tiv, ptb, al, jTiv, jPtb] = await Promise.all([
+      const [tiv, ptb, al, jTiv, jPtb, stored] = await Promise.all([
         fetchTivActuals(), fetchPtbActuals(), fetchAlActuals(),
         fetchJudgmentTiv(), fetchJudgmentPtb(),
+        fetchLatestModelParams().catch(() => null),
       ])
       setTivActuals(tiv); setPtbActuals(ptb); setAlActuals(al)
       setJudgmentTiv(jTiv); setJudgmentPtb(jPtb)
+      if (stored?.last_data_month === newParams.last_data_month) setModelParams(stored)
     } catch { /* non-critical */ }
   }
 
@@ -224,7 +233,7 @@ export default function TivForecastPage() {
           <span className="tiv-chip">Engine v3.0</span>
           <span>Last data: <strong>{modelParams.last_data_month}</strong></span>
           <span>Total months: <strong>{modelParams.total_months}</strong></span>
-          <span>Model trained: <strong>{new Date(modelParams.trained_at).toLocaleDateString('en-IN')}</strong></span>
+          <span>Model trained: <strong>{formatTrainedAt(modelParams.trained_at)}</strong></span>
           <span title="No judgment value enters any forecast computation. Judgment appears only as a comparison column.">
             Judgment-free forecast
           </span>
