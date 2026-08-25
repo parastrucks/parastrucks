@@ -223,6 +223,11 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ## Next actions
 
+- **⏭️ DECISION NEEDED — `tiv_upload_all()` never `DELETE`s.** Upload only upserts, so a month that
+  disappears from the workbook lingers in the database forever; that is how 12 ghost judgment rows
+  survived the first cleanup (cleared in PR **#110** → `61532ac`). Either teach the upload to remove
+  months absent from the workbook (**owner approval required** — silent deletion is its own hazard)
+  or accept SQL-only cleanup and keep the diff preview honest. ⭐ `docs/backlog/tiv-uiux-fix-roadmap.md` §1b.
 - **⏭️ OWNER: run ONE real upload through the new path.** The self-aborting probe proves
   `tiv_upload_all()` and its transaction boundary; it cannot prove the browser wiring. Expect the
   diff preview to read *"0 new · 0 amended · 52 unchanged"* for the workbook already loaded.
