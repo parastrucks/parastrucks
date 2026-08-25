@@ -377,7 +377,12 @@ New module `src/tiv-forecast/lib/forecastQuality.js` + `scripts/tiv/selftest-qua
 
 ## 1b. What is actually left (2026-08-25)
 
-- ⭐ **NEW (2026-08-25, PR #110) — `tiv_upload_all()` never DELETEs.** It only upserts, so a month
+- ✅ **DONE (PR #118 → `0807489`) — upload can now prune, after an explicit tick.** Owner chose
+  *"ask me, then remove"*. `tiv_upload_and_prune()` wraps `tiv_upload_all()`; per table, opt-in,
+  refuses on an empty sheet, refuses on a count mismatch. ⏭️ **No human has ticked the box yet.**
+  Original finding follows, for the record.
+
+- ~~**NEW (2026-08-25, PR #110) — `tiv_upload_all()` never DELETEs.**~~ It only upserts, so a month
   that disappears from the workbook lingers in the database forever and no upload will remove it.
   That is exactly how 12 ghost judgment rows survived the first cleanup. `buildUploadDiff` already
   surfaces shrinkage in the preview (`emptyMonths`, `missingWithData`, `coverageShortfall`), so it
@@ -385,6 +390,13 @@ New module `src/tiv-forecast/lib/forecastQuality.js` + `scripts/tiv/selftest-qua
   teach the upload to delete months absent from the workbook (needs owner approval — silent
   deletion is its own hazard), or accept SQL-only cleanup and keep the preview honest. Do not
   leave it undecided; "the series got shorter" is a case the upload path does not handle.
+- ⏭️ **Owner picked, still to build (2026-08-25):** tap-a-number bottom sheet for phone (C9), and
+  the previous-vintage ghost line (W4.7). He did **not** pick xlsx export.
+- ⏭️ **Owner declined for now:** multi-entity/brand — *"eventually, but not now"*. Keep the 409
+  guard; do not start the constraint work. ⭐ `docs/backlog/tiv-multi-entity-brand.md`.
+- ✅ **DONE — legend contrast + dead `admin-tiv` actions** (PR #117 → `50048b3`).
+- ✅ **DONE — the monthly data-gap rhythm** (PR #116 → `dfe73d7`). Owner: market data arrives
+  **5th–7th of the following month**; the model runs out on the 1st, so the gap is normal.
 - **W4.6** — xlsx download · round-trip export in the workbook's own prediction-sheet shape ·
   print stylesheet. *Copy table (TSV) and Copy summary line already cover the daily need, so this
   is a nice-to-have, not a gap.*

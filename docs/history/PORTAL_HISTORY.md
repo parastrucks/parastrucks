@@ -330,6 +330,50 @@ and only-the-last (mirror) — plus the invariant that the header spans exactly 
 the body row fills. First test in this estate that renders a component rather than calling a
 library, which is precisely the gap §7c identified.
 
+### 7e. The owner's four answers, and what was built from them (PRs #116–#118)
+
+Asked directly what he needed to decide. His answers, and the work:
+
+| question | answer | result |
+|---|---|---|
+| Upload deleting months absent from the workbook | **"Ask me, then remove"** | PR **#118** `0807489` |
+| A second entity/brand dataset | **"Eventually, but not now"** | keep the 409 guard, **no work started** |
+| Handling the model running out | *"I get past month market data by 5–7th of the next month"* | PR **#116** `dfe73d7` |
+| What to build next | polish · phone bottom sheet · vintage ghost line | #117 done, two remain |
+
+⭐ **The third answer was better than any option offered.** The question assumed the model running
+out was an exception to warn about. It is not: market data arrives on the **5th–7th**, the anchors
+expire on the **1st**, so a gap opens **on schedule, twelve times a year**, and closes itself a few
+days later. Shouting *"Model out of date"* at it would make the one banner that matters — data
+genuinely late — indistinguishable from the routine wait. **A fact about how the business actually
+runs reframed the problem; the multiple-choice options had all encoded the wrong premise.**
+
+`dataCadence()` now returns **current** / **due** / **overdue**, derived from the model's own
+`last_data_month`, and the strip always states `Covers: Aug-26 → Oct-26` so running out is never a
+surprise. `selftest-data-cadence` (38/38) walks the real calendar: 1 Sep still *current* because the
+data is not due yet, 5 Sep *due*, 11 Sep *overdue*, cleared by an on-time upload — plus year
+boundaries and IST day boundaries read in IST.
+
+**Pruning (#118) was built as a wrapper on purpose.** `tiv_upload_and_prune()` calls the verified
+`tiv_upload_all()` and prunes after it. Adding parameters would have meant DROP + recreate — a new
+argument list makes an *overload*, not a replacement — putting 275 lines of working SQL through a
+copy for nothing. Pruning after the upserts is provably equivalent: the predicate is "in the
+database, absent from the payload", and upserts only write payload months.
+
+Three guards: opt-in · refuse on any empty sheet (a sheet that parsed to nothing is a broken file,
+not an instruction to empty a table) · **refuse when the count differs from what the uploader was
+shown**, so a stale preview cannot delete the unseen. **Per table, never global** — actuals hold 52
+months and judgment 14, so a single month set would have proposed deleting 38 judgment months.
+Proved with a self-aborting probe on real prod data (off → 0 · wrong count → refused · empty sheet
+→ refused · correct → pruned exactly Jul-26), then verified prod untouched at 52/52/52/14/14/52.
+
+**#117** measured rather than eyeballed: the PTB forecast legend label was **1.84:1** against white
+and the lines 2.81:1 and 1.84:1, all below their thresholds. `selftest-contrast` parses the token
+hex out of `src/index.css` and the series colours out of the component, so nothing is written twice
+and a future re-mute fails the test. It also deleted the superseded upload actions (**−133 lines**)
+and updated the multi-brand backlog, which had told a future session to edit a constant that no
+longer exists.
+
 ### 8. Owner decisions taken this session
 
 | Decision | Choice |
@@ -341,6 +385,10 @@ library, which is precisely the gap §7c identified.
 | Audience to tune for | **The GM opening it monthly** |
 | Clear the 16 ghost rows | Approved |
 | Clear the 12 judgment ghost rows | Approved — after being shown `ptb_actuals` was already clean |
+| Upload deleting absent months | **Ask me, then remove** — list them, tick to confirm |
+| A second entity/brand dataset | **Eventually, not now** — keep the 409 guard, start nothing |
+| Model running out each month | *"I get past month market data by 5–7th"* — reframed it as a rhythm, not an exception |
+| What to build next | Polish · phone bottom sheet · previous-vintage line (**not** xlsx export) |
 
 ### 9. Verification estate now standing
 

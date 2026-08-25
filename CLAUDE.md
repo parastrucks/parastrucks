@@ -32,9 +32,11 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 ## Current state (2026-08-25)
 
 - **✅ TIV FORECAST UI/UX — AUDITED, REMEDIATED IN FOUR WAVES, AND COURSE-CORRECTED. ALL LIVE.**
-  Twelve PRs: **#102 `485430e`** (W1 stop the lies) · **#103 `5446ac8`** (W2 atomic upload) ·
+  Sixteen PRs: **#102 `485430e`** (W1 stop the lies) · **#103 `5446ac8`** (W2 atomic upload) ·
   **#104 `868857f`** (W3 shell) · **#105 `bdba3a4`** (W4 value layer) · **#106 `0649493`**
-  (simplify) · **#107 `65adccb`** (chart handover) · **#108 `fe517fa`** (KPI month rule) · **#109 `d821b94`** (docs) · **#110** (judgment ghosts) · **#112 `dafa33a`** (Invalid Date) · **#114 `b0ebe31`** (lone Model column).
+  (simplify) · **#107 `65adccb`** (chart handover) · **#108 `fe517fa`** (KPI month rule) · **#109 `d821b94`** (docs) · **#110** (judgment ghosts) · **#112 `dafa33a`** (Invalid Date) · **#114 `b0ebe31`** (lone Model column) ·
+  **#116 `dfe73d7`** (data cadence) · **#117 `50048b3`** (contrast + dead code) ·
+  **#118 `0807489`** (prune on upload).
   ⭐ **Full record: `docs/history/PORTAL_HISTORY.md` (2026-08-25 entry).** Findings:
   `docs/backlog/tiv-uiux-audit-2026-08-25.md`. Remaining work: `docs/backlog/tiv-uiux-fix-roadmap.md`.
   - **The parity gate never moved: 21/21 exact (736 / 779 / 850, backtest 26.4%)** before and after
@@ -83,10 +85,33 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
     as an unlabelled number beside two "Model | Judg" pairs — the empty `<td>` was invisible only
     while the ghosts existed. A **removal** changed a header's shape: check the aggregate after
     deleting data, not just after adding UI.
+  - ✅ **Owner's four decisions taken and three of four built (2026-08-25 evening).**
+    **#116 `dfe73d7`** — the monthly data gap now tells the truth. Market data arrives on the
+    **5th–7th**, the model's anchors run out on the **1st**, so a gap opens on schedule twelve
+    times a year. Calling that *"Model out of date"* in red was crying wolf. Three states from
+    `dataCadence()`: **current** (not due yet) · **due** (5th–10th, neutral `role=status`) ·
+    **overdue** (past grace, red `role=alert`). The strip now always states **`Covers: Aug-26 →
+    Oct-26`**, read from the anchors, so running out is never a surprise.
+    **#117 `50048b3`** — legend label text forced to `gray-600` (7.34:1; it was **1.84:1**, measured)
+    while the swatch keeps the series colour; both PTB lines to `gray-500` (4.54:1, clearing the
+    3:1 graphical minimum). Superseded `upsertRows`/`insertModelParams`/`insertUploadHistory`
+    **deleted** with their 8 client wrappers, plus the now-dead `TABLE_CONFIG` + `injectTivIds`
+    (**−133 lines**); `docs/backlog/tiv-multi-entity-brand.md` updated because it told a future
+    session to edit `TABLE_CONFIG`.
+    **#118 `0807489`** — **upload can now remove months the workbook no longer contains, after an
+    explicit tick.** `tiv_upload_and_prune()` **wraps** `tiv_upload_all()` rather than editing it
+    (a new argument list makes an overload, not a replacement — 275 lines of verified upserts stay
+    untouched). Pruning after the upserts is provably equivalent to before. Three guards: opt-in ·
+    refuse on any empty sheet · **refuse when the count differs from what the uploader was shown**.
+    **Per table, never global** — actuals hold 52 months and judgment 14, so one global month set
+    would have proposed deleting 38 judgment months. Proved on prod with a self-aborting probe
+    (off→0 · wrong count→refused · empty sheet→refused · correct→pruned exactly Jul-26), prod
+    verified untouched at 52/52/52/14/14/52 with zero probe residue.
 - **Test estate (bundle with esbuild first, then run against the gitignored workbook):**
   `parity-gate` **21/21** · `selftest-parser` 13/13 · `selftest-stale-anchors` 14/14 ·
   `selftest-upload-diff` 27/27 · `selftest-quality` 31/31 · `selftest-chart` 22/22 ·
-  `selftest-kpi-month` 13/13 · `selftest-trained-at` 14/14 · `selftest-table-header` 18/18
+  `selftest-kpi-month` 13/13 · `selftest-trained-at` 14/14 · `selftest-table-header` 18/18 ·
+  `selftest-data-cadence` 38/38 · `selftest-removals` 25/25 · `selftest-contrast` 8/8
   (renders the real component via `react-dom/server.browser`). Plus `diag-blank-zero` / `diag-raw-cells` workbook inspectors.
 - ⚠️ **`npm run build` does NOT catch a stray top-level `x={y}`** — it parses as a valid non-strict
   assignment, but ES modules are strict so it throws on every page load. A `perl -0pi` JSX edit
@@ -237,11 +262,12 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ## Next actions
 
-- **⏭️ DECISION NEEDED — `tiv_upload_all()` never `DELETE`s.** Upload only upserts, so a month that
-  disappears from the workbook lingers in the database forever; that is how 12 ghost judgment rows
-  survived the first cleanup (cleared in PR **#110** → `61532ac`). Either teach the upload to remove
-  months absent from the workbook (**owner approval required** — silent deletion is its own hazard)
-  or accept SQL-only cleanup and keep the diff preview honest. ⭐ `docs/backlog/tiv-uiux-fix-roadmap.md` §1b.
+- ~~**DECISION NEEDED — `tiv_upload_all()` never `DELETE`s.**~~ ✅ **DECIDED AND BUILT 2026-08-25**
+  (PR **#118** → `0807489`): owner chose *"ask me, then remove"*. `tiv_upload_and_prune()` lists
+  every month that would go, per table, box unticked by default; opt-in, refuses on an empty
+  sheet, and refuses when its own count differs from what the uploader was shown.
+  ⏭️ **Untested by a human** — nobody has ticked the box on a real upload. With the current
+  workbook the list should be empty, so it will not even appear.
 - ~~**OWNER: run ONE real upload.**~~ ✅ **DONE AND CONFIRMED 2026-08-25.** It behaved as predicted
   and surfaced two defects nothing else could — "Model trained: Invalid Date" (PR #112 →
   `dafa33a`) and the unlabelled lone Model column (PR #114 → `b0ebe31`). Hard refresh verified the
