@@ -89,17 +89,10 @@ async function verify(
   return { caller: { id: prof.id, role: token, is_active: prof.is_active, full_name: prof.full_name }, admin }
 }
 
-// Whitelisted tables the client is allowed to target.
-// Each table's onConflict column is hard-coded here — the client never specifies it.
-const TABLE_CONFIG: Record<string, { onConflict: string }> = {
-  tiv_forecast_tiv_actuals: { onConflict: "month_label" },
-  tiv_forecast_ptb_actuals: { onConflict: "month_label" },
-  tiv_forecast_al_actuals: { onConflict: "month_label" },
-  tiv_forecast_judgment_tiv: { onConflict: "month_label" },
-  tiv_forecast_judgment_ptb: { onConflict: "month_label" },
-  tiv_forecast_raw_data: { onConflict: "month_label" },
-}
-
+// The table whitelist and the per-table onConflict map used to live here, for
+// the eight-call upload the browser used to drive. That path is gone: uploads
+// go through tiv_upload_all(), which owns the table list and the conflict
+// targets inside one transaction. Nothing here targets a table by name any more.
 Deno.serve(async (req: Request) => {
   const json = (b: unknown, status = 200) => jsonResponse(req, b, status)
   if (req.method === "OPTIONS") return preflight(req)
@@ -133,80 +126,8 @@ Deno.serve(async (req: Request) => {
     return json({ ok: false, error: "rate_limited", retry_after_s: rl.retry_after_s }, 429)
   }
 
-  function injectTivIds(
-    rows: Record<string, unknown>[],
-    entityId: string,
-    brandId: string,
-  ): Record<string, unknown>[] {
-    return rows.map((r) => ({ ...r, entity_id: entityId, brand_id: brandId }))
-  }
-
   try {
     switch (action) {
-      case "upsertRows": {
-        const { table, rows, entity_id, brand_id } = payload as {
-          table?: string
-          rows?: Record<string, unknown>[]
-          entity_id?: string
-          brand_id?: string
-        }
-        if (!table || !TABLE_CONFIG[table]) {
-          return json({ error: `Unknown or disallowed table: ${table}` }, 400)
-        }
-        if (!Array.isArray(rows)) {
-          return json({ error: "rows array is required" }, 400)
-        }
-        if (!entity_id || !brand_id) {
-          return json({ error: "entity_id and brand_id are required" }, 400)
-        }
-        if (rows.length === 0) return json({ ok: true, count: 0 })
-        if (rows.length > 5000) {
-          return json({ error: "Max 5000 rows per upsert" }, 400)
-        }
-        const { onConflict } = TABLE_CONFIG[table]
-        const { error } = await admin.from(table).upsert(injectTivIds(rows, entity_id, brand_id), { onConflict })
-        if (error) return json({ error: error.message }, 400)
-        return json({ ok: true, count: rows.length })
-      }
-
-      case "insertModelParams": {
-        const { params, entity_id, brand_id } = payload as {
-          params?: Record<string, unknown>
-          entity_id?: string
-          brand_id?: string
-        }
-        if (!params || typeof params !== "object") {
-          return json({ error: "params object required" }, 400)
-        }
-        if (!entity_id || !brand_id) {
-          return json({ error: "entity_id and brand_id are required" }, 400)
-        }
-        const injected = { ...params, entity_id, brand_id }
-        const { error } = await admin.from("tiv_forecast_model_params").insert(injected)
-        if (error) return json({ error: error.message }, 400)
-        return json({ ok: true })
-      }
-
-      case "insertUploadHistory": {
-        const p = payload as {
-          uploader_name?: string
-          file_name?: string
-          months_loaded?: number
-          last_data_month?: string
-        }
-        if (!p.file_name) return json({ error: "file_name required" }, 400)
-        // uploaded_by always comes from the verified JWT, never from the client
-        const { error } = await admin.from("tiv_forecast_upload_history").insert({
-          uploaded_by: caller.id,
-          uploader_name: p.uploader_name ?? caller.full_name,
-          file_name: p.file_name,
-          months_loaded: p.months_loaded ?? 0,
-          last_data_month: p.last_data_month ?? null,
-        })
-        if (error) return json({ error: error.message }, 400)
-        return json({ ok: true })
-      }
-
       // One transaction for the whole upload. The previous flow was eight
       // independent calls from the browser, so a failure part-way left
       // production half-overwritten -- new actuals under the old model -- and

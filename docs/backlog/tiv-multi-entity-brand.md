@@ -34,6 +34,7 @@ It is `UNIQUE (month_label)` — **not** `UNIQUE (entity_id, brand_id, month_lab
 And `admin-tiv` upserts against exactly that key (`supabase/functions/admin-tiv/index.ts:93-100`):
 
 ```ts
+// HISTORICAL (deleted 2026-08-25) - admin-tiv, before uploads moved to tiv_upload_all()
 const TABLE_CONFIG: Record<string, { onConflict: string }> = {
   tiv_forecast_tiv_actuals:  { onConflict: "month_label" },
   ...
@@ -99,7 +100,12 @@ to reach, not safer.
 
 1. **Constraint swap** (needs owner approval — this is the destructive step)
    - `UNIQUE (month_label)` → `UNIQUE (entity_id, brand_id, month_label)` on all six tables.
-   - Update `TABLE_CONFIG[*].onConflict` to `"entity_id,brand_id,month_label"` to match.
+   - Update the conflict target to `(entity_id, brand_id, month_label)` **inside**
+     `tiv_upload_all()` (migration `20260825_tiv_atomic_upload.sql`), which is where the six
+     upserts now live.
+   - ⚠️ **`TABLE_CONFIG` in `admin-tiv` no longer exists** — it was deleted 2026-08-25 along with
+     the superseded `upsertRows` / `insertModelParams` / `insertUploadHistory` actions, because
+     uploads go through the RPC. Do not go looking for it; the conflict target is SQL now.
    - Deploy the EF and the constraint **together**; a mismatch between them silently reverts to
      overwrite-on-conflict behaviour.
 2. **Scope every read.** Thread `(entityId, brandId)` through all of `dataQueries.js` and filter
