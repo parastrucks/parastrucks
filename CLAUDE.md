@@ -32,7 +32,7 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 ## Current state (2026-08-25)
 
 - **✅ TIV FORECAST UI/UX — AUDITED, REMEDIATED IN FOUR WAVES, AND COURSE-CORRECTED. ALL LIVE.**
-  Eighteen PRs: **#102 `485430e`** (W1 stop the lies) · **#103 `5446ac8`** (W2 atomic upload) ·
+  Twenty PRs (**#102–#121**), the substantive ones being: **#102 `485430e`** (W1 stop the lies) · **#103 `5446ac8`** (W2 atomic upload) ·
   **#104 `868857f`** (W3 shell) · **#105 `bdba3a4`** (W4 value layer) · **#106 `0649493`**
   (simplify) · **#107 `65adccb`** (chart handover) · **#108 `fe517fa`** (KPI month rule) · **#109 `d821b94`** (docs) · **#110** (judgment ghosts) · **#112 `dafa33a`** (Invalid Date) · **#114 `b0ebe31`** (lone Model column) ·
   **#116 `dfe73d7`** (data cadence) · **#117 `50048b3`** (contrast + dead code) ·
