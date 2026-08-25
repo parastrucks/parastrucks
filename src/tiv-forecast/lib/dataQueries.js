@@ -155,3 +155,40 @@ export async function insertUploadHistory({ userId, uploaderName, fileName, mont
     last_data_month: lastDataMonth,
   })
 }
+
+// ── Atomic upload (audit finding A4) ─────────────────────────────────
+// Replaces the eight separate calls above with ONE, so a failure part-way can
+// no longer leave production half-overwritten -- new actuals sitting under the
+// old model -- and a failed history write can no longer report "Upload failed"
+// for an upload that actually committed. The Edge Function forwards this to
+// the tiv_upload_all() Postgres function, whose body is a single transaction.
+// It also snapshots the previous state first, so the upload is revertible.
+export async function uploadAllTiv(parsed, params, entityId, brandId, fileName, uploaderName) {
+  return callEdge('admin-tiv', 'uploadAll', {
+    entity_id:       entityId,
+    brand_id:        brandId,
+    tiv:             parsed.tivActuals,
+    ptb:             parsed.ptbActuals,
+    al:              parsed.alActuals,
+    judgment_tiv:    parsed.judgmentTiv,
+    judgment_ptb:    parsed.judgmentPtb,
+    raw:             parsed.rawRows,
+    params,
+    uploader_name:   uploaderName,
+    file_name:       fileName,
+    months_loaded:   parsed.summary.monthsLoaded,
+    last_data_month: parsed.summary.lastDataMonth,
+  })
+}
+
+// Every training vintage this entity/brand has produced, newest first --
+// the input to a revert, and to showing how a forecast has been revised.
+export async function fetchSnapshots(limit = 10) {
+  const { data, error } = await supabase
+    .from('tiv_forecast_snapshots')
+    .select('id, taken_at, taken_by, reason')
+    .order('taken_at', { ascending: false })
+    .limit(limit)
+  if (error) throw error
+  return data || []
+}

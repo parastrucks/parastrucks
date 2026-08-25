@@ -143,15 +143,15 @@ The unifying insight: **parse and retrain are pure client functions, so everythi
 upload can be known before the first byte is written.** The wave converts a blind write into a
 reviewed transaction.
 
-- [ ] **W2.1 (B3) Decide + enforce the EF gate** — ⚠️ **OWNER DECISION**: `admin-tiv` currently
+- [x] **W2.1 (B3) Decide + enforce the EF gate** — ⚠️ **OWNER DECISION**: `admin-tiv` currently
   accepts `back_office` with service-role writes. Recommend tightening `verify(req, ["admin"])`
   — reads don't go through this EF, so nothing breaks for viewers. One line + redeploy. If the
   owner instead wants back-office uploaders, render the panel for them (make the fiction true).
-- [ ] **W2.2 (B2) Un-vanish the success message** — keep the panel open on success (drop the
+- [x] **W2.2 (B2) Un-vanish the success message** — keep the panel open on success (drop the
   auto-`setCollapsed(true)`) OR toast the success; add the result line to the collapsed header
   (C13: "Last upload: 24-Aug by Dhruv · data through Jul-26" — from `upload_history[0]`, already
   fetched). *Accept:* code-trace — success text renders in a subtree that exists post-commit.
-- [ ] **W2.3 (C1 ⭐ + B2) Dry-run diff modal** — after parse+retrain, BEFORE any write: per-table
+- [x] **W2.3 (C1 ⭐ + B2) Dry-run diff modal** — after parse+retrain, BEFORE any write: per-table
   added/changed/unchanged month counts (diff parsed rows vs the in-memory `tivActuals` etc.),
   cell-level changes for overlapping months (cap the list at ~10 + "and N more"), current-vs-new
   Aug/Sep/Oct forecast deltas (run `runForecast` on both param sets), and the **entity/brand
@@ -160,7 +160,7 @@ reviewed transaction.
   AL/Raw = 0 while TIV > 0. ⚠️MB: this is the interim scream for the multi-brand overwrite
   ("51 of 51 cells changed" on an incremental upload) — until the constraint lands, treat a
   ≥90%-changed diff as a red warning state in the modal.
-- [ ] **W2.4 (A4) Atomic upload** — new `admin-tiv` action `uploadAll`: one payload with all six
+- [x] **W2.4 (A4) Atomic upload** — new `admin-tiv` action `uploadAll`: one payload with all six
   tables + params + history, written inside **one Postgres RPC transaction** (`SECURITY DEFINER`,
   revoke EXECUTE from `anon` AND `authenticated` — the EF's service-role client calls it). Client
   drops the 8-step chain for one call; progress bar becomes parse → train → diff → write.
@@ -171,20 +171,54 @@ reviewed transaction.
   TIV and PTB were already updated; re-upload the same file to complete").
   ⚠️ If `retrainModel`'s emitted column set changes AT ALL, run the insert probe (§5) — the EF
   inserts params as a spread; one missing column breaks upload.
-- [ ] **W2.5 (A4) Retrain/DB coverage guard** — before upload, compare parsed month span vs
+- [x] **W2.5 (A4) Retrain/DB coverage guard** — before upload, compare parsed month span vs
   in-memory DB months: fewer months than the DB holds → hard warning in the diff modal ("this
   file has 12 months; the database holds 51 — the model would be retrained on the file only").
   Cheapest honest fix for retrain-from-file; full fix (retrain from DB re-fetch) is optional.
-- [ ] **W2.6 (C7) Snapshot-before-overwrite + Download current** — ⚠️ **OWNER FLAG (additive
+- [x] **W2.6 (C7) Snapshot-before-overwrite + Download current** — ⚠️ **OWNER FLAG (additive
   table)**: `tiv_forecast_snapshots(id, taken_at, taken_by, payload jsonb)`, RLS admin-only;
   insert inside the `uploadAll` transaction. Separately, a "Download current data (.xlsx)" button
   reusing the `XLSX.writeFile` pattern — this needs no schema and can ship even if the table waits.
-- [ ] **W2.7** `beforeunload` while `uploading`; map 401/"Invalid token" to "Your session is
+- [x] **W2.7** `beforeunload` while `uploading`; map 401/"Invalid token" to "Your session is
   stale — sign out and back in, then retry" (known ES256 stale-session mode); entity/brand
   prefill from latest history row (⚠️MB: prefill reduces mis-picks — do NOT turn it into a free
   selector for new pairs; keep the dropdowns).
-- [ ] **W2.8 (B4-admin)** UploadPanel lookups surface errors: destructure `error` on
+- [x] **W2.8 (B4-admin)** UploadPanel lookups surface errors: destructure `error` on
   `outlet_brands`, render inline error + retry for both lookups.
+
+---
+
+#### ✅ Wave 2 SHIPPED 2026-08-25 — branch `tiv-uiux-w2`, commit `18b5715`
+
+Owner decisions taken: EF tightened to **admin-only** ✅ · `tiv_forecast_snapshots` **approved** ✅.
+Migration `tiv_atomic_upload` applied to prod; `admin-tiv` redeployed (all four assets travelled,
+incl. `keys.ts`). Verification: self-aborting probe through the **real function with a real
+payload** — 60→61→60 rows, 18→19→18 params, snapshot payload carried all 7 keys, Jul-26 restored
+to 85/162/810, zero residue; `selftest-upload-diff` **22/22**; parity **21/21 @ 26.4%**.
+
+**Decisions made while executing, for the record:**
+- **Went past the "minimum bar."** The roadmap allowed EF-orchestrated writes with per-step errors
+  as a fallback. Since the snapshot table was approved anyway, a single PL/pgSQL body was the
+  honest fix — Postgres runs a function atomically, so there is no compensating-rollback logic to
+  get wrong.
+- **`jsonb_populate_record(...).*` was a trap**, caught before applying: it supplies an explicit
+  NULL `id`, which overrides the sequence default and violates NOT NULL. Columns are enumerated,
+  and `trained_at` is coalesced for the same reason.
+- **The interim 409 guard rode this wave** (roadmap decision #3, never formally asked). It only
+  *refuses* a write that would have silently destroyed another entity/brand's dataset, so it is
+  strictly protective — but it IS a behaviour change and the owner should know. It does **not**
+  replace the constraint fix; order remains constraint → scoped reads → selector.
+- **Old `upsertRows`/`insertModelParams`/`insertUploadHistory` actions were kept**, now admin-only,
+  so a stale cached browser tab does not break mid-deploy. They can be removed once a release has
+  fully rolled out.
+- ⚠️ **Pre-existing React hook-order violation noticed, not fixed:** `UploadPanel` calls
+  `useCallback` *after* `if (!isAdmin) return null`. Harmless today because `isAdmin` is stable per
+  session, but new hooks must go above that early return (the `beforeunload` effect does).
+
+**Still untested by a human:** nobody has run a real upload through the new path. The probe proves
+the function and the transaction boundary; it cannot prove the browser wiring. **Ask the owner to
+do one real upload** (the diff preview should show "0 new · 0 amended · 52 unchanged" for the file
+already loaded) before assuming wave 2 is closed.
 
 ---
 

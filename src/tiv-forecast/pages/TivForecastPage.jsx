@@ -139,7 +139,10 @@ export default function TivForecastPage() {
       {/* Load failures surface as a global toast (no banner). */}
 
       {/* Upload panel — admin only */}
-      <UploadPanel onUploadComplete={handleUploadComplete} />
+      <UploadPanel
+        onUploadComplete={handleUploadComplete}
+        current={{ tivActuals, modelParams }}
+      />
 
       {/* Model info banner */}
       {modelParams && (
