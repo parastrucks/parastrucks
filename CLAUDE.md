@@ -29,6 +29,49 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ---
 
+## Current state (2026-08-25)
+
+- **✅ TIV FORECAST UI/UX — AUDITED, REMEDIATED IN FOUR WAVES, AND COURSE-CORRECTED. ALL LIVE.**
+  Seven PRs: **#102 `485430e`** (W1 stop the lies) · **#103 `5446ac8`** (W2 atomic upload) ·
+  **#104 `868857f`** (W3 shell) · **#105 `bdba3a4`** (W4 value layer) · **#106 `0649493`**
+  (simplify) · **#107 `65adccb`** (chart handover) · **#108 `fe517fa`** (KPI month rule).
+  ⭐ **Full record: `docs/history/PORTAL_HISTORY.md` (2026-08-25 entry).** Findings:
+  `docs/backlog/tiv-uiux-audit-2026-08-25.md`. Remaining work: `docs/backlog/tiv-uiux-fix-roadmap.md`.
+  - **The parity gate never moved: 21/21 exact (736 / 779 / 850, backtest 26.4%)** before and after
+    every change. Engine maths untouched throughout.
+  - **⭐ THE LESSON OF THE SESSION — the owner rejected the result of the first four waves:**
+    *"All pages have too much information … employees feel intimidated rather than informed."*
+    He was right. Every finding was fixed on its own merits and **nothing checked the aggregate** —
+    eleven blocks before the first number. `feedback_excel_parity` (*adoption is the metric, novelty
+    is a cost*) was violated **by accretion**. Now: **default view answers the question; everything
+    else folds one click away** (`.tiv-fold`), tuned for **the GM opening it monthly**.
+    **Rule adopted: when adding a UI element, state what it pushes further down the page.**
+  - **A1 was live, not theoretical** — trained through Jul-26, the forecast would have rendered
+    **bold zeros** from **1 Sep 2026** once the window outran its anchors. Fixed; missing anchor is
+    now a red "model out of date" state, never a number.
+  - **Upload is atomic, reviewed and revertible.** `tiv_upload_all()` = snapshot + 6 upserts +
+    params + history in ONE transaction; pre-commit diff preview; `tiv_forecast_snapshots` table;
+    **409 interim guard** against the multi-brand overwrite. `admin-tiv` **tightened to admin-only**
+    (it accepted `back_office` while the panel showed only to admins, and it bypasses RLS).
+  - **16 rows of corrupt prod data cleared** (owner-approved): all-zero Aug-26…Mar-27 in
+    `tiv_actuals` + `ptb_actuals`, written 2026-08-21 by the pre-fix parser. Snapshotted first.
+    **The six all-zero 2022 PTB months are GENUINE ramp-up zeros and were kept** — the rule is
+    "empty AND after the last real month", **never** "value is zero".
+  - **Summary tiles lead with next month after the 19th** (IST), falling back if that month is stale.
+  - ⏭️ **Nobody has run a real upload through the new path yet** — the probe proves the function and
+    the transaction boundary, not the browser wiring.
+- **Test estate (bundle with esbuild first, then run against the gitignored workbook):**
+  `parity-gate` **21/21** · `selftest-parser` 13/13 · `selftest-stale-anchors` 14/14 ·
+  `selftest-upload-diff` 27/27 · `selftest-quality` 31/31 · `selftest-chart` 22/22 ·
+  `selftest-kpi-month` 13/13. Plus `diag-blank-zero` / `diag-raw-cells` workbook inspectors.
+- ⚠️ **`npm run build` does NOT catch a stray top-level `x={y}`** — it parses as a valid non-strict
+  assignment, but ES modules are strict so it throws on every page load. A `perl -0pi` JSX edit
+  introduced exactly that. **Use the Edit tool for multi-line JSX; check `head -1` of every edited
+  file afterwards.** These source files are **CRLF**, so `\n` in a node/perl replacement silently
+  no-ops — detect the newline style first.
+- ⚠️ **There is no ESLint config in this repo** (`npx eslint` fails; no lint script). `npm run build`
+  is the gate — never report a lint pass.
+
 ## Current state (2026-08-24)
 
 - **✅ TIV FORECAST v3.0 — SHIPPED, VERIFIED ON PROD, AND UPLOADED (2026-08-24).**
@@ -170,21 +213,33 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ## Next actions
 
+- **⏭️ OWNER: run ONE real upload through the new path.** The self-aborting probe proves
+  `tiv_upload_all()` and its transaction boundary; it cannot prove the browser wiring. Expect the
+  diff preview to read *"0 new · 0 amended · 52 unchanged"* for the workbook already loaded.
+- **⏭️ TIV UI/UX tail (all documented, none silently dropped)** —
+  ⭐ `docs/backlog/tiv-uiux-fix-roadmap.md`: **W4.6** xlsx download / round-trip export in the
+  workbook's own sheet shape / print stylesheet · **W4.7** forecast-vintage ghost line · roving
+  tabindex on the accuracy grid (168 tab stops kept; the toggle is the keyboard path) ·
+  tap-for-detail bottom sheet (CSS `.tiv-detail` exists, no component) · Recharts `Legend` inherits
+  the series colour (PTB forecast label ≈1.84:1).
+- **⏭️ Remove the superseded `admin-tiv` actions** (`upsertRows`, `insertModelParams`,
+  `insertUploadHistory`). Kept deliberately, now admin-only, so a stale cached browser tab could not
+  break mid-deploy. Safe to delete once the release has fully rolled out.
 - **⏭️ DECISION NEEDED — TIV multi-entity/brand.** A second entity/brand upload **silently
   overwrites** the first dataset (global `UNIQUE (month_label)` + `onConflict: "month_label"`).
   Latent only because prod holds exactly one pair. Fix order is **constraint → scoped reads →
   selector**, never the selector first. Needs owner approval for the constraint change.
-  ⭐ `docs/backlog/tiv-multi-entity-brand.md`. Cheap interim: make `admin-tiv` reject an upsert
-  whose `month_label` exists under a different `(entity_id, brand_id)` → turns silent loss into a
-  409 (~10 lines, no schema change).
+  ⭐ `docs/backlog/tiv-multi-entity-brand.md`. **The cheap interim IS NOW SHIPPED** — `tiv_upload_all()`
+  refuses with 409 an upload whose months belong to a different `(entity_id, brand_id)`. That
+  converts silent data loss into a clear refusal; it does **not** replace the constraint fix.
 - **⏭️ TIV re-trial checkpoint: after Oct-26 actuals** (15-month window). Re-examine ADAPT
   stability for ICV Trucks and whether Haulage should move to ADAPT (it was second-best there and
   carries a persistent −19% to −37% bias under capped methods). **Do not change `V3_METHOD`
   before then** — it is a code constant, not a retrained field.
-- **⏭️ Owner: supply AL/LM split for Apr-26 onward.** The upload file lacks it, so
-  `al_share_recent` / `ptb_share_recent` and the AL share chart are frozen at Mar-26. The UI now
-  labels this ("AL/PTB share layer as of …"), so it is visible rather than silent. Layer 1 (TIV)
-  is unaffected.
+- ~~**Owner: supply AL/LM split for Apr-26 onward.**~~ **RESOLVED — this is STALE, do not chase it.**
+  Measured 2026-08-25: the current workbook carries real AL figures right through **Jul-26**
+  (Apr-26 = 10/95/31/24/30/44 …), so the share layer is no longer frozen at Mar-26 and the ⚠ chip is
+  correctly hidden. `al_actuals` holds 52 rows, all with data.
 - **⏭️ Owner: run the forced-password-change loop once** with a throwaway user (reset → login →
   land on `/change-password` → every other route bounces → set new password → released → sign
   out/in, not prompted again). Untested end-to-end; staging is down.
