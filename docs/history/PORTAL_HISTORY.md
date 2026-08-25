@@ -264,6 +264,42 @@ verbatim from `supabase_migrations.schema_migrations`, so the folder matches wha
 Parity gate re-run after the delete: **21/21 exact (736 / 779 / 850), backtest 26.4%** — unchanged,
 as expected, since the gate reads the workbook rather than prod.
 
+### 7c. The first real upload — and the bug only a human could find
+
+**2026-08-25, owner-run.** The standing open item ("nobody has run a real upload through the new
+path") is **closed**. It behaved: file recognised as *52 months of TIV data, ending Jul-26 ·
+TIV 52 · PTB 52 · AL 52 · Judgment 14/14 · Raw 52*, preview read **"0 new · 0 amended · 52
+unchanged — this file matches what is already stored"**, and the result banner confirmed the
+retrain and named the rollback point: *"The previous data was saved as snapshot #4, so this can be
+undone."* Judgment reading **14/14** is the ghost cleanup from §7b showing up in the UI.
+
+**Then the status strip said `Model trained: Invalid Date`** (PR **#112** → `dafa33a`).
+
+`handleUploadComplete` sets `modelParams` to the object `retrainModel` builds **in the browser**.
+That object is complete enough to forecast from — which is why every number on screen was right —
+but it carries no `trained_at`: that column is stamped by the database inside `tiv_upload_all`
+(`coalesce(r.trained_at, now())`). So the strip rendered `new Date(undefined)` and said so.
+
+⭐ **Why no test caught it, and why that matters.** A page reload cleared it, so the defect existed
+only in the seconds after an upload — and until today, *nobody had ever watched an upload land*.
+The probe proved the function and the transaction boundary; the parity gate proves the maths; 134
+self-test assertions prove the libraries. **None of them render a page at the moment state is
+handed from client to server.** This is the exact gap the entry above predicted in one line —
+"the probe cannot prove the browser wiring" — and the prediction was right.
+
+Fixed at cause and at guard: the handler now re-reads the stored params row alongside the actuals
+it already re-fetches and prefers it when the month matches; `formatTrainedAt()` renders **"just
+now"** for anything unparseable, so no value can put the words "Invalid Date" on a screen. Extracted
+to `src/tiv-forecast/lib/formatTrainedAt.js` so `selftest-trained-at` (**14/14**) exercises the
+shipped function without pulling the Supabase client into node — the root cause is *asserted*
+there, not assumed (`retrainModel`'s output genuinely has no `trained_at` key).
+
+**Open question left with the owner:** the same screenshot showed the summary tile leading with
+**Aug-26 (736)** rather than Sep-26 (779), though today is the 25th. The deployed bundle was
+checked directly and carries the rule (`function ie(e=new Date){return re(e).day>19}`, consumed by
+the KPI memo), and `selftest-kpi-month` is 13/13 — so the most likely explanation is a **cached
+pre-#108 chunk in a long-lived browser tab**, resolved by a hard refresh. Flagged, not assumed.
+
 ### 8. Owner decisions taken this session
 
 | Decision | Choice |
