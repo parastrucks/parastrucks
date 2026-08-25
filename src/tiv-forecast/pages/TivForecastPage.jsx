@@ -7,6 +7,7 @@ import { runForecast } from '../lib/forecastEngine'
 import { SEGMENTS, SEG_COL } from '../constants'
 import { shouldLeadWithNextMonth } from '../lib/istMonth'
 import { formatTrainedAt } from '../lib/formatTrainedAt'
+import { dataCadence, coverageWindow } from '../lib/dataCadence'
 import { buildDefaultTriggerState, TRIGGER_DEFS } from '../lib/triggerDefs'
 import {
   fetchTivActuals, fetchPtbActuals, fetchAlActuals,
@@ -159,6 +160,13 @@ export default function TivForecastPage() {
   // effectively spoken for, so the number worth acting on is next month's
   // (owner's rule, 2026-08-25). Falls back to the first month if the next one
   // has no forecast — a dash would be less useful than a real number.
+  // Where the next workbook is in its monthly cycle, and what the trained model
+  // can actually reach. Both derived, never assumed.
+  const cadence = useMemo(
+    () => (modelParams ? dataCadence(modelParams.last_data_month) : null),
+    [modelParams])
+  const coverage = useMemo(() => coverageWindow(modelParams), [modelParams])
+
   const kpiIdx = useMemo(() => {
     const totals = forecastResult?.totals
     if (!totals?.length) return 0
@@ -234,6 +242,14 @@ export default function TivForecastPage() {
           <span>Last data: <strong>{modelParams.last_data_month}</strong></span>
           <span>Total months: <strong>{modelParams.total_months}</strong></span>
           <span>Model trained: <strong>{formatTrainedAt(modelParams.trained_at)}</strong></span>
+          {/* The single most decision-relevant fact when the month turns: how far
+              this model can actually see. Stated always, so running out is never
+              a surprise — the banner below only appears once it has. */}
+          {coverage && (
+            <span title="The trained model carries anchors for these months only. Uploading the next workbook moves the window forward.">
+              Covers: <strong>{coverage.text}</strong>
+            </span>
+          )}
           <span title="No judgment value enters any forecast computation. Judgment appears only as a comparison column.">
             Judgment-free forecast
           </span>
@@ -322,20 +338,46 @@ export default function TivForecastPage() {
           upload, those columns have no basis at all — which used to render as
           a confident zero. This says so out loud, to everyone, not just to the
           admin who can fix it. */}
-      {forecastResult?.staleMonths?.length > 0 && (
-        <div className="tiv-banner tiv-banner-danger" role="alert">
-          <strong>Model out of date.</strong>{' '}
-          {forecastResult.staleMonths.length === forecastResult.forecastMonths.length
-            ? 'No forecast can be produced for any of the months shown'
-            : `No forecast can be produced for ${forecastResult.staleMonths.join(', ')}`}
-          {' '}— the model was trained on data through{' '}
-          <strong>{modelParams?.last_data_month}</strong>, and its forecast window only
-          reaches three months past that. Those columns show “—”, not zero.
-          {isAdmin
-            ? ' Upload the latest Market Data workbook to refresh it.'
-            : ' Ask an administrator to upload the latest Market Data workbook.'}
-        </div>
-      )}
+      {forecastResult?.staleMonths?.length > 0 && (() => {
+        // The anchors run out on the 1st of every month; the market data that
+        // replaces them arrives on the 5th-7th. So this gap opens on schedule
+        // twelve times a year and closes itself a few days later. Shouting
+        // "Model out of date" at it would make the one banner that matters —
+        // data genuinely late — indistinguishable from the routine wait.
+        const overdue = cadence?.status === 'overdue'
+        const all = forecastResult.staleMonths.length === forecastResult.forecastMonths.length
+        const which = all
+          ? 'none of the months shown can be forecast'
+          : `${forecastResult.staleMonths.join(', ')} cannot be forecast`
+        return (
+          <div
+            className={overdue ? 'tiv-banner tiv-banner-danger' : 'tiv-banner'}
+            role={overdue ? 'alert' : 'status'}
+          >
+            {cadence ? (
+              <>
+                <strong>
+                  {overdue
+                    ? `${cadence.awaitedMonth} market data is overdue.`
+                    : `Waiting for ${cadence.awaitedMonth} market data.`}
+                </strong>{' '}
+                It usually arrives on the {cadence.dueFrom}th–{cadence.dueBy}th of{' '}
+                {cadence.arrivesInMonth}. Until it is uploaded, {which} — those columns
+                show “—”, never zero.
+              </>
+            ) : (
+              <>
+                <strong>Model out of date.</strong> {which} — the model was trained on data
+                through <strong>{modelParams?.last_data_month}</strong>, and its forecast
+                window reaches only three months past that. Those columns show “—”, never zero.
+              </>
+            )}
+            {isAdmin
+              ? ' Upload the Market Data workbook to extend the forecast.'
+              : ' An administrator uploads the workbook each month.'}
+          </div>
+        )
+      })()}
 
       {/* Tab bar */}
       <div className="tiv-tabs" role="tablist" aria-label="TIV forecast sections">
