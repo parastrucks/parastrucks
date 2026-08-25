@@ -92,9 +92,15 @@ export default function SegmentChart({ type = 'line', data = [], xKey = 'month',
               dataKey={s.key}
               name={s.name || s.key}
               stroke={s.color || 'var(--blue)'}
-              strokeDasharray={s.dashed ? '5 4' : undefined}
+              /* Three line treatments, all distinguishable without colour:
+                 solid = actual, dashed = the current forecast, dotted = an
+                 older vintage of the same forecast. */
+              strokeDasharray={s.dotted ? '1 4' : s.dashed ? '5 4' : undefined}
               strokeWidth={s.bold ? 2.5 : 1.5}
-              dot={false}
+              /* A vintage line covers only the two or three months the old
+                 model still reaches. With dot={false} a single-point series
+                 renders as nothing at all — recharts has no segment to draw. */
+              dot={s.dotted ? { r: 2.5 } : false}
               /* connectNulls was unconditional, so a month with no data was
                  bridged with a straight line that looked like measurement.
                  Opt in per series; a gap in actuals should read as a gap. */

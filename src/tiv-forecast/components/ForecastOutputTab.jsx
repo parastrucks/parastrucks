@@ -6,6 +6,7 @@ import { useAuth } from '../../context/AuthContext'
 import ForecastTable from './ForecastTable'
 import { SEGMENTS } from '../constants'
 import { explainForecast, toleranceOdds } from '../lib/forecastQuality'
+import ForecastDetail from './ForecastDetail'
 
 // Each layer owns its own title and caption. The captions used to be passed to
 // ForecastTable and then never rendered, so the share basis and the 75% cap
@@ -177,11 +178,10 @@ export default function ForecastOutputTab({ forecastResult, judgmentTiv, judgmen
           so this is a formatter, not a second model. It turns the method-map
           footnote from trivia into something checkable. */}
       {explain && (
-        <div className="tiv-receipt">
-          <button className="tiv-receipt-close" onClick={() => setExplain(null)} aria-label="Close">×</button>
-          <div style={{ fontWeight: 700, marginBottom: 6 }}>
-            {explain.segment} · {explain.label} = {explain.value}
-          </div>
+        <ForecastDetail
+          title={`${explain.segment} · ${explain.label} = ${explain.value}`}
+          onClose={() => setExplain(null)}
+        >
           {(() => {
             const r = explainForecast(explain.segment, explain.label, modelParams)
             if (!r) return <div>No derivation is available for this month.</div>
@@ -204,7 +204,7 @@ export default function ForecastOutputTab({ forecastResult, judgmentTiv, judgmen
               </>
             )
           })()}
-        </div>
+        </ForecastDetail>
       )}
 
       {/* Two permanent footnotes of methodology sat under every visit. Folded:

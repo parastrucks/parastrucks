@@ -63,6 +63,22 @@ export async function fetchLatestModelParams() {
   return data
 }
 
+// Training vintages, newest first. Used to draw what the PREVIOUS model said
+// about the months now on screen, so a reader can see whether the view is
+// steady or swinging between retrains.
+//
+// Ordered by trained_at, never by last_data_month: that column is TEXT, and
+// 'May-26' sorts after 'Jul-26'.
+export async function fetchModelParamsHistory(limit = 6) {
+  const { data, error } = await supabase
+    .from('tiv_forecast_model_params')
+    .select('*')
+    .order('trained_at', { ascending: false })
+    .limit(limit)
+  if (error) throw error
+  return data || []
+}
+
 export async function fetchUploadHistory() {
   const { data, error } = await supabase
     .from('tiv_forecast_upload_history')

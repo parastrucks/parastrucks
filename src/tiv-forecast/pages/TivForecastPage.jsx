@@ -8,11 +8,12 @@ import { SEGMENTS, SEG_COL } from '../constants'
 import { shouldLeadWithNextMonth } from '../lib/istMonth'
 import { formatTrainedAt } from '../lib/formatTrainedAt'
 import { dataCadence, coverageWindow } from '../lib/dataCadence'
+import { previousVintage, vintageAsOf } from '../lib/vintage'
 import { buildDefaultTriggerState, TRIGGER_DEFS } from '../lib/triggerDefs'
 import {
   fetchTivActuals, fetchPtbActuals, fetchAlActuals,
   fetchJudgmentTiv, fetchJudgmentPtb,
-  fetchLatestModelParams, fetchTriggerState, saveTriggerStateRow,
+  fetchLatestModelParams, fetchModelParamsHistory, fetchTriggerState, saveTriggerStateRow,
 } from '../lib/dataQueries'
 import UploadPanel from '../components/UploadPanel'
 import ForecastOutputTab from '../components/ForecastOutputTab'
@@ -60,6 +61,7 @@ export default function TivForecastPage() {
   const [alActuals,    setAlActuals]    = useState([])
   const [judgmentTiv,  setJudgmentTiv]  = useState([])
   const [judgmentPtb,  setJudgmentPtb]  = useState([])
+  const [paramsHistory, setParamsHistory] = useState([])
   const [modelParams,  setModelParams]  = useState(null)
   const [triggerState, setTriggerState] = useState(null)
 
@@ -86,6 +88,9 @@ export default function TivForecastPage() {
       setJudgmentTiv(jTiv)
       setJudgmentPtb(jPtb)
       setModelParams(params)
+      // Vintages are a nice-to-have on this screen: a failure here must not
+      // stop the page loading, so it is fetched separately and swallowed.
+      fetchModelParamsHistory().then(setParamsHistory).catch(() => setParamsHistory([]))
       // Merge saved trigger state with defaults
       const defaults = buildDefaultTriggerState()
       setTriggerState({ ...defaults, ...savedTriggers })
@@ -167,6 +172,20 @@ export default function TivForecastPage() {
     [modelParams])
   const coverage = useMemo(() => coverageWindow(modelParams), [modelParams])
 
+  // What the model said BEFORE the last retrain, replayed at the horizons it
+  // originally had rather than at today's. The same trigger state is applied
+  // to both, so any difference on screen is the retrain, not the triggers.
+  const prevForecast = useMemo(() => {
+    const prev = previousVintage(paramsHistory, modelParams)
+    const asOf = prev && vintageAsOf(prev.last_data_month)
+    if (!prev || !asOf || !triggerState) return null
+    try {
+      return { result: runForecast(prev, triggerState, asOf), lastDataMonth: prev.last_data_month }
+    } catch {
+      return null   // an old vintage with a shape the engine no longer reads
+    }
+  }, [paramsHistory, modelParams, triggerState])
+
   const kpiIdx = useMemo(() => {
     const totals = forecastResult?.totals
     if (!totals?.length) return 0
@@ -205,6 +224,7 @@ export default function TivForecastPage() {
       setTivActuals(tiv); setPtbActuals(ptb); setAlActuals(al)
       setJudgmentTiv(jTiv); setJudgmentPtb(jPtb)
       if (stored?.last_data_month === newParams.last_data_month) setModelParams(stored)
+      fetchModelParamsHistory().then(setParamsHistory).catch(() => {})
     } catch { /* non-critical */ }
   }
 
@@ -421,6 +441,7 @@ export default function TivForecastPage() {
           alActuals={alActuals}
           ptbActuals={ptbActuals}
           forecastResult={forecastResult}
+          previousForecast={prevForecast}
         />
       )}
       {activeTab === 'accuracy' && (
