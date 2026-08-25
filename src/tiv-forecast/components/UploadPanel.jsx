@@ -238,10 +238,18 @@ export default function UploadPanel({ onUploadComplete, current = {} }) {
 
   return (
     <div className="card mb-24">
+      {/* Was a bare <div onClick>: no tabIndex, no role, no key handler — so a
+          keyboard user could not open the upload panel at all. */}
       <div
         className="flex-between"
+        role="button"
+        tabIndex={0}
+        aria-expanded={!collapsed}
         style={{ cursor: 'pointer', userSelect: 'none' }}
         onClick={() => setCollapsed(c => !c)}
+        onKeyDown={e => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCollapsed(c => !c) }
+        }}
       >
         <div>
           <div style={{ fontWeight: 700, fontSize: 15 }}>Data Upload</div>
@@ -264,6 +272,7 @@ export default function UploadPanel({ onUploadComplete, current = {} }) {
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
             <select
               className="form-select"
+              aria-label="Entity"
               style={{ flex: '1 1 160px', maxWidth: 220 }}
               value={entityId}
               onChange={e => setEntityId(e.target.value)}
@@ -275,6 +284,7 @@ export default function UploadPanel({ onUploadComplete, current = {} }) {
             </select>
             <select
               className="form-select"
+              aria-label="Brand"
               style={{ flex: '1 1 160px', maxWidth: 220 }}
               value={brandId}
               onChange={e => setBrandId(e.target.value)}
@@ -290,10 +300,19 @@ export default function UploadPanel({ onUploadComplete, current = {} }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
             <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer' }}>
               Choose File
+              {/* display:none removes the input from the tab order AND the
+                  accessibility tree, so there was no keyboard or screen-reader
+                  path to choosing a file. The clip pattern keeps it focusable
+                  while staying invisible. */}
               <input
                 type="file"
                 accept=".xlsx,.xls"
-                style={{ display: 'none' }}
+                aria-label="Choose a Market Data workbook"
+                style={{
+                  position: 'absolute', width: 1, height: 1,
+                  padding: 0, margin: -1, overflow: 'hidden',
+                  clipPath: 'inset(50%)', whiteSpace: 'nowrap', border: 0,
+                }}
                 onChange={handleFileChange}
               />
             </label>
@@ -434,10 +453,19 @@ export default function UploadPanel({ onUploadComplete, current = {} }) {
             </button>
           )}
 
-          {/* Progress bar */}
+          {/* Progress bar. Was nested plain divs with no role and no live
+              region, so an upload that rewrites six production tables gave a
+              screen-reader user no feedback at all. */}
           {progress && (
-            <div style={{ marginTop: 14 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--gray-500)', marginBottom: 5 }}>
+            <div
+              style={{ marginTop: 14 }}
+              role="progressbar"
+              aria-valuenow={progress.pct}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuetext={progress.label}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--gray-600)', marginBottom: 5 }}>
                 <span>{progress.label}</span>
                 <span style={{ fontWeight: 700 }}>{progress.pct}%</span>
               </div>

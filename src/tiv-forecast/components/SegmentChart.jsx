@@ -5,7 +5,7 @@ import {
 } from 'recharts'
 import Icon from '../../components/Icon'
 
-export default function SegmentChart({ type = 'line', data = [], xKey = 'month', series = [], height = 300, referenceLines = [] }) {
+export default function SegmentChart({ type = 'line', data = [], xKey = 'month', series = [], height = 300, referenceLines = [], label = '' }) {
   if (!data.length || !series.length) {
     return (
       <div className="empty-state" style={{ height }}>
@@ -18,6 +18,14 @@ export default function SegmentChart({ type = 'line', data = [], xKey = 'month',
   const commonProps = {
     data,
     margin: { top: 8, right: 16, left: 0, bottom: 4 },
+  }
+
+  // Recharts emits a bare <svg> with no role or name, so the historical trend
+  // and AL-share charts — whose data has no tabular equivalent anywhere else
+  // in the app — were entirely unavailable to a screen reader.
+  const a11y = {
+    role: 'img',
+    'aria-label': label || 'Chart',
   }
 
   const axisProps = {
@@ -35,6 +43,7 @@ export default function SegmentChart({ type = 'line', data = [], xKey = 'month',
   }
 
   return (
+    <div {...a11y}>
     <ResponsiveContainer width="100%" height={height}>
       {type === 'bar' || type === 'stackedBar' ? (
         <BarChart {...commonProps}>
@@ -85,5 +94,6 @@ export default function SegmentChart({ type = 'line', data = [], xKey = 'month',
         </LineChart>
       )}
     </ResponsiveContainer>
+    </div>
   )
 }

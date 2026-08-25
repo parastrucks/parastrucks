@@ -104,6 +104,7 @@ export default function SegmentAnalysisTab({ tivActuals, alActuals, ptbActuals, 
           {activeSeg} — Historical TIV + PTB + Forecast
         </div>
         <SegmentChart
+          label={`${activeSeg}: monthly industry volume and PTB sales, with the three-month forecast`}
           type="line"
           data={chartDataWithForecast}
           xKey="month"
@@ -123,6 +124,7 @@ export default function SegmentAnalysisTab({ tivActuals, alActuals, ptbActuals, 
           {activeSeg} — AL Market Share %
         </div>
         <SegmentChart
+          label={`${activeSeg}: Ashok Leyland share of industry volume, month by month`}
           type="line"
           data={shareChartData}
           xKey="month"
@@ -138,6 +140,7 @@ export default function SegmentAnalysisTab({ tivActuals, alActuals, ptbActuals, 
             TIV Forecast by Segment (all segments)
           </div>
           <SegmentChart
+            label="Forecast industry volume by segment for the next three months"
             type="stackedBar"
             data={stackedData}
             xKey="month"
