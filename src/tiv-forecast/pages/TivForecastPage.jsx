@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
 import { runForecast } from '../lib/forecastEngine'
 import { SEGMENTS, SEG_COL } from '../constants'
+import { shouldLeadWithNextMonth } from '../lib/istMonth'
 import { buildDefaultTriggerState, TRIGGER_DEFS } from '../lib/triggerDefs'
 import {
   fetchTivActuals, fetchPtbActuals, fetchAlActuals,
@@ -153,6 +154,17 @@ export default function TivForecastPage() {
     }
   }
 
+  // Which month the summary tiles lead with. Past the 19th the current month is
+  // effectively spoken for, so the number worth acting on is next month's
+  // (owner's rule, 2026-08-25). Falls back to the first month if the next one
+  // has no forecast — a dash would be less useful than a real number.
+  const kpiIdx = useMemo(() => {
+    const totals = forecastResult?.totals
+    if (!totals?.length) return 0
+    if (!shouldLeadWithNextMonth() || totals.length < 2) return 0
+    return totals[1].tiv === null || totals[1].tiv === undefined ? 0 : 1
+  }, [forecastResult])
+
   // Which triggers are bending the numbers right now — surfaced at page level
   // so it travels with every tab, not just the Forecast one.
   const activeTriggers = useMemo(() => {
@@ -273,7 +285,7 @@ export default function TivForecastPage() {
             { key: 'al',  label: 'Ashok Leyland',  hint: 'AL share of market' },
             { key: 'ptb', label: 'Our sales',      hint: 'PTB share of AL' },
           ].map(({ key, label, hint }) => {
-            const first = forecastResult.totals[0]
+            const first = forecastResult.totals[kpiIdx]
             const jRow = judgmentTiv?.find(j => j.month_label === first.month)
             const jTotal = key === 'tiv' && jRow
               ? SEGMENTS.reduce((s, seg) => {

@@ -10,7 +10,19 @@ const IST_OFFSET_MINUTES = 5 * 60 + 30
 // `now` is injectable so tests can stand at a chosen instant.
 export function currentIstMonth(now = new Date()) {
   const ist = new Date(now.getTime() + IST_OFFSET_MINUTES * 60000)
-  return { year: ist.getUTCFullYear(), month_num: ist.getUTCMonth() + 1 }
+  return {
+    year: ist.getUTCFullYear(),
+    month_num: ist.getUTCMonth() + 1,
+    day: ist.getUTCDate(),
+  }
+}
+
+// Past this day of the month, the current month is effectively spoken for and
+// the number worth acting on is next month's. Owner's rule, 2026-08-25.
+export const NEXT_MONTH_FROM_DAY = 19
+
+export function shouldLeadWithNextMonth(now = new Date()) {
+  return currentIstMonth(now).day > NEXT_MONTH_FROM_DAY
 }
 
 // Months since year 0 — a monotonic cursor safe to compare and subtract,
