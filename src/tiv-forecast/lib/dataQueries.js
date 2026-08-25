@@ -117,7 +117,26 @@ export async function saveTriggerStateRow(userId, triggerId, { on, severity, dir
 // for an upload that actually committed. The Edge Function forwards this to
 // the tiv_upload_all() Postgres function, whose body is a single transaction.
 // It also snapshots the previous state first, so the upload is revertible.
-export async function uploadAllTiv(parsed, params, entityId, brandId, fileName, uploaderName) {
+// Month labels currently stored in each of the six tables. Read fresh at
+// preview time, because the removal preview is a promise about what will be
+// deleted -- and tiv_upload_and_prune() refuses if its own count disagrees.
+export async function fetchStoredMonths() {
+  const tables = [
+    'tiv_forecast_tiv_actuals', 'tiv_forecast_ptb_actuals', 'tiv_forecast_al_actuals',
+    'tiv_forecast_judgment_tiv', 'tiv_forecast_judgment_ptb', 'tiv_forecast_raw_data',
+  ]
+  const out = {}
+  await Promise.all(tables.map(async t => {
+    // A month-label column only, so the 1000-row PostgREST default cannot
+    // truncate a set this size (the largest table holds 52 rows).
+    const { data, error } = await supabase.from(t).select('month_label')
+    if (error) throw error
+    out[t] = (data || []).map(r => r.month_label)
+  }))
+  return out
+}
+
+export async function uploadAllTiv(parsed, params, entityId, brandId, fileName, uploaderName, removal = null) {
   return callEdge('admin-tiv', 'uploadAll', {
     entity_id:       entityId,
     brand_id:        brandId,
@@ -132,6 +151,10 @@ export async function uploadAllTiv(parsed, params, entityId, brandId, fileName, 
     file_name:       fileName,
     months_loaded:   parsed.summary.monthsLoaded,
     last_data_month: parsed.summary.lastDataMonth,
+    // Only sent when the uploader ticked the box. `remove_expected` is the
+    // number they were shown; the database refuses on any disagreement.
+    remove_absent:   !!removal,
+    remove_expected: removal ? removal.total : undefined,
   })
 }
 
