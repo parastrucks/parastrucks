@@ -104,3 +104,56 @@ export function buildForecastDelta(currentResult, nextResult) {
     }
   })
 }
+
+// ── What an upload would REMOVE (owner's decision, 2026-08-25) ────────
+//
+// Upserts never delete, so a month dropped from the workbook used to live in
+// the database forever — that is how twelve ghost judgment rows survived every
+// upload. The owner chose "ask me, then remove": show the exact list, let them
+// tick, and only then delete.
+//
+// The rule here must be IDENTICAL to the one tiv_upload_and_prune() applies:
+// per table, a stored month_label that the incoming payload for that same table
+// does not contain. Per table matters — the actuals sheets run to 52 months
+// while the prediction sheets run to 14, so a global month set would propose
+// deleting 38 months of judgment that were never supposed to be there.
+//
+// The database re-counts before deleting and refuses if its number differs from
+// `total`, so a preview that goes stale between reading and confirming cannot
+// delete something the uploader never saw.
+export const REMOVAL_TABLES = [
+  { table: 'tiv_forecast_tiv_actuals',  key: 'tivActuals',  label: 'TIV actuals' },
+  { table: 'tiv_forecast_ptb_actuals',  key: 'ptbActuals',  label: 'PTB actuals' },
+  { table: 'tiv_forecast_al_actuals',   key: 'alActuals',   label: 'AL actuals' },
+  { table: 'tiv_forecast_judgment_tiv', key: 'judgmentTiv', label: 'TIV judgment' },
+  { table: 'tiv_forecast_judgment_ptb', key: 'judgmentPtb', label: 'PTB judgment' },
+  { table: 'tiv_forecast_raw_data',     key: 'rawRows',     label: 'raw data' },
+]
+
+export function computeRemovals(parsed, storedMonths = {}) {
+  const byTable = []
+  let total = 0
+  const allMonths = new Set()
+
+  for (const { table, key, label } of REMOVAL_TABLES) {
+    const incoming = new Set((parsed?.[key] || []).map(r => r.month_label))
+    const stored = storedMonths[table] || []
+    // A sheet that parsed to nothing is a broken file, not an instruction to
+    // empty a table. Propose no removals for it; the database refuses outright.
+    const months = incoming.size === 0 ? [] : stored.filter(m => !incoming.has(m)).sort()
+    if (months.length) {
+      byTable.push({ table, label, months })
+      total += months.length
+      months.forEach(m => allMonths.add(m))
+    }
+  }
+
+  return {
+    byTable,
+    total,
+    months: [...allMonths].sort(),
+    // True when any sheet parsed empty: removal must not even be offered,
+    // because the file is wrong, not the database.
+    blocked: REMOVAL_TABLES.some(({ key }) => (parsed?.[key] || []).length === 0),
+  }
+}

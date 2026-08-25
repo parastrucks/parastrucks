@@ -6,8 +6,8 @@ import { supabase } from '../../lib/supabase'
 import Icon from '../../components/Icon'
 import { parseExcelFile, downloadMarketDataTemplate } from '../lib/parseExcel'
 import { retrainModel } from '../lib/retrainModel'
-import { uploadAllTiv, fetchUploadHistory } from '../lib/dataQueries'
-import { buildUploadDiff, buildForecastDelta } from '../lib/uploadDiff'
+import { uploadAllTiv, fetchUploadHistory, fetchStoredMonths } from '../lib/dataQueries'
+import { buildUploadDiff, buildForecastDelta, computeRemovals } from '../lib/uploadDiff'
 import { runForecast } from '../lib/forecastEngine'
 import { buildDefaultTriggerState } from '../lib/triggerDefs'
 
@@ -24,6 +24,10 @@ export default function UploadPanel({ onUploadComplete, current = {} }) {
   const [successMsg, setSuccessMsg]       = useState('')
   const [history, setHistory]             = useState(null)  // null = not loaded yet
   const [showHistory, setShowHistory]     = useState(false)
+  // What this file would DELETE, and whether the uploader has agreed to it.
+  // Never defaults to true: removal is opt-in, every time.
+  const [removals, setRemovals]           = useState(null)
+  const [removeOk, setRemoveOk]           = useState(false)
   const [entities, setEntities]           = useState([])
   const [entityId, setEntityId]           = useState('')
   const [brandsForEntity, setBrandsForEntity] = useState([])
@@ -145,6 +149,14 @@ export default function UploadPanel({ onUploadComplete, current = {} }) {
           setParsedFile({ parsed, params })
           setPreview({ ...parsed.summary, diff, delta })
           setAcknowledged(false)
+          setRemoveOk(false)
+          setRemovals(null)
+          // Read the stored months fresh rather than reusing what the page
+          // loaded earlier: this list is a promise about what will be deleted,
+          // and the database refuses the upload if its own count disagrees.
+          fetchStoredMonths()
+            .then(stored => setRemovals(computeRemovals(parsed, stored)))
+            .catch(() => setRemovals(null))
         } catch (err) {
           toast.error(`Parse error: ${err.message}`)
           setFile(null)
@@ -184,6 +196,9 @@ export default function UploadPanel({ onUploadComplete, current = {} }) {
       const res = await uploadAllTiv(
         parsedFile.parsed, parsedFile.params, entityId, brandId,
         file.name, profile.full_name,
+        // Removal travels only when it was proposed AND ticked. The count
+        // goes with it so the database can refuse a stale confirmation.
+        removeOk && removals?.total > 0 && !removals.blocked ? removals : null,
       )
 
       setProgress({ pct: 100, label: 'Done!' })
@@ -193,12 +208,19 @@ export default function UploadPanel({ onUploadComplete, current = {} }) {
       setSuccessMsg(
         `Uploaded ${parsedFile.parsed.summary.monthsLoaded} months for ${entityName} / ${brandName}. ` +
         `Data now runs to ${parsedFile.parsed.summary.lastDataMonth}, and the model has been retrained.` +
+        // Report what was actually removed from the value the database
+        // returned, not from the preview -- so the two can be compared.
+        (res?.removed_count > 0
+          ? ` ${res.removed_count} month-row${res.removed_count === 1 ? '' : 's'} no longer in the workbook ${res.removed_count === 1 ? 'was' : 'were'} removed.`
+          : '') +
         (res?.snapshot_id ? ` The previous data was saved as snapshot #${res.snapshot_id}, so this can be undone.` : '')
       )
       setFile(null)
       setPreview(null)
       setParsedFile(null)
       setAcknowledged(false)
+      setRemovals(null)
+      setRemoveOk(false)
       // The panel deliberately stays OPEN. It used to collapse in the same
       // React commit that set the success message, and the message renders
       // inside the expanded body -- so a successful upload ended in silence.
@@ -380,8 +402,48 @@ export default function UploadPanel({ onUploadComplete, current = {} }) {
                       {diff.emptyMonths.length === 1 ? '' : 's'} ({diff.emptyMonths.slice(0, 4).join(', ')}
                       {diff.emptyMonths.length > 4 ? `, +${diff.emptyMonths.length - 4} more` : ''}) that
                       this file correctly does not contain. They were written by an older upload that read
-                      pre-typed future rows as zeros. Uploading will not remove them — they need clearing
-                      separately.
+                      pre-typed future rows as zeros. Tick the box below to remove them with this upload.
+                    </div>
+                  )}
+
+                  {/* Months stored that this workbook no longer contains. Upsert
+                      never deletes, so these used to survive every upload for
+                      ever — which is exactly how twelve ghost judgment rows
+                      lived on. The owner chose "ask me, then remove": name them
+                      all, default to off, and let the database refuse if its own
+                      count disagrees with what was shown here. */}
+                  {removals && removals.total > 0 && !removals.blocked && (
+                    <div className="tiv-receipt" style={{ marginTop: 8 }}>
+                      <div style={{ fontWeight: 700, marginBottom: 4 }}>
+                        Not in this file any more
+                      </div>
+                      {removals.byTable.map(t => (
+                        <div key={t.table} style={{ color: 'var(--gray-600)', marginTop: 2 }}>
+                          {t.label}: {t.months.slice(0, 8).join(', ')}
+                          {t.months.length > 8 ? ` · +${t.months.length - 8} more` : ''}
+                        </div>
+                      ))}
+                      <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginTop: 8 }}>
+                        <input
+                          type="checkbox"
+                          checked={removeOk}
+                          onChange={e => setRemoveOk(e.target.checked)}
+                          style={{ marginTop: 3 }}
+                        />
+                        <span>
+                          Remove {removals.total} month-row{removals.total === 1 ? '' : 's'} listed above.
+                          {' '}Leave unticked and they stay exactly as they are. A snapshot is taken first
+                          either way, so this can be undone.
+                        </span>
+                      </label>
+                    </div>
+                  )}
+
+                  {removals?.blocked && (
+                    <div className="tiv-warn" style={{ marginTop: 6 }}>
+                      ⚠ One of the sheets in this file parsed to zero rows, so nothing can be removed
+                      with this upload — an empty sheet means a broken file, not an instruction to
+                      empty a table. Existing months are left untouched.
                     </div>
                   )}
 

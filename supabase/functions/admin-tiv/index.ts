@@ -150,6 +150,11 @@ Deno.serve(async (req: Request) => {
           file_name?: string
           months_loaded?: number
           last_data_month?: string
+          // Opt-in removal of months the workbook no longer contains, plus the
+          // count the uploader was shown. The function refuses if the number it
+          // finds differs -- so a preview that went stale cannot delete blindly.
+          remove_absent?: boolean
+          remove_expected?: number
         }
 
         if (!p.entity_id || !p.brand_id) {
@@ -172,7 +177,7 @@ Deno.serve(async (req: Request) => {
           return json({ error: "tiv rows are required" }, 400)
         }
 
-        const { data, error } = await admin.rpc("tiv_upload_all", {
+        const { data, error } = await admin.rpc("tiv_upload_and_prune", {
           p_entity_id: p.entity_id,
           p_brand_id: p.brand_id,
           p_tiv: p.tiv,
@@ -188,6 +193,9 @@ Deno.serve(async (req: Request) => {
           p_file_name: p.file_name,
           p_months_loaded: p.months_loaded ?? 0,
           p_last_data_month: p.last_data_month ?? null,
+          p_remove_absent: p.remove_absent === true,
+          p_remove_expected:
+            typeof p.remove_expected === "number" ? p.remove_expected : null,
         })
 
         if (error) {
@@ -196,6 +204,14 @@ Deno.serve(async (req: Request) => {
           // status of its own so the client can explain rather than retry.
           if (error.message?.includes("cross_scope_conflict")) {
             return json({ error: error.message, code: "cross_scope_conflict" }, 409)
+          }
+          // The preview the uploader confirmed no longer matches the database.
+          // Nothing was deleted; the client must re-read and show it again.
+          if (error.message?.includes("remove_count_mismatch")) {
+            return json({ error: error.message, code: "remove_count_mismatch" }, 409)
+          }
+          if (error.message?.includes("remove_absent_refused")) {
+            return json({ error: error.message, code: "remove_absent_refused" }, 422)
           }
           return json({ error: error.message }, 400)
         }
