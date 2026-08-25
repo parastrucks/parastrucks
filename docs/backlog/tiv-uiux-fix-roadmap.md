@@ -398,7 +398,11 @@ New module `src/tiv-forecast/lib/forecastQuality.js` + `scripts/tiv/selftest-qua
 - Delete the superseded `admin-tiv` actions (`upsertRows`, `insertModelParams`,
   `insertUploadHistory`) once the release has fully rolled out. Kept, admin-only, so a stale cached
   tab could not break mid-deploy.
-- **Owner:** run one real upload. Still unexercised by a human.
+- ✅ **Owner ran the first real upload (2026-08-25).** No longer pending. It surfaced one defect
+  (PR #112 → `dafa33a`, "Model trained: Invalid Date") that **no probe, gate or self-test could
+  have caught**, because it existed only in the seconds between the client handing state to the
+  server and a reload. ⭐ **Lesson for this backlog: the estate proves libraries and maths; it does
+  not render a page at a state handover. Watch one real run of anything that writes.**
 
 **Late addition already shipped (PR #108 `fe517fa`):** the summary tiles lead with **next month
 after the 19th** (IST), falling back to the first month if that one is stale. Threshold in
