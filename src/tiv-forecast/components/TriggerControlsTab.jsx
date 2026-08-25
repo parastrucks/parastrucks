@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { TRIGGER_DEFS } from '../lib/triggerDefs'
 
-export default function TriggerControlsTab({ triggerState, onTriggerChange }) {
+export default function TriggerControlsTab({ triggerState, onTriggerChange, onResetTriggers }) {
   const [draggingId, setDraggingId] = useState(null)
 
   function handleToggle(id) {
@@ -20,8 +20,30 @@ export default function TriggerControlsTab({ triggerState, onTriggerChange }) {
     onTriggerChange(id, { ...current, direction: dir })
   }
 
+  const activeCount = TRIGGER_DEFS.filter(d => triggerState[d.id]?.on).length
+
   return (
     <div>
+      {/* Trigger state is stored per user (tiv_forecast_trigger_state is keyed
+          on user_id with matching RLS), so these are a private what-if — but
+          nothing said so, and the owner could reasonably believe he had pushed
+          a scenario to everyone. Say it, and offer a way back to the baseline. */}
+      <div className="tiv-note tiv-note-top" style={{ marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ flex: '1 1 320px' }}>
+            <strong style={{ color: 'var(--gray-700)' }}>These are your own what-if adjustments.</strong>
+            {' '}They change only what you see — everyone else keeps the base forecast — and they
+            stay switched on for you until you turn them off. The v3.0 forecast is judgment-free
+            with every trigger OFF.
+          </div>
+          {activeCount > 0 && onResetTriggers && (
+            <button className="btn btn-secondary btn-sm" onClick={onResetTriggers}>
+              Reset all to base ({activeCount} on)
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Weekly booking pattern info box */}
       <div style={{
         background: 'var(--blue-light)',
@@ -58,10 +80,14 @@ export default function TriggerControlsTab({ triggerState, onTriggerChange }) {
             >
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
                 {/* Toggle */}
+                {/* The label wrapping this checkbox contains no text, so a
+                    screen reader announced "checkbox, not checked" with no clue
+                    which of the several triggers it belonged to. */}
                 <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', flexShrink: 0, marginTop: 2 }}>
                   <input
                     type="checkbox"
                     checked={isOn}
+                    aria-label={`${def.name} — on or off`}
                     onChange={() => handleToggle(def.id)}
                     style={{ width: 16, height: 16, cursor: 'pointer' }}
                   />
@@ -116,6 +142,8 @@ export default function TriggerControlsTab({ triggerState, onTriggerChange }) {
                           max={def.max}
                           step={1}
                           value={sev}
+                          aria-label={`Severity for ${def.name}`}
+                          aria-valuetext={`${sev}%`}
                           onChange={e => handleSeverity(def.id, e.target.value)}
                           onMouseDown={() => setDraggingId(def.id)}
                           onMouseUp={() => setDraggingId(null)}

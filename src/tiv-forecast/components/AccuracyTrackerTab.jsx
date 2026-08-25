@@ -17,6 +17,14 @@ function sevClass(ae) {
   return 'tiv-sev tiv-sev-bad'
 }
 
+// The spoken equivalent of the colour + shape band, for screen readers.
+function sevWord(ae) {
+  if (ae === null || ae === undefined) return 'no comparison available'
+  if (ae <= AL_TOLERANCE) return 'within the Ashok Leyland tolerance'
+  if (ae <= 0.25) return 'over tolerance'
+  return 'well over tolerance'
+}
+
 function fmtPct(val) {
   if (val === null || val === undefined || isNaN(val)) return '—'
   return `${(val * 100).toFixed(1)}%`
@@ -118,7 +126,12 @@ function ErrCell({ ae, forecast, actual, kind, peerLabel, peerForecast, peerAe, 
     <td
       className={[hasVals ? 'tiv-cell' : '', 'tiv-num', sevClass(ae ?? null)].filter(Boolean).join(' ')}
       title={title}
-      aria-label={title ? title.split(String.fromCharCode(10)).join(', ') : undefined}
+      /* The severity band was carried by colour and by a CSS ::before shape,
+         neither of which reaches a screen reader — so the one thing this tab
+         exists to convey was the one thing it never announced. */
+      aria-label={title
+        ? title.split(String.fromCharCode(10)).join(', ') + ', ' + sevWord(ae ?? null)
+        : undefined}
       tabIndex={hasVals ? 0 : undefined}
       style={{ fontWeight: 700, whiteSpace: 'nowrap', ...style }}
     >
@@ -231,6 +244,7 @@ export default function AccuracyTrackerTab({ tivActuals, judgmentTiv, modelParam
             Mean absolute % error vs actuals
           </div>
           <SegmentChart
+            label="Average forecast error by segment, model versus judgment"
             type="bar"
             data={mapeChartData}
             xKey="segment"
@@ -263,12 +277,14 @@ export default function AccuracyTrackerTab({ tivActuals, judgmentTiv, modelParam
             {' · '}
             <span className="tiv-sev tiv-sev-bad">over 25%</span>
           </div>
+          {/* Was `btn-ghost` WITHOUT `btn` plus padding:0, so it missed both
+              the button base box and the 44px mobile minimum — roughly a 14px
+              tall target, and the only touch-viable route to these values. */}
           <button
             type="button"
-            className="btn-ghost"
+            className="btn btn-ghost btn-sm"
             aria-pressed={showValues}
             onClick={() => setShowValues(v => !v)}
-            style={{ fontSize: 12, padding: 0, background: 'none', border: 'none', cursor: 'pointer' }}
           >
             {showValues ? 'Show error %' : 'Show forecast/actual'}
           </button>

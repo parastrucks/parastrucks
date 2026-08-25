@@ -3023,3 +3023,114 @@ tbody tr:hover td { background: var(--gray-50); }
   font-family: var(--font); font-size: 13.5px; font-weight: 700; color: var(--ink);
 }
 .dcard-more-item:hover { background: var(--surface-sunken); color: var(--accent); }
+
+/* ─── TIV KPI HEADER ────────────────────────────────────────────────
+   The headline forecast used to be the bottom-left cell of a table, five
+   visual strata down the page, set at the same 13px as every other cell. */
+.tiv-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.tiv-kpi {
+  background: var(--white);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+}
+.tiv-kpi-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--gray-600);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.tiv-kpi-value {
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  margin-top: 2px;
+}
+.tiv-kpi-sub { font-size: 12px; color: var(--gray-600); margin-top: 2px; }
+
+/* ─── TIV SHELL FIXES (UI/UX audit 2026-08-25, finding B6) ──────────
+   The 2026-08-24 pass hardened the inside of the tables; the chrome around
+   them had never been looked at for phones or keyboards. */
+
+/* Four tabs at 14px with 20px side padding need ~388px. A 375px phone offers
+   ~347px after .app-main padding, and body{overflow-x:hidden} CLIPPED the
+   overflow rather than letting it scroll — so the Accuracy tab was
+   unreachable on a phone. There were zero media queries touching .tiv-*. */
+.tiv-tabs {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.tiv-tabs::-webkit-scrollbar { display: none; }
+
+/* gray-500 (#767676) on the gray-50 page ground (#F4F4F4) is 4.13:1 — below
+   the 4.5:1 AA floor. On white cards the same token is 4.54:1 and fine, so
+   this is a second token for text sitting on paper: gray-600 (#565656) on
+   #F4F4F4 = 6.85:1. */
+.tiv-meta,
+.tiv-table caption,
+.tiv-note,
+.tiv-cell-actual,
+.tiv-cell-sep { color: var(--gray-600); }
+.tiv-tab { color: var(--gray-600); }
+
+/* Month identity is the one thing Excel's Freeze Panes never lets you lose,
+   and the accuracy grid is ~1000px wide. */
+.tiv-table th[scope="row"],
+.tiv-table thead th:first-child {
+  position: sticky;
+  left: 0;
+  background: var(--white);
+  z-index: 1;
+}
+.tiv-row-total th[scope="row"] { background: var(--gray-50); }
+
+/* The severity slider suppressed its own focus ring unconditionally, beating
+   the global :focus-visible rule on specificity — so keyboard users adjusting
+   a trigger had no visible focus at all. */
+.tiv-slider:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 3px;
+  border-radius: 99px;
+}
+
+/* Tap-for-detail sheet: the peer-comparison tooltip lived in a `title`
+   attribute, which never fires on touch — on the exact devices (field
+   Androids) the audience actually uses. */
+.tiv-detail {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  z-index: 60;
+  background: var(--white);
+  border-top: 1px solid var(--border-default);
+  box-shadow: 0 -6px 24px rgba(0,0,0,.12);
+  padding: 14px 16px calc(14px + env(safe-area-inset-bottom, 0px));
+  font-size: 13px;
+}
+.tiv-detail-head { font-weight: 700; margin-bottom: 4px; }
+.tiv-detail-row { color: var(--gray-600); }
+.tiv-detail-close {
+  position: absolute; top: 8px; right: 10px;
+  background: none; border: none; cursor: pointer;
+  font-size: 20px; line-height: 1; color: var(--gray-600);
+  min-width: 44px; min-height: 44px;
+}
+
+@media (max-width: 560px) {
+  .tiv-tab { padding: 8px 14px; }
+  .tiv-kpi-value { font-size: 25px; }
+}
+
+/* The page-level smooth scroll is the real vestibular offender here; the
+   existing reduced-motion block only covers .sj-*. */
+@media (prefers-reduced-motion: reduce) {
+  .tiv-tab, .tiv-cell, .tiv-slider { transition: none !important; }
+}

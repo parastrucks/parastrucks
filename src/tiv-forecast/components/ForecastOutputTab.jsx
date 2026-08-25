@@ -2,7 +2,7 @@
 // 3 layers shown as sub-tabs to avoid vertical scroll
 import { useState } from 'react'
 import Icon from '../../components/Icon'
-import { TRIGGER_DEFS } from '../lib/triggerDefs'
+import { useAuth } from '../../context/AuthContext'
 import ForecastTable from './ForecastTable'
 
 // Each layer owns its own title and caption. The captions used to be passed to
@@ -48,7 +48,9 @@ function buildJudgmentRows(judgmentData, forecastMonths) {
   return rows
 }
 
-export default function ForecastOutputTab({ forecastResult, judgmentTiv, judgmentPtb, triggerState }) {
+export default function ForecastOutputTab({ forecastResult, judgmentTiv, judgmentPtb }) {
+  const { profile } = useAuth()
+  const isAdmin = profile?.permission_level === 'admin'
   const [activeLayer, setActiveLayer] = useState('tiv')
 
   if (!forecastResult) {
@@ -56,29 +58,28 @@ export default function ForecastOutputTab({ forecastResult, judgmentTiv, judgmen
       <div className="empty-state">
         <div className="empty-icon"><Icon name="chart" size={34} color="var(--text-muted)" /></div>
         <div className="empty-title">No forecast data</div>
-        <div className="empty-desc">Upload a Market Data file to generate forecasts.</div>
+        {/* This told EVERY reader to upload a file — including the people for
+            whom the upload panel does not render at all, and whose real problem
+            is usually that row-level security returned them nothing. */}
+        <div className="empty-desc">
+          {isAdmin
+            ? 'Upload a Market Data file to generate forecasts.'
+            : 'No data has been loaded for your entity and brand. Ask an administrator to upload the latest Market Data workbook.'}
+        </div>
       </div>
     )
   }
 
   const { forecastMonths, bySegment } = forecastResult
-  const activeTriggers = TRIGGER_DEFS.filter(d => triggerState?.[d.id]?.on)
   const jTivRows = buildJudgmentRows(judgmentTiv, forecastMonths)
   const jPtbRows = buildJudgmentRows(judgmentPtb, forecastMonths)
 
   return (
     <div>
-      {/* Active trigger context banner — single line, truncated */}
-      {activeTriggers.length > 0 && (
-        <div
-          className="tiv-banner"
-          role="status"
-          style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
-        >
-          <strong>Active:</strong>{' '}
-          {activeTriggers.map(t => t.name).join(' · ')}
-        </div>
-      )}
+      {/* The active-trigger banner moved to page level (TivForecastPage), so it
+          travels with every tab instead of labelling only this one. It also
+          used to be nowrap+ellipsis with no magnitude, so with several triggers
+          on it silently hid the ones bending the numbers most. */}
 
       {/* Layer sub-tabs */}
       <div className="tiv-tabs tiv-tabs-sm" role="tablist" aria-label="Forecast layer">
