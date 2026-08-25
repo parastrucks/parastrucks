@@ -6,13 +6,14 @@ import { supabase } from '../../lib/supabase'
 import Icon from '../../components/Icon'
 import { parseExcelFile, downloadMarketDataTemplate } from '../lib/parseExcel'
 import { retrainModel } from '../lib/retrainModel'
-import {
-  upsertTivActuals, upsertPtbActuals, upsertAlActuals,
-  upsertJudgmentTiv, upsertJudgmentPtb, upsertRawData,
-  insertModelParams, insertUploadHistory, fetchUploadHistory,
-} from '../lib/dataQueries'
+import { uploadAllTiv, fetchUploadHistory } from '../lib/dataQueries'
+import { buildUploadDiff, buildForecastDelta } from '../lib/uploadDiff'
+import { runForecast } from '../lib/forecastEngine'
+import { buildDefaultTriggerState } from '../lib/triggerDefs'
 
-export default function UploadPanel({ onUploadComplete }) {
+// `current` carries what the page already holds, so the panel can show what
+// this file would CHANGE rather than only what it contains.
+export default function UploadPanel({ onUploadComplete, current = {} }) {
   const { profile, isAdmin } = useAuth()
   const toast = useToast()   // file / parse / upload failures
   const [collapsed, setCollapsed]         = useState(true)
@@ -27,12 +28,26 @@ export default function UploadPanel({ onUploadComplete }) {
   const [entityId, setEntityId]           = useState('')
   const [brandsForEntity, setBrandsForEntity] = useState([])
   const [brandId, setBrandId]             = useState('')
+  // Parsed + retrained result, held from file-select until the confirm click so
+  // the upload writes exactly what was reviewed.
+  const [parsedFile, setParsedFile]       = useState(null)
+  // Required tick when the diff looks like a wholesale replacement rather than
+  // an incremental update.
+  const [acknowledged, setAcknowledged]   = useState(false)
+
+  // Both lookups used to fail silently — the entities error went to the
+  // console and the brands query never even destructured `error` — leaving the
+  // admin staring at empty dropdowns and a disabled button with no stated
+  // reason.
+  const [lookupError, setLookupError] = useState('')
 
   useEffect(() => {
     if (collapsed) return
     supabase.from('entities').select('id, full_name, code').order('full_name')
       .then(({ data, error }) => {
-        if (error) console.error('Failed to load entities:', error)
+        if (error) setLookupError(`Could not load entities: ${error.message}`)
+        else if (!data?.length) setLookupError('No entities were returned — the upload form cannot be filled in.')
+        else setLookupError('')
         setEntities(data || [])
       })
   }, [collapsed])
@@ -45,7 +60,8 @@ export default function UploadPanel({ onUploadComplete }) {
       .from('outlet_brands')
       .select('brand_id, brands(id, name, code), outlets!inner(entity_id)')
       .eq('outlets.entity_id', entityId)
-      .then(({ data }) => {
+      .then(({ data, error }) => {
+        if (error) { setLookupError(`Could not load brands: ${error.message}`); return }
         const seen = {}
         const brands = []
         for (const row of data || []) {
@@ -54,9 +70,21 @@ export default function UploadPanel({ onUploadComplete }) {
             brands.push(row.brands)
           }
         }
+        if (!brands.length) setLookupError('This entity has no brands assigned to any of its outlets.')
+        else setLookupError('')
         setBrandsForEntity(brands)
       })
   }, [entityId])
+
+  // Closing the tab mid-upload used to leave a partial write with no trace,
+  // because the history row was the last thing written. Declared above the
+  // isAdmin early-return so hook order stays stable.
+  useEffect(() => {
+    if (!uploading) return
+    const warn = (e) => { e.preventDefault(); e.returnValue = '' }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [uploading])
 
   const UPLOAD_STEPS = [
     { pct: 10, label: 'Parsing file…' },
@@ -103,11 +131,24 @@ export default function UploadPanel({ onUploadComplete }) {
       const reader = new FileReader()
       reader.onload = (evt) => {
         try {
+          // Parse AND retrain here, before anything is written. Both are pure
+          // client-side functions, so the full consequence of this upload --
+          // rows changed, and the forecast it would produce -- is knowable now.
           const parsed = parseExcelFile(evt.target.result)
-          setPreview(parsed.summary)
+          const params = retrainModel(parsed.tivActuals, parsed.ptbActuals, parsed.alActuals)
+          const diff = buildUploadDiff(parsed, current)
+          const triggers = buildDefaultTriggerState()
+          const delta = buildForecastDelta(
+            current.modelParams ? runForecast(current.modelParams, triggers) : null,
+            runForecast(params, triggers),
+          )
+          setParsedFile({ parsed, params })
+          setPreview({ ...parsed.summary, diff, delta })
+          setAcknowledged(false)
         } catch (err) {
           toast.error(`Parse error: ${err.message}`)
           setFile(null)
+          setParsedFile(null)
         }
       }
       reader.readAsArrayBuffer(f)
@@ -119,68 +160,70 @@ export default function UploadPanel({ onUploadComplete }) {
     headerReader.readAsArrayBuffer(f.slice(0, 4))
   }
 
+  // An upload that rewrites nearly every month it touches, or that carries less
+  // history than the database already holds, is not a routine monthly update.
+  // Make the admin say so out loud before it is allowed through.
+  const diff = preview?.diff
+  const needsAck = !!diff && (diff.wholesaleRewrite || !!diff.coverageShortfall)
+
   const handleUpload = useCallback(async () => {
-    if (!file || !preview || !entityId || !brandId) return
+    if (!file || !preview || !parsedFile || !entityId || !brandId) return
+    if (needsAck && !acknowledged) return
     setUploading(true)
     setProgress({ pct: 0, label: 'Starting…' })
     setSuccessMsg('')
 
-    const step = (s) => setProgress(UPLOAD_STEPS[s])
-
     try {
-      step(0)  // 10% — parsing
-      const buf = await file.arrayBuffer()
-      const parsed = parseExcelFile(buf)
+      setProgress({ pct: 35, label: 'Uploading…' })
+      // ONE call. This used to be eight independent requests from the browser,
+      // so a failure at step four left production half-overwritten and the
+      // message named no step; a failure of the LAST one (history) reported
+      // "Upload failed" for an upload that had fully committed. The edge
+      // function now forwards a single transaction that also snapshots the
+      // previous state first, so this is revertible.
+      const res = await uploadAllTiv(
+        parsedFile.parsed, parsedFile.params, entityId, brandId,
+        file.name, profile.full_name,
+      )
 
-      step(1)  // 25% — TIV actuals
-      await upsertTivActuals(parsed.tivActuals, entityId, brandId)
-
-      step(2)  // 37% — PTB actuals
-      await upsertPtbActuals(parsed.ptbActuals, entityId, brandId)
-
-      step(3)  // 50% — AL actuals
-      await upsertAlActuals(parsed.alActuals, entityId, brandId)
-
-      step(4)  // 62% — judgment forecasts
-      await upsertJudgmentTiv(parsed.judgmentTiv, entityId, brandId)
-      await upsertJudgmentPtb(parsed.judgmentPtb, entityId, brandId)
-
-      step(5)  // 75% — raw data
-      await upsertRawData(parsed.rawRows, entityId, brandId)
-
-      step(6)  // 88% — retrain
-      const params = retrainModel(parsed.tivActuals, parsed.ptbActuals, parsed.alActuals)
-      await insertModelParams(params, entityId, brandId)
-
-      step(7)  // 95% — upload record
-      await insertUploadHistory({
-        userId:         profile.id,
-        uploaderName:   profile.full_name,
-        fileName:       file.name,
-        monthsLoaded:   parsed.summary.monthsLoaded,
-        lastDataMonth:  parsed.summary.lastDataMonth,
-      })
-
-      step(8)  // 100% — done
-      setSuccessMsg(`Upload complete — ${parsed.summary.monthsLoaded} months loaded. Last data: ${parsed.summary.lastDataMonth}`)
+      setProgress({ pct: 100, label: 'Done!' })
+      const brandName = brandsForEntity.find(b => b.id === brandId)?.name || 'brand'
+      const entityName = entities.find(e => e.id === entityId)?.code
+        || entities.find(e => e.id === entityId)?.full_name || 'entity'
+      setSuccessMsg(
+        `Uploaded ${parsedFile.parsed.summary.monthsLoaded} months for ${entityName} / ${brandName}. ` +
+        `Data now runs to ${parsedFile.parsed.summary.lastDataMonth}, and the model has been retrained.` +
+        (res?.snapshot_id ? ` The previous data was saved as snapshot #${res.snapshot_id}, so this can be undone.` : '')
+      )
       setFile(null)
       setPreview(null)
-      setCollapsed(true)  // auto-collapse after upload
+      setParsedFile(null)
+      setAcknowledged(false)
+      // The panel deliberately stays OPEN. It used to collapse in the same
+      // React commit that set the success message, and the message renders
+      // inside the expanded body -- so a successful upload ended in silence.
 
-      // Reload history if visible
-      const hist = await fetchUploadHistory()
-      setHistory(hist)
-      if (showHistory) setShowHistory(true)  // keeps it open and shows refreshed data
-
-      if (onUploadComplete) onUploadComplete(params)
+      const hist = await fetchUploadHistory().catch(() => null)
+      if (hist) setHistory(hist)
+      if (onUploadComplete) await onUploadComplete(parsedFile.params)
 
     } catch (err) {
-      toast.error(`Upload failed: ${err.message}`)
+      const msg = String(err.message || '')
+      if (msg.includes('cross_scope_conflict')) {
+        toast.error(
+          'Upload refused: these months already belong to a different entity/brand. ' +
+          'Uploading here would have overwritten that dataset. Nothing was changed.'
+        )
+      } else if (/invalid token|not signed in|jwt/i.test(msg)) {
+        toast.error('Your session is stale. Sign out, sign back in, and try again — nothing was changed.')
+      } else {
+        toast.error(`Upload failed: ${msg}. Nothing was changed — the whole upload is one transaction.`)
+      }
     } finally {
       setUploading(false)
       setTimeout(() => setProgress(null), 1200)
     }
-  }, [file, preview, entityId, brandId, profile, onUploadComplete, showHistory, toast])
+  }, [file, preview, parsedFile, needsAck, acknowledged, entityId, brandId, entities, brandsForEntity, profile, onUploadComplete, toast])
 
   async function toggleHistory() {
     const next = !showHistory
@@ -263,10 +306,113 @@ export default function UploadPanel({ onUploadComplete }) {
             </button>
           </div>
 
+          {lookupError && (
+            <div className="tiv-banner tiv-banner-danger" role="alert" style={{ marginTop: 8 }}>
+              {lookupError}
+            </div>
+          )}
+
+          {/* Pre-commit review. Parsing and retraining have already run in the
+              browser, so this shows what the upload would CHANGE and what
+              forecast it would produce — before anything is written. */}
           {preview && (
-            <div style={{ marginTop: 12, padding: '10px 14px', background: 'var(--gray-50)', borderRadius: 6, fontSize: 13 }}>
-              <span style={{ fontWeight: 700 }}>Preview: </span>
-              {preview.monthsLoaded} months found · Last data month: <strong>{preview.lastDataMonth}</strong>
+            <div style={{ marginTop: 12, padding: '12px 14px', background: 'var(--gray-50)', borderRadius: 6, fontSize: 13 }}>
+              <div style={{ fontWeight: 700, marginBottom: 6 }}>This file contains</div>
+              <div style={{ marginBottom: 8 }}>
+                {preview.monthsLoaded} months of TIV data, ending <strong>{preview.lastDataMonth}</strong>
+                {preview.lastAlMonth && preview.lastAlMonth !== preview.lastDataMonth && (
+                  <> · AL data only to <strong>{preview.lastAlMonth}</strong></>
+                )}
+              </div>
+
+              {/* Per-sheet counts. The old preview reported only TIV, so a
+                  sheet that parsed to nothing was invisible — which is how the
+                  AL layer could freeze on a "successful" upload. */}
+              {preview.counts && (
+                <div style={{ marginBottom: 8, color: 'var(--gray-600)' }}>
+                  TIV {preview.counts.tiv} · PTB {preview.counts.ptb} ·{' '}
+                  <span className={preview.counts.al === 0 ? 'tiv-warn' : undefined}>AL {preview.counts.al}</span> ·
+                  {' '}Judgment {preview.counts.judgTiv}/{preview.counts.judgPtb} · Raw {preview.counts.raw}
+                </div>
+              )}
+
+              {diff && (
+                <>
+                  <div style={{ fontWeight: 700, margin: '10px 0 4px' }}>What would change</div>
+                  {diff.isFirstUpload ? (
+                    <div>Nothing is stored yet — all {preview.monthsLoaded} months would be created.</div>
+                  ) : (
+                    <div>
+                      <strong>{diff.added.length}</strong> new month{diff.added.length === 1 ? '' : 's'}
+                      {diff.added.length > 0 && <> ({diff.added.slice(0, 4).join(', ')}{diff.added.length > 4 ? `, +${diff.added.length - 4} more` : ''})</>}
+                      {' · '}<strong>{diff.changed.length}</strong> month{diff.changed.length === 1 ? '' : 's'} amended
+                      {diff.changedCells > 0 && <> ({diff.changedCells} cell{diff.changedCells === 1 ? '' : 's'})</>}
+                      {' · '}<strong>{diff.unchanged}</strong> unchanged
+                      {diff.untouched.length > 0 && <> · {diff.untouched.length} month{diff.untouched.length === 1 ? '' : 's'} in the database are not in this file and would be left as they are</>}
+                    </div>
+                  )}
+
+                  {diff.changed.slice(0, 6).map(m => (
+                    <div key={m.month} style={{ color: 'var(--gray-600)', marginTop: 2 }}>
+                      {m.month}: {m.cells.slice(0, 4).map(c => `${c.segment} ${c.from}→${c.to}`).join(' · ')}
+                      {m.cells.length > 4 ? ` · +${m.cells.length - 4} more` : ''}
+                    </div>
+                  ))}
+                  {diff.changed.length > 6 && (
+                    <div style={{ color: 'var(--gray-600)', marginTop: 2 }}>…and {diff.changed.length - 6} more amended months</div>
+                  )}
+
+                  {diff.added.length === 0 && diff.changed.length === 0 && !diff.isFirstUpload && (
+                    <div style={{ marginTop: 6 }}>
+                      This file matches what is already stored — uploading it would change nothing.
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* The effect in the units the business talks in. */}
+              {preview.delta?.length > 0 && (
+                <>
+                  <div style={{ fontWeight: 700, margin: '10px 0 4px' }}>Forecast after this upload</div>
+                  <div>
+                    {preview.delta.map(d => (
+                      <span key={d.month} style={{ marginRight: 14 }}>
+                        {d.month}: <strong>{d.after ?? '—'}</strong>
+                        {d.before !== null && d.delta !== null && d.delta !== 0 && (
+                          <span style={{ color: 'var(--gray-600)' }}> (was {d.before}, {d.delta > 0 ? '+' : ''}{d.delta})</span>
+                        )}
+                        {d.before === null && <span style={{ color: 'var(--gray-600)' }}> (new month)</span>}
+                      </span>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {preview.warnings?.length > 0 && (
+                <div className="tiv-warn" style={{ marginTop: 10 }}>
+                  {preview.warnings.map((w, i) => <div key={i}>⚠ {w}</div>)}
+                </div>
+              )}
+
+              {needsAck && (
+                <div style={{ marginTop: 10, padding: '8px 10px', background: 'var(--red-light)', border: '1px solid var(--red)', borderRadius: 6 }}>
+                  <div style={{ fontWeight: 700, marginBottom: 4 }}>This does not look like a routine update</div>
+                  {diff.wholesaleRewrite && (
+                    <div>Nearly every month in this file differs from what is stored. That is what a
+                    different dataset — another entity or brand — looks like, and it would replace the
+                    current one.</div>
+                  )}
+                  {diff.coverageShortfall && (
+                    <div>This file has {diff.coverageShortfall.fileMonths} months but the database holds
+                    {' '}{diff.coverageShortfall.dbMonths}. The model is retrained on the FILE, so it would
+                    be trained on less history than the page still displays.</div>
+                  )}
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={acknowledged} onChange={e => setAcknowledged(e.target.checked)} />
+                    <span>I have checked this and want to continue</span>
+                  </label>
+                </div>
+              )}
             </div>
           )}
 
@@ -275,10 +421,16 @@ export default function UploadPanel({ onUploadComplete }) {
               className="btn btn-primary btn-sm"
               style={{ marginTop: 12 }}
               onClick={handleUpload}
-              disabled={uploading || !entityId || !brandId}
-              title={!entityId || !brandId ? 'Select entity and brand first' : undefined}
+              disabled={uploading || !entityId || !brandId || (needsAck && !acknowledged)}
             >
-              {uploading ? 'Uploading…' : 'Upload & Retrain'}
+              {uploading
+                ? 'Uploading…'
+                : !entityId || !brandId
+                  ? 'Choose an entity and brand first'
+                  /* The button says exactly what it will do, to whom. The old
+                     label ("Upload & Retrain") never named the target, so a
+                     mis-picked dropdown was invisible before AND after. */
+                  : `Upload ${preview.monthsLoaded} months to ${entities.find(e => e.id === entityId)?.code || 'entity'} / ${brandsForEntity.find(b => b.id === brandId)?.name || 'brand'}`}
             </button>
           )}
 
