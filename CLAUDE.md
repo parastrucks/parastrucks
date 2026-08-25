@@ -32,9 +32,9 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 ## Current state (2026-08-25)
 
 - **✅ TIV FORECAST UI/UX — AUDITED, REMEDIATED IN FOUR WAVES, AND COURSE-CORRECTED. ALL LIVE.**
-  Ten PRs: **#102 `485430e`** (W1 stop the lies) · **#103 `5446ac8`** (W2 atomic upload) ·
+  Twelve PRs: **#102 `485430e`** (W1 stop the lies) · **#103 `5446ac8`** (W2 atomic upload) ·
   **#104 `868857f`** (W3 shell) · **#105 `bdba3a4`** (W4 value layer) · **#106 `0649493`**
-  (simplify) · **#107 `65adccb`** (chart handover) · **#108 `fe517fa`** (KPI month rule) · **#109 `d821b94`** (docs) · **#110** (judgment ghosts) · **#112 `dafa33a`** (Invalid Date).
+  (simplify) · **#107 `65adccb`** (chart handover) · **#108 `fe517fa`** (KPI month rule) · **#109 `d821b94`** (docs) · **#110** (judgment ghosts) · **#112 `dafa33a`** (Invalid Date) · **#114 `b0ebe31`** (lone Model column).
   ⭐ **Full record: `docs/history/PORTAL_HISTORY.md` (2026-08-25 entry).** Findings:
   `docs/backlog/tiv-uiux-audit-2026-08-25.md`. Remaining work: `docs/backlog/tiv-uiux-fix-roadmap.md`.
   - **The parity gate never moved: 21/21 exact (736 / 779 / 850, backtest 26.4%)** before and after
@@ -75,10 +75,19 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
     `retrainModel` builds *in the browser*, and `trained_at` is stamped by the DB. A reload cleared
     it, so it lived only in the seconds after an upload — which no probe, gate or self-test renders.
     Fixed at cause (re-read the stored row) and guard (`formatTrainedAt` → "just now").
+  - ✅ **Hard refresh confirmed both (2026-08-25):** tile leads with **Sep-26 779 · judgment 830**,
+    strip reads **"Model trained: 25/8/2026"**. The Aug-26 tile was a **cached pre-#108 chunk**, as
+    the deployed source predicted — not a bug. ⭐ **Method: to date what a user is running, fetch
+    the prod HTML → read the hashed asset name → curl the chunk → grep the minified logic.**
+  - ✅ **Lone "Model" column labelled** (PR **#114** → `b0ebe31`). Clearing the ghosts left Oct-26
+    as an unlabelled number beside two "Model | Judg" pairs — the empty `<td>` was invisible only
+    while the ghosts existed. A **removal** changed a header's shape: check the aggregate after
+    deleting data, not just after adding UI.
 - **Test estate (bundle with esbuild first, then run against the gitignored workbook):**
   `parity-gate` **21/21** · `selftest-parser` 13/13 · `selftest-stale-anchors` 14/14 ·
   `selftest-upload-diff` 27/27 · `selftest-quality` 31/31 · `selftest-chart` 22/22 ·
-  `selftest-kpi-month` 13/13 · `selftest-trained-at` 14/14. Plus `diag-blank-zero` / `diag-raw-cells` workbook inspectors.
+  `selftest-kpi-month` 13/13 · `selftest-trained-at` 14/14 · `selftest-table-header` 18/18
+  (renders the real component via `react-dom/server.browser`). Plus `diag-blank-zero` / `diag-raw-cells` workbook inspectors.
 - ⚠️ **`npm run build` does NOT catch a stray top-level `x={y}`** — it parses as a valid non-strict
   assignment, but ES modules are strict so it throws on every page load. A `perl -0pi` JSX edit
   introduced exactly that. **Use the Edit tool for multi-line JSX; check `head -1` of every edited
@@ -233,13 +242,11 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   survived the first cleanup (cleared in PR **#110** → `61532ac`). Either teach the upload to remove
   months absent from the workbook (**owner approval required** — silent deletion is its own hazard)
   or accept SQL-only cleanup and keep the diff preview honest. ⭐ `docs/backlog/tiv-uiux-fix-roadmap.md` §1b.
-- ~~**OWNER: run ONE real upload.**~~ **DONE 2026-08-25** — behaved exactly as predicted, and
-  surfaced the "Invalid Date" defect (PR #112 → `dafa33a`).
-  ⏭️ **Residual, 1 minute: confirm the summary tile leads with Sep-26 (779) after a hard refresh.**
-  The owner saw Aug-26 (736) on the 25th. The deployed bundle was checked directly and *does* carry
-  the rule (`function ie(e=new Date){return re(e).day>19}`, consumed by the KPI memo) and
-  `selftest-kpi-month` is 13/13 — so a **cached pre-#108 chunk in a long-lived tab** is the likely
-  cause. **Unconfirmed** — if it still reads Aug-26 after Ctrl+Shift+R, it is a real bug.
+- ~~**OWNER: run ONE real upload.**~~ ✅ **DONE AND CONFIRMED 2026-08-25.** It behaved as predicted
+  and surfaced two defects nothing else could — "Model trained: Invalid Date" (PR #112 →
+  `dafa33a`) and the unlabelled lone Model column (PR #114 → `b0ebe31`). Hard refresh verified the
+  summary tile leads with **Sep-26 779 · judgment 830** and the strip reads **25/8/2026**; the
+  earlier Aug-26 tile was a **stale cached chunk**, not a bug. Nothing outstanding here.
 - **⏭️ TIV UI/UX tail (all documented, none silently dropped)** —
   ⭐ `docs/backlog/tiv-uiux-fix-roadmap.md`: **W4.6** xlsx download / round-trip export in the
   workbook's own sheet shape / print stylesheet · **W4.7** forecast-vintage ghost line · roving
