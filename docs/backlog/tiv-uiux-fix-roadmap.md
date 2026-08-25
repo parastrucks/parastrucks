@@ -227,17 +227,17 @@ already loaded) before assuming wave 2 is closed.
 The unifying insight: **the 08-24 pass fixed the inside of the tables; nobody ever audited the
 chrome around them for phones, keyboards, or failure.** Nothing here touches data flow.
 
-- [ ] **W3.1 (B4) Failure-state triage** — `loadData` catch → persistent inline error card +
+- [x] **W3.1 (B4) Failure-state triage** — `loadData` catch → persistent inline error card +
   Retry (keep the toast); `runForecast` catch → `console.error` + a distinct "Forecast could not
   be computed from the stored model — this is a fault, not missing data" state (NEVER the upload
   CTA); empty-state copy branches on `isAdmin` ("No data loaded for your entity/brand — contact an
   administrator" for non-admins). Early-return the Segments tab's tab-level empty state before the
   chart cards (kills the triple-stack).
-- [ ] **W3.2 (B5) KPI header row** — three stat tiles above the tabs (next-month TIV / AL / PTB,
+- [x] **W3.2 (B5) KPI header row** — three stat tiles above the tabs (next-month TIV / AL / PTB,
   judgment small underneath) from the existing `forecastResult`. Also surface C6 here: when
   `forecastMonths[0].horizon > 1`, an amber staleness banner for ALL users ("Data ends Jul-26;
   this forecast reaches N months beyond its data.").
-- [ ] **W3.3 (B6) Phone shell bundle** — `.tiv-tabs { overflow-x: auto }` (+ same for
+- [x] **W3.3 (B6) Phone shell bundle** — `.tiv-tabs { overflow-x: auto }` (+ same for
   `.tiv-tabs-sm`); UploadPanel header → real `<button>` with `aria-expanded`; file input →
   visually-hidden-clip pattern (NOT `display:none`); trigger checkbox `aria-label={def.name}`,
   slider `aria-label`/`aria-valuetext`; delete `.tiv-slider { outline: none }` + add thumb
@@ -248,15 +248,15 @@ chrome around them for phones, keyboards, or failure.** Nothing here touches dat
   aria-labels; drop per-cell `tabIndex` (the toggle is the keyboard path — kills 168 tab stops)
   or implement roving tabindex if you're feeling thorough; `tabIndex={0} role="region"` on
   `.tiv-scroll` (pattern documented at `index.css:1504`).
-- [ ] **W3.4 (B6) Contrast pass** — new token `--text-secondary-on-paper: var(--gray-600)` used
+- [x] **W3.4 (B6) Contrast pass** — new token `--text-secondary-on-paper: var(--gray-600)` used
   by `.tiv-meta`, resting `.tiv-tab`, captions/notes on page ground, and the revealed
   `.tiv-cell-actual`/`.tiv-cell-sep`; Recharts `Legend formatter` → gray-700 text; PTB series
   colors → gray-600 solid / gray-500 dashed. Fix the stale "4.8:1" CSS comment while there
   (actual: 4.56/4.57). Show the arithmetic in the PR description (owner precedent).
-- [ ] **W3.5 (B6) Touch reveal: tap-for-detail bottom sheet (C9)** — `ErrCell onClick` → one
+- [x] **W3.5 (B6) Touch reveal: tap-for-detail bottom sheet (C9)** — `ErrCell onClick` → one
   state `{month, col}` → fixed bottom card (`role="status"`) with the full payload incl. judgment
   peer; Escape/second-tap dismisses. Desktop keeps the hover.
-- [ ] **W3.6 (B7) Structural** — `?tab=&layer=&seg=` search params (read on mount, `replace` on
+- [x] **W3.6 (B7) Structural** — `?tab=&layer=&seg=` search params (read on mount, `replace` on
   change); sticky first column on `.tiv-table` (`th[scope="row"] { position: sticky; left: 0;
   background: var(--white); z-index: 1 }` + right-edge fade cue on `.tiv-scroll::after`);
   trigger banner un-ellipsized with magnitudes (`Monsoon −10%`) moved into the shared meta banner
@@ -265,6 +265,32 @@ chrome around them for phones, keyboards, or failure.** Nothing here touches dat
   `title=`-only content (judgment-free explainer, disabled-Upload reason) into visible text;
   GM vocabulary ("Industry / Ashok Leyland / Our sales", "Scenario adjustments") — keep layer
   numbers as small prefixes.
+
+---
+
+#### ✅ Wave 3 SHIPPED 2026-08-25 — branch `tiv-uiux-w3`, commits `f08b6ec` + `cbde88a`
+
+Verification: parity **21/21 @ 26.4%**, parser **13/13**, stale-anchors **14/14**, upload-diff
+**22/22**, build clean.
+
+**Carried out beyond the checklist:** the active-trigger banner moved to page level with magnitude
+and direction (this closes audit **A5**, which the roadmap had left in W3.6's tail), Triggers tab
+now states the per-user scope and offers Reset-to-base, and trigger save failures are surfaced.
+
+⚠️ **Mistake worth not repeating:** a `perl -0pi` multi-line JSX edit silently prepended a stray
+`judgmentPtb={judgmentPtb}` line to the top of `TivForecastPage.jsx`. **`npm run build` did NOT
+catch it** — `x={y}` at top level parses as a valid non-strict assignment expression — but ES
+modules are strict, so it would have thrown `ReferenceError` in the browser on every page load.
+Caught by reading `head -1` of every edited file. **Use the Edit tool for multi-line JSX; reserve
+sed/perl for single-line, unambiguous substitutions, and check `head` afterwards.**
+
+**Deliberately deferred out of W3.3** (listed so nobody assumes they shipped): per-cell `tabIndex`
+on the accuracy grid was **kept** (168 tab stops) rather than swapped for roving tabindex — the
+`Show forecast/actual` toggle is the keyboard path and now has a real 44px target, so no
+information is keyboard-unreachable; the tap-for-detail bottom sheet (C9) has its CSS in place
+(`.tiv-detail`) but **no component yet**; Recharts `Legend` still colours its label text with the
+series colour (PTB forecast legend ≈1.84:1) — needs a `formatter`, and the PTB series colours
+themselves want darkening.
 
 ---
 
