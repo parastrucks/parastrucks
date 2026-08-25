@@ -28,9 +28,10 @@
 
 ## Session log — 2026-08-25: TIV Forecast UI/UX — six-lane audit, four remediation waves, and a course correction from the owner
 
-**Outcome:** six PRs shipped to prod (**#102 `485430e`**, **#103 `5446ac8`**, **#104 `868857f`**,
-**#105 `bdba3a4`**, **#106 `0649493`**, **#107 `65adccb`**), two migrations applied, `admin-tiv`
-redeployed, and **16 rows of corrupt production data cleared**. The engine's numbers never moved:
+**Outcome:** eight PRs shipped to prod (**#102 `485430e`**, **#103 `5446ac8`**, **#104 `868857f`**,
+**#105 `bdba3a4`**, **#106 `0649493`**, **#107 `65adccb`**, **#108 `fe517fa`**, **#109 `d821b94`**), three migrations applied, `admin-tiv`
+redeployed, and **28 rows of corrupt production data cleared** across two passes (16 actuals,
+then 12 judgment). The engine's numbers never moved:
 the parity gate held **21/21 exact (736 / 779 / 850, backtest 26.4%)** before and after every
 single change. The session's most valuable moment was not a fix — it was the owner rejecting the
 result of the first four waves as cluttered, which was correct.
@@ -210,6 +211,59 @@ Series construction moved to `src/tiv-forecast/lib/chartData.js` so the test exe
 tab runs rather than a reimplementation. A forecast-boundary marker was considered and **rejected**
 as more clutter.
 
+### 7b. Addendum — the judgment ghosts, found the same day
+
+The first cleanup targeted `tiv_actuals` and `ptb_actuals`. It did not look at the two
+**judgment** tables, and they carried the same defect from the same 2026-08-21 parser run.
+
+Measured on prod before touching anything:
+
+| table | rows | ends at | all-zero rows |
+|---|---|---|---|
+| `tiv_actuals` | 52 | Jul-26 | none |
+| `ptb_actuals` | 52 | Jul-26 | 6 — **genuine** |
+| `al_actuals` | 52 | Jul-26 | none |
+| `raw_data` | 52 | Jul-26 | none |
+| `judgment_tiv` | **20** | **Mar-27** | **6 ghosts** |
+| `judgment_ptb` | **20** | **Mar-27** | **6 ghosts** |
+
+The request was to clear ghosts "from `ptb_actuals` too", but `ptb_actuals` was already clean —
+its trailing ghosts went in the first cleanup. The six zeros still in it are **real**: the
+workbook holds *typed zeros*, not blanks, for Apr-22…Aug-22 and Oct-22, and TIV for those same
+months is fully populated (Apr-22 = 265). The dealership genuinely sold nothing until Sep-22
+(62 Haulage). Deleting them would have erased real ramp-up history and punched a hole in the
+`month_index` sequence the engine walks. **This is the second time that rule earned its keep** —
+"empty AND after the last real month", never "value is zero".
+
+The real ghosts were in the judgment tables. Both prediction sheets in the workbook end at
+**Sep-26** (14 rows, `ref=A1:H15`, zero blank cells); the DB held 20, with Oct-26…Mar-27 all zero.
+Migration `clear_ghost_judgment_months` removed **12 rows** (6 + 6) after a whole-table snapshot,
+computing its own cutoff (`max(month) where sum > 0` → 2026-09-01) and self-aborting on an
+unexpected cutoff or a blast radius over 6 per table. A dry run printed the exact target list
+before the real run. Both tables now hold 14 rows ending Sep-26.
+
+**What the ghosts were actually doing:** the accuracy tracker was already immune —
+`buildJudgmentBacktest` skips any judgment month with no matching actual, and actuals end Jul-26.
+But the **forecast table** keys its judgment column on row *presence* (`if (jRow)`), so Oct-26
+rendered a judgment column of zeros beside the model's 850 — a prediction nobody made, exactly
+the A-class defect the whole session was about. Aug-26 and Sep-26 judgment survive and still
+render. With today past the 19th the KPI row leads with Sep-26, whose judgment (830) is intact.
+
+⭐ **The durable finding — `tiv_upload_all()` contains no `DELETE` at all.** It only upserts. A row
+that disappears from the workbook lingers in the database forever, and no upload will ever remove
+it. That is precisely how these 12 rows survived the first cleanup and would have survived every
+future upload. `buildUploadDiff` surfaces shrinkage in the preview (`emptyMonths`,
+`missingWithData`, `coverageShortfall`) so it is visible rather than silent — but removal is still
+a SQL-only operation. **Treat "the series got shorter" as a case the upload path does not handle.**
+
+**Repo gap closed on the way:** neither data-cleanup migration existed in `supabase/migrations/` —
+both had been applied straight to prod. Both are now committed
+(`20260825_clear_ghost_future_months.sql`, `20260825_clear_ghost_judgment_months.sql`), recovered
+verbatim from `supabase_migrations.schema_migrations`, so the folder matches what prod actually ran.
+
+Parity gate re-run after the delete: **21/21 exact (736 / 779 / 850), backtest 26.4%** — unchanged,
+as expected, since the gate reads the workbook rather than prod.
+
 ### 8. Owner decisions taken this session
 
 | Decision | Choice |
@@ -220,6 +274,7 @@ as more clutter.
 | Default-view density | **Middle** — keep judgment visible, remove the ranges |
 | Audience to tune for | **The GM opening it monthly** |
 | Clear the 16 ghost rows | Approved |
+| Clear the 12 judgment ghost rows | Approved — after being shown `ptb_actuals` was already clean |
 
 ### 9. Verification estate now standing
 

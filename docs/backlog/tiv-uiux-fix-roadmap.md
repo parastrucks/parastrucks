@@ -377,6 +377,14 @@ New module `src/tiv-forecast/lib/forecastQuality.js` + `scripts/tiv/selftest-qua
 
 ## 1b. What is actually left (2026-08-25)
 
+- ⭐ **NEW (2026-08-25, PR #110) — `tiv_upload_all()` never DELETEs.** It only upserts, so a month
+  that disappears from the workbook lingers in the database forever and no upload will remove it.
+  That is exactly how 12 ghost judgment rows survived the first cleanup. `buildUploadDiff` already
+  surfaces shrinkage in the preview (`emptyMonths`, `missingWithData`, `coverageShortfall`), so it
+  is visible rather than silent — but removal remains SQL-only. **Decide deliberately:** either
+  teach the upload to delete months absent from the workbook (needs owner approval — silent
+  deletion is its own hazard), or accept SQL-only cleanup and keep the preview honest. Do not
+  leave it undecided; "the series got shorter" is a case the upload path does not handle.
 - **W4.6** — xlsx download · round-trip export in the workbook's own prediction-sheet shape ·
   print stylesheet. *Copy table (TSV) and Copy summary line already cover the daily need, so this
   is a nice-to-have, not a gap.*

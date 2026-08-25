@@ -32,9 +32,9 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 ## Current state (2026-08-25)
 
 - **✅ TIV FORECAST UI/UX — AUDITED, REMEDIATED IN FOUR WAVES, AND COURSE-CORRECTED. ALL LIVE.**
-  Seven PRs: **#102 `485430e`** (W1 stop the lies) · **#103 `5446ac8`** (W2 atomic upload) ·
+  Nine PRs: **#102 `485430e`** (W1 stop the lies) · **#103 `5446ac8`** (W2 atomic upload) ·
   **#104 `868857f`** (W3 shell) · **#105 `bdba3a4`** (W4 value layer) · **#106 `0649493`**
-  (simplify) · **#107 `65adccb`** (chart handover) · **#108 `fe517fa`** (KPI month rule).
+  (simplify) · **#107 `65adccb`** (chart handover) · **#108 `fe517fa`** (KPI month rule) · **#109 `d821b94`** (docs) · **#110** (judgment ghosts).
   ⭐ **Full record: `docs/history/PORTAL_HISTORY.md` (2026-08-25 entry).** Findings:
   `docs/backlog/tiv-uiux-audit-2026-08-25.md`. Remaining work: `docs/backlog/tiv-uiux-fix-roadmap.md`.
   - **The parity gate never moved: 21/21 exact (736 / 779 / 850, backtest 26.4%)** before and after
@@ -53,10 +53,20 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
     params + history in ONE transaction; pre-commit diff preview; `tiv_forecast_snapshots` table;
     **409 interim guard** against the multi-brand overwrite. `admin-tiv` **tightened to admin-only**
     (it accepted `back_office` while the panel showed only to admins, and it bypasses RLS).
-  - **16 rows of corrupt prod data cleared** (owner-approved): all-zero Aug-26…Mar-27 in
-    `tiv_actuals` + `ptb_actuals`, written 2026-08-21 by the pre-fix parser. Snapshotted first.
-    **The six all-zero 2022 PTB months are GENUINE ramp-up zeros and were kept** — the rule is
-    "empty AND after the last real month", **never** "value is zero".
+  - **28 rows of corrupt prod data cleared in two passes** (both owner-approved, both snapshotted):
+    16 all-zero Aug-26…Mar-27 in `tiv_actuals` + `ptb_actuals`, then **12 all-zero Oct-26…Mar-27 in
+    `judgment_tiv` + `judgment_ptb`** (PR **#110**) — the judgment tables carried the same
+    2026-08-21 parser defect and the first pass never looked at them. Both prediction sheets in the
+    workbook end at **Sep-26** (14 rows); the DB held 20. Both tables now hold 14.
+    **The six all-zero 2022 PTB months are GENUINE ramp-up zeros and were kept** — verified as
+    *typed zeros* in the workbook, with TIV fully populated for the same months (Apr-22 = 265).
+    The rule is "empty AND after the last real month", **never** "value is zero".
+  - ⚠️ **`tiv_upload_all()` contains no `DELETE`** — it only upserts, so a month that vanishes from
+    the workbook lingers forever and no upload will remove it. That is how the 12 judgment ghosts
+    survived. The diff preview surfaces shrinkage; removal is SQL-only. Decision pending — see
+    `docs/backlog/tiv-uiux-fix-roadmap.md` §1b.
+  - Both data-cleanup migrations are now **committed** (`20260825_clear_ghost_future_months.sql`,
+    `20260825_clear_ghost_judgment_months.sql`); they had been applied straight to prod.
   - **Summary tiles lead with next month after the 19th** (IST), falling back if that month is stale.
   - ⏭️ **Nobody has run a real upload through the new path yet** — the probe proves the function and
     the transaction boundary, not the browser wiring.
