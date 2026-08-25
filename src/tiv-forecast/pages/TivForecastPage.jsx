@@ -1,5 +1,6 @@
 // TIV Forecast — Main page
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
 import { runForecast } from '../lib/forecastEngine'
@@ -31,7 +32,18 @@ export default function TivForecastPage() {
   // ("upload it" vs "ask an administrator"), never to grant anything.
   const isAdmin = profile?.permission_level === 'admin'
   const toast = useToast()   // load failures
-  const [activeTab, setActiveTab]       = useState('forecast')
+
+  // Tab lived in useState alone, so the URL never changed: you could not send
+  // anyone "look at the Accuracy tab", and an accidental refresh mid-review
+  // dropped you back on Forecast.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const urlTab = searchParams.get('tab')
+  const activeTab = TABS.some(t => t.id === urlTab) ? urlTab : 'forecast'
+  const setActiveTab = (id) => {
+    const next = new URLSearchParams(searchParams)
+    next.set('tab', id)
+    setSearchParams(next, { replace: true })
+  }
   const [loading, setLoading]           = useState(true)
   const [loadError, setLoadError]       = useState('')
   // A forecast that THREW is a fault, not missing data. Kept apart so the page
