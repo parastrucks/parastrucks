@@ -26,15 +26,29 @@
 
 ---
 
-## Session log — 2026-08-25: TIV Forecast UI/UX — six-lane audit, four remediation waves, and a course correction from the owner
+## Session log — 2026-08-25: TIV Forecast UI/UX — six-lane audit, four remediation waves, a course correction from the owner, and the first real upload
 
-**Outcome:** eight PRs shipped to prod (**#102 `485430e`**, **#103 `5446ac8`**, **#104 `868857f`**,
-**#105 `bdba3a4`**, **#106 `0649493`**, **#107 `65adccb`**, **#108 `fe517fa`**, **#109 `d821b94`**), three migrations applied, `admin-tiv`
-redeployed, and **28 rows of corrupt production data cleared** across two passes (16 actuals,
-then 12 judgment). The engine's numbers never moved:
-the parity gate held **21/21 exact (736 / 779 / 850, backtest 26.4%)** before and after every
-single change. The session's most valuable moment was not a fix — it was the owner rejecting the
-result of the first four waves as cluttered, which was correct.
+**Outcome: twenty PRs shipped to prod (#102–#121)** — **#102** `485430e` · **#103** `5446ac8` · **#104**
+`868857f` · **#105** `bdba3a4` · **#106** `0649493` · **#107** `65adccb` · **#108** `fe517fa` ·
+**#109** `d821b94` · **#110** `61532ac` · **#111** `1e7f292` · **#112** `dafa33a` · **#113**
+`0520e98` · **#114** `b0ebe31` · **#115** `5f9b521` · **#116** `dfe73d7` · **#117** `50048b3` ·
+**#118** `0807489` · **#119** `fc3fb26` · **#120** `ade925c` · **#121** `cbdf424`.
+
+Four migrations applied, `admin-tiv` redeployed three times, **28 rows of corrupt production data
+cleared** across two passes (16 actuals, then 12 judgment), and **−133 lines** of superseded
+service-role upload path deleted. The engine's numbers never moved: the parity gate held
+**21/21 exact (736 / 779 / 850, backtest 26.4%)** before and after every single change.
+
+Three moments mattered more than any individual fix, and none of them was a fix:
+
+1. **The owner rejected the result of the first four waves as cluttered** — every finding had been
+   fixed on its own merits and nothing had checked the aggregate (§6).
+2. **He ran the first real upload**, which immediately exposed a defect no probe, gate or
+   self-test could have caught, because it lived only in the seconds between a client handing
+   state to the server and a reload (§7c).
+3. **He answered a multiple-choice question with a fact instead of an option** — *"I get past
+   month market data by 5–7th"* — and that fact showed every option offered had encoded the wrong
+   premise (§7e).
 
 ### 1. The audit
 
@@ -430,48 +444,95 @@ sentence lives in the test file itself so the next reader is not misled by a gre
 
 ### 9. Verification estate now standing
 
-All bundle via esbuild first (`npx esbuild <script> --bundle --platform=node --format=esm --outfile=<tmp>/x.mjs`),
-then run against the gitignored workbook.
+All bundle via esbuild first (`npx esbuild <script> --bundle --platform=node --format=esm --outfile=<tmp>/x.mjs`;
+add `--loader:.jsx=jsx --jsx=automatic` for the ones that render components), then run against the
+gitignored workbook.
 
 | Suite | Result | What it defends |
 |---|---|---|
-| `parity-gate` | **21/21 @ 26.4%** | the referee — ran before and after every wave, **never moved** |
+| `parity-gate` | **21/21 @ 26.4%** | the referee — ran before and after every change, **never moved** |
 | `selftest-parser` | 13/13 | blank-vs-zero, future months, header/sheet validation, canonical labels |
 | `selftest-stale-anchors` | 14/14 | real trained model at mocked dates, incl. the IST boundary |
 | `selftest-upload-diff` | 27/27 | the diff preview, incl. the exact prod residue shape |
 | `selftest-quality` | 31/31 | every range brackets its forecast; every receipt reproduces its number |
 | `selftest-chart` | 22/22 | duplicate categories, handover, stale non-bridging, genuine zeros |
+| `selftest-kpi-month` | 13/13 | the after-the-19th rule, both sides of the boundary, IST, stale fallback |
+| `selftest-trained-at` | 14/14 | no input can render the words "Invalid Date" |
+| `selftest-table-header` | 18/18 | every month labelled; header spans match the body row |
+| `selftest-data-cadence` | 38/38 | the monthly rhythm day by day; year and IST boundaries |
+| `selftest-removals` | 25/25 | per-table pruning, the 12-ghost case, empty-sheet blocking |
+| `selftest-contrast` | 8/8 | WCAG ratios computed from the real tokens and the real components |
+| `selftest-vintage` | 33/33 | which vintage counts as "previous", replay horizons, overlap only |
+| `selftest-detail-sheet` | 19/19 | the figure is a real button; the sheet is a real dialog |
 
 Plus `diag-blank-zero.mjs` and `diag-raw-cells.mjs` as workbook inspectors.
 
+**Two of these render the shipped components** (`react-dom/server.browser`) rather than calling a
+library — the gap that let "Invalid Date" ship. ⚠️ **Stated limit: jsdom is not installed**, so they
+assert *structure*. Effects — the Escape handler, focus moving in and back out — are verified by
+reading the component, and that sentence lives in the test file so a green line cannot mislead.
+Note too that React emits `colSpan` with a capital S in static markup, so match case-insensitively.
 ### 10. Mistakes made, and the guards added
 
 - **`git reset --hard origin/portal`** in a tree with a modified `.claude/settings.local.json`
   discarded this session's permission additions. Use `git checkout` + `git pull --rebase`; never
   `reset --hard` with local modifications. Same failure family `CLAUDE.md` already warns about for
-  stash.
+  stash. (Later in the same session a docs commit landed **directly on local `portal`** by mistake;
+  recovered with `git branch <new>` + `git reset --keep origin/portal` before anything was pushed.)
 - **A `perl -0pi` multi-line JSX edit silently prepended a stray line** to the top of
   `TivForecastPage.jsx`. **`npm run build` did NOT catch it** — `x={y}` at top level parses as a
   valid non-strict assignment — but ES modules are strict, so it would have thrown on every page
   load. Caught by checking `head -1` of every edited file, now a standing step. **Use the Edit tool
   for multi-line JSX.**
 - **These source files are CRLF**, so `\n` in a node/perl replacement string silently no-ops.
-  Detect the newline style first.
+  Detect the newline style first. ⚠️ **And MSYS `sed -i` STRIPS the CRs** from a file it rewrites.
+  Harmless here only because the repo has `core.autocrlf` normalising to LF — the diffs stayed at
+  tens of lines, not whole-file churn — but **check `git diff --stat` after any `sed -i` on a CRLF
+  file** before trusting it.
+- ⚠️ **A Bash heredoc silently TRUNCATED a ~120-line test file mid-line** — `wc -l` reported 100 and
+  the last line was cut in half. Use the Write tool for long files; check `wc -l` and `tail` after
+  any heredoc.
+- **The zero-cliff was asserted from a database query rather than read off the owner's screenshot**,
+  and a second symptom visible in that same image (a duplicated x-axis category) was missed. When
+  the owner supplies evidence, read it as evidence rather than as confirmation.
+- **Supabase MCP roles differ by tool**: `execute_sql` runs as `supabase_read_only_user` — it cannot
+  call a function or write anything — while `apply_migration` runs as `postgres`. A self-aborting
+  write probe therefore has to go through `apply_migration`. The read-only user being refused with
+  *"permission denied for function"* was itself proof the REVOKE-from-anon-and-authenticated
+  lockdown works.
+- ⚠️ **Adding a parameter to a Postgres function is not an edit.** A different argument list makes an
+  **overload**, so every existing call becomes ambiguous — it needs DROP + full recreate. That is
+  why pruning shipped as a wrapper (`tiv_upload_and_prune`) rather than as an edit to a verified
+  275-line function.
+- **A stale browser tab is a real diagnosis here, not an excuse** — the owner saw a pre-#108 bundle
+  hours after it deployed. To prove it rather than assert it: fetch the deployed HTML, read the
+  hashed asset name, curl that chunk and grep the minified logic.
 - The audit's own recommendations were followed too literally in aggregate — see §6.
-
 ### 11. Still open
 
-- **W4.6** xlsx download, round-trip export in the workbook's own sheet shape, print stylesheet.
-- **W4.7** forecast-vintage ghost line.
-- Roving tabindex on the accuracy grid (168 tab stops kept; the toggle is the keyboard path).
-- Tap-for-detail bottom sheet — CSS `.tiv-detail` exists, no component.
-- Recharts `Legend` inherits the series colour (PTB forecast label ≈1.84:1).
-- **Multi-entity/brand constraint fix** — still owner-gated, now mitigated by the 409 guard.
-- Old `upsertRows` / `insertModelParams` / `insertUploadHistory` EF actions kept (admin-only) so a
-  stale cached tab cannot break mid-deploy; removable once a release has fully rolled out.
-- ⏭️ **Nobody has yet run a real upload through the new path.** The probe proves the function and
-  the transaction boundary; it cannot prove the browser wiring.
+**Waiting on the owner, none urgent:**
+- **Nobody has ticked the remove box on a real upload.** With the current workbook the removal list
+  is empty, so the block will not even appear — it needs a genuinely shortened file to exercise.
+- **Multi-entity/brand** — asked directly; the answer was *"eventually, but not now"*. **Do not
+  start it.** The 409 guard turns a second brand's upload into a refusal rather than silent data
+  loss. When it is wanted: **constraint → scoped reads → selector**, never the selector first, and
+  the constraint change needs explicit approval. `fetchModelParamsHistory` and `fetchStoredMonths`
+  are two more unscoped reads to fix in the same pass.
+- **Model-method re-trial after Oct-26 actuals.** Do not change `V3_METHOD` before then.
 
+**Built but not yet visible in production, by design:**
+- The **previous-vintage line** draws nothing today: every stored vintage is `Jul-26` (the same data
+  month as the current model) or pre-v3 with no anchors. It begins working when August data lands.
+
+**Not built, and NOT picked when the owner was asked:**
+- **W4.6** xlsx download, round-trip export in the workbook's own sheet shape, print stylesheet —
+  Copy table (TSV) and Copy summary already cover the daily need.
+- Roving tabindex on the accuracy grid — 168 tab stops kept; the *Show forecast/actual* toggle is
+  the keyboard path, so nothing is unreachable.
+
+**Closed during this session** (listed because the earlier draft of this section named them as open):
+W4.7 vintage line · tap-for-detail sheet · Recharts legend contrast · the superseded `admin-tiv`
+actions · "upload never deletes" · the first real human upload.
 ### 12. Late addition — the summary row leads with next month (PR #108 → `fe517fa`)
 
 Owner: *"if today's date is >19th show next month forecast on the summary row"*. By the back half
