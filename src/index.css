@@ -3134,3 +3134,41 @@ tbody tr:hover td { background: var(--gray-50); }
 @media (prefers-reduced-motion: reduce) {
   .tiv-tab, .tiv-cell, .tiv-slider { transition: none !important; }
 }
+
+/* ─── TIV EXPLAIN RECEIPT (audit C2) ────────────────────────────────
+   "Where does 736 come from" had no answer in the product; the method map
+   was a footnote listing estimator names. */
+.tiv-explainable { cursor: pointer; }
+.tiv-explainable:hover { background: var(--gray-50); }
+.tiv-receipt {
+  position: relative;
+  background: var(--white);
+  border: 1px solid var(--border-default);
+  border-left: 3px solid var(--blue);
+  border-radius: var(--radius-sm);
+  padding: 12px 40px 12px 14px;
+  margin: 4px 0 16px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.tiv-receipt-close {
+  position: absolute; top: 4px; right: 6px;
+  background: none; border: none; cursor: pointer;
+  font-size: 20px; line-height: 1; color: var(--gray-600);
+  min-width: 40px; min-height: 40px;
+}
+.tiv-score {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.tiv-score-cell {
+  background: var(--white);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  font-size: 12px;
+}
+.tiv-score-seg { font-weight: 700; color: var(--ink); margin-bottom: 2px; }
+.tiv-score-win { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
