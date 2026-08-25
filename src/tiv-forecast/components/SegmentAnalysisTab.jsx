@@ -3,16 +3,24 @@ import { useState, useMemo } from 'react'
 import Icon from '../../components/Icon'
 import { SEGMENTS, SEG_COLORS, SEG_COL } from '../constants'
 import SegmentChart from './SegmentChart'
-import { buildSegmentChartData, buildShareSeries } from '../lib/chartData'
+import { buildSegmentChartData, buildShareSeries, hasVintageOverlap } from '../lib/chartData'
 
-export default function SegmentAnalysisTab({ tivActuals, alActuals, ptbActuals, forecastResult }) {
+export default function SegmentAnalysisTab({ tivActuals, alActuals, ptbActuals, forecastResult, previousForecast = null }) {
   const [activeSeg, setActiveSeg] = useState(SEGMENTS[0])
 
   // Series construction lives in ../lib/chartData so it can be tested against
   // the real data instead of being reimplemented inside a test.
   const chartDataWithForecast = useMemo(
-    () => buildSegmentChartData(tivActuals, ptbActuals, activeSeg, forecastResult),
-    [tivActuals, ptbActuals, activeSeg, forecastResult],
+    () => buildSegmentChartData(tivActuals, ptbActuals, activeSeg, forecastResult, previousForecast?.result),
+    [tivActuals, ptbActuals, activeSeg, forecastResult, previousForecast],
+  )
+
+  // Only claim a comparison when there is one. An older vintage whose window
+  // no longer reaches these months contributes nothing, and advertising a
+  // line that draws nothing is worse than leaving it out.
+  const showVintage = useMemo(
+    () => !!previousForecast && hasVintageOverlap(chartDataWithForecast),
+    [previousForecast, chartDataWithForecast],
   )
 
   // AL market share trend
@@ -77,6 +85,15 @@ export default function SegmentAnalysisTab({ tivActuals, alActuals, ptbActuals, 
             { key: 'PTB',      name: 'PTB (actual)',    color: 'var(--gray-500)' },
             { key: 'TIV Fcst', name: 'TIV (forecast)', color: SEG_COLORS[activeSeg], dashed: true },
             { key: 'PTB Fcst', name: 'PTB (forecast)', color: 'var(--gray-500)', dashed: true },
+            // The previous vintage, only when it actually covers these months.
+            // Named by the data it was trained on, because "previous" alone does
+            // not say how old it is.
+            ...(showVintage ? [{
+              key: 'TIV Prev',
+              name: `TIV (forecast when trained to ${previousForecast.lastDataMonth})`,
+              color: 'var(--gray-500)',
+              dotted: true,
+            }] : []),
           ]}
           height={260}
         />

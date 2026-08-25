@@ -27,7 +27,7 @@ export function buildHistoricalSeries(tivActuals, ptbActuals, segment) {
   }))
 }
 
-export function buildSegmentChartData(tivActuals, ptbActuals, segment, forecastResult) {
+export function buildSegmentChartData(tivActuals, ptbActuals, segment, forecastResult, previousResult = null) {
   const historical = buildHistoricalSeries(tivActuals, ptbActuals, segment)
   if (!forecastResult) return historical
 
@@ -48,18 +48,39 @@ export function buildSegmentChartData(tivActuals, ptbActuals, segment, forecastR
     base[base.length - 1] = handover
   }
 
+  // What the previous vintage said about these same months. Keyed by month so
+  // only the OVERLAP is drawn: an older model's window starts earlier, and its
+  // months that are now history must not reappear as a forecast line running
+  // back through the actuals.
+  const prevByMonth = new Map()
+  for (const fm of previousResult?.forecastMonths || []) {
+    const row = previousResult.bySegment?.[segment]?.find(r => r.month === fm.label)
+    // A stale month in the old vintage has no number. Plot nothing rather than
+    // a zero, which is the whole reason this chart was rebuilt once already.
+    if (row && row.tiv !== null && row.tiv !== undefined) prevByMonth.set(fm.label, row.tiv)
+  }
+
   for (const fm of forecastResult.forecastMonths || []) {
     const segRow = forecastResult.bySegment?.[segment]?.find(r => r.month === fm.label)
     if (!segRow) continue
-    base.push({
+    const point = {
       month:      fm.label,
       TIV:        null,
       PTB:        null,
       'TIV Fcst': segRow.tiv,
       'PTB Fcst': segRow.ptb,
-    })
+    }
+    if (prevByMonth.has(fm.label)) point['TIV Prev'] = prevByMonth.get(fm.label)
+    base.push(point)
   }
   return base
+}
+
+// True only when the previous vintage actually says something about a month the
+// current forecast covers. Without this the chart would advertise a comparison
+// line and then draw nothing.
+export function hasVintageOverlap(chartData) {
+  return (chartData || []).some(r => r['TIV Prev'] !== null && r['TIV Prev'] !== undefined)
 }
 
 // AL share of industry volume, month by month. A month with no AL row has no

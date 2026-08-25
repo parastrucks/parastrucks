@@ -113,12 +113,8 @@ export default function ForecastTable({
                   const clickable = !!onExplain && hasVal
                   const cellProps = {
                     className: ['tiv-num', clickable ? 'tiv-explainable' : ''].filter(Boolean).join(' '),
-                    onClick: clickable
-                      ? () => onExplain({ segment: seg, label: fm.label, value: dispVal, band })
-                      : undefined,
-                    title: clickable ? 'Show how this number was worked out' : undefined,
                   }
-                  const body = (
+                  const figure = (
                     <>
                       <span style={{ fontWeight: 700 }}>{dispVal ?? '—'}</span>
                       {showShare && share !== null && (
@@ -128,6 +124,22 @@ export default function ForecastTable({
                       )}
                     </>
                   )
+                  // The trigger used to be `onClick` on the <td> itself, with a
+                  // `title` for explanation. A td is not focusable, so the
+                  // derivation was unreachable by keyboard and invisible to a
+                  // screen reader — and `title` never fires on touch, so on a
+                  // phone nothing announced that these numbers do anything. A
+                  // real button fixes all three at once.
+                  const body = clickable ? (
+                    <button
+                      type="button"
+                      className="tiv-cell-btn"
+                      onClick={() => onExplain({ segment: seg, label: fm.label, value: dispVal, band })}
+                      aria-label={`${seg}, ${fm.label}: ${dispVal}. Show how this number was worked out.`}
+                    >
+                      {figure}
+                    </button>
+                  ) : figure
 
                   if (jRow) {
                     return (

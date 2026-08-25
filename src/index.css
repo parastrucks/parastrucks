@@ -3224,3 +3224,50 @@ tbody tr:hover td { background: var(--gray-50); }
 @media (prefers-reduced-motion: reduce) {
   .tiv-fold > summary::before { transition: none; }
 }
+
+/* The explainable figure is a real button now, not a <td onClick>. It has to
+   look exactly like the plain number it replaced — the affordance is the row
+   hover and the focus ring, not a button chrome that would turn a dense grid
+   into a wall of controls. */
+.tiv-cell-btn {
+  appearance: none;
+  background: none;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  display: block;
+  width: 100%;
+  text-align: right;
+  /* Comfortably past the 44px touch target once the cell's own padding is
+     counted; the row does not grow, because table cells already sit near this. */
+  min-height: 36px;
+}
+.tiv-cell-btn:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: -2px;
+  border-radius: 2px;
+}
+
+/* Under 720px the forecast tables scroll sideways in their own box, so a
+   receipt rendered below them lands off-screen: the reader taps a number and
+   nothing appears to happen. Pin it to the bottom of the viewport instead.
+   Deliberately not a modal — the page behind stays readable, which is the
+   difference between a detail sheet and an interruption. */
+@media (max-width: 720px) {
+  .tiv-detail-sheet {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    z-index: 60;
+    margin: 0;
+    max-height: 70vh;
+    overflow-y: auto;
+    border: 0;
+    border-top: 3px solid var(--blue);
+    border-radius: 0;
+    box-shadow: 0 -6px 24px rgba(0, 0, 0, .12);
+    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+}
