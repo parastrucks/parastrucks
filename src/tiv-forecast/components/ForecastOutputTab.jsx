@@ -121,32 +121,30 @@ export default function ForecastOutputTab({ forecastResult, judgmentTiv, judgmen
           number left this screen by being retyped — the highest-stakes
           transcription step was the one the tool didn't touch. TSV pastes
           straight into Excel; the one-liner is for WhatsApp. */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-        <button className="btn btn-secondary btn-sm" onClick={() => copyTable(activeLayer)}>
-          Copy table
-        </button>
-        <button className="btn btn-secondary btn-sm" onClick={copySummary}>
-          Copy summary line
-        </button>
-        {copied && <span className="tiv-sub" role="status">{copied}</span>}
-      </div>
-
-      {/* Layer sub-tabs */}
-      <div className="tiv-tabs tiv-tabs-sm" role="tablist" aria-label="Forecast layer">
-        {LAYERS.map(layer => (
-          <button
-            key={layer.id}
-            id={'tiv-layertab-' + layer.id}
-            className="tiv-tab"
-            role="tab"
-            type="button"
-            aria-selected={activeLayer === layer.id}
-            aria-controls={'tiv-layerpanel-' + layer.id}
-            onClick={() => setActiveLayer(layer.id)}
-          >
-            {layer.label}
-          </button>
-        ))}
+      {/* Layer tabs and the copy actions share one row — two full-width
+          buttons above the tabs were louder than the tabs themselves. */}
+      <div className="tiv-toolbar">
+        <div className="tiv-tabs tiv-tabs-sm" role="tablist" aria-label="Forecast layer">
+          {LAYERS.map(layer => (
+            <button
+              key={layer.id}
+              id={'tiv-layertab-' + layer.id}
+              className="tiv-tab"
+              role="tab"
+              type="button"
+              aria-selected={activeLayer === layer.id}
+              aria-controls={'tiv-layerpanel-' + layer.id}
+              onClick={() => setActiveLayer(layer.id)}
+            >
+              {layer.label}
+            </button>
+          ))}
+        </div>
+        <div className="tiv-toolbar-actions">
+          {copied && <span className="tiv-sub" role="status">{copied}</span>}
+          <button className="btn btn-ghost btn-sm" onClick={() => copyTable(activeLayer)}>Copy table</button>
+          <button className="btn btn-ghost btn-sm" onClick={copySummary}>Copy summary</button>
+        </div>
       </div>
 
       {/* Active layer table */}
@@ -209,19 +207,26 @@ export default function ForecastOutputTab({ forecastResult, judgmentTiv, judgmen
         </div>
       )}
 
-      {/* Method map — which estimator produced each row (spec §5.5) */}
-      <div className="tiv-note tiv-note-top">
-        <div style={{ marginBottom: 4 }}>
-          <strong style={{ color: 'var(--gray-600)' }}>Method per segment</strong>
-          {' · '}Bus PVT, Tractor, Tipper <strong>ROB</strong> (robust-anchor SMLY × trailing-12M growth)
-          {' · '}Haulage, MAV <strong>THETA</strong> (60% SMLY + 40% Theta)
-          {' · '}ICV Trucks <strong>ADAPT</strong> (level-shift adapter)
+      {/* Two permanent footnotes of methodology sat under every visit. Folded:
+          a GM opening this monthly wants the number, and the detail is one
+          click away rather than deleted. */}
+      <details className="tiv-fold">
+        <summary>How these numbers are worked out</summary>
+        <div style={{ marginTop: 6 }}>
+          <div style={{ marginBottom: 4 }}>
+            Each segment uses the estimator that backtested best for it:{' '}
+            <strong>Bus PVT, Tractor, Tipper</strong> — last year&rsquo;s same month (smoothed) grown by
+            the last twelve months&rsquo; trend · <strong>Haulage, MAV</strong> — 60% that figure,
+            40% a longer-run trend · <strong>ICV Trucks</strong> — a level-shift adapter, because
+            demand moved further than the usual ±15% limit can express.
+          </div>
+          <div>
+            Click any forecast to see exactly how it was worked out. Judgment is shown for comparison
+            only and never enters the forecast; all what-if adjustments are off unless the banner
+            above says otherwise.
+          </div>
         </div>
-        <div>
-          All triggers are OFF by default — the base forecast is untouched historical data.
-          Judgment is shown for comparison only and never enters the forecast.
-        </div>
-      </div>
+      </details>
     </div>
   )
 }

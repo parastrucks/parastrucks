@@ -3172,3 +3172,55 @@ tbody tr:hover td { background: var(--gray-50); }
 }
 .tiv-score-seg { font-weight: 700; color: var(--ink); margin-bottom: 2px; }
 .tiv-score-win { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* ─── TIV PROGRESSIVE DISCLOSURE ────────────────────────────────────
+   The audit fixes were each justified on their own and cumulatively buried
+   the number the page exists to show. Detail is folded, never deleted. */
+.tiv-fold {
+  font-size: 13px;
+  border-top: 1px solid var(--gray-100);
+  padding-top: 8px;
+  margin-top: 4px;
+}
+.tiv-fold > summary {
+  cursor: pointer;
+  color: var(--gray-600);
+  font-weight: 700;
+  list-style: none;
+  padding: 4px 0;
+  min-height: 24px;
+}
+.tiv-fold > summary::-webkit-details-marker { display: none; }
+.tiv-fold > summary::before {
+  content: '▸';
+  display: inline-block;
+  margin-right: 6px;
+  transition: transform .15s;
+}
+.tiv-fold[open] > summary::before { transform: rotate(90deg); }
+.tiv-fold > summary:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* Layer tabs and copy actions on one row; the actions sit quiet on the right. */
+.tiv-toolbar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.tiv-toolbar .tiv-tabs { margin-bottom: 0; flex: 1 1 auto; }
+.tiv-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tiv-fold > summary::before { transition: none; }
+}

@@ -80,6 +80,31 @@ console.log('\n=== a short file would train on less history than is stored ===')
   ok('28 stored months would survive untouched', d.untouched.length === 28, String(d.untouched.length))
 }
 
+console.log('\n=== empty stored months are residue, not missing history ===')
+{
+  // Exactly the production situation on 2026-08-25: the file is correct, but
+  // the database still held eight all-zero future months written by an older
+  // upload that read pre-typed rows as zeros. Comparing row COUNTS made the
+  // correct file look deficient and blamed it for the residue.
+  const real = ['Apr-25', 'May-25', 'Jun-25'].map(m => row(m, A))
+  const ghosts = ['Jul-25', 'Aug-25'].map(m => row(m, [0, 0, 0, 0, 0, 0]))
+  const d = buildUploadDiff(mk(real), mk([...real, ...ghosts]))
+  ok('empty stored months are named separately', d.emptyMonths.length === 2, d.emptyMonths.join(','))
+  ok('they are NOT counted as missing history', d.missingWithData.length === 0, d.missingWithData.join(','))
+  ok('no acknowledgement demanded for a correct file', d.coverageShortfall === null,
+    JSON.stringify(d.coverageShortfall))
+}
+
+console.log('\n=== genuinely missing history still demands acknowledgement ===')
+{
+  const current = mk(['Apr-25', 'May-25', 'Jun-25', 'Jul-25'].map(m => row(m, A)))
+  const incoming = mk(['Jun-25', 'Jul-25'].map(m => row(m, A)))
+  const d = buildUploadDiff(incoming, current)
+  ok('missing months that carry data are reported', d.missingWithData.length === 2, d.missingWithData.join(','))
+  ok('coverage shortfall names them', d.coverageShortfall?.months?.length === 2,
+    JSON.stringify(d.coverageShortfall))
+}
+
 console.log('\n=== forecast delta ===')
 {
   const before = { totals: [{ month: 'Aug-26', tiv: 700 }, { month: 'Sep-26', tiv: 779 }] }

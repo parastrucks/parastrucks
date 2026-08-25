@@ -95,9 +95,11 @@ export default function ForecastTable({
                   const jRow    = judgmentRows[fm.label]
 
                   const hasVal = dispVal !== null && dispVal !== undefined
-                  // A point estimate carrying 13.8–33.5% historic error was
-                  // shown bare, while the data to qualify it sat two tabs away
-                  // in model_backtest.
+                  // The band is computed but NOT printed under every cell any
+                  // more. Eighteen ranges competing with eighteen forecasts
+                  // made the table hard to read, and a range nobody asked for
+                  // reads as hedging rather than honesty. It now appears only
+                  // in the click-through, where it was actually wanted.
                   const band = showBands && hasVal
                     ? forecastBand(seg, dispVal, backtest, actuals)
                     : null
@@ -117,7 +119,6 @@ export default function ForecastTable({
                           {fmtSharePct(share)}
                         </span>
                       )}
-                      {band && <div className="tiv-sub">{band.low}–{band.high}</div>}
                     </>
                   )
 

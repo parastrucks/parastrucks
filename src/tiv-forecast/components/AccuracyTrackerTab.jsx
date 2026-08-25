@@ -171,7 +171,14 @@ export default function AccuracyTrackerTab({ tivActuals, judgmentTiv, modelParam
   const totalScore = score.find(r => r.column === 'Total') || null
 
   const months = useMemo(() => {
-    const set = new Set([...Object.keys(jLookup), ...Object.keys(mdlLookup)])
+    // A month where nothing can be compared is not part of the backtest. The
+    // database still holds empty future months from an older upload, and they
+    // were stretching the stated window to "20 months (Aug-25 to Mar-27)" when
+    // only twelve months have anything to measure.
+    const usable = lookup => Object.keys(lookup).filter(
+      m => ALL_COLS.some(c => lookup[m][c]?.ae !== null && lookup[m][c]?.ae !== undefined)
+    )
+    const set = new Set([...usable(jLookup), ...usable(mdlLookup)])
     // Sort chronologically using parseMonthLabel's month_index
     return [...set].sort((a, b) => {
       const ai = (()=>{ const m=a.match(/^([A-Za-z]{3})-(\d{2})$/); if(!m) return 0; const mn={Jan:1,Feb:2,Mar:3,Apr:4,May:5,Jun:6,Jul:7,Aug:8,Sep:9,Oct:10,Nov:11,Dec:12}; return (parseInt(m[2])+2000)*12+mn[m[1]]; })()
@@ -206,11 +213,23 @@ export default function AccuracyTrackerTab({ tivActuals, judgmentTiv, modelParam
 
   return (
     <div>
-      {/* Methodology caption — what this backtest is, and what it replaced */}
-      <div className="card mb-16" style={{ fontSize: 12.5, lineHeight: 1.75, color: 'var(--gray-500)' }}>
-        <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--ink)', marginBottom: 4 }}>
-          How to read this
+      {/* Four paragraphs of methodology opened this tab before a single number.
+          The headline answer stays visible; the reasoning folds. */}
+      <div className="card mb-16" style={{ fontSize: 13, lineHeight: 1.7 }}>
+        <div>
+          Each month, the model is refit on data from <em>before</em> that month and asked to
+          forecast it — so these are honest out-of-sample errors, not a fit to known answers.
+          {mdlMape.Total !== null && jMape.Total !== null && (
+            <> On the combined Total-TIV number the model averaged{' '}
+            <strong>{mdlMape.Total.toFixed(1)}%</strong> error against judgment&rsquo;s{' '}
+            <strong>{jMape.Total.toFixed(1)}%</strong>.</>
+          )}
         </div>
+      </div>
+
+      <details className="tiv-fold mb-16">
+        <summary>What these percentages mean</summary>
+        <div style={{ marginTop: 6, fontSize: 12.5, lineHeight: 1.75, color: 'var(--gray-600)' }}>
         <div>
           Corrected <strong>{months.length}-month walk-forward</strong> backtest
           {months.length > 0 && <> ({months[0]} to {months[months.length - 1]})</>}: for each month
@@ -241,7 +260,8 @@ export default function AccuracyTrackerTab({ tivActuals, judgmentTiv, modelParam
           56 of 72 segment-months and invalidated every model selection made on it. All figures here use
           period-matched estimators.
         </div>
-      </div>
+        </div>
+      </details>
 
       {/* MAPE bar chart */}
       {mapeChartData.length > 0 && (
@@ -284,20 +304,25 @@ export default function AccuracyTrackerTab({ tivActuals, judgmentTiv, modelParam
               )}.
             </div>
           )}
-          <div className="tiv-score">
-            {score.filter(r => r.column !== 'Total').map(r => (
-              <div className="tiv-score-cell" key={r.column}>
-                <div className="tiv-score-seg">{r.column}</div>
-                <div className="tiv-score-win">
-                  {r.modelWins}<span className="tiv-sub"> / {r.compared}</span>
+          {/* The headline sentence is the point; six cards underneath it were
+              detail nobody had asked for yet. */}
+          <details className="tiv-fold">
+            <summary>Segment by segment</summary>
+            <div className="tiv-score" style={{ marginTop: 8 }}>
+              {score.filter(r => r.column !== 'Total').map(r => (
+                <div className="tiv-score-cell" key={r.column}>
+                  <div className="tiv-score-seg">{r.column}</div>
+                  <div className="tiv-score-win">
+                    {r.modelWins}<span className="tiv-sub"> / {r.compared}</span>
+                  </div>
+                  <div className="tiv-sub">
+                    months the model was closer
+                    {r.unitsSaved !== 0 && <> · {r.unitsSaved > 0 ? '−' : '+'}{Math.abs(r.unitsSaved)} units of error</>}
+                  </div>
                 </div>
-                <div className="tiv-sub">
-                  months the model was closer
-                  {r.unitsSaved !== 0 && <> · {r.unitsSaved > 0 ? '−' : '+'}{Math.abs(r.unitsSaved)} units of error</>}
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          </details>
         </div>
       )}
 

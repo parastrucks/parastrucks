@@ -367,7 +367,21 @@ export default function UploadPanel({ onUploadComplete, current = {} }) {
                       {' · '}<strong>{diff.changed.length}</strong> month{diff.changed.length === 1 ? '' : 's'} amended
                       {diff.changedCells > 0 && <> ({diff.changedCells} cell{diff.changedCells === 1 ? '' : 's'})</>}
                       {' · '}<strong>{diff.unchanged}</strong> unchanged
-                      {diff.untouched.length > 0 && <> · {diff.untouched.length} month{diff.untouched.length === 1 ? '' : 's'} in the database are not in this file and would be left as they are</>}
+                      {diff.missingWithData.length > 0 && <> · {diff.missingWithData.length} month{diff.missingWithData.length === 1 ? '' : 's'} of data in the database are not in this file and would be left as they are</>}
+                    </div>
+                  )}
+
+                  {/* Empty months already stored are residue from an older
+                      upload that read pre-typed future rows as zeros. Named
+                      plainly, because otherwise they look like the file's fault. */}
+                  {diff.emptyMonths.length > 0 && (
+                    <div className="tiv-warn" style={{ marginTop: 6 }}>
+                      ⚠ The database also holds {diff.emptyMonths.length} empty month
+                      {diff.emptyMonths.length === 1 ? '' : 's'} ({diff.emptyMonths.slice(0, 4).join(', ')}
+                      {diff.emptyMonths.length > 4 ? `, +${diff.emptyMonths.length - 4} more` : ''}) that
+                      this file correctly does not contain. They were written by an older upload that read
+                      pre-typed future rows as zeros. Uploading will not remove them — they need clearing
+                      separately.
                     </div>
                   )}
 
@@ -422,9 +436,14 @@ export default function UploadPanel({ onUploadComplete, current = {} }) {
                     current one.</div>
                   )}
                   {diff.coverageShortfall && (
-                    <div>This file has {diff.coverageShortfall.fileMonths} months but the database holds
-                    {' '}{diff.coverageShortfall.dbMonths}. The model is retrained on the FILE, so it would
-                    be trained on less history than the page still displays.</div>
+                    <div>
+                      {diff.coverageShortfall.months.length} month
+                      {diff.coverageShortfall.months.length === 1 ? '' : 's'} of real data in the
+                      database {diff.coverageShortfall.months.length === 1 ? 'is' : 'are'} missing from
+                      this file ({diff.coverageShortfall.months.slice(0, 5).join(', ')}
+                      {diff.coverageShortfall.months.length > 5 ? ', …' : ''}). The model is retrained on
+                      the FILE, so it would be trained on less history than the page still displays.
+                    </div>
                   )}
                   <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, cursor: 'pointer' }}>
                     <input type="checkbox" checked={acknowledged} onChange={e => setAcknowledged(e.target.checked)} />

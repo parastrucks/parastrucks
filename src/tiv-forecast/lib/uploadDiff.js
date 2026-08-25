@@ -45,9 +45,16 @@ export function buildUploadDiff(parsed, current = {}) {
   // delete, so these SURVIVE the upload -- which is worth saying, because the
   // natural reading of "replacing the data" is that they would not.
   const incomingMonths = new Set(incoming.map(r => r.month_label))
-  const untouched = currentTiv
-    .filter(r => !incomingMonths.has(r.month_label))
-    .map(r => r.month_label)
+  const missing = currentTiv.filter(r => !incomingMonths.has(r.month_label))
+  const untouched = missing.map(r => r.month_label)
+
+  // Of those, the ones that carry no data at all are almost certainly the
+  // pre-typed future months an older parser wrote as zeros before blank rows
+  // were skipped. They are not history the file is missing -- they are
+  // residue, and counting them as history made a correct file look deficient.
+  const hasData = r => COLS.some(c => Number(r[c]) > 0)
+  const emptyMonths = missing.filter(r => !hasData(r)).map(r => r.month_label)
+  const missingWithData = missing.filter(hasData).map(r => r.month_label)
 
   const changedCells = changed.reduce((s, m) => s + m.cells.length, 0)
   const overlap = incoming.length - added.length
@@ -58,6 +65,8 @@ export function buildUploadDiff(parsed, current = {}) {
     changedCells,
     unchanged,
     untouched,
+    emptyMonths,
+    missingWithData,
     isFirstUpload: currentTiv.length === 0,
     // A file that rewrites essentially every month it overlaps is not an
     // incremental update. Either it is a different dataset (the multi-brand
@@ -65,8 +74,17 @@ export function buildUploadDiff(parsed, current = {}) {
     wholesaleRewrite: overlap >= 6 && changed.length >= overlap * 0.9,
     // Retraining runs on the FILE, not the database, so a short file trains a
     // model that ignores history the database still holds and still displays.
-    coverageShortfall: currentTiv.length > 0 && incoming.length < currentTiv.length
-      ? { fileMonths: incoming.length, dbMonths: currentTiv.length }
+    //
+    // The test is whether real history is missing -- NOT whether the row counts
+    // differ. Comparing counts made a perfectly correct file look deficient
+    // because the database still held eight empty future months from an older
+    // upload, and pointed the blame at the file instead of at the residue.
+    coverageShortfall: missingWithData.length > 0
+      ? {
+          fileMonths: incoming.length,
+          dbMonths: currentTiv.length,
+          months: missingWithData,
+        }
       : null,
   }
 }
