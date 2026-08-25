@@ -4,6 +4,8 @@ import { useState } from 'react'
 import Icon from '../../components/Icon'
 import { useAuth } from '../../context/AuthContext'
 import ForecastTable from './ForecastTable'
+import { SEGMENTS } from '../constants'
+import { explainForecast, toleranceOdds } from '../lib/forecastQuality'
 
 // Each layer owns its own title and caption. The captions used to be passed to
 // ForecastTable and then never rendered, so the share basis and the 75% cap
@@ -48,10 +50,12 @@ function buildJudgmentRows(judgmentData, forecastMonths) {
   return rows
 }
 
-export default function ForecastOutputTab({ forecastResult, judgmentTiv, judgmentPtb }) {
+export default function ForecastOutputTab({ forecastResult, judgmentTiv, judgmentPtb, modelParams, tivActuals = [] }) {
   const { profile } = useAuth()
   const isAdmin = profile?.permission_level === 'admin'
   const [activeLayer, setActiveLayer] = useState('tiv')
+  const [explain, setExplain] = useState(null)
+  const [copied, setCopied]   = useState('')
 
   if (!forecastResult) {
     return (
@@ -70,7 +74,39 @@ export default function ForecastOutputTab({ forecastResult, judgmentTiv, judgmen
     )
   }
 
-  const { forecastMonths, bySegment } = forecastResult
+  const { forecastMonths, bySegment, totals } = forecastResult
+
+  async function writeClipboard(text, note) {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(note)
+      setTimeout(() => setCopied(''), 2500)
+    } catch {
+      setCopied('Could not copy — your browser blocked clipboard access.')
+      setTimeout(() => setCopied(''), 4000)
+    }
+  }
+
+  function copyTable(layerId) {
+    const key = layerId === 'al' ? 'al' : layerId === 'ptb' ? 'ptb' : 'tiv'
+    const header = ['Segment', ...forecastMonths.map(fm => fm.label)].join('\t')
+    const rows = SEGMENTS.map(seg => {
+      const cells = forecastMonths.map(fm => {
+        const r = bySegment[seg]?.find(x => x.month === fm.label)
+        const v = r ? r[key] : null
+        return v ?? ''
+      })
+      return [seg, ...cells].join('\t')
+    })
+    const totalRow = ['Total', ...totals.map(t => t[key] ?? '')].join('\t')
+    writeClipboard([header, ...rows, totalRow].join('\n'), 'Table copied — paste into Excel.')
+  }
+
+  function copySummary() {
+    const parts = totals.map(t => `${t.month} ${t.tiv ?? '—'}`).join(' · ')
+    const trained = modelParams?.last_data_month ? `, data to ${modelParams.last_data_month}` : ''
+    writeClipboard(`TIV forecast — ${parts} (model v3.0${trained})`, 'Summary copied.')
+  }
   const jTivRows = buildJudgmentRows(judgmentTiv, forecastMonths)
   const jPtbRows = buildJudgmentRows(judgmentPtb, forecastMonths)
 
@@ -80,6 +116,20 @@ export default function ForecastOutputTab({ forecastResult, judgmentTiv, judgmen
           travels with every tab instead of labelling only this one. It also
           used to be nowrap+ellipsis with no magnitude, so with several triggers
           on it silently hid the ones bending the numbers most. */}
+
+      {/* The page's own subtitle says "AL submission preparation", but every
+          number left this screen by being retyped — the highest-stakes
+          transcription step was the one the tool didn't touch. TSV pastes
+          straight into Excel; the one-liner is for WhatsApp. */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+        <button className="btn btn-secondary btn-sm" onClick={() => copyTable(activeLayer)}>
+          Copy table
+        </button>
+        <button className="btn btn-secondary btn-sm" onClick={copySummary}>
+          Copy summary line
+        </button>
+        {copied && <span className="tiv-sub" role="status">{copied}</span>}
+      </div>
 
       {/* Layer sub-tabs */}
       <div className="tiv-tabs tiv-tabs-sm" role="tablist" aria-label="Forecast layer">
@@ -117,9 +167,47 @@ export default function ForecastOutputTab({ forecastResult, judgmentTiv, judgmen
             showShare={l.id !== 'tiv'}
             shareKey={l.id === 'al' ? 'alShare' : 'ptbShare'}
             judgmentRows={l.id === 'tiv' ? jTivRows : l.id === 'ptb' ? jPtbRows : {}}
+            showBands={l.id === 'tiv'}
+            backtest={modelParams?.model_backtest || []}
+            actuals={tivActuals}
+            onExplain={l.id === 'tiv' ? setExplain : null}
           />
         </div>
       ))}
+
+      {/* "Where does 736 come from" — every input is already in model_params,
+          so this is a formatter, not a second model. It turns the method-map
+          footnote from trivia into something checkable. */}
+      {explain && (
+        <div className="tiv-receipt">
+          <button className="tiv-receipt-close" onClick={() => setExplain(null)} aria-label="Close">×</button>
+          <div style={{ fontWeight: 700, marginBottom: 6 }}>
+            {explain.segment} · {explain.label} = {explain.value}
+          </div>
+          {(() => {
+            const r = explainForecast(explain.segment, explain.label, modelParams)
+            if (!r) return <div>No derivation is available for this month.</div>
+            const odds = toleranceOdds(explain.segment, modelParams?.model_backtest || [], tivActuals)
+            return (
+              <>
+                <div className="tiv-sub" style={{ marginBottom: 6 }}>Method: {r.methodName}</div>
+                <ol style={{ margin: 0, paddingLeft: 18 }}>
+                  {r.steps.map((s, i) => <li key={i} style={{ marginBottom: 2 }}>{s}</li>)}
+                </ol>
+                {explain.band && (
+                  <div style={{ marginTop: 8 }}>
+                    Likely range <strong>{explain.band.low}–{explain.band.high}</strong> — in the{' '}
+                    {explain.band.months}-month backtest, all but the best and worst month landed
+                    within ±{(explain.band.spread * 100).toFixed(0)}% of the forecast.
+                    {odds && <> This segment was inside Ashok Leyland&rsquo;s 15% tolerance in{' '}
+                      <strong>{odds.within} of {odds.total}</strong> of those months.</>}
+                  </div>
+                )}
+              </>
+            )
+          })()}
+        </div>
+      )}
 
       {/* Method map — which estimator produced each row (spec §5.5) */}
       <div className="tiv-note tiv-note-top">

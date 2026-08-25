@@ -299,21 +299,21 @@ themselves want darkening.
 All pure-frontend formatters over data already on the client. Each is independently shippable;
 stop wherever the owner says stop.
 
-- [ ] **W4.1 (C3) Uncertainty** — per-segment empirical range from `model_backtest`:
+- [x] **W4.1 (C3) Uncertainty** — per-segment empirical range from `model_backtest`:
   `736 ⟨646–826⟩` sub-line (reuse the `tiv-sub` share pattern) + tolerance-odds line
   ("within AL's 15% in 9 of 12 backtest months", ●▲■ vocabulary). Recommend range = the middle
   10 of 12 backtest abs errors (drop best+worst) applied symmetrically; document whatever you
   choose in the UI caption — the method must be inspectable, not mystical.
-- [ ] **W4.2 (C2) "Why this number" receipt** — click a forecast cell → popover/bottom-sheet
+- [x] **W4.2 (C2) "Why this number" receipt** — click a forecast cell → popover/bottom-sheet
   with the 3–4 line derivation per method (ROB/THETA/ADAPT templates; all inputs in
   `model_params`). Include active-trigger multipliers when present.
-- [ ] **W4.3 (C4) Model-vs-judgment scoreboard** — card row above the MAPE chart: per segment,
+- [x] **W4.3 (C4) Model-vs-judgment scoreboard** — card row above the MAPE chart: per segment,
   months-closer count + cumulative units of error saved; headline "model closer in N/12 months,
   M units less error over the year".
-- [ ] **W4.4 (C5) Trigger delta preview** — run base + adjusted `runForecast`; struck-through
+- [x] **W4.4 (C5) Trigger delta preview** — run base + adjusted `runForecast`; struck-through
   baseline next to adjusted in tables (`~~761~~ → 736`), live per-trigger impact on the trigger
   card while dragging.
-- [ ] **W4.5 (C12) WhatsApp one-liner + copy-table** — per-table copy button writing
+- [x] **W4.5 (C12) WhatsApp one-liner + copy-table** — per-table copy button writing
   `text/html` + TSV dual-flavor clipboard; header chip writing the one-liner
   (`TIV forecast Aug/Sep/Oct-26: 736 / 779 / 850 (model v3.0, trained 24-Aug)`).
 - [ ] **W4.6 (B1) Export + print** — "Download forecast (.xlsx)"; round-trip export in the
@@ -323,6 +323,30 @@ stop wherever the owner says stop.
   rows by `trained_at`); plot prior vintage faintly on the Segments chart with a legend entry.
   ⚠️MB: params rows are NOT entity/brand-scoped in reads — after the multi-brand constraint fix,
   scope this fetch too.
+
+---
+
+#### ✅ Wave 4 (partial) SHIPPED 2026-08-25 — branch `tiv-uiux-w4`, commit `ba65a67`
+
+W4.1–W4.5 shipped. **W4.6 (xlsx download / round-trip export / print stylesheet) and W4.7
+(vintage ghost line) remain open** — "Copy table" (TSV) and "Copy summary line" cover the
+day-to-day need, so the remaining export work is a genuine nice-to-have rather than a gap.
+
+New module `src/tiv-forecast/lib/forecastQuality.js` + `scripts/tiv/selftest-quality.mjs`
+(**31/31 against the real trained model**). Design notes worth keeping:
+
+- **The band's derivation is stated in the UI, not hidden.** Drop the best and worst backtest
+  month, take the widest error remaining → "all but the best and worst of the last twelve months
+  landed inside this". A range whose derivation is a mystery is worse than no range. It is WIDE
+  for some segments (Tractor ±59%) — that is the truth, and the whole point of the feature.
+- **The receipt is tested to reproduce the number it explains** (Bus PVT: "56 × 1.150 = 64",
+  table shows 64). THETA receipts describe the blend in words rather than restating it, because
+  the trend term is not hand-checkable and pretending otherwise would be worse than saying less.
+- **The scoreboard is the most quotable thing built in this whole programme**: measured on the
+  Total-TIV column that actually goes to AL, the model was closer in **11 of 12 months and 726
+  units nearer** over the period. Per segment it is honest both ways (ICV Trucks 11/12,
+  Tractor 4/12). Worth telling the owner directly — it is a much stronger claim than "26.4% vs
+  28.6%" and it was sitting in data the tab already had.
 
 ---
 

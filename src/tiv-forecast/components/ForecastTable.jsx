@@ -2,6 +2,7 @@
 // forecastMonths items have { label, month_num, horizon } — use fm.label, NOT fm.month
 import { Fragment } from 'react'
 import { SEGMENTS } from '../constants'
+import { forecastBand } from '../lib/forecastQuality'
 
 // Which layer's number this table renders. Previously inferred by string-matching
 // the `title` prop (`title.includes('Layer 1') || title.toLowerCase().includes('tiv')`),
@@ -24,6 +25,12 @@ export default function ForecastTable({
   showShare,
   shareKey,
   judgmentRows = {},
+  // Uncertainty + explainability. Optional — a table given none of these
+  // renders exactly as it did before.
+  showBands = false,
+  backtest = [],
+  actuals = [],
+  onExplain = null,
 }) {
   if (!forecastMonths.length) return null
 
@@ -87,24 +94,42 @@ export default function ForecastTable({
                   const share   = showShare && row ? row[shareKey] : null
                   const jRow    = judgmentRows[fm.label]
 
-                  if (jRow) {
-                    return (
-                      <Fragment key={fm.label}>
-                        <td className="tiv-num">{dispVal ?? '—'}</td>
-                        <td className="tiv-num tiv-judg">{jRow[seg] ?? '—'}</td>
-                      </Fragment>
-                    )
+                  const hasVal = dispVal !== null && dispVal !== undefined
+                  // A point estimate carrying 13.8–33.5% historic error was
+                  // shown bare, while the data to qualify it sat two tabs away
+                  // in model_backtest.
+                  const band = showBands && hasVal
+                    ? forecastBand(seg, dispVal, backtest, actuals)
+                    : null
+                  const clickable = !!onExplain && hasVal
+                  const cellProps = {
+                    className: ['tiv-num', clickable ? 'tiv-explainable' : ''].filter(Boolean).join(' '),
+                    onClick: clickable
+                      ? () => onExplain({ segment: seg, label: fm.label, value: dispVal, band })
+                      : undefined,
+                    title: clickable ? 'Show how this number was worked out' : undefined,
                   }
-                  return (
-                    <td key={fm.label} className="tiv-num">
+                  const body = (
+                    <>
                       <span style={{ fontWeight: 700 }}>{dispVal ?? '—'}</span>
                       {showShare && share !== null && (
                         <span className="tiv-sub" style={{ marginLeft: 4 }}>
                           {fmtSharePct(share)}
                         </span>
                       )}
-                    </td>
+                      {band && <div className="tiv-sub">{band.low}–{band.high}</div>}
+                    </>
                   )
+
+                  if (jRow) {
+                    return (
+                      <Fragment key={fm.label}>
+                        <td {...cellProps}>{body}</td>
+                        <td className="tiv-num tiv-judg">{jRow[seg] ?? '—'}</td>
+                      </Fragment>
+                    )
+                  }
+                  return <td key={fm.label} {...cellProps}>{body}</td>
                 })}
               </tr>
             ))}

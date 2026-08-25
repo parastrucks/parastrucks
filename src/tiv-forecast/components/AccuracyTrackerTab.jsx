@@ -4,6 +4,7 @@ import { useMemo, useState, Fragment } from 'react'
 import Icon from '../../components/Icon'
 import { SEGMENTS, SEG_COL, AL_TOLERANCE } from '../constants'
 import SegmentChart from './SegmentChart'
+import { scoreboard } from '../lib/forecastQuality'
 
 function absErr(forecast, actual) {
   if (!actual || actual === 0 || forecast === null || forecast === undefined) return null
@@ -163,6 +164,12 @@ export default function AccuracyTrackerTab({ tivActuals, judgmentTiv, modelParam
   const hasMdl = Object.keys(mdlLookup).length > 0
   const hasBoth = hasJdg && hasMdl
 
+  const score = useMemo(
+    () => (hasBoth ? scoreboard(mdlLookup, jLookup, ALL_COLS) : []),
+    [hasBoth, mdlLookup, jLookup],
+  )
+  const totalScore = score.find(r => r.column === 'Total') || null
+
   const months = useMemo(() => {
     const set = new Set([...Object.keys(jLookup), ...Object.keys(mdlLookup)])
     // Sort chronologically using parseMonthLabel's month_index
@@ -255,6 +262,42 @@ export default function AccuracyTrackerTab({ tivActuals, judgmentTiv, modelParam
             referenceLines={[{ value: 15, color: 'var(--green)', label: '15% AL tolerance' }]}
             height={200}
           />
+        </div>
+      )}
+
+      {/* "26.4% vs 28.6%" is a true statement nobody can repeat or act on.
+          The same data says how often the model was closer, and by how many
+          units over the year — which is the sentence that gets said out loud
+          in a review meeting. */}
+      {hasBoth && score.length > 0 && (
+        <div className="card mb-16">
+          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8 }}>
+            Model versus judgment, month by month
+          </div>
+          {totalScore && (
+            <div style={{ fontSize: 13, marginBottom: 10 }}>
+              On the combined Total-TIV number the model was closer in{' '}
+              <strong>{totalScore.modelWins} of {totalScore.compared}</strong> months
+              {totalScore.unitsSaved !== 0 && (
+                <> and finished <strong>{Math.abs(totalScore.unitsSaved)} units</strong>{' '}
+                {totalScore.unitsSaved > 0 ? 'closer' : 'further away'} over the period</>
+              )}.
+            </div>
+          )}
+          <div className="tiv-score">
+            {score.filter(r => r.column !== 'Total').map(r => (
+              <div className="tiv-score-cell" key={r.column}>
+                <div className="tiv-score-seg">{r.column}</div>
+                <div className="tiv-score-win">
+                  {r.modelWins}<span className="tiv-sub"> / {r.compared}</span>
+                </div>
+                <div className="tiv-sub">
+                  months the model was closer
+                  {r.unitsSaved !== 0 && <> · {r.unitsSaved > 0 ? '−' : '+'}{Math.abs(r.unitsSaved)} units of error</>}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

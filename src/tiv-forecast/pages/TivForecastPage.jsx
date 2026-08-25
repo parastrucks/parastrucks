@@ -341,6 +341,8 @@ export default function TivForecastPage() {
           forecastResult={forecastResult}
           judgmentTiv={judgmentTiv}
           judgmentPtb={judgmentPtb}
+          modelParams={modelParams}
+          tivActuals={tivActuals}
         />
       )}
       {activeTab === 'triggers' && triggerState && (
