@@ -26,6 +26,262 @@
 
 ---
 
+## Session log — 2026-08-25: TIV Forecast UI/UX — six-lane audit, four remediation waves, and a course correction from the owner
+
+**Outcome:** six PRs shipped to prod (**#102 `485430e`**, **#103 `5446ac8`**, **#104 `868857f`**,
+**#105 `bdba3a4`**, **#106 `0649493`**, **#107 `65adccb`**), two migrations applied, `admin-tiv`
+redeployed, and **16 rows of corrupt production data cleared**. The engine's numbers never moved:
+the parity gate held **21/21 exact (736 / 779 / 850, backtest 26.4%)** before and after every
+single change. The session's most valuable moment was not a fix — it was the owner rejecting the
+result of the first four waves as cluttered, which was correct.
+
+### 1. The audit
+
+Six adversarial lanes were run as parallel read-only source audits against `44474bd`, each blind
+to the others: first-contact/hierarchy · data comprehension · Excel parity · accessibility+touch ·
+misleading-numbers · admin journey. Every citation was re-verified against real source before it
+entered the report; two mechanisms were corrected and one finding promoted during verification.
+
+Output: `docs/backlog/tiv-uiux-audit-2026-08-25.md` — findings A1–A8 ("the numbers can lie"),
+B1–B7 ("glaring gaps"), 13 novel ideas ranked by value-per-line, and a list of things deliberately
+**not** worth building. Convergent hits across blind lanes were treated as highest-confidence:
+missing export (3 lanes), zero-vs-null conflation (3), trigger labelling (3).
+
+Execution plan: `docs/backlog/tiv-uiux-fix-roadmap.md`, with per-item acceptance checks, the owner
+decisions to batch, and the verification protocol.
+
+### 2. Wave 1 — the numbers stopped lying (PR #102)
+
+The unifying insight: **almost every defect was a blank-vs-zero conflation at a boundary** — the
+parser, the anchor lookup, the judgment join, the chart mapper. The engine's arithmetic was sound;
+the edges were resolving "we don't know" into a confident figure.
+
+- **A1, and it was live.** `retrainModel` writes SMLY anchors for exactly the three months after
+  `last_data_month`, but the forecast window advances with the calendar. When it outran them,
+  `?? 0` rendered a **bold zero** for the three ROB segments and a plausible ~60%-low number for
+  the two THETA segments, then cascaded both into the AL and PTB layers. Trained through Jul-26,
+  **on 1 September the window becomes Sep/Oct/Nov-26 with no Nov anchor** — this would have fired
+  seven days after the audit. Now `baseForecast` returns null, the cascade carries it, and a red
+  banner names the affected months.
+- **The forecast month came from the viewer's clock.** Now derived in IST, so a laptop an hour
+  either side of the boundary cannot shift the grid or the horizon feeding the Theta term.
+- **Blank Excel cells became real data.** Pre-typed future months parsed as six zeros (moving
+  `last_data_month` into the future, pinning the YoY cap at −15%, poisoning seasonals). Blank AL
+  cells emitted zero AL rows, which advanced `lastAlMonth` and **silently hid the "AL share as
+  of …" chip** — the one safeguard against a stale share cascade.
+- **A blank judgment cell became "judgment predicted 0"** — a red 100% error asserting a call
+  nobody made, and every one inflated judgment MAPE, biasing the model-vs-judgment comparison in
+  the model's favour.
+- **Structure was never validated.** Segment columns were read by position and never checked
+  against headers, so an inserted column in Excel loaded every segment into the wrong bucket and
+  retrained the model on it. Sheets were addressed by position, so a scratch sheet made the parser
+  read the wrong sheet and blame the right one. Both now fail loudly, in the workbook's vocabulary.
+
+**Critical detail:** the guard skips **all-blank** rows, never all-**zero** rows. The 2022 PTB
+ramp-up months are *genuine* zeros (Sep-22 = 62 Haulage only), verified cell by cell in the
+source — the obvious version of this fix would have deleted six months of real history.
+
+### 3. Wave 2 — the upload became a transaction (PR #103)
+
+Eight sequential Edge Function calls from the browser became one. New Postgres function
+`tiv_upload_all()` performs snapshot + six upserts + model params + history **inside one
+transaction**; `admin-tiv` gained an `uploadAll` action.
+
+- Before: a failure at step four left prod half-overwritten — new actuals under the old model —
+  with an error naming no step. A failure of the **last** call (history) reported *"Upload failed"*
+  for an upload that had fully committed.
+- **Revertible.** Every upload now snapshots the entity/brand's seven tables into the new
+  `tiv_forecast_snapshots` table first (owner-approved, additive, admin-only RLS).
+- **Reviewed.** Parse and retrain are pure client functions, so the whole consequence is knowable
+  before the first byte is written. The preview shows per-sheet counts, months added, months
+  amended **with the actual cell changes**, months left untouched, and the resulting forecast with
+  its delta. Two shapes demand explicit acknowledgement: a file rewriting nearly every month it
+  overlaps, and a file carrying less history than the database holds.
+- **Interim 409 guard** for the documented multi-entity/brand defect: the function refuses an
+  upload whose months belong to a different entity/brand. Does **not** replace the constraint fix.
+- **`admin-tiv` tightened to admin-only.** It accepted `back_office` while the panel rendered for
+  admins alone, and every write bypasses RLS via the service-role client.
+
+Verified with a **self-aborting probe** — real payload through the real function, exercising both
+the `ON CONFLICT` update and insert paths plus a v3-shaped params object missing the retired v2.1
+columns, then rolled back: 60→61→60 rows, 18→19→18 params, snapshot carried all seven keys, Jul-26
+restored to 85/162/810, zero residue.
+
+⚠️ Caught before applying: `jsonb_populate_record(...).*` supplies an explicit NULL `id`, which
+overrides the sequence default and violates NOT NULL. Columns are enumerated instead.
+
+### 4. Wave 3 — the shell (PR #104)
+
+The 2026-08-24 pass hardened the *inside* of the tables; the chrome around them had never been
+audited for phones, keyboards, or failure.
+
+- **Every failure looked like "no data".** A load error was a six-second toast, after which the
+  page rendered exactly like an empty database — telling the reader to upload a file. An engine
+  crash was swallowed without even a console line and rendered identically, so the natural response
+  to a *code bug* was a destructive re-upload. A non-admin whose RLS returned nothing was told to
+  upload a file by a panel that does not render for them.
+- **The headline number was the hardest to find** — bottom-left cell of a table, five strata down.
+- **Adjusted numbers masqueraded as the forecast.** The trigger banner existed only on the Forecast
+  tab while the Segments tab charted the same adjusted figures unmarked, under a page banner
+  reading "Judgment-free forecast".
+- **Phone and keyboard:** the tab bar needed ~388px at a 375px viewport with no wrap and no
+  overflow-x under `body{overflow-x:hidden}`, so **the Accuracy tab was clipped and unreachable**;
+  the upload panel was **entirely keyboard-dead** (bare `<div onClick>` header, `display:none` file
+  input); trigger controls had no accessible names; the severity slider suppressed its own focus
+  ring; charts had no role or name; the show-values toggle was a ~14px target.
+- **Contrast:** gray-500 `#767676` on the gray-50 page ground `#F4F4F4` is **4.13:1**, below AA.
+  Moved to gray-600 `#565656` = **6.85:1**.
+- Deep-linking via `?tab=`; sticky month/segment column.
+
+### 5. Wave 4 — the value layer (PR #105)
+
+All formatting over data already on the client. No schema or engine change.
+
+- **Uncertainty** from real backtest error, with its derivation stated in the UI.
+- **"Where does 736 come from"** — a click-through receipt, tested to reproduce the number it
+  explains (Bus PVT: `56 × 1.150 = 64`, table shows 64). THETA receipts describe the blend in words
+  rather than restating it, because the trend term is not hand-checkable.
+- **Model-vs-judgment scoreboard.** The most quotable result of the whole programme: measured on
+  the **Total-TIV column that actually goes to Ashok Leyland**, the model was closer in **11 of the
+  last 12 months and finished 726 units nearer** over the period. Per segment it is honest both
+  ways — ICV Trucks 11/12, Tractor 4/12.
+- **Copy table** (TSV, pastes into Excel) and **Copy summary line** (for WhatsApp).
+
+### 6. The course correction (PR #106) — the most important part of the session
+
+Owner, reviewing the four shipped waves:
+
+> "All pages have too much information. This is adding to the clutter, which would make the
+> employees feel intimidated rather than informed."
+
+He was right, and **it was a failure of aggregate, not of any single change**. Every finding was
+fixed on its own merits and nothing checked the sum. The Forecast tab had grown to **eleven blocks
+before the first number**, with a range printed under all eighteen cells competing with the
+eighteen forecasts. The Accuracy tab opened with **four paragraphs of methodology**. The standing
+rule in `memory/feedback_excel_parity.md` — *adoption is the success metric, novelty is a cost* —
+was violated by accretion.
+
+**Principle now applied: the default view answers the question; everything else is one click away,
+folded rather than deleted** (`.tiv-fold`). Owner chose *middle* density, *remove the ranges*, and
+tune for **the GM opening it monthly** rather than for himself.
+
+- Ranges out of the table entirely; the band survives only in the click-through.
+- Judgment stays side by side.
+- Method footnotes → one closed `<details>`, rewritten in the reader's language — **no
+  ROB/THETA/ADAPT in GM-facing copy**.
+- Accuracy leads with one sentence carrying the two headline figures; the essay folds.
+- Scoreboard headline visible, six cards fold.
+- Copy actions became quiet ghost buttons on the layer-tab row.
+
+**Design rule adopted: when adding a UI element, state what it pushes further down the page.**
+
+### 7. Production data residue, and the graph the owner was looking at (PR #107)
+
+The new upload preview warned *"this file has 52 months but the database holds 60"* — on the
+owner's own current workbook. The warning fired correctly and **pointed at the wrong thing**.
+
+Measured on prod: the 8 extra months were **Aug-26 … Mar-27, all zeros, written 2026-08-21** into
+both `tiv_actuals` and `ptb_actuals` — the pre-typed future rows the old parser read as
+`Number('') || 0`. `al_actuals` was clean, because the Raw Data sheet is keyed by month headers
+those months never had. The file was right; the database held residue; and because upserts never
+delete, a re-upload could not clear it.
+
+Two visible consequences, both from the same cause:
+
+1. **The Segments chart fell to zero** after the last real month and ran flat through Mar-27.
+2. **"Oct-26" appeared twice on the axis.** Chart data was every stored month (including the
+   ghosts) *and then* the three forecast months appended as separate rows, so Aug/Sep/Oct-26 each
+   existed twice — recharts drew duplicate categories and stranded the forecast past Mar-27.
+
+⚠️ **Process note worth keeping:** the zero-cliff was asserted from a database query, not from
+reading the owner's screenshot — and the duplicate-axis symptom was visible in that same image and
+was missed. When the owner supplies evidence, read it as evidence rather than as confirmation.
+
+**Cleanup (owner-approved):** migration `clear_ghost_future_months` removed **16 rows**, after
+snapshotting all 60 pre-delete rows into `tiv_forecast_snapshots`. The predicate computed its own
+cutoff — `max(month_index) where sum > 0` — and self-aborted if it matched more than 12 rows per
+table. The rule was **"empty AND after the last real month"**, never "value is zero": the six
+genuine 2022 PTB ramp-up zeros survived. All four tables now hold 52 months ending Jul-26.
+
+**Handover gap closed:** the forecast series now starts at the last actual value (Jul-26 actual 85,
+forecast 85 → 64) — but **only when `forecastMonths[0].horizon === 1`**. If the model is stale and
+the window has run ahead, that gap is real and bridging it would claim months nobody forecast.
+Series construction moved to `src/tiv-forecast/lib/chartData.js` so the test exercises the code the
+tab runs rather than a reimplementation. A forecast-boundary marker was considered and **rejected**
+as more clutter.
+
+### 8. Owner decisions taken this session
+
+| Decision | Choice |
+|---|---|
+| Merge Wave 1 to prod | Yes |
+| `admin-tiv` role gate | **Tighten to admin-only** |
+| New `tiv_forecast_snapshots` table | Approved |
+| Default-view density | **Middle** — keep judgment visible, remove the ranges |
+| Audience to tune for | **The GM opening it monthly** |
+| Clear the 16 ghost rows | Approved |
+
+### 9. Verification estate now standing
+
+All bundle via esbuild first (`npx esbuild <script> --bundle --platform=node --format=esm --outfile=<tmp>/x.mjs`),
+then run against the gitignored workbook.
+
+| Suite | Result | What it defends |
+|---|---|---|
+| `parity-gate` | **21/21 @ 26.4%** | the referee — ran before and after every wave, **never moved** |
+| `selftest-parser` | 13/13 | blank-vs-zero, future months, header/sheet validation, canonical labels |
+| `selftest-stale-anchors` | 14/14 | real trained model at mocked dates, incl. the IST boundary |
+| `selftest-upload-diff` | 27/27 | the diff preview, incl. the exact prod residue shape |
+| `selftest-quality` | 31/31 | every range brackets its forecast; every receipt reproduces its number |
+| `selftest-chart` | 22/22 | duplicate categories, handover, stale non-bridging, genuine zeros |
+
+Plus `diag-blank-zero.mjs` and `diag-raw-cells.mjs` as workbook inspectors.
+
+### 10. Mistakes made, and the guards added
+
+- **`git reset --hard origin/portal`** in a tree with a modified `.claude/settings.local.json`
+  discarded this session's permission additions. Use `git checkout` + `git pull --rebase`; never
+  `reset --hard` with local modifications. Same failure family `CLAUDE.md` already warns about for
+  stash.
+- **A `perl -0pi` multi-line JSX edit silently prepended a stray line** to the top of
+  `TivForecastPage.jsx`. **`npm run build` did NOT catch it** — `x={y}` at top level parses as a
+  valid non-strict assignment — but ES modules are strict, so it would have thrown on every page
+  load. Caught by checking `head -1` of every edited file, now a standing step. **Use the Edit tool
+  for multi-line JSX.**
+- **These source files are CRLF**, so `\n` in a node/perl replacement string silently no-ops.
+  Detect the newline style first.
+- The audit's own recommendations were followed too literally in aggregate — see §6.
+
+### 11. Still open
+
+- **W4.6** xlsx download, round-trip export in the workbook's own sheet shape, print stylesheet.
+- **W4.7** forecast-vintage ghost line.
+- Roving tabindex on the accuracy grid (168 tab stops kept; the toggle is the keyboard path).
+- Tap-for-detail bottom sheet — CSS `.tiv-detail` exists, no component.
+- Recharts `Legend` inherits the series colour (PTB forecast label ≈1.84:1).
+- **Multi-entity/brand constraint fix** — still owner-gated, now mitigated by the 409 guard.
+- Old `upsertRows` / `insertModelParams` / `insertUploadHistory` EF actions kept (admin-only) so a
+  stale cached tab cannot break mid-deploy; removable once a release has fully rolled out.
+- ⏭️ **Nobody has yet run a real upload through the new path.** The probe proves the function and
+  the transaction boundary; it cannot prove the browser wiring.
+
+### 12. Late addition — the summary row leads with next month (PR #108 → `fe517fa`)
+
+Owner: *"if today's date is >19th show next month forecast on the summary row"*. By the back half
+of the month the current month is effectively spoken for, so the number worth acting on is the
+next one. Today (25 Aug) the tiles read **Sep-26 779** rather than Aug-26 736.
+
+Only the three tiles move — the table underneath still shows all three months in order, and each
+tile already names its own month, so the change explains itself without extra copy. The day is read
+in **IST** (19 Aug 20:00 UTC is already the 20th in India and switches; 17:00 UTC does not), and it
+**falls back to the first month when the next has no forecast** — past the 19th in a stale month, a
+real number beats a dash. Threshold lives in `NEXT_MONTH_FROM_DAY`.
+
+`selftest-kpi-month` **13/13**, including both sides of the boundary, the IST edge, and the stale
+fallback at 20 Oct where Nov-26 has no anchor and the tiles keep Oct-26 850.
+
+---
+
 ## Session log — 2026-08-24: TIV Forecast v3.0 ported, verified against real data, and shipped
 
 **Outcome:** the TIV forecast engine is **live on prod at v3.0** (PR #99 → `5bd2c2f`), CI

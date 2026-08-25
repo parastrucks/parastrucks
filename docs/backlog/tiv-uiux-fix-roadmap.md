@@ -11,6 +11,31 @@ session will otherwise rediscover the hard way.
 
 ---
 
+## ✅ ALL FOUR WAVES SHIPPED 2026-08-25 — plus a course correction
+
+PRs **#102 → #108**, all merged green, all live. Full narrative:
+`docs/history/PORTAL_HISTORY.md` (2026-08-25 entry).
+
+**Read this before picking up the tail.** The four waves were delivered as specified, and the owner
+then rejected the *result*:
+
+> "All pages have too much information. This is adding to the clutter, which would make the
+> employees feel intimidated rather than informed."
+
+He was right. Every finding in the audit was fixed on its own merits and **nothing checked the
+aggregate** — the Forecast tab reached eleven blocks before the first number. `feedback_excel_parity`
+(*adoption is the metric, novelty is a cost*) was violated by accretion, not by any single decision.
+
+**PR #106 folded it back**: default view answers the question, everything else one click away
+(`.tiv-fold`), ranges out of the table entirely, GM-facing copy stripped of spec vocabulary. Tune for
+**the GM opening it monthly**, not for the owner.
+
+⚠️ **Whoever works the remaining items: the constraint on this section is now attention, not
+coverage. When you add a UI element, state what it pushes further down the page.** If an item below
+cannot be added without pushing the number down, fold it or leave it.
+
+---
+
 ## 0. Required context before touching anything
 
 1. `docs/backlog/tiv-uiux-audit-2026-08-25.md` — the findings. Every claim was re-verified against
@@ -350,7 +375,40 @@ New module `src/tiv-forecast/lib/forecastQuality.js` + `scripts/tiv/selftest-qua
 
 ---
 
-## 2. Owner decisions to collect (batch them in ONE message, early)
+## 1b. What is actually left (2026-08-25)
+
+- **W4.6** — xlsx download · round-trip export in the workbook's own prediction-sheet shape ·
+  print stylesheet. *Copy table (TSV) and Copy summary line already cover the daily need, so this
+  is a nice-to-have, not a gap.*
+- **W4.7** — forecast-vintage ghost line (needs `fetchModelParamsHistory`). ⚠️MB: scope that fetch
+  once the multi-brand constraint lands.
+- Roving tabindex on the accuracy grid — 168 tab stops kept; the *Show forecast/actual* toggle is
+  the keyboard path and now has a real 44px target, so nothing is keyboard-unreachable.
+- Tap-for-detail bottom sheet (C9) — CSS `.tiv-detail` is in place, **no component yet**.
+- Recharts `Legend` colours its label text with the series colour (PTB forecast ≈1.84:1) — needs a
+  `formatter`, and the PTB series colours themselves want darkening.
+- Delete the superseded `admin-tiv` actions (`upsertRows`, `insertModelParams`,
+  `insertUploadHistory`) once the release has fully rolled out. Kept, admin-only, so a stale cached
+  tab could not break mid-deploy.
+- **Owner:** run one real upload. Still unexercised by a human.
+
+**Late addition already shipped (PR #108 `fe517fa`):** the summary tiles lead with **next month
+after the 19th** (IST), falling back to the first month if that one is stale. Threshold in
+`NEXT_MONTH_FROM_DAY`; `selftest-kpi-month` 13/13.
+
+## 2. Owner decisions — ALL TAKEN 2026-08-25
+
+| Decision | Choice |
+|---|---|
+| Merge Wave 1 to prod | Yes |
+| `admin-tiv` role gate | **Tighten to admin-only** — shipped |
+| New `tiv_forecast_snapshots` table | Approved — shipped |
+| Interim 409 cross-scope guard | Rode Wave 2 — shipped |
+| Default-view density | **Middle**, and **remove the ranges** |
+| Audience to tune for | **The GM opening it monthly** |
+| Clear the 16 ghost rows | Approved — done, snapshotted first |
+
+### (original list, kept for the record)
 
 1. **B3 / W2.1** — tighten `admin-tiv` to admin-only, or officially allow back-office uploaders?
    (Recommend tighten.)
