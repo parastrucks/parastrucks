@@ -23,11 +23,63 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
    - **ERP (separate repo)** → `project_hd_hyundai_vertical` — only for ERP tasks
 3. **Master history → [`docs/history/PORTAL_HISTORY.md`](docs/history/PORTAL_HISTORY.md)** — the full record of every phase, the Phase 9 VAPT programme, and session logs. **Do NOT read at session start.** Open only when you need the backstory of a decision, or to append a new session entry.
 4. **Rebuild the system → [`docs/RECONSTRUCTION.md`](docs/RECONSTRUCTION.md)** — step-by-step blueprint to recreate the whole portal from scratch, backed by the canonical DB dumps in [`docs/db/`](docs/db/) (`schema-current.sql`, `seed-reference.sql`).
-5. **Repo `docs/`** → `history/` (delivered reports/specs), `backlog/` (tabled ideas + Phase 10).
+5. **Repo `docs/`** → `history/` (delivered reports/specs), `backlog/` (tabled ideas, Phase 10, and
+   the **Service Payments** plan + its clean-room red-team digest).
 
 **When you finish a piece of work:** update `phase_status.md` + `known_issues.md` (if an issue opens/closes) + append a dated entry to `PORTAL_HISTORY.md`. New owner preference → add a `feedback_*` memory. Keep this file short — it points to detail, it doesn't hold it.
 
 ---
+
+## Current state (2026-08-29)
+
+- **📋 SERVICE PAYMENTS — PLANNING COMPLETE, NOTHING BUILT. Do not start coding without reading the plan.**
+  UPI→invoice matching + customer master (groups + credit limits) + a daily export for **Busy**.
+  Branch `claude/payments-reconciliation-tool-6eaab4` carries **documentation and measurement
+  scripts only** — no migration, Edge Function, route or table exists.
+  ⭐ **Start at `docs/backlog/service-payments-plan.md` (v4)** — Part 1 is the plain-language story,
+  Part 2 the technical spec. Companions: `docs/backlog/service-payments-redteam3-cleanroom.md`
+  (12-lane clean-room digest) and `scripts/payments/*.cjs` (re-runnable measurements).
+  Full record: `docs/history/PORTAL_HISTORY.md` (2026-08-29 entry) · memory
+  `project_service_payments.md`.
+  - **⭐ THE LESSON OF THE SESSION — measurement killed four natural-sounding assumptions**, each of
+    which would have shipped as a defect:
+    **(1)** the invoice source: the owner's **SAP Billing Report** (one row per invoice, counter
+    sales included, a `Cancelled` column) replaced the R5+R6 route outright and dissolved two
+    blockers at once. **(2)** the warranty predicate: filtering on the `Dealer Order Number` prefix
+    (`WTY…`/`FRE…`) keeps **61** billable invoices where the correct field `Split Order Type` keeps
+    **549** — a paid repair routinely carries a warranty-style job number. **(3)** customer
+    grouping: the proposed "shared vehicle registration" signal measures **exactly zero** — no
+    registration is billed to two customer codes; the relationship is commercial and invisible to
+    SAP, so grouping stays human (GM/admin) with weak hints only. **(4)** `MPI` is the **cash
+    counter sale**, not vendor sales — the largest single block, holding 114 of the ₹1,930 DEF sales.
+  - **Match reality: 12% of receipts match exactly one bill, 63% match several, 25% match none**
+    (payer-name overlap resolves 46 collisions) → the design is **"shortlist fast, human picks"**,
+    never auto-suggest. **Volumes: ~37 payable bills/day vs ~18 UPI receipts/day**, 76% of same-day
+    bills amount-unique → a **15–30 min next-morning session for one person**.
+  - **Two constraints the owner closed permanently:** SAP will **never** give a billing time (date
+    only), and **mobile web is the cornerstone** — most matching happens on staff phones, which
+    inverted the frontend architecture from the earlier desktop-first draft.
+  - **⭐ Three red-team rounds, 21 lanes. Round 3 was 12 CLEAN-ROOM lanes** given no access to the
+    plan or the data, at the owner's request, to get an unbiased opinion. **They independently
+    reinvented the plan's core decisions** — the strongest validation available — and added: the
+    **Busy integration path** (native *Import Vouchers From Excel*; **no Busy voucher XML** — that's
+    Tally; Receipt **and** Journal vouchers from day one; a reversal journal must re-open the
+    original bill reference or Busy shows it paid while the balance disagrees), a document-model
+    ledger with a built-in corruption identity, temporal group membership, GST advance/return
+    obligations, the ₹2L cash hard-block (Sec 269ST — 100% penalty on the dealership), and the rule
+    that **`not_ours` money must still reach Busy as a sister-unit payable** or bank reconciliation
+    cannot tie.
+  - **Owner decisions (don't re-litigate):** PTB first · warranty+AMC excluded · next-day batch
+    matching (point-of-payment capture, a WhatsApp experiment and paise-tagging were each proposed
+    and **rejected on measured volumes**) · no tolerance write-off · TDS capped 5%, **no TAN** ·
+    GM/admin own groups **and** limits · customer master keyed on **SAP customer code**, shown
+    beside every name · groups carry common email/WhatsApp for the planned customer channel · daily
+    cash tie-out + GM sign · weekly GM exceptions digest.
+  - **⛔ Gating the first migration (all owner/accounts-side):** schedule the Billing Report export ·
+    confirm the Busy edition + collect its sample import format (five verbatim questions ready in
+    the plan) · ask accounts how **MPR parts returns** behave. Then a 2-week routine dry run.
+  - ⚠️ **Portal-wide side finding: Vercel Hobby's ToS prohibits commercial use** — suspension risk
+    for the *whole* portal, unrelated to this tool. See `memory/known_issues.md`.
 
 ## Current state (2026-08-25)
 
@@ -264,6 +316,22 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ## Next actions
 
+- **⏭️ SERVICE PAYMENTS — three owner/accounts items gate the first migration. Do NOT start
+  building before they land** (and read `docs/backlog/service-payments-plan.md` first — it encodes
+  two bugs already caught by measurement that are easy to reintroduce from first principles):
+  1. **Schedule the SAP Billing Report** as a regular export (one-off manual run today); ask for a
+     stable transaction/variant so column names don't drift. ⛔ **Do not ask again for a billing
+     *time* column** — the owner confirmed date-only is the maximum SAP will provide.
+  2. **Busy: confirm the edition, collect the sample import format.** The shape is solved (native
+     *Import Vouchers From Excel*, Receipt+Journal, no Busy XML); the five verbatim questions for
+     the accountant are in the plan, and one screenshot of `Administration → Utilities` settles the
+     edition question.
+  3. **Ask accounts how MPR parts returns behave** — credit against the customer, or money paid
+     back out? Excluded from outstanding until answered.
+  Then: the 2-week daily-routine dry run, then Phase A1 per the plan's build order.
+- **⏭️ Portal-wide, not urgent: Vercel Hobby's ToS prohibits commercial use.** Decide Cloudflare
+  Pages (free, commercial OK) or Vercel Pro (~$20/mo), and pre-commit the Supabase Pro trigger
+  (~$25/mo — the free tier has no backups and no PITR). See `memory/known_issues.md`.
 - ~~**DECISION NEEDED — `tiv_upload_all()` never `DELETE`s.**~~ ✅ **DECIDED AND BUILT 2026-08-25**
   (PR **#118** → `0807489`): owner chose *"ask me, then remove"*. `tiv_upload_and_prune()` lists
   every month that would go, per table, box unticked by default; opt-in, refuses on an empty

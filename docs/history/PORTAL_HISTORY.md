@@ -26,6 +26,122 @@
 
 ---
 
+## Session log — 2026-08-29: Service Payments — a planning session that measured its way out of four wrong assumptions
+
+**Outcome: a complete, three-times-red-teamed plan and ZERO lines of production code.** Nothing was
+built, deliberately. Branch `claude/payments-reconciliation-tool-6eaab4` carries only documentation
+and re-runnable measurement scripts.
+
+**Artifacts:** `docs/backlog/service-payments-plan.md` (v4 — Part 1 plain-language, Part 2 technical
+spec) · `docs/backlog/service-payments-redteam3-cleanroom.md` (the 12-lane clean-room digest) ·
+`scripts/payments/measure-join.cjs`, `measure-billing-report.cjs`, `diag-invoice-series.cjs`.
+
+### The problem
+Service invoices are raised in SAP; customers pay mostly by UPI; both invoices and receipts are
+re-keyed by hand into **Busy** (the statutory books). A UPI credit arrives as a payer handle and an
+amount with no invoice reference, so attribution is the bottleneck that stalls the whole
+reconciliation day. The owner asked for a tool that gives matching authority to the service team
+for UPI and to accounts for everything, keeps a customer ledger with credit limits, and produces a
+daily file for Busy.
+
+### What measurement changed — the substance of the session
+Every one of these was a natural-sounding assumption that real files falsified:
+
+1. **The invoice source was wrong.** The plan was built on the nightly automation's Report 5
+   (parts) + Report 6 (labour). Mid-session the owner supplied a **SAP Billing Report** (1,085 rows,
+   1–29 Aug): **one row per invoice**, 33 columns, **counter sales included**, a **`Cancelled`
+   column**, customer code + GSTIN + PAN + payment terms. It replaced R5/R6 outright, dissolved the
+   "counter sales are missing" blocker *and* the cancellation-detection gap in one move.
+2. **The warranty predicate would have destroyed 90% of the data.** Filtering billable invoices on
+   the `Dealer Order Number` prefix (`WTY…`/`FRE…`) keeps **61** invoices where the correct field,
+   **`Split Order Type`**, keeps **549**. A paid repair routinely carries a warranty-style job
+   number because the job *opened* under warranty and the line is post-warranty paid work.
+3. **The auto-grouping signal measures literally zero.** The plan had proposed linking a customer's
+   several trading names (the owner's real case: *Ramesh · Pankaj · Kamal Sharma → Avenue Roadways*)
+   by shared vehicle registration. Measured: **not one registration is billed to more than one
+   customer code**, and `Bill to Name` only ever points at PTB itself. The relationship is
+   commercial and invisible to SAP → grouping stays a human decision (GM/admin) with weak hints
+   only (same-name-different-code — 15 such names, the worst spanning four codes — plus shared
+   GSTIN/PAN).
+4. **`MPI` is not vendor sales.** SAP labels it *"M&HCV Parts Cash Inv"*, split *"Workshop Cash
+   Sales"*, zero vehicles attached: it is the **cash counter sale**, the largest single block, and
+   it holds **114 of the ₹1,930 DEF sales**. Both `M*` prefixes are counter sales (MPI cash, MCI
+   credit).
+
+**Matching reality, end to end:** 12% of receipts match exactly one bill by amount, 63% match
+several, 25% match none; payer-name overlap resolves 46 collisions. **The design conclusion is
+"shortlist fast, human picks" — never "auto-suggest the answer".**
+
+**Volumes settled the workflow shape:** ~37 payable bills/day (median 42, max 60) against ~18 UPI
+receipts/day (max 33), with 76% of same-day bills amount-unique. That is a **15–30 minute
+next-morning session for one person** — which is why the owner rejected point-of-payment capture,
+a WhatsApp capture experiment, and paise-tagging when they were proposed.
+
+**Two constraints the owner closed permanently:** SAP will **never** provide a billing time (date
+only — so 17 identical ₹1,930 bills on one day cannot be separated by the tool), and **mobile web
+is the cornerstone** — most matching happens on staff phones, which inverted the frontend
+architecture from the earlier desktop-first draft.
+
+### Three red-team rounds, 21 lanes
+- **Round 1 (4 lanes)** — domain workflow · money logic · technical/security · adoption. Found the
+  advances/TDS/short-pay gaps, the idempotency hole across sources, a concurrency race in
+  allocation, and export-by-calendar-date leaking late matches.
+- **Round 2 (5 lanes)** — premise · fraud/audit · 12-month operations · self-consistency · people.
+  Read the wrapper's own run log and established the feed is **~80% reliable** (8 of 42 nightly runs
+  finished with failures); found a one-person accounts fraud loop and that teeming-and-lading was
+  enabled; found that opening balances broke the allocation arithmetic.
+- **Round 3 (12 CLEAN-ROOM lanes)** — the owner asked for a sweep with **no access to the plan or
+  the data**, to get an unbiased opinion. Independent experts designed from a neutral brief, then
+  their output was diffed against the plan. ⭐ **They independently reinvented the plan's core
+  decisions**, which is the strongest validation available. What they added and the plan absorbed:
+  - **The Busy integration path** — Busy's native *Import Vouchers From Excel*
+    (Standard/Enterprise). **There is no Busy voucher XML** (that is a Tally concept) and no
+    bank-statement→voucher route. The export needs **Receipt and Journal vouchers from day one**:
+    TDS closures are journals, and a reversal journal must carry a **New Ref line re-opening the
+    original invoice reference** or Busy shows the bill paid while the balance disagrees. Mapping
+    convention: SAP customer code in the Busy ledger's **Alias**; auto-create-master **off forever**.
+  - **A cleaner ledger model** — debit documents vs credit documents, opening balances as ordinary
+    documents, allocations that *classify* money rather than change outstanding, yielding an
+    arithmetic identity that doubles as a nightly corruption detector; plus **temporal group
+    membership** (EXCLUDE-gist = one group per customer per instant).
+  - Compliance obligations the plan had not encoded: GST on **service advances** at receipt with
+    Rule 50 receipt vouchers; returns tracked but never receivable-reduced before the SAP credit
+    note + IRN exists; a **₹2L cash hard-block** (Sec 269ST, all three limbs — the penalty is 100%
+    *on the dealership*); an **India-located backup copy** (Companies Rule 3) and 8-year retention.
+  - Controls: `not_ours` money must still reach Busy as a **sister-unit payable** (dropping it
+    breaks bank-reconciliation completeness); a **daily cash tie-out vs the deposit slip with a GM
+    in-app signature** (adopted by the owner); a weekly GM exceptions digest.
+  - Operations: a dead-man's switch that fires **because** the laptop is off; staleness that
+    **disables one-click confirm** rather than merely displaying a banner; parser column-mapping
+    stored as data so a format break is fixable from a phone.
+  - ⚠️ **Portal-wide finding: Vercel Hobby's terms prohibit commercial use** — a
+    suspension-without-warning risk for the entire portal, unrelated to this tool. Logged in
+    `known_issues.md`.
+
+### Owner decisions of record
+PTB only first · warranty + AMC excluded · **mobile web first** · **next-day batch matching** · no
+tolerance write-off (residues ride the customer's ledger — "most customers repeat, collect next
+time") · **TDS capped at 5%, no TAN field** (reconfirmed after the compliance warning; 26AS
+reconciliation stays outside the tool) · **GM/admin own customer groups *and* credit limits**,
+accounts proposes only · **customer master keyed on the SAP customer code and displayed beside
+every name**, so two customers sharing a name are never confused · groups carry the common
+email(s) and WhatsApp number(s) for the planned customer-facing bills/ledgers channel · receipt
+serial numbers yes, customer messaging later · owner uploads during the pilot then hands over to
+accounts on a dated schedule · monthly Busy-vs-portal balance comparison.
+
+### Still gating the first migration
+Schedule the Billing Report as a regular export · confirm the Busy edition and collect its sample
+import format (five verbatim questions for the accountant are in the plan) · ask accounts how MPR
+parts returns behave. Then the 2-week routine dry run, then Phase A1.
+
+### The transferable lessons
+- **Measure the real files before designing.** Four assumptions died on contact with data, and the
+  entire invoice source changed the moment the owner supplied one better export.
+- **A clean-room red team beats another informed one.** Agents that never saw the plan converged on
+  it independently *and* found what iteration had quietly baked in.
+- **Ask for volumes before designing a workflow.** ~18 receipts/day removed the case for real-time
+  capture, offline write queues, and most of the concurrency machinery.
+
 ## Session log — 2026-08-25: TIV Forecast UI/UX — six-lane audit, four remediation waves, a course correction from the owner, and the first real upload
 
 **Outcome: twenty PRs shipped to prod (#102–#121)** — **#102** `485430e` · **#103** `5446ac8` · **#104**
