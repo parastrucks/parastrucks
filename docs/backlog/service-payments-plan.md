@@ -264,7 +264,7 @@ around:
 | Volume | **532 txns · ₹37.7L** (17/day avg, 33 max) | **97 txns · ₹5.9L** (~3/day) |
 | Txn ID | **12-digit numeric, UTR-like** → the dedup key | Google-internal code (`CICAgLiC…`) — **NOT a UTR** |
 | Payer | Full legal/bank names (496/532 ≥2 words) | Truncated first names; **2 rows empty** |
-| Remark | **No notes column at all** | `Notes` on 74/97; **24 carry a 3+ digit bill/job number** ("urea 7458", "5666 Service") |
+| Remark | **No notes column at all** | `Notes` on 74/97; **24 carry a 3+ digit number — which is a VEHICLE NUMBER PLATE, not a bill number.** See "⭐ CORRECTION" below |
 | Fees | 7 rows nonzero MDR (gross≠net exists) | Always 0 |
 | Junk | 6 test txns ≤₹30 | third-party-app rows show "Unknown app" + "Payment from PhonePe" |
 
@@ -416,9 +416,12 @@ Phase 10 tracker (parked, chassis money) — no overlap. HD Hyundai ERP — no o
   stale banners; conflict = visible "already matched by X" strip.
 
 ### Matching refinements (adopted; capture/paise proposals REJECTED — see verdict)
-- Tiered weights with hard separation (note-number 100 · unique-amount 90 · learned≥2 = 50 max ·
-  single-confirm 20 · name 0–25, **never negative** — drivers pay for firms · date 0–10); score
-  gap < ε with no strong signal → **refuse to rank** (unordered list + honest banner).
+- Tiered weights with hard separation. ⚠️ **The note-number tier below was WRONG — see "⭐
+  CORRECTION" at the end of this section.** As actually built and self-tested:
+  reg-full 95 · **reg-last4 85** · unique-amount 90 · ambiguous-amount 55 · typed-bill-number 45 ·
+  learned≥2 = 50 · single-confirm 20 · name 0–25 **never negative** (drivers pay for firms) ·
+  date 0–10, which breaks ties but **never qualifies a candidate on its own**; score gap < ε with
+  no strong signal → **refuse to rank** (unordered list + honest banner).
 - Indic phonetic canonicalization (~20 regex rules, not Soundex); asymmetric token match with
   prefix/initial expansion; IDF from own customer master (KUMAR/BHAI ≈ noise).
 - Poisoning defenses: single confirmation = weak tier; contradiction counter demotes; shared-name
@@ -428,6 +431,48 @@ Phase 10 tracker (parked, chassis money) — no overlap. HD Hyundai ERP — no o
   (greedy mutual elimination), not 17 shortlists. Log position-of-confirm, class, winning signal,
   clerk-seconds, reversals-within-30d; pre-committed simplification: deterministic ≥85% → delete
   the fuzzy tier; learned-tier wins <5% after 8 weeks → drop the store.
+
+### ⭐ CORRECTION (2026-09-08, measured while building A1) — the note number is a NUMBER PLATE
+
+**What this plan said:** a number typed into a Google Pay note is a **bill/job number**, and it is
+the strongest signal in the matcher (weight 100).
+
+**What the data says.** `scripts/payments/diag-note-numbers.mjs` tests every typed number against
+every field it could plausibly refer to — invoice number, job card, SAP billing document, dealer
+order, registration, and the last 4/5/6 digits of each. Of the **28** real August notes carrying a
+number:
+
+| the typed number is… | hits |
+|---|---|
+| **the last 4 digits of the VEHICLE REGISTRATION** | **17 / 28** |
+| the last 4 of the job card | 3 / 28 |
+| the last 4 of the SAP billing document | 3 / 28 |
+| the last 4 of an invoice number | **1 / 28** |
+
+Two notes say it outright: **"GJ15AV 9044"**, **"Gj27td 7715"**. Substring-matching against the
+registration reaches **19/28**. This is obvious in hindsight — a driver identifies a truck by its
+plate, the workshop books the job against the plate, and nobody memorises `MPI6370260000724`.
+
+**What changed.** `reg-last4` is now a first-class signal (85), just below a full registration
+match (95). A typed bill number is kept but weighted **45** — it is rare, and four digits collide
+easily, so it must not outrank a plate. **Result: the signal went from resolving 7% of
+note-carrying receipts to 50%.**
+
+**Second defect, found in the same pass.** The first matcher gave every open bill inside the date
+window a score for date proximity alone, so a "shortlist" was always exactly as long as its own
+limit — **median 8 of 8 across 450 real receipts, and "nothing in range" never fired once.** A
+candidate must now carry a *substantive* signal (amount, plate, typed bill number, payer memory, or
+a rare-token name match); date and faint name overlap break ties but never qualify. Measured
+effect: **median shortlist 8 → 3** (50.7% fit in three) and **"nothing in range" 0% → 20.2%**,
+which finally agrees with the ~25% no-candidate rate measured independently.
+
+**Current honest picture** (450 real receipts × 1,085 real invoices, `measure-matcher.mjs`):
+one clear answer **28.2%** · ranked short list **16.0%** · shown unordered **35.6%** · nothing in
+range **20.2%**.
+⚠️ These are **shortlist-quality** numbers, **not accuracy**. Nobody ever recorded which bill each
+payment actually paid, so there is no ground truth to score against. "Confident" means one
+candidate stands clear of the rest — not that it is provably right. **The pilot is the first
+opportunity to measure whether it is right**, via position-of-confirm and 30-day reversals.
 
 ### Pilot playbook enrichment (adopted into the pilot spec)
 - **Seeding D-7→D-1**: customer master + SAP↔Busy name reconciliation FIRST → groups+limits
@@ -686,8 +731,8 @@ reachable from the mobile Create (+) sheet · seed migration (asserts own-route 
 
 Tabs (fold discipline throughout):
 1. **Match** (default): unmatched receipts as a card stack · candidates via
-   `payments_match_candidates`, grouped by job and customer group. Signal order: **bill/job number
-   in the remark** (GPay Notes — present and numeric on 25% of GPay rows) · payer_memory name hit
+   `payments_match_candidates`, grouped by job and customer group. Signal order: **the VEHICLE the
+   remark names** (GPay Notes — the digits are a number plate; see "⭐ CORRECTION") · payer_memory name hit
    (strongest for BharatPe's full legal names; **measured to resolve 46 same-amount collisions**) ·
    exact amount vs invoice/order outstanding (12% unique — never sufficient alone) · subset-sum
    within one group (cap ≤12) · reg-no/GSTIN in remark · name tokens · date proximity.
