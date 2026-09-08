@@ -3271,3 +3271,200 @@ tbody tr:hover td { background: var(--gray-50); }
     padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
   }
 }
+
+/* ─── SERVICE PAYMENTS — MATCH (mobile is the cornerstone) ──────────
+   Authored phone-first and widened for desktop, which is the reverse of every
+   other screen in this portal. Most matching is done by service staff on their
+   own phones, on a workshop connection, often with the customer still standing
+   there. So: one receipt at a time, no two-panel layout at any width, every
+   target >= 44px, and the confirm button inside the thumb arc. */
+.pay-match {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 12px 12px calc(150px + env(safe-area-inset-bottom, 0px));
+}
+
+.pay-banner {
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  margin-bottom: 10px;
+}
+.pay-banner-warn {
+  background: var(--amber-light);
+  border: 1px solid var(--amber);
+  color: var(--amber);
+}
+
+.pay-daystatus {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+}
+.pay-daystatus strong { color: var(--ink); font-size: 15px; }
+
+/* The receipt. The amount is the largest thing on the screen because it is the
+   one fact the person is holding in their head while they look. */
+.pay-receipt {
+  background: var(--white);
+  border: 1px solid var(--border-default);
+  border-left: 3px solid var(--blue);
+  border-radius: var(--radius-sm);
+  padding: 16px 14px;
+  margin-bottom: 18px;
+}
+.pay-receipt-amount {
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.pay-receipt-payer { font-size: 16px; font-weight: 600; color: var(--ink); margin-top: 4px; }
+.pay-receipt-meta  { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+.pay-receipt-note {
+  margin-top: 8px;
+  font-size: 14px;
+  color: var(--ink);
+  background: var(--surface-sunken);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+}
+
+.pay-ask { font-size: 15px; font-weight: 700; color: var(--ink); margin-bottom: 6px; }
+.pay-hint { font-size: 13px; color: var(--text-secondary); margin-bottom: 10px; line-height: 1.5; }
+.pay-hint-unordered { color: var(--amber); font-weight: 600; }
+
+.pay-candidates { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+
+/* A whole candidate is one target. Nobody should have to hit a radio button
+   the size of a grain of rice while standing at a counter. */
+.pay-candidate {
+  width: 100%;
+  min-height: 44px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+  background: var(--white);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  cursor: pointer;
+  font: inherit;
+}
+.pay-candidate:hover { border-color: var(--border-strong); }
+.pay-candidate.is-selected {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 2px var(--accent-ring);
+  background: var(--blue-lighter);
+}
+.pay-candidate:disabled { opacity: .55; cursor: default; }
+.pay-candidate-top { display: flex; align-items: baseline; gap: 8px; }
+.pay-candidate-amount {
+  font-size: 19px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums;
+}
+.pay-candidate-name { font-size: 14px; font-weight: 600; color: var(--ink); }
+.pay-candidate-ref  { font-size: 12px; color: var(--text-muted); }
+.pay-candidate-why  { font-size: 13px; color: var(--blue-dark); margin-top: 4px; }
+.pay-candidate-all  { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+
+.pay-chip {
+  font-size: 11px;
+  background: var(--surface-sunken);
+  color: var(--gray-600);
+  border-radius: 2px;
+  padding: 2px 6px;
+}
+.pay-chip-job { background: var(--blue-light); color: var(--blue-dark); font-weight: 700; }
+
+/* The ways out stay on screen. A person who cannot find "this is not a service
+   payment" will pick a bill instead, and that is a wrong ledger entry. */
+.pay-escapes { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.pay-secondary {
+  min-height: 44px;
+  flex: 1 1 auto;
+  background: var(--white);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  cursor: pointer;
+}
+.pay-secondary:hover { background: var(--gray-50); }
+.pay-secondary:disabled { opacity: .55; cursor: default; }
+
+.pay-reasons { list-style: none; display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.pay-reason {
+  width: 100%;
+  min-height: 44px;
+  text-align: left;
+  background: var(--white);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.pay-reason:hover { background: var(--gray-50); }
+
+/* The thumb zone. Sticky at the bottom on every width — on a phone because it
+   is the only place a thumb reaches without regripping, and on desktop because
+   moving it would make the two layouts behave differently under the same hand. */
+.pay-confirmbar {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+  background: var(--white);
+  border-top: 1px solid var(--border-default);
+}
+@media (min-width: 721px) {
+  .pay-confirmbar {
+    max-width: 560px;
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    border: 1px solid var(--border-default);
+    border-bottom: 0;
+    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  }
+}
+.pay-confirm {
+  min-height: 52px;
+  background: var(--blue);
+  color: var(--white);
+  border: 0;
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.pay-confirm:hover:not(:disabled) { background: var(--blue-dark); }
+.pay-confirm:disabled { background: var(--gray-300); cursor: default; }
+.pay-skip {
+  min-height: 44px;
+  background: none;
+  border: 0;
+  font: inherit;
+  font-size: 14px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.pay-match-empty { text-align: center; padding-top: 48px; }
+.pay-empty-tick  { font-size: 40px; color: var(--green); line-height: 1; }
+.pay-empty-title { font-size: 18px; font-weight: 700; color: var(--ink); margin-top: 10px; }
+.pay-empty-sub   { font-size: 14px; color: var(--text-secondary); margin-top: 6px; line-height: 1.5; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pay-candidate, .pay-secondary, .pay-confirm { transition: none !important; }
+}
