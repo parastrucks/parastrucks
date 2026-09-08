@@ -887,5 +887,12 @@ working; 10-minute weekly numbers review *with* the pilot users.
 7. Confirm ₹1,700 / ₹3,400 are current counter prices (they are absent from the July R7 fixture).
 8. Wrapper laptop → always-on PC (owner, "later") — prerequisite for full reliance, tracked.
 9. UPI source consolidation → single provider → API (owner will notify; v1 stays multi-source).
+   ⭐ **Discovery questionnaire ready: `docs/backlog/upi-api-bank-questionnaire.md`** (2026-09-08).
+   The decisive question is **A1–A3: can a dynamic QR carry OUR bill reference and return it?** If
+   yes, per-bill QR largely dissolves the matching problem and this jumps ahead of Phase C. If no,
+   the API is a convenience upgrade and the matcher stays exactly as designed. Two answers gate
+   feasibility rather than value: **C1** (a fetch-by-date-range endpoint — without it a lost
+   webhook is undetectable) and **E2** (banks routinely demand IP allowlisting; Supabase Edge
+   Functions have **no fixed outbound IP**, so a mandatory allowlist means an extra relay host).
 10. **Vercel Hobby commercial-use ToS** (portal-wide, from round 3) — decide Cloudflare Pages vs
     Vercel Pro at leisure; and pre-commit the Supabase Pro trigger (go-live + 90 days).
