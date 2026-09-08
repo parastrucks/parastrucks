@@ -1,11 +1,27 @@
 <!--
 REPO COPY of the approved planning document (session 2026-08-29).
+
+⚠️ BUILD STATUS 2026-09-08 — THIS PLAN IS NO LONGER AHEAD OF THE CODE.
+Phase A1's core is BUILT and PROVED ON STAGING (klpnhpnlotcbbovwswmq): 14 tables,
+28 policies, 2 views, 10 SECURITY DEFINER RPCs, probe 24/0 with zero residue; plus
+parsers, matcher and the mobile Match screen at 239 offline self-tests.
+NOT on prod · Edge Function written but NEVER DEPLOYED OR CALLED · NO ROUTE, so
+none of it is reachable in the running app.
+Current state lives in CLAUDE.md; the full build record is the 2026-09-08 entry in
+docs/history/PORTAL_HISTORY.md.
+
+⭐ READ THE "⭐ CORRECTION" SECTION before trusting this document's matcher signals:
+the number a customer types into a payment note is a VEHICLE NUMBER PLATE, not a
+bill number (17 of 28 measured). This plan's original claim was wrong.
+
 Companion files:
   · docs/backlog/service-payments-redteam3-cleanroom.md  — the 12-lane clean-room sweep digest
   · scripts/payments/measure-join.cjs                    — UPI × SAP end-to-end match measurement
   · scripts/payments/measure-billing-report.cjs          — Billing Report analysis + join
   · scripts/payments/diag-invoice-series.cjs             — invoice/order series diagnosis
-NOTHING HAS BEEN BUILT. No migrations, no Edge Functions, no UI. This is planning only.
+  · scripts/payments/diag-note-numbers.mjs               — what a typed note number actually refers to
+  · scripts/payments/measure-matcher.mjs                 — the real matcher over the real files
+  · scripts/payments/probe-allocation.sql                — the money truth table, self-aborting
 -->
 
 # Service Payments — UPI attribution, customer ledger & reconciliation (v4, final)

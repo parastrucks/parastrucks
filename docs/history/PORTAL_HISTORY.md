@@ -26,6 +26,201 @@
 
 ---
 
+## Session log — 2026-09-08: Service Payments Phase A1 — built, and proved on a real database that found three bugs review had passed
+
+**Branch:** `claude/payments-reconciliation-tool-6eaab4` (not merged, not on prod).
+**Prior session:** the 2026-08-29 planning entry below. Read that first for the measured facts and
+owner decisions; this entry covers only what was built.
+
+**One-line state:** the Phase A1 core exists and is proved on **staging**. Nothing is on prod, the
+Edge Function has never been deployed or called, and there is **no route** — none of it is
+reachable in the running app.
+
+### What was built
+
+| Artifact | State |
+|---|---|
+| `supabase/migrations/20260830_payments_a1_schema.sql` | 14 tables · 28 policies · 44 indexes · 2 views · append-only trigger. **Applied to staging.** |
+| `supabase/migrations/20260908_payments_a1_rpcs.sql` | 10 SECURITY DEFINER RPCs. **Applied to staging.** |
+| `scripts/payments/probe-allocation.sql` | Self-aborting truth-table probe. **24 passed, 0 failed, zero residue.** |
+| `src/service-payments/lib/*.js` | paise · dates · csv · parseBillingReport · parseUpi · matchCandidates · signalLabels |
+| `src/service-payments/components/MatchScreen.jsx` | Mobile-first Match screen, presentational |
+| `scripts/payments/selftest-{parsers,matcher,mobile-render}.mjs` | **239 offline tests, all green** (166 for parsers with the real files) |
+| `scripts/payments/{measure-matcher,diag-note-numbers}.mjs` | Re-runnable measurement over the real files |
+| `supabase/functions/service-payments/index.ts` | Written. **NOT deployed. verify() and every authority rule untested.** |
+| Route / navConfig / container / Import / Export | **Not built.** |
+
+Money is `bigint` paise throughout; all day arithmetic is `Asia/Kolkata`.
+
+### ⭐ The finding: the number in a payment note is a NUMBER PLATE
+
+The plan treated a number typed into a Google Pay note as a **bill number** and weighted it the
+highest signal in the matcher. It is not. `scripts/payments/diag-note-numbers.mjs` tested every
+typed number against every field it could refer to — invoice number, job card, SAP billing
+document, dealer order, registration, and the last 4/5/6 digits of each. Of the **28** real August
+notes carrying a number:
+
+| the typed number is… | hits |
+|---|---|
+| **the last 4 digits of the VEHICLE REGISTRATION** | **17 / 28** |
+| the last 4 of the job card | 3 / 28 |
+| the last 4 of the SAP billing document | 3 / 28 |
+| the last 4 of an invoice number | **1 / 28** |
+
+Two notes say it outright — `"GJ15AV 9044"`, `"Gj27td 7715"`. Obvious in hindsight: a driver
+identifies a truck by its plate, the workshop books the job against the plate, and nobody
+memorises `MPI6370260000724`. Treating those digits as a registration took the signal from
+resolving **7% → 50%** of note-carrying receipts. The plan's §"⭐ CORRECTION" now records this.
+
+### ⭐ Three defects that only EXECUTION caught
+
+All three were in code that had already passed careful review.
+
+**1. Idempotency was keyed per request, but rows are created per invoice.**
+`payment_allocations_idempotency_key` was `UNIQUE (client_request_id)`. But `payments_allocate`
+creates one row **per invoice**, because a job billed as parts + labour is settled by a single UPI
+transfer — **245 of 836 measured orders**. The probe's *first* assertion raised a duplicate key.
+Static review would not have caught it: the index and the loop are 90 lines apart and each is
+correct alone. Fixed to `UNIQUE (client_request_id, invoice_id) NULLS NOT DISTINCT`. The `NULLS
+NOT DISTINCT` is load-bearing — `on_account` rows carry no `invoice_id`, and under Postgres's
+default NULL handling two of them under one request id would **both** be accepted, silently
+doubling an advance.
+
+**2. The integrity view was readable by every signed-in user.**
+`v_payments_integrity` is a SECURITY DEFINER view (correctly — the only way to withhold a column
+in PostgREST) but carried **no access predicate** and was granted to `authenticated`. Any signed-in
+user, any entity, any department. Found by `get_advisors(type: "security")`, not by review. It is
+normally empty, which is exactly why it would never have been noticed; the rows it returns during a
+real incident are invoice numbers, receipt references and amounts. Now behind the same entity +
+back-office gate as the tables it reads.
+⭐ **Run `get_advisors` after every DDL change** — it catches the class of mistake review cannot,
+because the defect is in what the object *omits*.
+
+**3. Fixing (2) made a test pass vacuously.**
+The probe runs as the service role, where `current_user_role()` is NULL — so reading the
+now-scoped view returned zero rows *however badly the caches had drifted*, and the final assertion
+would have reported "all clear" forever. It now computes drift directly and adds a **negative
+control** that corrupts a cache on purpose and confirms the check fires. **A test that cannot fail
+is not a test.**
+
+### The matcher, and an honest limit
+
+First version scored every open bill inside the date window for date proximity alone, so every
+shortlist was exactly `limit` long — **median 8 of 8 across 450 real receipts** — and "nothing in
+range" never fired once. A list that is always full is the corpus with a spinner. Requiring a
+*substantive* signal (amount, plate, typed bill number, payer memory, or a rare-token name match;
+date and faint name overlap break ties but never qualify):
+
+| | before | after |
+|---|---|---|
+| median shortlist | 8 | **3** |
+| ≤3 candidates | 0% | **50.7%** |
+| "nothing in range" | 0% | **20.2%** (independent measurement said ~25%) |
+
+Current picture on 450 real receipts × 1,085 real invoices: **28.2%** one clear answer · **16.0%**
+ranked shortlist · **35.6%** shown unordered · **20.2%** nothing in range.
+
+⚠️ **These are shortlist-quality numbers, NOT accuracy.** Nobody ever recorded which bill each
+historical payment actually paid, so there is no ground truth to score against. "Confident" means
+one candidate stands clear of the rest — not that it is right. **The pilot is the first opportunity
+to measure correctness**, via position-of-confirm and 30-day reversal rate.
+
+### Parsers, proved on the real files
+
+The August Billing Report parses **1,085 of 1,085 rows, zero refusals, zero bijection breaks, zero
+cross-foot breaks** — 1,045 payable worth ₹107.28 lakh, 530 customers, 245 multi-invoice orders.
+Every number matches what was measured independently in the planning session. The **July** exports
+were then run as a holdout the parsers had never seen, and parsed clean.
+
+Four gates, in order of what omitting them would have cost:
+1. the file says "Billing Report" and has every required column;
+2. SAP's own `No. of entries` equals the rows read — an interrupted export is otherwise invisible;
+3. **invoice prefix and SAP billing type agree** — two independent statements of what a document
+   is, agreeing on all 1,085 rows, so disagreement is corruption rather than nuance;
+4. `Net + Tax = Total`, per row.
+
+Three real-file findings a from-first-principles parser gets wrong, each now a named test:
+- **Google Pay `Type` is not always "UPI"** — two July rows are `Wallet` (₹3,860 and ₹9,263.87,
+  both with real customer notes). Filtering on `Type` would have silently discarded ₹13,124.
+- **BharatPe's `Amount Added` is rounded to ONE decimal**, so on every row carrying MDR it
+  disagrees with gross − fee by up to 4 paise (13 rows across two files). Never imported; gross and
+  MDR are exact and net is derived.
+- **A digit run is only a bill number if the character before it is not a letter** — without that
+  rule `"DD01C9924 TOOL SCANNING"` yields `9924`, the tail of a registration, offered confidently.
+
+Also **reversed the plan's rule that receipts under ₹50 are test transactions**: a ₹30 credit
+arrives five minutes after ₹1,900 from the *same payer* — a customer topping up. Small amounts are
+imported and flagged, never dropped.
+
+### Verifying on staging — and checking staging was worth verifying on
+
+`execute_sql` is **read-only** for both the portal and staging projects (DDL raises `25006`), but
+**`apply_migration` writes**. They are separate permission paths; one refusing says nothing about
+the other. `restore_project` returns "Project not found" for both portal refs, so a paused project
+cannot be woken from here — only the owner can, from the dashboard.
+
+Because `execute_sql` cannot write, a `BEGIN … ROLLBACK` probe cannot run through it. The probe was
+routed through `apply_migration` instead: it executes, the final `RAISE EXCEPTION` rolls everything
+back, and **the exception message returns as the tool's error** — so the pass/fail log is
+accumulated into a text variable and raised. A green run therefore *looks* like a failure.
+
+**Staging was compared to prod before being trusted** (prompted by the owner asking directly):
+
+- `entities`, `users`, `outlets`, `departments` — identical column sets;
+- `current_user_role`, `get_my_entity_id`, `is_active_user`, `is_manager_or_above` —
+  **byte-identical**, by `md5(pg_get_functiondef(oid))`;
+- same seed data: 2 entities incl. PTB, 1 active admin, 8 departments, 8 outlets.
+
+Drift was **exactly three objects**: `tiv_forecast_snapshots`, `tiv_upload_all`,
+`tiv_upload_and_prune` — the 2026-08-25 TIV work, applied to prod after staging was paused. All
+TIV, none of it touched by or depended on here. Prod also carries no table this migration would
+collide with. ⭐ **Do this comparison every time before treating staging as a rehearsal.**
+
+### Design decisions worth carrying
+
+- **No write RLS policy for `authenticated` on any money table, including admin** — and the table
+  privileges are revoked too, so "no write path outside the RPCs" is true at two independent
+  layers rather than resting on policy absence.
+- ⚠️ **EXECUTE on the RLS gate functions MUST stay granted to `authenticated`.** Policy predicates
+  are evaluated with the querying user's privileges, so revoking it breaks every payments SELECT
+  with "permission denied for function". The Supabase linter flags this; it is not an oversight.
+- **RLS predicates must be uncorrelated** — `(SELECT f(entity_id))` passes a column into the
+  sub-select, making it correlated and per-row, losing exactly the InitPlan optimisation the
+  wrapping exists for. The entity comparison is inline and the gate functions take no arguments.
+- **Two access gates, not one.** Service executives match payments and need receipts and invoices;
+  customer tax identifiers, the audit diary and the cash book are back-office only. PostgREST has
+  no column-level RLS, so the split is table-level plus a stripped view.
+- **Allocating IS the classification** — someone pointing money at a service bill has already said
+  it is service money.
+- **A re-imported file is normal, not an error.** Conflicts are counted, never raised. But an
+  "amendment" that changes the customer, or shrinks a total below what is already allocated, is
+  refused as a collision — it means an invoice number was reused.
+- **`Split Order Type` decides nothing.** It is blank on all 12 parts returns and labels one
+  free-of-cost invoice `"Repeat Jobs"` — a value the plan lists as payable. Kept for forensics only;
+  payability comes from the prefix × billing-type bijection.
+- **Mobile is tested, not promised.** Half the Match-screen contract is asserted against rendered
+  markup and half against the stylesheet itself, because "the tap target is big enough" is a CSS
+  fact invisible in HTML. No `.pay-*` rule may introduce a second layout column at any width.
+
+### Commits
+
+`038e64d` schema · `c04a146` parsers · `f16f311` matcher · `af87ed0` plan correction ·
+`261f634` Match screen · `2235b59` RPCs + probe · `90196de` proved on staging (idempotency fix) ·
+`2338872` Edge Function + advisor fixes · `60caa0b` CLAUDE.md · this entry.
+
+### Next
+
+1. Deploy the EF to staging and call it with a real user JWT — the largest unverified surface.
+2. Wire `/payments`: route, navConfig + `CREATE_ACTIONS`, `AccessRules.ALL_ROUTES`, data container.
+3. Import screen (gates → client-side parse + diff preview → commit what was previewed).
+4. Then prod, as a separate owner-approved step: both migrations, then the probe.
+
+Still gating **go-live** only, all owner/accounts-side: the Billing Report export schedule; the
+Busy edition + sample import format; how MPR parts returns behave (those 12 rows import as
+`parked` until answered).
+
+---
+
 ## Session log — 2026-08-29: Service Payments — a planning session that measured its way out of four wrong assumptions
 
 **Outcome: a complete, three-times-red-teamed plan and ZERO lines of production code.** Nothing was
