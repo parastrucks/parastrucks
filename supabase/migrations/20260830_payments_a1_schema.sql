@@ -385,8 +385,26 @@ CREATE INDEX IF NOT EXISTS payment_allocations_group_idx
 CREATE INDEX IF NOT EXISTS payment_allocations_unexported_idx
   ON public.payment_allocations (entity_id, allocated_at)
   WHERE reversed_at IS NULL AND export_batch_id IS NULL;
+-- Idempotency, keyed per (request, INVOICE) rather than per request.
+--
+-- This was wrong on the first pass and staging caught it on the very first
+-- assertion. One confirm creates one allocation row PER INVOICE, because a job
+-- that billed as parts + labour is settled by a single UPI transfer -- 245 of
+-- 836 measured orders. A bare UNIQUE (client_request_id) allows only one row
+-- per request, so the most ordinary case in the whole system raised a duplicate
+-- key error.
+--
+-- Retrying a confirm is still safe: payments_allocate returns the first
+-- attempt's answer if ANY row already carries that request id, so this index
+-- only has to stop a genuine duplicate of the same (request, invoice) pair.
+--
+-- NULLS NOT DISTINCT is load-bearing: on_account allocations carry no
+-- invoice_id, and under Postgres's default NULL handling two of them sharing a
+-- request id would BOTH be accepted -- silently doubling an advance.
 CREATE UNIQUE INDEX IF NOT EXISTS payment_allocations_idempotency_key
-  ON public.payment_allocations (client_request_id) WHERE client_request_id IS NOT NULL;
+  ON public.payment_allocations (client_request_id, invoice_id)
+  NULLS NOT DISTINCT
+  WHERE client_request_id IS NOT NULL;
 
 
 -- ── 5. Payer memory ─────────────────────────────────────────────────────────

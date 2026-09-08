@@ -3,11 +3,19 @@
 --
 -- Requires 20260830_payments_a1_schema.sql.
 --
--- ⚠️ NOT YET EXECUTED ANYWHERE. The Supabase MCP is read-only for the portal
--- project, staging (klpnhpnlotcbbovwswmq) is paused and times out, and this
--- worktree has no database password. Everything here is written and reviewed
--- but UNRUN. Do not treat it as working until it has been applied to staging
--- and scripts/payments/probe-allocation.sql has been run against it.
+-- ✅ APPLIED AND PROVED ON STAGING (klpnhpnlotcbbovwswmq, PostgreSQL 17.6,
+-- 2026-09-08). scripts/payments/probe-allocation.sql ran green: 24 passed,
+-- 0 failed, and the self-aborting transaction left zero rows behind.
+--
+-- Staging was first checked to be a fair proving ground: entities, users,
+-- outlets and departments have identical column sets to prod, and
+-- current_user_role / get_my_entity_id / is_active_user / is_manager_or_above
+-- are byte-identical (matching md5 of pg_get_functiondef). The only drift is
+-- tiv_forecast_snapshots plus tiv_upload_all / tiv_upload_and_prune, which
+-- landed on prod after staging was paused -- all TIV, none of it touched by or
+-- depended on here.
+--
+-- ⚠️ Still NOT applied to PROD. That is a separate, owner-approved step.
 --
 -- WHY THESE ARE FUNCTIONS AND NOT CLIENT WRITES. A PL/pgSQL body is one
 -- transaction. Allocating a payment touches three rows -- the allocation, the
