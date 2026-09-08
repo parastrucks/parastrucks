@@ -30,12 +30,46 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ---
 
-## Current state (2026-08-29)
+## Current state (2026-09-08)
 
-- **📋 SERVICE PAYMENTS — PLANNING COMPLETE, NOTHING BUILT. Do not start coding without reading the plan.**
-  UPI→invoice matching + customer master (groups + credit limits) + a daily export for **Busy**.
-  Branch `claude/payments-reconciliation-tool-6eaab4` carries **documentation and measurement
-  scripts only** — no migration, Edge Function, route or table exists.
+- **🔨 SERVICE PAYMENTS — PHASE A1 CORE BUILT AND PROVED ON STAGING. NOT on prod, NOT wired to a route.**
+  Branch `claude/payments-reconciliation-tool-6eaab4`. What exists and is verified:
+  - **Schema** (`20260830_payments_a1_schema.sql`) — 14 tables, 28 policies, 44 indexes, 2 views,
+    append-only audit trigger. **Applied to STAGING** (`klpnhpnlotcbbovwswmq`, PG 17.6).
+  - **Money logic** (`20260908_payments_a1_rpcs.sql`) — 10 SECURITY DEFINER RPCs. Applied to
+    staging and proved by `scripts/payments/probe-allocation.sql`: **24 passed, 0 failed, zero
+    rows left behind** (it self-aborts; a green run ENDS IN AN ERROR reading "PROBE COMPLETE").
+  - **Parsers + matcher + Match screen** — pure JS. `selftest-parsers` 140 · `selftest-matcher` 47 ·
+    `selftest-mobile-render` 52 = **239 offline, all green**; `npm run build` passes. Pointed at the
+    real files `selftest-parsers` runs 166 and proves the August Billing Report parses 1,085 of
+    1,085 rows with zero refusals — with July as a holdout the parsers had never seen.
+    ⚠️ `selftest-mobile-render` needs esbuild first (React is bundled in, so the output runs from
+    anywhere): `npx esbuild scripts/payments/selftest-mobile-render.mjs --bundle --platform=node
+    --format=esm --jsx=automatic --outfile=<tmp>/m.mjs && node <tmp>/m.mjs`
+  - **Edge Function** `supabase/functions/service-payments/index.ts` — written, **NOT deployed**.
+  - ⛔ **No route, no navConfig entry, no data-fetching container yet** — the UI is presentational
+    and unreachable in the app.
+  - ⭐ **Staging was checked to be a fair proving ground before trusting it:** entities/users/
+    outlets/departments have identical column sets to prod, and current_user_role /
+    get_my_entity_id / is_active_user / is_manager_or_above are **byte-identical** (md5 of
+    `pg_get_functiondef`). Drift is exactly `tiv_forecast_snapshots` + `tiv_upload_all` /
+    `tiv_upload_and_prune` — 2026-08-25 TIV work that landed after staging was paused. All TIV,
+    none of it touched here. **Method worth reusing for any future staging rehearsal.**
+  - ⭐ **THREE defects that only EXECUTION caught, after static review passed:**
+    **(1)** the idempotency index was `UNIQUE (client_request_id)`, but one confirm creates one
+    allocation row **per invoice** — so a parts+labour order paid by a single transfer (245 of 836
+    measured orders) raised a duplicate key on the probe's FIRST assertion. Now
+    `(client_request_id, invoice_id) NULLS NOT DISTINCT`; the NULLS clause stops two `on_account`
+    rows under one request id silently doubling an advance.
+    **(2)** `v_payments_integrity` is a SECURITY DEFINER view with **no access predicate**, granted
+    to `authenticated` — any signed-in user in any entity could read it. Found by
+    `get_advisors(type:security)`. Normally empty, which is why it would never have been noticed.
+    **(3)** scoping that view made the probe's integrity assertion pass **vacuously** (service role
+    ⇒ `current_user_role()` NULL ⇒ zero rows regardless of drift). The probe now computes drift
+    directly and includes a **negative control** that corrupts a cache on purpose.
+  - **⚠️ EXECUTE on the gate functions must stay granted to `authenticated`** — RLS predicates are
+    evaluated with the querying user's privileges, so revoking it breaks every payments SELECT
+    with "permission denied for function". The linter flags this; it is not an oversight.
   ⭐ **Start at `docs/backlog/service-payments-plan.md` (v4)** — Part 1 is the plain-language story,
   Part 2 the technical spec. Companions: `docs/backlog/service-payments-redteam3-cleanroom.md`
   (12-lane clean-room digest) and `scripts/payments/*.cjs` (re-runnable measurements).
@@ -316,9 +350,18 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ## Next actions
 
-- **⏭️ SERVICE PAYMENTS — three owner/accounts items gate the first migration. Do NOT start
-  building before they land** (and read `docs/backlog/service-payments-plan.md` first — it encodes
-  two bugs already caught by measurement that are easy to reintroduce from first principles):
+- **⏭️ SERVICE PAYMENTS — next build steps** (read `docs/backlog/service-payments-plan.md` first —
+  it encodes several bugs already caught by measurement that are easy to reintroduce from first
+  principles, including the ⭐ CORRECTION that a number in a payment note is a **number plate**,
+  not a bill number):
+  1. Deploy `service-payments` to staging and exercise it with a real user JWT (verify() cannot be
+     tested without one). `npx supabase functions deploy service-payments --no-verify-jwt`.
+  2. Wire the route: `App.jsx` lazy route `/payments`, `navConfig.js` Service Tools + a
+     `CREATE_ACTIONS` entry, `AccessRules.jsx` `ALL_ROUTES`, plus the data-fetching container that
+     feeds `MatchScreen` and calls the EF.
+  3. Import screen (TIV chain: gates → client-side parse+diff → commit what was previewed).
+  4. Then prod: same two migrations, then the probe. Owner-approved, separate step.
+- **⏭️ SERVICE PAYMENTS — three owner/accounts items still gate GO-LIVE (not further building):**
   1. **Schedule the SAP Billing Report** as a regular export (one-off manual run today); ask for a
      stable transaction/variant so column names don't drift. ⛔ **Do not ask again for a billing
      *time* column** — the owner confirmed date-only is the maximum SAP will provide.
