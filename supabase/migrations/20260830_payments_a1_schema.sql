@@ -896,6 +896,14 @@ SELECT 'invoice'::text  AS doc_kind,
          GROUP BY invoice_id
        ) a ON a.invoice_id = i.id
  WHERE i.allocated_paise <> COALESCE(a.sum_paise, 0)
+   -- A definer view sees past the base-table RLS by design, so it must carry
+   -- its own predicate. Without this the view was readable by ANY authenticated
+   -- user in ANY entity -- caught by the Supabase security advisor. It is
+   -- normally empty, which is exactly why nobody would have noticed; the rows
+   -- it returns during a real incident are invoice numbers and amounts.
+   AND ((SELECT public.current_user_role()) = 'admin'
+        OR (i.entity_id = (SELECT public.get_my_entity_id())
+            AND (SELECT public.payments_can_read_back_office())))
 UNION ALL
 SELECT 'receipt',
        r.id,
@@ -911,12 +919,27 @@ SELECT 'receipt',
          WHERE reversed_at IS NULL AND receipt_id IS NOT NULL
          GROUP BY receipt_id
        ) a ON a.receipt_id = r.id
- WHERE r.allocated_paise <> COALESCE(a.sum_paise, 0);
+ WHERE r.allocated_paise <> COALESCE(a.sum_paise, 0)
+   AND ((SELECT public.current_user_role()) = 'admin'
+        OR (r.entity_id = (SELECT public.get_my_entity_id())
+            AND (SELECT public.payments_can_read_back_office())));
 
 COMMENT ON VIEW public.v_payments_integrity IS
-  'Must be empty. Recomputes both allocated_paise caches from live allocations and returns any row that disagrees. A non-empty result means an RPC has a bug -- stop writing and investigate before the next export.';
+  'Must be empty. Recomputes both allocated_paise caches from live allocations and returns any row that disagrees. A non-empty result means an RPC has a bug -- stop writing and investigate before the next export. Entity-scoped: a definer view has to carry its own predicate, because it sees past the base-table RLS by design.';
 
 REVOKE ALL ON public.v_payments_customers_lite FROM anon;
 REVOKE ALL ON public.v_payments_integrity      FROM anon;
 GRANT SELECT ON public.v_payments_customers_lite TO authenticated;
 GRANT SELECT ON public.v_payments_integrity      TO authenticated;
+
+-- The gate functions answer only "what may the CALLER see", so anon learns
+-- nothing from them (it gets false) -- but anon has no SELECT on any payments
+-- table, so nothing needs anon to call them either.
+--
+-- EXECUTE for `authenticated` MUST STAY. RLS policy expressions are evaluated
+-- with the querying user's own privileges, so revoking it would make every
+-- payments SELECT fail with "permission denied for function". This is why the
+-- portal's existing helpers (current_user_role, is_active_user, ...) also keep
+-- it, and it is not the oversight the linter reads it as.
+REVOKE EXECUTE ON FUNCTION public.payments_can_read() FROM anon;
+REVOKE EXECUTE ON FUNCTION public.payments_can_read_back_office() FROM anon;

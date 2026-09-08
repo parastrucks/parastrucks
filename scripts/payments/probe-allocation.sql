@@ -278,11 +278,45 @@ BEGIN
   END;
 
   -- ── 11. the corruption detector agrees with everything above ────────────
-  SELECT count(*) INTO v_n FROM public.v_payments_integrity;
+  -- Computed DIRECTLY, not by reading v_payments_integrity. That view is
+  -- entity-scoped, and this block runs as the service role where
+  -- current_user_role() is NULL — so reading the view here would return zero
+  -- rows however badly the caches had drifted, and this assertion would pass
+  -- vacuously. A test that cannot fail is not a test.
+  SELECT count(*) INTO v_n FROM (
+    SELECT i.id FROM public.service_invoices i
+     LEFT JOIN (SELECT invoice_id, SUM(amount_paise) s FROM public.payment_allocations
+                 WHERE reversed_at IS NULL AND invoice_id IS NOT NULL GROUP BY invoice_id) a
+            ON a.invoice_id = i.id
+     WHERE i.allocated_paise <> COALESCE(a.s, 0)
+    UNION ALL
+    SELECT r.id FROM public.payment_receipts r
+     LEFT JOIN (SELECT receipt_id, SUM(amount_paise) s FROM public.payment_allocations
+                 WHERE reversed_at IS NULL AND receipt_id IS NOT NULL GROUP BY receipt_id) a
+            ON a.receipt_id = r.id
+     WHERE r.allocated_paise <> COALESCE(a.s, 0)
+  ) drift;
   IF v_n = 0 THEN
-    v_pass := v_pass + 1; RAISE NOTICE 'PASS  v_payments_integrity is empty — every cache matches its allocations';
+    v_pass := v_pass + 1; RAISE NOTICE 'PASS  no cache drift — every cache matches its allocations';
   ELSE
-    v_fail := v_fail + 1; RAISE NOTICE 'FAIL  v_payments_integrity has % drifting row(s)', v_n;
+    v_fail := v_fail + 1; RAISE NOTICE 'FAIL  % drifting row(s)', v_n;
+  END IF;
+
+  -- ── 12. and prove that check CAN fail ───────────────────────────────────
+  -- Corrupt one cache deliberately and confirm the detector notices. Without
+  -- this, a drift check that silently stopped working would keep reporting
+  -- "all clear" forever.
+  UPDATE public.service_invoices SET allocated_paise = allocated_paise - 1 WHERE id = v_inv_a;
+  SELECT count(*) INTO v_n FROM (
+    SELECT i.id FROM public.service_invoices i
+     LEFT JOIN (SELECT invoice_id, SUM(amount_paise) s FROM public.payment_allocations
+                 WHERE reversed_at IS NULL AND invoice_id IS NOT NULL GROUP BY invoice_id) a
+            ON a.invoice_id = i.id
+     WHERE i.allocated_paise <> COALESCE(a.s, 0)) d;
+  IF v_n = 1 THEN
+    v_pass := v_pass + 1; RAISE NOTICE 'PASS  the drift check DOES catch a deliberately corrupted cache';
+  ELSE
+    v_fail := v_fail + 1; RAISE NOTICE 'FAIL  a corrupted cache went undetected';
   END IF;
 
   RAISE NOTICE '';
