@@ -887,12 +887,22 @@ working; 10-minute weekly numbers review *with* the pilot users.
 7. Confirm ₹1,700 / ₹3,400 are current counter prices (they are absent from the July R7 fixture).
 8. Wrapper laptop → always-on PC (owner, "later") — prerequisite for full reliance, tracked.
 9. UPI source consolidation → single provider → API (owner will notify; v1 stays multi-source).
-   ⭐ **Discovery questionnaire ready: `docs/backlog/upi-api-bank-questionnaire.md`** (2026-09-08).
-   The decisive question is **A1–A3: can a dynamic QR carry OUR bill reference and return it?** If
-   yes, per-bill QR largely dissolves the matching problem and this jumps ahead of Phase C. If no,
-   the API is a convenience upgrade and the matcher stays exactly as designed. Two answers gate
-   feasibility rather than value: **C1** (a fetch-by-date-range endpoint — without it a lost
-   webhook is undetectable) and **E2** (banks routinely demand IP allowlisting; Supabase Edge
-   Functions have **no fixed outbound IP**, so a mandatory allowlist means an extra relay host).
+   ⭐ **Discovery questionnaire ready: `docs/backlog/upi-api-bank-questionnaire.md`** (v2,
+   2026-09-09). ⚠️ **The offering is a STATIC QR system, one QR per branch** *(owner)* — so a
+   per-bill reference cannot travel with the payment, and the matcher stays exactly as designed.
+   **The one new signal a static QR system can give us is WHICH QR was scanned**, which makes the
+   QR *count* the only dial worth pressing on: a QR on the parts counter would mark a receipt as a
+   counter sale and drop every job-card invoice from its candidate list before ranking starts —
+   directly attacking the ₹1,930 × 114-bills collision, which is overwhelmingly counter-sale
+   (MPI+MCI = 378 of 1,085 August invoices). **⚠️ Separate QRs and an API that reports them are
+   two different things:** verified 2026-09-09 that *neither* current export carries any
+   store/terminal/QR column — BharatPe's `Product`/`Payment Mode` are constant across all 303
+   August rows, and GPay's `Paid via` names the *customer's* app. Demand a sample response.
+   Two answers gate feasibility rather than value: **C1** (a fetch-by-date-range endpoint — without
+   it a lost webhook is undetectable) and **E2** (banks routinely demand IP allowlisting; Supabase
+   Edge Functions have **no fixed outbound IP**, so a mandatory allowlist means an extra relay
+   host). ⏭️ **Unmeasured:** what share of same-amount/same-day invoice collisions span both plants
+   (5756/6370) rather than sitting inside one — that number sizes per-branch QR exactly. Needs the
+   Billing Report, which is no longer on disk.
 10. **Vercel Hobby commercial-use ToS** (portal-wide, from round 3) — decide Cloudflare Pages vs
     Vercel Pro at leisure; and pre-commit the Supabase Pro trigger (go-live + 90 days).
