@@ -3,26 +3,47 @@
 > **Purpose.** Paras Trucks & Buses is being offered UPI APIs by its bank. This is the
 > discovery document: what to ask, why each answer matters, and what a bad answer looks like.
 >
-> **Status:** v2, 2026-09-09. **Revised after the owner confirmed the offering is a STATIC QR
-> system, one QR per branch.** That single fact removes the highest-value question from v1 and
-> replaces it with a different one — see "What changed" below.
+> **Status:** v3, 2026-09-11. **Settled by the owner: a STATIC QR system, ONE QR PER BRANCH** —
+> even though the bank allows as many QRs as we like. Part 2 is the part to send.
 >
 > Companion: `docs/backlog/service-payments-plan.md` (the tool this feeds), open item 9.
 
 ---
 
-## What changed from v1, and why it matters
+## How we got here — two versions withdrawn, and why
 
-v1's headline question was: *"can a dynamic QR carry our own bill reference and hand it back?"*
-With a static QR that is **not possible** — a static QR is a printed sticker, identical for every
-customer and every bill, so nothing about the specific bill can travel with the payment.
+**v1 asked:** *"can a QR carry our own bill reference and hand it back?"* A static QR is a printed
+sticker, identical for every customer and every bill, so nothing about the bill can travel with the
+payment. **Closed.** (One confirming question survives as A7.)
 
-**That question is now closed. Do not ask it as though it were open.** (One confirming question
-survives, as A8, purely so we know we are not leaving an option on the table.)
+**v2 argued for a QR per collection point** — parts counter, workshop cashier — on the theory that
+a payment arriving on the counter QR must be a counter sale, so every job-card invoice could be
+dropped from its candidate list. **Withdrawn — the owner corrected it, rightly:**
 
-Under a static QR system, the bank can supply exactly **one** new matching signal that we do not
-have today: **which QR the customer scanned.** Everything of value in this conversation now hangs
-off that, which makes the number of QRs — and whether the API reports them — the thing to press on.
+> Where a customer pays does not tell you what they bought. Someone who buys a bucket of AdBlue at
+> the parts counter may pay at the counter, walk over to accounts, or be taken to the accounts
+> office by a counter executive and pay there. The same QR takes payment for service invoices and
+> counter invoices alike.
+
+So a counter QR would have been **mislabelled on exactly the payments that were made somewhere
+else** — and v2's proposal to *remove* job-card invoices from those payments' candidate lists would
+have hidden the correct bill every single time. A person cannot pick an answer the screen does not
+show them.
+
+**v3: one QR per branch.** The QR tells us **which branch** took the money — and nothing about what
+was bought.
+
+### ⭐ The rule this sets for the tool (ours, not the bank's)
+
+**Which QR a payment arrived on is a *ranking* signal, never a *filter*.** It moves same-branch
+bills up the shortlist; it never removes the other branch's bills. Even the branch is a strong hint
+rather than a certainty — a fleet owner with trucks in both workshops can settle an Ahmedabad bill
+while standing in Anand, and a customer can pay from a photo of a QR sent over WhatsApp.
+
+A filter that is right 95% of the time is not 95% useful — it is silently wrong the other 5%, on
+cases nobody can see. So: rank it, and **record every confirmed match where the bill's branch
+differs from the QR's branch.** The pilot will then tell us, with numbers, how reliable the branch
+really is.
 
 ---
 
@@ -34,62 +55,54 @@ Today money arrives and we find out by downloading a spreadsheet from Google Pay
 another from BharatPe — roughly **18–21 payments a day, about ₹44 lakh a month**. Someone then
 works out which workshop bill each payment pays.
 
-With static QRs, an API buys us two things:
+With one static QR per branch, the API buys two kinds of thing:
 
-| | What it fixes | Worth |
+| | What it gives us | Worth |
 |---|---|---|
-| **The convenience win** | No more downloading and uploading spreadsheets. Payments appear in the portal on their own, within minutes instead of the next morning. | Saves a few minutes a day and removes a manual step that can be forgotten. |
-| **⭐ The matching win** | Every receipt arrives already knowing **which QR it came in on** — so it can be tied to a branch, and possibly to a counter. | **Depends entirely on how many QRs we are allowed.** One per branch is a modest gain. One per collection point would be a large one. |
+| **Convenience and completeness** | Payments appear in the portal on their own, the same day, with exact amounts. Nobody has to remember to download anything, and a missing day becomes detectable. | Real, but modest. Saves minutes a day and removes a step that can be forgotten. |
+| **⭐ Better clues on every payment** | Three pieces of information that make matching sharper — two of which **we do not get at all today** (see below). | This is what makes the API better than the spreadsheets, rather than just faster. |
 
-## ⭐ The question worth more than all the others *(revised)*
+The matching itself stays as designed: the tool shortlists, a person picks.
 
-> **"How many separate static QRs can we have, and does the API tell us which QR each payment
-> came in on?"**
+## ⭐ The question worth more than all the others *(revised for v3)*
 
-And immediately after it:
+> **"For every payment, does the API give us the payer's UPI ID, the customer's note, and which of
+> our QRs was scanned?"**
 
-> **"Can we have one per collection point — the parts counter, the workshop cashier, each service
-> advisor — rather than only one per branch?"**
+Each of the three is a matching clue. Measured against our own July and August exports:
 
-**Why this is now the whole game.** A static QR carries no bill information. The only thing it can
-tell us is *where the customer was standing*. So the QR count is the only dial the bank controls
-that affects our matching at all — and each extra QR splits the incoming payment stream into a
-smaller, cleaner pool.
+**1. The payer's UPI ID** (e.g. `rameshsharma@okicici`) — **we have never had this. Zero of 1,079
+payments carry one.** Today we recognise a repeat payer by their *name*, and a name is a poor key:
 
-Concretely, from our own August data:
+- **13 Google Pay payments had no name at all**, including one of ₹25,000;
+- two different Ramesh Sharmas look identical;
+- Google Pay shortens names.
 
-- **₹1,930 appeared on 114 different bills** in one month — 17 of them on a single day. Almost all
-  of those are **counter sales** (DEF and parts over the counter): 378 of August's 1,085 invoices
-  were counter sales rather than job-card work.
-- If the **parts counter has its own QR**, then a ₹1,930 payment arriving on that QR is a counter
-  sale, and every job-card invoice drops out of the candidate list before we start. And a payment
-  on the **workshop** QR is never a counter sale.
-- That is a real, permanent narrowing that costs the bank nothing — **static QRs are stickers.**
+Repeat payers are common. Counting **by name** — which is exactly the unreliable part —
+**40% of July+August payments came from a name that paid more than once**, and **23% of August
+payments came from a name already seen in July.** Those figures are approximate *because* names
+are unreliable; a UPI ID would make them exact. It is unique and never blank, so a fleet owner's
+driver who paid last month would be recognised with certainty rather than guessed at.
 
-**Ask for more QRs than you think you need, before the account is configured.** Adding them later
-means reprinting, re-siting and retraining staff. Asking now costs one sentence.
+**2. The customer's note** — the one thing the *customer* tells us. With a static QR it is the
+**only** customer-supplied clue that exists. About one in five Google Pay payments carry a number in the note,
+and most of those (17 of 28 in August) are the **last four digits of the vehicle's number plate** — a strong
+clue, because every job-card invoice carries the registration. **BharatPe gives us no note at all
+today.** If the new API drops it, matching gets *worse* than what we already have.
 
-## ⚠️ The thing that would make per-QR attribution worthless
-
-**Verified on our own files today:** neither current export carries any store, terminal, QR or
-outlet column at all.
-
-- BharatPe's only two descriptive columns, `Product` and `Payment Mode`, read `BharatPe QR` and
-  `UPI` on **all 303 August rows** — identical, zero discriminating power.
-- Google Pay's `Paid via` describes the *customer's* app (83 "Unknown app", 64 "Google Pay" in
-  August), not our QR.
-
-So it is entirely possible to have two physical QRs and still receive a feed that cannot tell them
-apart. **Having separate QRs and having the API report them are two different things, and we need
-both.** That is questions A1 and B15, and neither should be taken on trust — ask for a sample API
-response showing the field populated.
+**3. Which QR was scanned** — this is how the branch reaches us. **Checked against our own files:
+neither current export has any store, terminal, QR or outlet column.** BharatPe's only two
+descriptive columns read `BharatPe QR` and `UPI` on all 303 August rows — identical. Google Pay's
+`Paid via` describes the *customer's* app, not our QR. So two branch QRs could still arrive in a
+feed that cannot tell them apart. **Having two QRs and having the API report them are different
+things — ask for a sample API response with the field populated,** not a yes.
 
 ## ⚠️ The thing that could stop this dead
 
 Banks very often say *"give us your server's IP address and we'll allow only that."* Our portal
 backend runs on serverless infrastructure with **no fixed outbound IP address**. If IP allowlisting
 is mandatory we cannot simply comply — we would need a small fixed-address server in between:
-extra cost, and one more thing that can break.
+extra cost, one more thing that can break.
 
 **Ask question E2 early and get the answer in writing.** It changes the architecture and the
 budget, and it is far cheaper to know now than after signing.
@@ -98,18 +111,18 @@ budget, and it is far cheaper to know now than after signing.
 
 > A **fetch-by-date endpoint** returning every payment in a date range with the **exact amount**,
 > the **UTR**, the **payer's name and UPI ID**, the **customer's note**, and **which QR it came in
-> on** — plus as many QRs as we ask for, and a sandbox to test in.
+> on** — plus a sandbox to test in.
 
 ## Red flags — what to listen for
 
 | If they say… | What it means for us |
 |---|---|
-| *"The API doesn't return which QR was used."* | ⛔ **This removes the only reason to prefer their API over the spreadsheets we already download.** Ask for a sample response. |
-| *"You get one QR per merchant ID; more QRs means more merchant IDs / more paperwork / more cost."* | ⚠️ Get the price and the effort per extra QR **in writing**, then decide the layout once — reprinting later is worse. |
 | *"We only send webhooks, there is no API to list transactions."* | ⛔ **Serious.** If one notification is lost, that payment is invisible to us forever and we cannot even know it is missing. |
+| *"The customer's note is not available."* | ⚠️ A step **backwards** from Google Pay today. With a static QR it is the only clue the customer gives us. |
+| *"The payer's UPI ID is not shared."* | ⚠️ We stay on name-matching for repeat payers, as today. Not fatal — but it was the biggest single improvement on offer. |
+| *"The API doesn't say which QR was used."* | ⚠️ We lose the branch hint. Not fatal, but ask for it in writing. |
 | *"You must give us a static IP address."* | ⚠️ Architecture change and a cost line. Get the alternatives in writing (E2). |
 | *"The amount comes as a number"* — and it turns out to be rounded | ⚠️ Our current BharatPe file rounds a derived amount to one decimal; on 13 rows it misses the true figure by up to 4 paise. Small, but it is wrong money in a ledger. |
-| *"The customer's note is not available."* | ⚠️ With no bill reference in a static QR, the customer's typed note is the **only** customer-supplied clue we get. A quarter of Google Pay notes carry a number. Losing it makes matching **worse** than what we have today. |
 | *"There is no test environment."* | ⚠️ We would be testing with live customer money. Push back. |
 
 ## What they will ask us for — have it ready
@@ -120,24 +133,8 @@ budget, and it is far cheaper to know now than after signing.
 - A public HTTPS address for notifications (we have one)
 - Expected volume: **~600 transactions and ~₹44 lakh a month**, average ticket around ₹7,000
 - Business category: automobile service and spare parts (dealership)
-- **How many QRs we want and where each one sits** — decide this before the call (see below)
-- Locations: **2 today** — Ahmedabad (plant 5756) and Anand (plant 6370); a third possible later
-
-## Decide before the call: how many QRs, and where
-
-Bring a list. A sensible starting ask, per branch:
-
-1. **Parts / counter sales** — the DEF and over-the-counter till
-2. **Workshop cashier** — job-card bills
-3. **A spare**, unlabelled, for a future counter or a mobile advisor
-
-That is **6 for two branches** with room to grow. If they will give more, one per service advisor
-is better still — because then the receipt tells us *who took the payment*, and that person is the
-one who knows which bill it was.
-
-If they will only give one per branch, take it — 2 is still better than the 1 we effectively have
-now — but say clearly on the call that we want the option to add more later, and ask what that
-would involve.
+- **QRs: one per branch — two today**, Ahmedabad (plant 5756) and Anand (plant 6370); a third
+  branch is possible later
 
 ## What NOT to ask about
 
@@ -151,28 +148,27 @@ with the API · anything about cash or cheque handling.
 
 **Context for your team, in one paragraph:**
 
-> We are a commercial-vehicle dealership running two workshop locations. We accept UPI through
-> static merchant QR codes and currently reconcile payments against workshop invoices manually,
-> using CSV exports. We are building an internal tool to automate that reconciliation and would
-> like to integrate directly with your APIs. Our questions are grouped below; the first group is
-> the most important to us commercially.
+> We are a commercial-vehicle dealership with two workshop branches. We will accept UPI through
+> one static merchant QR code per branch, and we currently reconcile payments against invoices
+> manually using CSV exports. We are building an internal tool to automate that reconciliation and
+> would like to integrate directly with your APIs. Our questions are grouped below; the first group
+> is the most important to us.
 
 ---
 
-## A. Static QR codes and payment identification — *our highest priority*
+## A. What travels with each payment — *our highest priority*
 
 | # | Question | Your answer |
 |---|---|---|
-| A1 | ⭐ **Does the transaction record identify which QR the payment was made to?** Please name the field and send a sample API response with it populated. | |
-| A2 | ⭐ **How many separate static QRs can we have?** Is there a limit per merchant account, per branch, or overall? | |
-| A3 | Can we have QRs at a finer level than one per branch — e.g. one for the parts counter, one for the workshop cashier, one per service advisor? | |
-| A4 | Can we **add or retire QRs later** without disturbing the existing ones? Is it self-service, or does each one need paperwork, and how long does it take? | |
-| A5 | Can we attach our **own label** to each QR (e.g. "Anand – parts counter") and is that label returned by the API, or do we only get an ID we must map ourselves? | |
-| A6 | Do all QRs settle into the **same bank account** and appear in a **single API feed**, or does each need its own credentials and its own calls? | |
-| A7 | For a static QR, does the **customer's own note/remark** reach us through the API? | |
-| A8 | We understand the offering is static QR. For completeness: is **dynamic QR** (a QR generated per bill, carrying our own invoice reference) available on any account type, and at what cost? | |
-| A9 | Do you support **UPI Collect** — sending a payment request to a customer's UPI ID with our invoice number attached? *(This is our only remaining route to a payment that carries a bill reference, and would be useful for credit customers paying from their office.)* | |
-| A10 | Is there any **per-QR cost** — setup, monthly, or a different MDR? | |
+| A1 | ⭐ **Does each transaction record identify which of our QRs was scanned?** Please name the field and send a **sample API response with it populated**. | |
+| A2 | ⭐ **Does each transaction include the payer's UPI ID (VPA)?** Is it ever masked or withheld — for example for certain apps or banks? | |
+| A3 | ⭐ **Does the customer's own note / remark reach us through the API**, in full? | |
+| A4 | Can we **add a QR later** (for a new branch) without disturbing the existing ones? What is the process and how long does it take? | |
+| A5 | Can we attach our **own label** to each QR (e.g. "Anand"), and is that label returned by the API — or do we only get an ID that we map ourselves? | |
+| A6 | Do all our QRs settle into the **same bank account** and appear in a **single API feed**, or does each need its own credentials and its own calls? | |
+| A7 | For completeness: is **dynamic QR** (generated per bill, carrying our own invoice reference) available on any account type, and at what cost? | |
+| A8 | Do you support **UPI Collect** — sending a payment request to a customer's UPI ID with our invoice number attached? *(Useful for credit customers who pay from their office.)* | |
+| A9 | Is there any **per-QR cost** — setup, monthly, or a different MDR? | |
 
 ## B. What each transaction record contains
 
@@ -186,11 +182,11 @@ Please confirm which of the following you return, and the exact field name for e
 | B4 | Currency | | |
 | B5 | **Timestamp with time zone / offset** — and whether it is the time the customer paid or the time it was processed | | |
 | B6 | **Status**, plus the complete list of possible values and which of them mean the money has actually arrived | | |
-| B7 | **Payer name** — full, or truncated? | | |
-| B8 | **Payer VPA / UPI ID** | | |
+| B7 | **Payer name** — full, or shortened? | | |
+| B8 | ⭐ **Payer VPA / UPI ID** *(see A2)* | | |
 | B9 | Payer mobile number | | |
-| B10 | **Customer note / remark** typed at payment time | | |
-| B11 | ⭐ **QR / terminal / sub-merchant identifier** — which of our QRs was scanned *(see A1; this is the single most important field in this table for us)* | | |
+| B10 | ⭐ **Customer note / remark** typed at payment time *(see A3)* | | |
+| B11 | ⭐ **QR / terminal / sub-merchant identifier** — which of our QRs was scanned *(see A1)* | | |
 | B12 | The app the customer paid from | | |
 | B13 | **MDR / fee charged**, and GST on it, as separate exact values | | |
 | B14 | Settlement reference and settlement date | | |
@@ -204,7 +200,7 @@ Please confirm which of the following you return, and the exact field name for e
 | # | Question | Your answer |
 |---|---|---|
 | C1 | Is there an endpoint to **list all transactions in a date range**, independent of webhooks? *(Essential for us — see the note below.)* | |
-| C2 | Can that listing be **filtered by QR / terminal**, or do we filter on our side? | |
+| C2 | Can that listing be **filtered by QR**, or do we filter on our side? | |
 | C3 | **Pagination:** cursor-based or offset-based? Maximum page size? Is a total count returned? | |
 | C4 | What is the **largest date range** allowed in one call? | |
 | C5 | **How far back** is history available? Can we backfill the last 6–12 months? | |
@@ -259,7 +255,7 @@ Please confirm which of the following you return, and the exact field name for e
 | G1 | **Settlement cycle** — T+0, T+1? Daily cut-off time, and what happens on bank holidays? | |
 | G2 | Is settlement **gross or net of MDR**? We need to record the **gross amount the customer paid** as well as the fee. | |
 | G3 | Does the API expose the **settlement batch** — its own UTR, its total, and the list of transactions inside it? *(This is what lets us tie the portal to the bank statement.)* | |
-| G4 | If we have multiple QRs, do they settle in **one batch or separate batches**? | |
+| G4 | Do our two QRs settle in **one batch or separate batches**? | |
 | G5 | **MDR rate card** — by instrument type and amount band, with GST shown separately. | |
 | G6 | Are there **API usage charges** — per call, per webhook, monthly platform fee, one-time setup fee, annual maintenance? | |
 | G7 | Is there a **minimum volume commitment** or minimum monthly billing? | |
@@ -269,7 +265,7 @@ Please confirm which of the following you return, and the exact field name for e
 
 | # | Question | Your answer |
 |---|---|---|
-| H1 | **Per-transaction limit** on our merchant account, and the **per-day** limit. Is the daily limit per QR or shared across all of them? | |
+| H1 | **Per-transaction limit** on our merchant account, and the **per-day** limit. Is the daily limit per QR or shared? | |
 | H2 | Workshop invoices can exceed ₹1 lakh. What is the correct way to collect a large amount — a higher merchant limit, or must the customer split it? | |
 | H3 | Are there limits an individual **customer** may hit, and can we detect that from the API response? | |
 
@@ -313,14 +309,12 @@ Please confirm which of the following you return, and the exact field name for e
 # PART 3 — After the call: how we decide
 
 **1. Is the API better than the spreadsheets we already download?**
-Driven by **A1, A2, A3, A7, B11**.
-- If the API returns a **QR identifier** and we can have **more than one QR per branch**, then yes —
-  every receipt self-attributes to a place, and for counter QRs that removes job-card invoices from
-  the candidate list outright. Worth doing.
-- If the API returns **no QR identifier**, the integration delivers only convenience. Still worth
-  having eventually, but it is not urgent and should not displace other work.
-- **If it also loses the customer's note (A7), it is a step backwards** and we should stay on the
-  CSV exports.
+Driven by **A1, A2, A3** (fields B8, B10, B11).
+- **UPI ID + note + QR** → clearly better. Repeat payers are recognised exactly, the customer's
+  clue survives, and the branch arrives as a ranking hint.
+- **Note but no UPI ID** → still better than today (convenience, completeness, branch), and
+  repeat-payer recognition stays name-based, as it is now.
+- **No note** → a step backwards from Google Pay. Weigh carefully before consolidating onto it.
 
 **2. Can we build it safely?**
 Driven by **C1, E2, I1**. We need all three: a pull endpoint, a workable authentication story, and
@@ -328,7 +322,7 @@ a sandbox. Missing **C1** is close to disqualifying. **E2** decides whether we n
 of infrastructure and a cost line.
 
 **3. Does it pay for itself?**
-Driven by **G5, G6, G7, A10**. Compare against what we pay Google Pay Business and BharatPe today.
+Driven by **G5, G6, G7, A9**. Compare against what we pay Google Pay Business and BharatPe today.
 Consolidating from **two providers to one** is worth something on its own — it halves the
 reconciliation surface and removes an entire parser from the tool.
 
@@ -337,15 +331,16 @@ will mark up this document with what was said.
 
 ---
 
-## Open measurement (for us, not for the bank)
+## Open measurements (for us, not for the bank)
 
-**How much is one QR per branch actually worth?** We can size it exactly, but the August Billing
-Report is no longer on disk, so it has not been measured. When that file is next available, the
-figure to compute is: **of the same-amount, same-day invoice collisions, what share span both
-plants (5756 Ahmedabad / 6370 Anand) rather than sitting inside one?** Collisions that span both
-branches are the ones a per-branch QR resolves; collisions inside one branch are untouched by it.
-That number tells us whether to push hard for per-counter QRs or accept per-branch.
+1. **How useful is the branch hint?** Size it from the Billing Report: of the same-amount, same-day
+   invoice collisions, what share span **both** plants (5756 / 6370) rather than sitting inside one?
+   Only cross-branch collisions are sharpened by knowing the branch. **Not yet measured** — the
+   August Billing Report is no longer on disk.
+2. **How reliable is the branch hint?** Only the pilot can say. Log every confirmed match where the
+   bill's plant differs from the QR's branch; that rate is the honest answer to "could this ever be
+   tightened into a filter?" (Default answer: no.)
 
 ---
 
-*Prepared for Paras Trucks & Buses · v2, 9 September 2026 · internal working document.*
+*Prepared for Paras Trucks & Buses · v3, 11 September 2026 · internal working document.*

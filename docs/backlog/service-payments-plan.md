@@ -887,22 +887,35 @@ working; 10-minute weekly numbers review *with* the pilot users.
 7. Confirm ₹1,700 / ₹3,400 are current counter prices (they are absent from the July R7 fixture).
 8. Wrapper laptop → always-on PC (owner, "later") — prerequisite for full reliance, tracked.
 9. UPI source consolidation → single provider → API (owner will notify; v1 stays multi-source).
-   ⭐ **Discovery questionnaire ready: `docs/backlog/upi-api-bank-questionnaire.md`** (v2,
-   2026-09-09). ⚠️ **The offering is a STATIC QR system, one QR per branch** *(owner)* — so a
-   per-bill reference cannot travel with the payment, and the matcher stays exactly as designed.
-   **The one new signal a static QR system can give us is WHICH QR was scanned**, which makes the
-   QR *count* the only dial worth pressing on: a QR on the parts counter would mark a receipt as a
-   counter sale and drop every job-card invoice from its candidate list before ranking starts —
-   directly attacking the ₹1,930 × 114-bills collision, which is overwhelmingly counter-sale
-   (MPI+MCI = 378 of 1,085 August invoices). **⚠️ Separate QRs and an API that reports them are
-   two different things:** verified 2026-09-09 that *neither* current export carries any
-   store/terminal/QR column — BharatPe's `Product`/`Payment Mode` are constant across all 303
-   August rows, and GPay's `Paid via` names the *customer's* app. Demand a sample response.
+   ⭐ **Discovery questionnaire ready: `docs/backlog/upi-api-bank-questionnaire.md`** (v3,
+   2026-09-11). **Settled *(owner)*: STATIC QR, ONE PER BRANCH** — even though the bank allows as
+   many as we like. A static QR cannot carry a bill reference, so the matcher stays as designed.
+   ⛔ **Do NOT re-propose per-counter QRs.** v2 did, reasoning that a payment on a parts-counter QR
+   must be a counter sale so job-card invoices could be dropped from its candidates. The owner
+   corrected it: **where a customer pays does not tell you what they bought** — a counter customer
+   may pay at the counter, at accounts, or be walked to the accounts office by a counter executive.
+   That filter would have hidden the correct bill on every payment made "elsewhere".
+   ⭐ **Matcher rule that follows: the QR/branch a payment arrived on is a RANKING signal, never a
+   FILTER** — it lifts same-plant bills, never removes the other plant's. Even the branch is not
+   certain (a fleet owner with trucks in both workshops; paying from a WhatsApp'd QR photo). Log
+   every confirmed match where invoice plant ≠ QR branch; the pilot measures reliability. Same
+   family as "name weight is never negative — drivers pay for firms".
+   **What the API can add that the CSVs lack — the three fields that decide it (A1–A3):**
+   **payer VPA** (measured 2026-09-11: **0 of 1,079** rows carry one; 13 GPay rows have no name at
+   all; by-name repeat rate is **40%** of Jul+Aug payments and **23%** of August payers already
+   seen in July — approximate *because* names are the unreliable key; a VPA would make
+   `payer_memory` exact) · **customer note** (the only customer-supplied clue under static QR;
+   BharatPe has none today) · **QR identifier** (neither export has any store/terminal/QR column —
+   BharatPe `Product`/`Payment Mode` constant on all 303 August rows; GPay `Paid via` is the
+   *customer's* app — demand a sample response).
+   ⚠️ **The schema has NO VPA column** (`payment_receipts`, and `payer_memory` is keyed on
+   `(entity, source, normalized_payer_name, customer)` — migration lines 235/411 say so). If the API
+   supplies a VPA, that is an **additive** change: a nullable `payer_vpa` on receipts + a VPA-keyed
+   memory tier ranked above the name tier. Do it when the API is real, not speculatively.
    Two answers gate feasibility rather than value: **C1** (a fetch-by-date-range endpoint — without
    it a lost webhook is undetectable) and **E2** (banks routinely demand IP allowlisting; Supabase
    Edge Functions have **no fixed outbound IP**, so a mandatory allowlist means an extra relay
-   host). ⏭️ **Unmeasured:** what share of same-amount/same-day invoice collisions span both plants
-   (5756/6370) rather than sitting inside one — that number sizes per-branch QR exactly. Needs the
-   Billing Report, which is no longer on disk.
+   host). ⏭️ **Unmeasured:** what share of same-amount/same-day collisions span both plants
+   (5756/6370) — sizes the branch hint. Needs the Billing Report, which is no longer on disk.
 10. **Vercel Hobby commercial-use ToS** (portal-wide, from round 3) — decide Cloudflare Pages vs
     Vercel Pro at leisure; and pre-commit the Supabase Pro trigger (go-live + 90 days).
