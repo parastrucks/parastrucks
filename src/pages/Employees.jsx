@@ -267,6 +267,14 @@ export default function Employees() {
 
   /* ── modal open/close ───────────────────────────────────────────────── */
   function openAdd() {
+    // Same guard as openEdit. With reference data missing, every dropdown and
+    // checkbox list in the form is empty, so the required fields can never be
+    // filled and the form refuses forever with no hint why. openEdit had this
+    // check; openAdd did not (found 2026-09-19 while chasing an HR report).
+    if (refLoadError) {
+      toast.error('Reference data failed to load — reload the page before adding an employee.')
+      return
+    }
     // Pre-fill entity for non-admin callers (entity-locked)
     setForm({ ...EMPTY_FORM, entity_id: callerEntityLocked ? caller.entity_id : '' })
     setError('')

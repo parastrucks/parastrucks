@@ -268,6 +268,39 @@ async function changeOwnPassword(
   return json({ ok: true })
 }
 
+// A refused create used to leave no trace at all: only SUCCESSES were audited,
+// and Edge Function logs on this plan are kept for one day. On 2026-09-19 HR
+// reported "we cannot create users" days after trying, and there was nothing
+// left to read — no row, no log, no message. Every refusal is now recorded with
+// the exact text the caller was shown and the stage that refused it, so the
+// next report can be answered from this table. The password is never recorded.
+async function auditCreateFailure(
+  admin: SupabaseClient,
+  actorId: string,
+  payload: Record<string, unknown>,
+  stage: string,
+  error: string,
+): Promise<void> {
+  const str = (v: unknown) => (typeof v === "string" ? v.trim() || null : null)
+  await audit(admin, {
+    actorId,
+    action: "createUserFailed",
+    targetId: null,
+    after: {
+      stage,
+      error,
+      email: str(payload.email),
+      full_name: str(payload.full_name),
+      entity_id: str(payload.entity_id),
+      department_id: str(payload.department_id),
+      designation_id: str(payload.designation_id),
+      permission_level: str(payload.permission_level),
+      primary_outlet_id: str(payload.primary_outlet_id),
+      brand_count: Array.isArray(payload.brand_ids) ? payload.brand_ids.length : null,
+    },
+  })
+}
+
 Deno.serve(async (req: Request) => {
   const json = (b: unknown, status = 200) => jsonResponse(req, b, status)
   if (req.method === "OPTIONS") return preflight(req)
@@ -305,6 +338,9 @@ Deno.serve(async (req: Request) => {
   // unauthenticated hits can't pollute the rate_limits table.
   const rl = await rateLimit(admin, caller.id, "admin-users")
   if (!rl.allowed) {
+    if (action === "create") {
+      await auditCreateFailure(admin, caller.id, payload, "rate_limit", "rate_limited")
+    }
     return json({ ok: false, error: "rate_limited", retry_after_s: rl.retry_after_s }, 429)
   }
 
@@ -348,24 +384,35 @@ Deno.serve(async (req: Request) => {
           sales_vertical_ids?: string[]
           outlet_ids?: string[]
         }
-        if (!p.full_name?.trim()) return json({ error: "Full name is required" }, 400)
-        if (!p.email?.trim()) return json({ error: "Email is required" }, 400)
+        // Every refusal below goes through fail(), so none of them can return
+        // without leaving a createUserFailed row behind.
+        const fail = async (stage: string, error: string, status = 400) => {
+          await auditCreateFailure(admin, caller.id, payload, stage, error)
+          return json({ error }, status)
+        }
+
+        if (!p.full_name?.trim()) return await fail("input", "Full name is required")
+        if (!p.email?.trim()) return await fail("input", "Email is required")
         if (!p.password || p.password.length < MIN_PASSWORD_LENGTH) {
-          return json({ error: `Password must be at least ${MIN_PASSWORD_LENGTH} characters` }, 400)
+          return await fail("input", `Password must be at least ${MIN_PASSWORD_LENGTH} characters`)
         }
         const adminErr = rejectAdminTier(null, p.permission_level)
-        if (adminErr) return json({ error: adminErr }, 400)
-        if (!p.entity_id)      return json({ error: "entity_id is required" }, 400)
-        if (!p.department_id)  return json({ error: "department_id is required" }, 400)
-        if (!p.designation_id) return json({ error: "designation_id is required" }, 400)
+        if (adminErr) return await fail("input", adminErr)
+        if (!p.entity_id)      return await fail("input", "entity_id is required")
+        if (!p.department_id)  return await fail("input", "department_id is required")
+        if (!p.designation_id) return await fail("input", "designation_id is required")
         // rejectAdminTier() returns null when permission_level is absent, so an
         // omitted tier used to slip through here and surface as an opaque NOT
         // NULL violation after the auth user had already been created.
-        if (!p.permission_level) return json({ error: "permission_level is required" }, 400)
+        if (!p.permission_level) return await fail("input", "permission_level is required")
 
         // Entity-scoping: HR can only create users in their own entity
         const entityErr = await requireSameEntity(p.entity_id)
-        if (entityErr) return entityErr
+        if (entityErr) {
+          const msg = await entityErr.clone().json().then((b) => b?.error).catch(() => null)
+          await auditCreateFailure(admin, caller.id, payload, "entity_scope", msg || "entity scope refused")
+          return entityErr
+        }
 
         // ── SHAPE GATE ────────────────────────────────────────────────────
         // Every user carries the same attributes. Enforced HERE, not just in
@@ -382,7 +429,7 @@ Deno.serve(async (req: Request) => {
           brand_ids: p.brand_ids,
           sales_vertical_ids: p.sales_vertical_ids,
         })
-        if (shapeErr) return json({ error: shapeErr }, 400)
+        if (shapeErr) return await fail("shape", shapeErr)
 
         const { data: authData, error: authErr } = await admin.auth.admin.createUser({
           email: p.email.trim(),
@@ -395,7 +442,9 @@ Deno.serve(async (req: Request) => {
           app_metadata: { must_change_password: true },
         })
         if (authErr || !authData?.user) {
-          return json({ error: authErr?.message || "Failed to create auth user" }, 400)
+          // The login system's own refusals land here — "already registered",
+          // its password rules — which is why this is the stage most worth keeping.
+          return await fail("auth_create", authErr?.message || "Failed to create auth user")
         }
 
         const { error: pErr } = await admin.from("users").insert({
@@ -415,7 +464,7 @@ Deno.serve(async (req: Request) => {
         if (pErr) {
           // Roll back the auth user if the profile insert fails
           await admin.auth.admin.deleteUser(authData.user.id)
-          return json({ error: pErr.message }, 400)
+          return await fail("profile_insert", pErr.message)
         }
 
         // Join-table inserts. Best-effort: if any fail, we delete the partial
@@ -427,7 +476,7 @@ Deno.serve(async (req: Request) => {
         if (joinErr) {
           await admin.from("users").delete().eq("id", authData.user.id)
           await admin.auth.admin.deleteUser(authData.user.id)
-          return json({ error: joinErr }, 400)
+          return await fail("join_tables", joinErr)
         }
 
         // Phase 9e M3 — audit log
@@ -791,6 +840,8 @@ Deno.serve(async (req: Request) => {
         return json({ error: `Unknown action: ${action}` }, 400)
     }
   } catch (e) {
-    return json({ error: (e as Error).message || "Internal error" }, 500)
+    const msg = (e as Error).message || "Internal error"
+    if (action === "create") await auditCreateFailure(admin, caller.id, payload, "exception", msg)
+    return json({ error: msg }, 500)
   }
 })
