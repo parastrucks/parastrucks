@@ -6,13 +6,13 @@ import { ToastProvider } from './context/ToastContext'
 import App from './App'
 import './index.css'
 
-// Global error reporting — defer to src/lib/errorLog.js (owned by Phase 5 U5).
-// The dynamic import is intentionally built from a variable so bundlers don't
-// resolve it at build time. It silently no-ops until U5 merges and the module
-// exists at runtime.
-const errorLogPath = /* @vite-ignore */ './lib/errorLog'
+// Global error reporting via src/lib/errorLog.js, loaded lazily as its own chunk.
+// The specifier MUST stay a literal so Vite bundles it. It used to be a variable
+// under @vite-ignore, which in production fetched /lib/errorLog, received the
+// SPA's index.html, and failed silently — no client error was ever recorded
+// (error_log was empty on 2026-09-19, while a crash was live in Employees).
 const reportError = (error, context) => {
-  import(/* @vite-ignore */ errorLogPath)
+  import('./lib/errorLog')
     .then(m => m.logError?.(error, context))
     .catch(() => {})
 }
