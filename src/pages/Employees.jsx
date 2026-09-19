@@ -1020,7 +1020,13 @@ function EmployeeFormModal({
                 A slot that does not apply is still rendered, disabled, with the
                 reason on screen. It is never omitted: an absent control is
                 indistinguishable from one nobody filled in. */}
-            <DeptSection title={deptCode ? `Assignment — ${deptById[form.department_id]?.name || deptCode}` : 'Assignment'}>
+            {/* selectedDept, NOT deptById: this is EmployeeFormModal, and deptById
+                lives only in the parent Employees component. Referencing it here
+                threw "deptById is not defined" the moment a department was
+                picked, crashing Add and Edit for everyone from 2026-08-07 to
+                2026-09-19 — and nothing caught it, because the build does not
+                check for undefined names. */}
+            <DeptSection title={deptCode ? `Assignment — ${selectedDept?.name || deptCode}` : 'Assignment'}>
               {!deptCode && (
                 <div style={{ fontSize: 12, color: 'var(--gray-500)' }}>
                   Choose a department to see which assignments apply.

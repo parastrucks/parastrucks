@@ -18,10 +18,13 @@ export default class ErrorBoundary extends React.Component {
 
   componentDidCatch(error, errorInfo) {
     console.error(error, errorInfo)
-    // Dynamic import path built from a variable so the bundler doesn't try
-    // to resolve it at build time — U5 (errorLog.js) may not have merged yet.
-    const path = /* @vite-ignore */ '../lib/errorLog'
-    import(/* @vite-ignore */ path)
+    // A LITERAL specifier, so Vite bundles errorLog as its own chunk. This used
+    // to be a variable path under @vite-ignore (a stopgap from before errorLog.js
+    // existed). In production that asked the server for /lib/errorLog, got the
+    // SPA's index.html back, failed to load it as a module, and .catch()
+    // swallowed it — so no crash was EVER reported: error_log held zero rows
+    // when HR's "deptById is not defined" crash was found on 2026-09-19.
+    import('../lib/errorLog')
       .then(m => m.logError?.(error, {
         componentStack: errorInfo?.componentStack,
         url: location.href,
