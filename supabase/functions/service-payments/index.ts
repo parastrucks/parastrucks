@@ -24,35 +24,14 @@ import { secretKey, publishableKey } from "../_shared/keys.ts"
 import { rateLimit } from "../_shared/rateLimit.ts"
 import { audit } from "../_shared/auditLog.ts"
 import { jsonResponse, preflight } from "../_shared/cors.ts"
-
-type Caller = {
-  id: string
-  full_name: string
-  permission_level: string | null
-  entity_id: string | null
-  department_code: string | null
-  is_active: boolean
-}
+// Who may do what lives in authority.ts — pure, and checked against every
+// department and rank by scripts/payments/selftest-authority.mjs.
+import {
+  type Caller, inScope, isAdmin, ROLE_GATES, DENIED_MESSAGE,
+  allocateModeAllowed, tdsOverCapAllowed, reverseAllowed,
+} from "./authority.ts"
 
 type VerifyResult = { err: Response } | { caller: Caller; admin: SupabaseClient }
-
-// ── Authority ──────────────────────────────────────────────────────
-// Department first, then rank. The first draft admitted every manager and GM
-// in the company — Sales, HR, Back Office — and then let "any manager" void
-// receipts, key cash, close TDS and declassify money, the four verbs the plan
-// gives to accounts alone. Found reading the code before its first real call
-// (2026-09-19); on prod that was 4 Sales managers, 2 GMs outside service and
-// accounts, and an HR manager, none of whom the plan lets near this ledger.
-const PAYMENTS_DEPTS = ["service", "accounts"]
-const isAdmin    = (c: Caller) => c.permission_level === "admin"
-const inScope    = (c: Caller) => isAdmin(c) || PAYMENTS_DEPTS.includes(c.department_code ?? "")
-const isAccounts = (c: Caller) => isAdmin(c) || c.department_code === "accounts"
-// Safe ONLY because verify() refuses everyone outside PAYMENTS_DEPTS first:
-// past that gate, "gm" can only mean the service or accounts GM.
-const isGmPlus   = (c: Caller) => ["gm", "admin"].includes(c.permission_level ?? "")
-// Service executives match UPI — that IS their job, and it is the whole reason
-// this feature is phone-first. They cannot do anything that moves money out of
-// the ordinary path: no reversals of exported work, no TDS, no voids.
 
 async function verify(req: Request): Promise<VerifyResult> {
   const authHeader = req.headers.get("Authorization") ?? ""
@@ -156,6 +135,12 @@ Deno.serve(async (req: Request) => {
 
   const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null)
 
+  // ONE gate for every action whose permission depends on the caller alone.
+  // Checked before any payload is read, so a refused caller learns nothing
+  // about whether the ids they sent exist. Unknown actions fall to the 400.
+  const gate = ROLE_GATES[action ?? ""]
+  if (gate && !gate(caller)) return json({ error: DENIED_MESSAGE[action!] }, 403)
+
   try {
     switch (action) {
       // ── Matching. The high-frequency flow, and the only one a service
@@ -171,13 +156,13 @@ Deno.serve(async (req: Request) => {
         if (targets.length > 25) return json({ error: "too many invoices in one confirm" }, 400)
         // Service staff match UPI. Cash, cheque and bank receipts are keyed by
         // accounts and matched by accounts (plan: "non-UPI allocation — accounts").
-        if (!isAccounts(caller)) {
+        {
           const { data: rcpt, error: rErr } = await admin
             .from("payment_receipts").select("mode")
             .eq("id", receiptId).eq("entity_id", entityId).maybeSingle()
           if (rErr) return json({ error: rErr.message }, 400)
           if (!rcpt) return json({ error: "Receipt not found" }, 404)
-          if (rcpt.mode !== "upi") {
+          if (!allocateModeAllowed(caller, rcpt.mode)) {
             return json({ error: "Accounts matches cash, cheque and bank receipts." }, 403)
           }
         }
@@ -194,9 +179,6 @@ Deno.serve(async (req: Request) => {
       case "on_account": {
         // Parking money against a group (an advance, or settling an opening
         // balance) is a ledger judgment, not a match — accounts makes it.
-        if (!isAccounts(caller)) {
-          return json({ error: "Accounts places money on a customer's account." }, 403)
-        }
         const receiptId = str(payload.receipt_id)
         const groupId = str(payload.group_id)
         const amount = Number(payload.amount_paise)
@@ -232,15 +214,11 @@ Deno.serve(async (req: Request) => {
         if (!isAdmin(caller) && alloc.entity_id !== caller.entity_id) {
           return json({ error: "Forbidden" }, 403)
         }
-        if (alloc.export_batch_id && !isGmPlus(caller)) {
-          return json({
-            error: "This entry has already gone to Busy. A GM can reverse it; it will travel as a correcting entry.",
-          }, 403)
-        }
-        const isMaker = alloc.allocated_by === caller.id
-        if (!isMaker && !isAccounts(caller) && !isGmPlus(caller)) {
-          return json({ error: "Only the person who matched this, or accounts, can undo it." }, 403)
-        }
+        const refusal = reverseAllowed(caller, {
+          isMaker: alloc.allocated_by === caller.id,
+          exported: !!alloc.export_batch_id,
+        })
+        if (refusal) return json({ error: refusal }, 403)
         return await rpc("payments_reverse_allocation", {
           p_allocation_id: allocId, p_actor: caller.id, p_reason: reason,
         })
@@ -249,9 +227,6 @@ Deno.serve(async (req: Request) => {
       // ── Accounts-only verbs. Service staff match; they do not classify
       // money as non-service, close bills against tax, or void receipts.
       case "classify_receipt": {
-        if (!isAccounts(caller)) {
-          return json({ error: "Accounts decides what is not a service payment." }, 403)
-        }
         const receiptId = str(payload.receipt_id)
         const classification = str(payload.classification)
         if (!receiptId) return json({ error: "receipt_id required" }, 400)
@@ -269,9 +244,6 @@ Deno.serve(async (req: Request) => {
 
       case "close_tds": {
         // Accounts closes up to the 5% cap; a GM may be the one asked to go over.
-        if (!isAccounts(caller) && !isGmPlus(caller)) {
-          return json({ error: "Accounts closes bills against TDS." }, 403)
-        }
         const invoiceId = str(payload.invoice_id)
         const amount = Number(payload.amount_paise)
         if (!invoiceId) return json({ error: "invoice_id required" }, 400)
@@ -280,7 +252,7 @@ Deno.serve(async (req: Request) => {
         }
         // Over 5% is a GM decision. The RPC enforces the cap itself; this only
         // decides who is allowed to ask for the override.
-        const allowOverCap = payload.allow_over_cap === true && isGmPlus(caller)
+        const allowOverCap = payload.allow_over_cap === true && tdsOverCapAllowed(caller)
         return await rpc("payments_close_tds", {
           p_entity_id: entityId,
           p_invoice_id: invoiceId,
@@ -291,9 +263,6 @@ Deno.serve(async (req: Request) => {
       }
 
       case "manual_receipt": {
-        if (!isAccounts(caller)) {
-          return json({ error: "Accounts enters cash and cheque receipts." }, 403)
-        }
         const row = payload.row
         if (!row || typeof row !== "object") return json({ error: "row required" }, 400)
         const amount = Number((row as Record<string, unknown>).amount_paise)
@@ -306,9 +275,6 @@ Deno.serve(async (req: Request) => {
       }
 
       case "void_receipt": {
-        if (!isAccounts(caller)) {
-          return json({ error: "Accounts voids receipts." }, 403)
-        }
         const receiptId = str(payload.receipt_id)
         const reason = str(payload.reason)
         if (!receiptId) return json({ error: "receipt_id required" }, 400)
@@ -326,9 +292,6 @@ Deno.serve(async (req: Request) => {
       // ── Imports. Admin during the pilot; accounts after the handover, which
       // is a dated event rather than a vague "for now".
       case "import_invoices": {
-        if (!isAdmin(caller) && !isAccounts(caller)) {
-          return json({ error: "Only accounts or an admin can import bills." }, 403)
-        }
         const rows = payload.rows
         if (!Array.isArray(rows)) return json({ error: "rows must be an array" }, 400)
         if (rows.length === 0) return json({ error: "nothing to import" }, 400)
@@ -344,9 +307,6 @@ Deno.serve(async (req: Request) => {
       }
 
       case "import_receipts": {
-        if (!isAdmin(caller) && !isAccounts(caller)) {
-          return json({ error: "Only accounts or an admin can import payments." }, 403)
-        }
         const rows = payload.rows
         if (!Array.isArray(rows)) return json({ error: "rows must be an array" }, 400)
         if (rows.length === 0) return json({ error: "nothing to import" }, 400)
@@ -363,9 +323,6 @@ Deno.serve(async (req: Request) => {
 
       // ── Groups and limits are the GM's, not accounts'. Accounts proposes.
       case "create_group": {
-        if (!isGmPlus(caller)) {
-          return json({ error: "A GM or admin creates customer groups." }, 403)
-        }
         const name = str(payload.name)
         if (!name) return json({ error: "name required" }, 400)
         const limit = payload.credit_limit_paise === null || payload.credit_limit_paise === undefined
@@ -388,9 +345,6 @@ Deno.serve(async (req: Request) => {
       }
 
       case "assign_customer_group": {
-        if (!isGmPlus(caller)) {
-          return json({ error: "A GM or admin assigns customers to groups." }, 403)
-        }
         const customerId = str(payload.customer_id)
         const groupId = str(payload.group_id)
         if (!customerId) return json({ error: "customer_id required" }, 400)
@@ -443,9 +397,6 @@ Deno.serve(async (req: Request) => {
       }
 
       case "set_credit_limit": {
-        if (!isGmPlus(caller)) {
-          return json({ error: "A GM or admin sets credit limits." }, 403)
-        }
         const groupId = str(payload.group_id)
         if (!groupId) return json({ error: "group_id required" }, 400)
         const limit = payload.credit_limit_paise === null || payload.credit_limit_paise === undefined
