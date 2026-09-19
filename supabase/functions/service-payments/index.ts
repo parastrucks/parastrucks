@@ -3,9 +3,10 @@
 //
 // Called by the portal client via callEdge('service-payments', action, payload).
 //
-// Auth: JWT required. Caller must be service/accounts, manager+, or admin.
-// Per-action authority is enforced below, because "managers and above" is a
-// permission_level concept and the department code alone cannot express it.
+// Auth: JWT required. Caller must be in the SERVICE or ACCOUNTS department, or
+// the admin. Rank never grants entry on its own: a Sales GM is a GM, but not
+// one who owns service customers' credit. Per-action authority is the plan's
+// ladder (docs/backlog/service-payments-plan.md, "Authority ladder").
 //
 // IMPORTANT: deploy with verify_jwt: false (the gateway rejects this project's
 // user JWTs; verify() below does the real validation). Mirrors service-jobs.
@@ -36,16 +37,22 @@ type Caller = {
 type VerifyResult = { err: Response } | { caller: Caller; admin: SupabaseClient }
 
 // ── Authority ──────────────────────────────────────────────────────
-const isAdmin       = (c: Caller) => c.permission_level === "admin"
-const isManagerPlus = (c: Caller) => ["manager", "gm", "admin"].includes(c.permission_level ?? "")
-const isGmPlus      = (c: Caller) => ["gm", "admin"].includes(c.permission_level ?? "")
-const isAccounts    = (c: Caller) => isAdmin(c) || c.department_code === "accounts"
-const isService     = (c: Caller) => c.department_code === "service"
+// Department first, then rank. The first draft admitted every manager and GM
+// in the company — Sales, HR, Back Office — and then let "any manager" void
+// receipts, key cash, close TDS and declassify money, the four verbs the plan
+// gives to accounts alone. Found reading the code before its first real call
+// (2026-09-19); on prod that was 4 Sales managers, 2 GMs outside service and
+// accounts, and an HR manager, none of whom the plan lets near this ledger.
+const PAYMENTS_DEPTS = ["service", "accounts"]
+const isAdmin    = (c: Caller) => c.permission_level === "admin"
+const inScope    = (c: Caller) => isAdmin(c) || PAYMENTS_DEPTS.includes(c.department_code ?? "")
+const isAccounts = (c: Caller) => isAdmin(c) || c.department_code === "accounts"
+// Safe ONLY because verify() refuses everyone outside PAYMENTS_DEPTS first:
+// past that gate, "gm" can only mean the service or accounts GM.
+const isGmPlus   = (c: Caller) => ["gm", "admin"].includes(c.permission_level ?? "")
 // Service executives match UPI — that IS their job, and it is the whole reason
 // this feature is phone-first. They cannot do anything that moves money out of
 // the ordinary path: no reversals of exported work, no TDS, no voids.
-const isPortalUser  = (c: Caller) =>
-  isAdmin(c) || isManagerPlus(c) || ["service", "accounts"].includes(c.department_code ?? "")
 
 async function verify(req: Request): Promise<VerifyResult> {
   const authHeader = req.headers.get("Authorization") ?? ""
@@ -102,7 +109,9 @@ async function verify(req: Request): Promise<VerifyResult> {
     department_code: prof.departments?.code ?? null,
     is_active: prof.is_active,
   }
-  if (!isPortalUser(caller)) return { err: jsonResponse(req, { error: "Forbidden" }, 403) }
+  if (!inScope(caller)) {
+    return { err: jsonResponse(req, { error: "Service payments is for the service and accounts teams." }, 403) }
+  }
   return { caller, admin }
 }
 
@@ -160,6 +169,18 @@ Deno.serve(async (req: Request) => {
           return json({ error: "targets must be a non-empty array" }, 400)
         }
         if (targets.length > 25) return json({ error: "too many invoices in one confirm" }, 400)
+        // Service staff match UPI. Cash, cheque and bank receipts are keyed by
+        // accounts and matched by accounts (plan: "non-UPI allocation — accounts").
+        if (!isAccounts(caller)) {
+          const { data: rcpt, error: rErr } = await admin
+            .from("payment_receipts").select("mode")
+            .eq("id", receiptId).eq("entity_id", entityId).maybeSingle()
+          if (rErr) return json({ error: rErr.message }, 400)
+          if (!rcpt) return json({ error: "Receipt not found" }, 404)
+          if (rcpt.mode !== "upi") {
+            return json({ error: "Accounts matches cash, cheque and bank receipts." }, 403)
+          }
+        }
         return await rpc("payments_allocate", {
           p_entity_id: entityId,
           p_receipt_id: receiptId,
@@ -171,6 +192,11 @@ Deno.serve(async (req: Request) => {
       }
 
       case "on_account": {
+        // Parking money against a group (an advance, or settling an opening
+        // balance) is a ledger judgment, not a match — accounts makes it.
+        if (!isAccounts(caller)) {
+          return json({ error: "Accounts places money on a customer's account." }, 403)
+        }
         const receiptId = str(payload.receipt_id)
         const groupId = str(payload.group_id)
         const amount = Number(payload.amount_paise)
@@ -223,7 +249,7 @@ Deno.serve(async (req: Request) => {
       // ── Accounts-only verbs. Service staff match; they do not classify
       // money as non-service, close bills against tax, or void receipts.
       case "classify_receipt": {
-        if (!isAccounts(caller) && !isManagerPlus(caller)) {
+        if (!isAccounts(caller)) {
           return json({ error: "Accounts decides what is not a service payment." }, 403)
         }
         const receiptId = str(payload.receipt_id)
@@ -242,7 +268,8 @@ Deno.serve(async (req: Request) => {
       }
 
       case "close_tds": {
-        if (!isAccounts(caller) && !isManagerPlus(caller)) {
+        // Accounts closes up to the 5% cap; a GM may be the one asked to go over.
+        if (!isAccounts(caller) && !isGmPlus(caller)) {
           return json({ error: "Accounts closes bills against TDS." }, 403)
         }
         const invoiceId = str(payload.invoice_id)
@@ -264,7 +291,7 @@ Deno.serve(async (req: Request) => {
       }
 
       case "manual_receipt": {
-        if (!isAccounts(caller) && !isManagerPlus(caller)) {
+        if (!isAccounts(caller)) {
           return json({ error: "Accounts enters cash and cheque receipts." }, 403)
         }
         const row = payload.row
@@ -279,7 +306,7 @@ Deno.serve(async (req: Request) => {
       }
 
       case "void_receipt": {
-        if (!isAccounts(caller) && !isManagerPlus(caller)) {
+        if (!isAccounts(caller)) {
           return json({ error: "Accounts voids receipts." }, 403)
         }
         const receiptId = str(payload.receipt_id)
@@ -374,6 +401,19 @@ Deno.serve(async (req: Request) => {
         if (!cust) return json({ error: "Customer not found" }, 404)
         if (!isAdmin(caller) && cust.entity_id !== caller.entity_id) {
           return json({ error: "Forbidden" }, 403)
+        }
+        // The GROUP must be checked too, and BEFORE the open membership is
+        // closed. The first draft checked only the customer, so a PTB customer
+        // could be filed under a PT group; and a bad group id failed only after
+        // the old membership was already closed, leaving the customer ungrouped.
+        if (groupId) {
+          const { data: grp, error: gErr } = await admin
+            .from("customer_groups").select("id, entity_id").eq("id", groupId).maybeSingle()
+          if (gErr) return json({ error: gErr.message }, 400)
+          if (!grp) return json({ error: "Group not found" }, 404)
+          if (grp.entity_id !== cust.entity_id) {
+            return json({ error: "That group belongs to the other company." }, 403)
+          }
         }
 
         // Membership is temporal: close the open row, then open a new one. The
