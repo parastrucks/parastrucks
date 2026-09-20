@@ -46,7 +46,9 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
     ⚠️ `selftest-mobile-render` needs esbuild first (React is bundled in, so the output runs from
     anywhere): `npx esbuild scripts/payments/selftest-mobile-render.mjs --bundle --platform=node
     --format=esm --jsx=automatic --outfile=<tmp>/m.mjs && node <tmp>/m.mjs`
-  - **Edge Function** `supabase/functions/service-payments/index.ts` — written, **NOT deployed**.
+  - **Edge Function** `supabase/functions/service-payments/index.ts` + `authority.ts` — **deployed
+    to STAGING and proved there 2026-09-20**: 72/72 live authority checks as six real logins, zero
+    rows written. Not on prod. See next-actions for the authority bug this found.
   - ⛔ **No route, no navConfig entry, no data-fetching container yet** — the UI is presentational
     and unreachable in the app.
   - ⭐ **Staging was checked to be a fair proving ground before trusting it:** entities/users/
@@ -354,8 +356,19 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   it encodes several bugs already caught by measurement that are easy to reintroduce from first
   principles, including the ⭐ CORRECTION that a number in a payment note is a **number plate**,
   not a bill number):
-  1. Deploy `service-payments` to staging and exercise it with a real user JWT (verify() cannot be
-     tested without one). `npx supabase functions deploy service-payments --no-verify-jwt`.
+  1. ~~Deploy `service-payments` to staging and exercise it with a real user JWT.~~ ✅ **DONE
+     2026-09-20. And it was worth doing: reading the gate before the first real call found that it
+     admitted EVERY manager and GM in the company** (on prod: 4 Sales managers, a Sales GM, a BO GM
+     + 2 BO managers, an HR manager) **and that void / manual receipt / close_tds /
+     classify_receipt accepted "accounts OR any manager"** — all four are accounts-only in the
+     plan, so service managers had them too. Rules now live in
+     `supabase/functions/service-payments/authority.ts` (department first, rank second); `index.ts`
+     asks `ROLE_GATES` once before reading any payload and keeps no role check of its own.
+     `selftest-authority` = **630 offline checks** (26 people × 12 actions; expectations written
+     out by hand from the plan, never from the code; restoring the old gate fails it 111×), and
+     `probe-ef-authority` (owner-run, needs the staging password) = **72/72 live against the
+     deployed function**, zero rows written. ⚠️ **Staging has no Sales/HR/BO test account** — those
+     departments are covered offline only.
   2. Wire the route: `App.jsx` lazy route `/payments`, `navConfig.js` Service Tools + a
      `CREATE_ACTIONS` entry, `AccessRules.jsx` `ALL_ROUTES`, plus the data-fetching container that
      feeds `MatchScreen` and calls the EF.
