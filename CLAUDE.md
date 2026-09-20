@@ -30,6 +30,70 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ---
 
+## Current state (2026-09-20)
+
+- **✅ USER CREATION WAS BROKEN ON PROD FOR SIX WEEKS — FIXED AND VERIFIED LIVE.** HR reported
+  "unable to create new users". It was a **browser crash**, not a server problem: PR #93
+  (`a613b76`, 2026-08-07) titled the Assignment section with `deptById[form.department_id]` inside
+  **`EmployeeFormModal`**, where `deptById` does not exist — it lives in the parent `Employees`.
+  Picking a department threw `deptById is not defined`, killing **Add for everyone and Edit too**
+  (Edit opens with a department already selected). **Nobody had been created since 2026-08-03.**
+  Fix: PR **#124** → `732eafb`, use the `selectedDept` prop the modal already receives.
+  ✅ Owner ran create+delete on prod 2026-09-19 18:01 UTC: both audited, zero residue.
+  ⏭️ **Not yet exercised by an HR login** (their path is entity-locked).
+  - ⚠️⚠️ **`npm run build` does NOT catch an undefined identifier, and this repo has no lint** —
+    that is how a six-week outage shipped. ⭐ **The recipe that does catch it** (install OUTSIDE the
+    repo so nothing is added to it):
+    `npm i eslint@8.57.0 eslint-plugin-react@7.37.2` in a scratch dir, then
+    `<scratch>/node_modules/.bin/eslint --no-eslintrc -c <scratch>/undef.eslintrc.json
+    --resolve-plugins-relative-to <scratch> --ext .js,.jsx src` with
+    `rules: { "no-undef": "error", "react/jsx-no-undef": "error", "react/jsx-uses-vars": "error" }`.
+    Run it after ANY multi-component JSX edit. It flagged the bug on the old code, is clean on the
+    fix, and found **no other undefined name in `src/`**.
+- **✅⭐ CLIENT ERROR REPORTING HAD NEVER WORKED IN PRODUCTION — FIXED (same PR #124).**
+  `error_log` held **zero rows, ever**. `ErrorBoundary` and the `window.error` /
+  `unhandledrejection` handlers in `main.jsx` both loaded `errorLog.js` via a **variable specifier
+  under `@vite-ignore`** — a stopgap from before that file existed, never removed. In prod the path
+  resolved to `/lib/errorLog`, Vercel served `index.html`, the module load failed, and
+  `.catch(() => {})` swallowed it. Now literal specifiers; verified live that `errorLog-<hash>.js`
+  is emitted, referenced from the entry chunk and calls `log-error`.
+  ⚠️ **The 2026-07 cutover cited "Error Log tab empty" as a health signal — it could only ever have
+  been empty.** Never grade on an absence of signal without proving the collector can record one.
+  ⏭️ Still unproven by a real crash.
+- **✅ FAILED user-creates are now recorded** (PR **#123** → `9289828`, `admin-users` **v25**).
+  Only successes were audited and EF logs last one day, so the original report was undiagnosable.
+  Every refusal now writes `security_audit_log` action **`createUserFailed`** with
+  `after_jsonb.stage` (`input`/`entity_scope`/`shape`/`auth_create`/`profile_insert`/`join_tables`/
+  `rate_limit`/`exception`) + the exact message shown; never the password. `auth_create` is the
+  valuable one — GoTrue's own refusals ("already registered", its password rules) are invisible to
+  every check the portal runs itself. `openAdd` also now refuses when reference data failed to load.
+  ⏭️ **If a user-creation problem is ever reported again, start here:**
+  `select created_at, after_jsonb from security_audit_log where action in
+  ('createUserFailed','createUser') order by created_at desc limit 5;`
+- **🔨 SERVICE PAYMENTS — the Edge Function is DEPLOYED AND PROVED ON STAGING** (branch
+  `claude/payments-reconciliation-tool-6eaab4`, 20 commits, unpushed; **nothing on prod, still no
+  `/payments` route**). ⭐ **Reading the gate before its first real call found that it admitted
+  EVERY manager and GM in the company** — on prod that is 4 Sales managers, a Sales GM, a BO GM + 2
+  BO managers and an HR manager — **and that `void_receipt` / `manual_receipt` / `close_tds` /
+  `classify_receipt` accepted "accounts OR any manager"**, though all four are accounts-only in the
+  plan (service managers had them too). Also `assign_customer_group` checked only the customer's
+  entity, so a PTB customer could be filed under a PT group, and it closed the open membership
+  before validating the target group.
+  Rules now live in `supabase/functions/service-payments/authority.ts` (**department first, rank
+  second**); `index.ts` consults `ROLE_GATES` once before reading any payload and keeps no role
+  check of its own. **`selftest-authority` 630 offline checks** (26 people × 12 actions;
+  expectations hand-written from the plan, never from the code; old gate fails it **111×**) +
+  **`probe-ef-authority` 72/72 live** as six real staging logins with **zero rows written**.
+  ⚠️ **Staging has no Sales/HR/BO test account** — those departments are covered offline only,
+  which is exactly why a live probe alone would have missed this.
+  ⚠️ The probe needs the staging password, so **the owner runs it**:
+  `$env:PROBE_PASSWORD = '…'; node scripts/payments/probe-ef-authority.mjs; Remove-Item Env:\PROBE_PASSWORD`
+  ⭐ **Its own two bugs are worth remembering:** a raw-mode password prompt that accepted no input
+  in the VS Code/app terminal, and an embedded `departments(code)` read it never unpacked — which
+  made every account look department-less and produced **22 false failures against correct code**.
+  A profile it cannot resolve now stops that account loudly. *An expectation built from a failed
+  read is not an expectation.*
+
 ## Current state (2026-09-08)
 
 - **🔨 SERVICE PAYMENTS — PHASE A1 CORE BUILT AND PROVED ON STAGING. NOT on prod, NOT wired to a route.**
@@ -210,6 +274,10 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   no-ops — detect the newline style first.
 - ⚠️ **There is no ESLint config in this repo** (`npx eslint` fails; no lint script). `npm run build`
   is the gate — never report a lint pass.
+  ⚠️⚠️ **And the build does NOT catch an undefined identifier.** That is how `deptById is not
+  defined` took user creation down for six weeks (2026-08-07 → 09-19). After any multi-component
+  JSX edit, run the throwaway `no-undef` pass from the 2026-09-20 state block above — installed in
+  a scratch dir, never added to the repo.
 
 ## Current state (2026-08-24)
 

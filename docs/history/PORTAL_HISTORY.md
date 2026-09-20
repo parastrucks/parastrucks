@@ -26,6 +26,121 @@
 
 ---
 
+## Session log — 2026-09-19/20: HR could not create users (a crash live for six weeks), error reporting that never worked, and the payments Edge Function's authority gate
+
+Three pieces of work, in the order they happened. The first two are **on prod**; the third is on
+branch `claude/payments-reconciliation-tool-6eaab4` and **staging only**.
+
+### 1. ⭐ "HR is unable to create new users" — a browser crash, live since 2026-08-07
+
+**Cause:** PR #93 (uniform user shape, `a613b76`) titled the Assignment section with
+`deptById[form.department_id]`. That line is inside `EmployeeFormModal`; `deptById` is defined only
+in the parent `Employees` component. **Picking a department threw `deptById is not defined`**, so
+Add broke for everyone — and Edit too, since Edit opens with a department already selected.
+Nobody had been created since **2026-08-03**.
+**Fix:** PR **#124** → `732eafb` — use the `selectedDept` prop the modal already receives.
+
+**What the investigation ruled out first, all on prod:** admin-users deployed and healthy, code
+unchanged since 7 Aug · reference data complete (PTB 2 outlets / 1 brand / 5 verticals; PT 6 / 3) ·
+RLS lets HR read every list the form needs · the form pre-fills and LOCKS HR to their own entity ·
+designations exist for every department · no orphaned auth users. **No `admin-users` call appeared
+in 24h of function, gateway or auth logs** — which was the real clue: the request never left the
+browser.
+
+⚠️ **Why it shipped: `npm run build` does not check for undefined names, and this repo has no
+lint.** A throwaway ESLint `no-undef` pass (installed OUTSIDE the repo, in the scratchpad) flags the
+line on the old code, is clean on the fix, and finds **no other undefined identifier in `src/`**.
+⭐ **Keep that recipe** — it is the only check that catches this class here.
+
+### 2. ⭐⭐ Client error reporting had NEVER worked in production — `error_log` held zero rows, ever
+
+Found while asking why a six-week-old crash left no trace. `ErrorBoundary` and the global
+`window.error` / `unhandledrejection` handlers in `main.jsx` both loaded `errorLog.js` through a
+**variable specifier under `@vite-ignore`** — a stopgap from before that file existed
+("silently no-ops until U5 merges"), never removed after U5 merged. In production the path resolves
+to `/lib/errorLog`, Vercel's SPA fallback serves `index.html`, the module load fails on MIME type,
+and `.catch(() => {})` swallows it. Every client crash since was dropped.
+**Fix:** literal specifiers, in the same PR. Verified live: `errorLog-<hash>.js` is emitted,
+referenced from the entry chunk, calls `log-error`, and `dist` holds no unresolved `lib/errorLog`.
+
+⚠️ **The 2026-07 key cutover cited "Access Rules → Error Log tab empty" as a health signal. It
+could only ever have been empty.** Same family as `feedback_prove_dont_argue`: never grade on an
+absence of signal without first proving the collector can record one.
+
+### 3. Failed user-creates left no record either (PR #123 → `9289828`, admin-users **v25**)
+
+Only *successful* creates were audited, and EF logs are kept one day, so a refusal days earlier was
+unrecoverable. Every refusal in the create path now writes `security_audit_log` action
+**`createUserFailed`** with `after_jsonb.stage` (`input` · `entity_scope` · `shape` · `auth_create` ·
+`profile_insert` · `join_tables` · `rate_limit` · `exception`) and the exact message the caller saw;
+the password is never recorded. All refusals route through one `fail()` helper so a new early return
+cannot skip the audit. `auth_create` is the stage worth having: GoTrue's own refusals ("already
+registered", its password rules) are invisible to every check the portal runs itself.
+Also `openAdd` now refuses when reference data failed to load, as `openEdit` already did.
+
+✅ **Verified end-to-end on prod 2026-09-19 18:01 UTC by the owner (admin):** created and deleted a
+throwaway user, both audited, zero residue (auth / profile / join rows 0, orphans 0). First user
+created since 3 Aug. ⏭️ Not yet exercised by an **HR** login (entity-locked path), and the error
+logger is still unproven by a real crash.
+
+### 4. ⭐ Service Payments: the Edge Function admitted every manager in the company
+
+Step 1 of the payments queue was "deploy to staging and exercise it with a real JWT". **Reading the
+gate before the first real call is what found the defect** — execution confirmed the fix, it did not
+discover the bug.
+
+`isPortalUser` admitted admin, service/accounts, **and any manager or GM in ANY department**. Four
+actions then accepted "accounts OR any manager": `void_receipt`, `manual_receipt`, `close_tds`,
+`classify_receipt` — all four are **accounts-only** in the plan, and their own error strings say so.
+On prod that population is **4 Sales managers, a Sales GM, a Back Office GM + 2 BO managers, and an
+HR manager**, plus service managers who are also excluded by the plan. GM-only verbs (groups, credit
+limits, reversing exported work) accepted a GM from any department.
+Two more, in the same read: `assign_customer_group` checked only the **customer's** entity, so a PTB
+customer could be filed under a PT group; and it closed the open membership **before** learning the
+target group existed, leaving the customer ungrouped on a bad id. (The RPCs were already entity-safe
+on their own paths — these holes were in the EF's gates and its direct table writes.)
+
+**Now:** `supabase/functions/service-payments/authority.ts` holds the plan's ladder as data —
+department first, rank second; `index.ts` asks `ROLE_GATES` **once, before any payload is read**, and
+keeps no role check of its own. Data-dependent rules (receipt mode, maker, exported) are functions
+there too. Non-UPI receipts are accounts-only, to match "non-UPI allocation — accounts".
+
+**Proof, both kinds:**
+- `scripts/payments/selftest-authority.mjs` — **630 offline checks**: 26 people (every department ×
+  rank, plus the admin with no department and filed under hr) × 12 actions, plus mode / TDS-cap /
+  reversal edges. Expectations are **written out by hand from the plan and never call the code under
+  test**. It also asserts `index.ts` parity: every action handled has a gate, and no inline
+  `isAccounts`/`isGmPlus` survives. **Negative control: restoring the old gate fails it 111×**,
+  starting at `manager@sales`.
+- `scripts/payments/probe-ef-authority.mjs` — **72/72 live** against the deployed function as the six
+  staging logins, **zero rows written** (all payments tables still 0; audit log unchanged at 43; only
+  5 rate-limiter counters). The owner runs it and supplies the password; staging-only by a hard guard.
+
+⚠️ **Staging has no Sales / HR / Back Office test account**, so those departments are covered
+offline only. That absence is exactly why a live probe could never have found this bug.
+
+**Two faults in the probe itself, both instructive:**
+1. Its hidden-password prompt drove stdin in raw mode and accepted neither typing nor paste in the
+   VS Code or app terminal. Now a muted `readline`; `PROBE_PASSWORD` skips the prompt entirely.
+2. ⭐ It read each account's department as an embedded `departments(code)` and never unpacked that
+   shape, so **every account came back department-less and it expected everything to be refused** —
+   22 false failures reported against correct code. A profile it cannot resolve now **stops that
+   account with a named failure** instead of quietly becoming "no department". *An expectation built
+   from a failed read is not an expectation* — the same vacuous-test trap as the August probe.
+
+### State at the end of the session
+
+**Prod:** the two user-creation fixes and the error-reporting fix, verified live. **Payments: still
+nothing on prod, still no `/payments` route** — 20 commits on the branch, unpushed. Staging carries
+schema + RPCs + the Edge Function, all proved. Offline suite: parsers 140 · matcher 47 ·
+mobile-render 52 · authority 630; `npm run build` passes.
+
+⏭️ **Next:** wire the route — `App.jsx` lazy `/payments`, `navConfig.js` Service Tools +
+`CREATE_ACTIONS`, `AccessRules.jsx` `ALL_ROUTES`, and the container that feeds `MatchScreen` and
+calls the EF. Then the Import screen, then prod as a separate owner-approved step.
+
+---
+
 ## Session log — 2026-09-08: Service Payments Phase A1 — built, and proved on a real database that found three bugs review had passed
 
 **Branch:** `claude/payments-reconciliation-tool-6eaab4` (not merged, not on prod).
