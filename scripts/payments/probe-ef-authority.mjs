@@ -22,6 +22,8 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
+import readline from 'node:readline'
+import { Writable } from 'node:stream'
 import { randomUUID } from 'node:crypto'
 import { createClient } from '@supabase/supabase-js'
 
@@ -86,27 +88,26 @@ const PAYLOAD = {
   set_credit_limit:      () => ({}),
 }
 
-// ── Hidden password prompt ─────────────────────────────────────────────────
+// ── Password prompt ────────────────────────────────────────────────────────
+// readline with a muted output stream — the portable way. The first version
+// drove stdin in raw mode itself, which accepts neither typing nor paste in the
+// VS Code integrated terminal (2026-09-20): the prompt appeared and swallowed
+// everything. readline keeps paste, backspace and Ctrl+C working everywhere.
 function askHidden(question) {
   if (process.env.PROBE_PASSWORD) return Promise.resolve(process.env.PROBE_PASSWORD)
-  if (!process.stdin.isTTY) { console.error('Run this in a terminal (the password is typed, not piped).'); process.exit(2) }
-  process.stdout.write(question)
+  if (!process.stdin.isTTY) {
+    console.error('Run this in a terminal, or set PROBE_PASSWORD first:')
+    console.error('  PowerShell:  $env:PROBE_PASSWORD = \'...\'; node scripts/payments/probe-ef-authority.mjs')
+    process.exit(2)
+  }
   return new Promise((resolve) => {
-    const stdin = process.stdin
-    let s = ''
-    stdin.setRawMode(true); stdin.resume(); stdin.setEncoding('utf8')
-    const onData = (chunk) => {
-      for (const ch of chunk) {
-        if (ch === '\r' || ch === '\n') {
-          stdin.setRawMode(false); stdin.pause(); stdin.off('data', onData)
-          process.stdout.write('\n'); return resolve(s)
-        }
-        if (ch === '') { process.stdout.write('\n'); process.exit(130) }
-        if (ch === '' || ch === '\b') s = s.slice(0, -1)
-        else s += ch
-      }
-    }
-    stdin.on('data', onData)
+    const muted = new Writable({
+      write(chunk, enc, cb) { if (!muted.muted) process.stdout.write(chunk, enc); cb() },
+    })
+    muted.muted = false
+    const rl = readline.createInterface({ input: process.stdin, output: muted, terminal: true })
+    rl.question(question, (answer) => { rl.close(); process.stdout.write('\n'); resolve(answer) })
+    muted.muted = true   // after question() has printed the prompt
   })
 }
 
