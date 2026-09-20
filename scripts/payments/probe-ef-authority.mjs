@@ -118,18 +118,52 @@ const problems = []
 
 for (const email of ACCOUNTS) {
   const sb = createClient(URL, KEY, { auth: { persistSession: false, autoRefreshToken: false } })
-  const { data: signIn, error: sErr } = await sb.auth.signInWithPassword({ email, password })
-  if (sErr || !signIn?.session) {
+  let signIn = null, sErr = null
+  for (let attempt = 1; attempt <= 3 && !signIn?.session; attempt++) {
+    const r = await sb.auth.signInWithPassword({ email, password })
+    signIn = r.data; sErr = r.error
+    // "fetch failed" is a transport blip, not a wrong password — retry those only.
+    if (!signIn?.session && !/fetch failed|network|timeout/i.test(sErr?.message ?? '')) break
+    if (!signIn?.session && attempt < 3) await new Promise(r => setTimeout(r, 1500 * attempt))
+  }
+  if (!signIn?.session) {
     fail++; problems.push(`${email}: sign-in failed (${sErr?.message ?? 'no session'})`)
     console.log(`\n${email}: SIGN-IN FAILED — ${sErr?.message ?? 'no session'}`)
     continue
   }
   // Expectations come from the account's REAL profile, not from its email.
-  const { data: prof } = await sb.from('users')
-    .select('permission_level, departments(code), entities(code)')
+  // Read the department in its OWN query: the first version embedded it as
+  // departments(code), whose shape this did not unpack, so every account came
+  // back department-less and the probe expected EVERYTHING to be refused —
+  // 22 false failures (2026-09-20). A profile that cannot be resolved must
+  // stop the run, never quietly become "no department": an expectation built
+  // from a failed read is not an expectation.
+  const { data: prof, error: pErr } = await sb.from('users')
+    .select('permission_level, department_id, entity_id')
     .eq('id', signIn.user.id).maybeSingle()
-  const p = { level: prof?.permission_level ?? null, dept: prof?.departments?.code ?? null }
-  console.log(`\n${email}  —  ${p.level} · ${p.dept ?? '(no dept)'} · ${prof?.entities?.code ?? '(no entity)'}`)
+  if (pErr || !prof) {
+    fail++; problems.push(`${email}: could not read own profile (${pErr?.message ?? 'no row'})`)
+    console.log(`\n${email}: PROFILE READ FAILED — ${pErr?.message ?? 'no row'}`)
+    continue
+  }
+  let dept = null
+  if (prof.department_id) {
+    const { data: d, error: dErr } = await sb.from('departments')
+      .select('code').eq('id', prof.department_id).maybeSingle()
+    if (dErr || !d?.code) {
+      fail++; problems.push(`${email}: could not resolve department ${prof.department_id} (${dErr?.message ?? 'no row'})`)
+      console.log(`\n${email}: DEPARTMENT READ FAILED — ${dErr?.message ?? 'no row'}`)
+      continue
+    }
+    dept = d.code
+  }
+  const p = { level: prof.permission_level ?? null, dept }
+  if (!p.level || (!p.dept && p.level !== 'admin')) {
+    fail++; problems.push(`${email}: incomplete profile (level=${p.level}, dept=${p.dept})`)
+    console.log(`\n${email}: INCOMPLETE PROFILE — level=${p.level}, dept=${p.dept}`)
+    continue
+  }
+  console.log(`\n${email}  —  ${p.level} · ${p.dept ?? '(no dept)'}`)
 
   for (const action of Object.keys(EXPECT)) {
     const want = EXPECT[action](p)
