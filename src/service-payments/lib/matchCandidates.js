@@ -13,6 +13,7 @@
 // happened that afternoon.
 
 import { normalizePayerName } from './parseUpi.js'
+import { istDateOf } from './dates.js'
 
 /**
  * Signal weights. Deliberately separated so tiers cannot silently outrank.
@@ -174,7 +175,7 @@ export function matchCandidates(receipt, index, {
   limit = 8,
   feedIsStale = false,
 } = {}) {
-  const receiptDate = String(receipt.received_at || '').slice(0, 10)
+  const receiptDate = receiptDayOf(receipt.received_at)
   const noteNumbers = receipt.note_numbers || []
   const regNos = receipt.reg_nos || []
   const payer = receipt.normalized_payer_name || normalizePayerName(receipt.payer_name)
@@ -319,6 +320,17 @@ function overlapScore(payerToks, custToks, index) {
   // Squash into 0..NAME_MAX. log(1086/1) ≈ 7, so a single rare exact token
   // reaches roughly two-thirds of the ceiling.
   return Math.min(WEIGHTS.NAME_MAX, (sum / 10) * WEIGHTS.NAME_MAX)
+}
+
+/**
+ * The IST calendar day a receipt belongs to. Bills are dated in IST, and the
+ * database hands instants back in UTC — slicing the first ten characters dated
+ * every payment made between midnight and 05:30 IST to the day before.
+ */
+function receiptDayOf(receivedAt) {
+  const s = String(receivedAt || '')
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s
+  try { return istDateOf(s) } catch { return '' }
 }
 
 /** Whole days between two ISO dates: positive when the receipt is later. */

@@ -215,6 +215,22 @@ section('the date window, and the stale-feed brake')
   eq('exactly three days is still inside', res.candidates.length, 1)
 }
 {
+  // The receipt's DAY is an IST question. The database hands back UTC, and the
+  // first version took the day as received_at.slice(0, 10) — so a payment at
+  // 01:30 IST on the 11th (19:30 UTC on the 10th) was dated the 10th, and a
+  // bill raised on the 11th read as "billed a day later" and fell a day
+  // closer to the edge of the window.
+  const idx = buildCandidateIndex([invoice({ total_paise: 193000, invoice_date: '2026-08-11' })])
+  const res = matchCandidates(receipt({ amount_paise: 193000, received_at: '2026-08-10T20:00:00Z' }), idx)
+  eq('a payment at 01:30 IST is dated by the IST calendar',
+     res.candidates[0]?.day_gap, 0)
+  const res2 = matchCandidates(receipt({ amount_paise: 193000, received_at: '2026-08-10T20:00:00+00:00' }), idx)
+  eq('...in the +00:00 form PostgREST actually returns', res2.candidates[0]?.day_gap, 0)
+  const idx4 = buildCandidateIndex([invoice({ total_paise: 193000, invoice_date: '2026-08-14' })])
+  const res4 = matchCandidates(receipt({ amount_paise: 193000, received_at: '2026-08-10T20:00:00Z' }), idx4)
+  eq('...so a bill three IST days later is inside the window, not four', res4.candidates.length, 1)
+}
+{
   // A stale invoice feed plus one-tap confirm is an error amplifier: the bill
   // that would have matched may simply not have imported yet.
   const idx = buildCandidateIndex([invoice({ total_paise: 193000 })])
