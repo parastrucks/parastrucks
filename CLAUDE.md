@@ -38,7 +38,10 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   cascade. ⏭️ **Owner phone check pending.** ⭐ Record: `PORTAL_HISTORY.md` 2026-09-26 entry.
 - ⚠️ **Any `position: fixed; bottom: 0` element under 760px collides with the bottom nav — and
   lifting one moves its TOP edge under the top bar (`--topbar-h`, z-index 95).** Check both edges.
-- 🟢 Tidy: `.tiv-detail*` CSS in `src/index.css` is dead since #120 — delete when next there.
+- ✅ Dead `.tiv-detail*` CSS (unused since #120) **deleted** (PR #127) — proven inert by an A/B
+  build: with hashes masked, 34/35 assets + `index.html` byte-identical; the CSS is the old CSS
+  minus exactly that block. ⭐ **Method: a CSS-only change re-hashes ~25 JS chunks** (the entry
+  names the CSS file, and chunks import the entry), so compare builds with hashed names masked.
 - ⚠️ **Self-tests: `npx --yes esbuild …`** — Vite 8 uses rolldown, so no esbuild is installed.
   **Git Bash `sed -i` converts CRLF files to LF** — use the Edit tool and check `file` afterwards.
 

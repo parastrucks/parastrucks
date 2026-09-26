@@ -3102,28 +3102,6 @@ tbody tr:hover td { background: var(--gray-50); }
   border-radius: 99px;
 }
 
-/* Tap-for-detail sheet: the peer-comparison tooltip lived in a `title`
-   attribute, which never fires on touch — on the exact devices (field
-   Androids) the audience actually uses. */
-.tiv-detail {
-  position: fixed;
-  left: 0; right: 0; bottom: 0;
-  z-index: 60;
-  background: var(--white);
-  border-top: 1px solid var(--border-default);
-  box-shadow: 0 -6px 24px rgba(0,0,0,.12);
-  padding: 14px 16px calc(14px + env(safe-area-inset-bottom, 0px));
-  font-size: 13px;
-}
-.tiv-detail-head { font-weight: 700; margin-bottom: 4px; }
-.tiv-detail-row { color: var(--gray-600); }
-.tiv-detail-close {
-  position: absolute; top: 8px; right: 10px;
-  background: none; border: none; cursor: pointer;
-  font-size: 20px; line-height: 1; color: var(--gray-600);
-  min-width: 44px; min-height: 44px;
-}
-
 @media (max-width: 560px) {
   .tiv-tab { padding: 8px 14px; }
   .tiv-kpi-value { font-size: 25px; }

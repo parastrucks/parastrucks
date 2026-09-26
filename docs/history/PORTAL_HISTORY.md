@@ -66,7 +66,12 @@ is hidden behind the nav. `.sj-filter-pop` (phone bottom sheet, z 1100) and the 
 *on top of it* for a few seconds, more so with an iPhone home bar (nav top = 96px) — cosmetic,
 left alone. **Found dead:** `.tiv-detail` / `-head` / `-row` / `-close` (added in #104 `868857f`)
 are used by no JSX since #120 replaced them; `.tiv-detail` is itself `bottom: 0; z-index: 60` at
-every width, so reviving it would bring the collision back. Logged as a tidy item, not deleted here.
+every width, so reviving it would bring the collision back. **Deleted the same day** (PR #127):
+an A/B build of old vs new stylesheet, hashed file names masked, left 34 of 35 emitted assets and
+`index.html` byte-identical; the CSS equals the old CSS minus exactly that block (508 chars). The
+old-CSS control build reproduced prod's own `index-CluuM-Ad.css`, so the local build is faithful.
+⭐ A CSS-only change re-hashes ~25 JS chunks (the entry names the CSS file; chunks import the entry)
+— a raw hash diff looks alarming and means nothing; mask the hashes before comparing.
 
 **Working notes worth keeping:**
 - **Vite 8 bundles with rolldown, so there is no `esbuild` in `node_modules`.** The self-test
