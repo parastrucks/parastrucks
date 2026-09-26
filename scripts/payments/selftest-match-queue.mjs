@@ -49,6 +49,11 @@ section('who may do what — the screen offers exactly what the server accepts')
     ok(`a ${dept ?? 'no-department'} ${level} gets no Match screen`, !who(level, dept).canMatch)
   }
   ok('a missing profile gets nothing', !capabilitiesFor(null, null).canMatch)
+  // Import: accounts and the admin (pilot), nobody else — not even a service GM.
+  ok('accounts at any rank may import', ['executive', 'manager', 'gm'].every((l) => who(l, 'accounts').canImport))
+  ok('the admin may import', ad.canImport)
+  ok('service staff at every rank may NOT import', ['executive', 'manager', 'gm'].every((l) => !who(l, 'service').canImport))
+  ok('nobody outside payments may import', !who('gm', 'sales').canImport && !who('manager', 'hr').canImport)
 }
 
 // ════════════════════════════════════════════════════════════════════════════

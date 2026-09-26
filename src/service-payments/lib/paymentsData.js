@@ -136,3 +136,79 @@ export async function fetchPaymentsEntityId() {
   if (!data) throw new Error('PTB entity not found')
   return data.id
 }
+
+// ── Import ────────────────────────────────────────────────────────────────
+// Back-office reads: the importer is accounts or the admin (authority.ts),
+// and these tables are theirs to read under RLS.
+
+export async function fetchOutlets(entityId) {
+  const { data, error } = await supabase
+    .from('outlets').select('id, city, label, is_active').eq('entity_id', entityId)
+  if (error) throw error
+  return data || []
+}
+
+/** A committed batch of the same kind with this exact file hash, if any. */
+export async function findPriorBatch(entityId, kind, fileHash) {
+  const { data, error } = await supabase
+    .from('payment_import_batches').select('id, file_name, uploaded_at')
+    .eq('entity_id', entityId).eq('kind', kind).eq('file_hash', fileHash)
+    .eq('status', 'committed').limit(1)
+  if (error) throw error
+  return data?.[0] ?? null
+}
+
+/**
+ * The stored bills this file's invoice numbers would land on, with each one's
+ * customer code (embedded; unpacked by existingInvoiceFromRow, which is
+ * tested). Chunked to keep URLs short.
+ */
+export async function fetchExistingInvoices(entityId, invoiceNumbers) {
+  const unique = [...new Set(invoiceNumbers.filter(Boolean))]
+  const out = []
+  for (let i = 0; i < unique.length; i += 150) {
+    const { data, error } = await supabase
+      .from('service_invoices')
+      .select('invoice_number, customer_name, total_paise, allocated_paise, status, cancelled_flag, customer:customers(sap_customer_code)')
+      .eq('entity_id', entityId)
+      .in('invoice_number', unique.slice(i, i + 150))
+    if (error) throw error
+    out.push(...(data || []))
+  }
+  return out
+}
+
+/**
+ * Stored receipts sharing this file's transaction ids — from ANY source, so a
+ * hand-keyed (source 'manual') copy of the same payment is seen.
+ */
+export async function fetchExistingReceiptsByTxn(entityId, txnIds) {
+  const unique = [...new Set(txnIds.filter(Boolean))]
+  const out = []
+  for (let i = 0; i < unique.length; i += 150) {
+    const { data, error } = await supabase
+      .from('payment_receipts')
+      .select('source, external_txn_id, import_batch_id, status, receipt_serial')
+      .eq('entity_id', entityId)
+      .in('external_txn_id', unique.slice(i, i + 150))
+    if (error) throw error
+    out.push(...(data || []))
+  }
+  return out
+}
+
+/** Stored receipts holding any of these UTRs, whatever their source. */
+export async function fetchExistingReceiptsByUtr(entityId, utrs) {
+  const unique = [...new Set(utrs.filter(Boolean))]
+  const out = []
+  for (let i = 0; i < unique.length; i += 150) {
+    const { data, error } = await supabase
+      .from('payment_receipts')
+      .select('source, external_txn_id, normalized_utr, receipt_serial, status')
+      .eq('entity_id', entityId)
+      .in('normalized_utr', unique.slice(i, i + 150))
+    if (error) throw error
+    out.push(...(data || []))
+  }
+  return out
+}

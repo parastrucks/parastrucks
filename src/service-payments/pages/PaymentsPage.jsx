@@ -15,6 +15,7 @@ import { useToast } from '../../context/ToastContext'
 import { callEdge } from '../../lib/api'
 import MatchScreen from '../components/MatchScreen.jsx'
 import SearchPanel from '../components/SearchPanel.jsx'
+import ImportPanel from '../components/ImportPanel.jsx'
 import { buildCandidateIndex, matchCandidates, DEFAULT_WINDOW_DAYS } from '../lib/matchCandidates.js'
 import {
   capabilitiesFor, toMatchReceipt, orderQueue, invoiceWindow, attachCustomerCodes,
@@ -46,6 +47,7 @@ export default function PaymentsPage() {
   const [pendingId, setPendingId] = useState(null)
   const [override, setOverride] = useState(null)  // { receiptId, result } from search
   const [searching, setSearching] = useState(false)
+  const [tab, setTab] = useState('match')          // match | import (import: accounts/admin)
 
   // One idempotency key per (receipt, candidate, amount). A retry after a
   // dropped connection reuses it, so the server answers "already done" instead
@@ -188,13 +190,29 @@ export default function PaymentsPage() {
   }
 
   const header = (
-    <div className="page-head">
-      <div>
-        <div className="page-head-crumb">Service Tools</div>
-        <h1 className="page-head-title">Match Payments<span className="period-accent">.</span></h1>
-        <div className="page-head-sub">Which bill did each UPI payment pay?</div>
+    <>
+      <div className="page-head">
+        <div>
+          <div className="page-head-crumb">Service Tools</div>
+          <h1 className="page-head-title">Match Payments<span className="period-accent">.</span></h1>
+          <div className="page-head-sub">Which bill did each UPI payment pay?</div>
+        </div>
       </div>
-    </div>
+      {/* Import is accounts' (and the admin's during the pilot). Service staff
+          never see the tab, so the Match screen stays the whole page for them. */}
+      {caps?.canImport && phase === 'ready' && (
+        <div className="seg pay-tabs" role="tablist" aria-label="Payments">
+          <button type="button" role="tab" aria-selected={tab === 'match'}
+                  className={`seg-btn ${tab === 'match' ? 'active' : ''}`} onClick={() => setTab('match')}>
+            Match{receipts.length ? ` (${receipts.length})` : ''}
+          </button>
+          <button type="button" role="tab" aria-selected={tab === 'import'}
+                  className={`seg-btn ${tab === 'import' ? 'active' : ''}`} onClick={() => setTab('import')}>
+            Import
+          </button>
+        </div>
+      )}
+    </>
   )
 
   if (phase === 'loading') {
@@ -218,6 +236,18 @@ export default function PaymentsPage() {
         <div className="pay-match">
           <p className="pay-hint" role="status">Matching payments is for the service and accounts teams.</p>
         </div>
+      </div>
+    )
+  }
+
+  if (tab === 'import' && caps?.canImport) {
+    return (
+      <div className="page">{header}
+        <ImportPanel
+          entityId={entityId}
+          onImported={() => load({ quiet: true })}
+          onGoMatch={() => { setSkipped([]); setOverride(null); setTab('match') }}
+        />
       </div>
     )
   }

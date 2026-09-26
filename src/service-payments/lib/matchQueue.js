@@ -30,6 +30,8 @@ export function capabilitiesFor(profile, departmentCode) {
     caller,
     canMatch: ROLE_GATES.allocate(caller),
     canClassify: ROLE_GATES.classify_receipt(caller),
+    // Bills and payments are imported by accounts (admin during the pilot).
+    canImport: ROLE_GATES.import_invoices(caller) && ROLE_GATES.import_receipts(caller),
     canMatchMode: (mode) => allocateModeAllowed(caller, mode),
   }
 }
