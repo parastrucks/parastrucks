@@ -45,11 +45,30 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   names the CSS file, and chunks import the entry), so compare builds with hashed names masked.
 - ⚠️ **Self-tests: `npx --yes esbuild …`** — Vite 8 uses rolldown, so no esbuild is installed.
   **Git Bash `sed -i` converts CRLF files to LF** — use the Edit tool and check `file` afterwards.
-- **🔨 SERVICE PAYMENTS — `/payments` IS A REAL SCREEN (staging only, still unpushed).** Step 2 of the
-  queue is done: route, nav (Service Tools → *Match Payments*), mobile Create-sheet entry,
-  `AccessRules` route list, and a container (`src/service-payments/pages/PaymentsPage.jsx`) that
-  reads under RLS and writes only through the Edge Function with a `client_request_id`.
-  Branch now **25 commits**. Prod untouched.
+- **🔨 SERVICE PAYMENTS — `/payments` MATCH + IMPORT SCREENS BUILT (staging only, unpushed).**
+  Steps 2 and 3 of the queue are done. Branch **29 commits** (merged with `portal` at `1a2744f`).
+  Prod untouched.
+  - **⭐⭐ The import RPCs counted hand-keyed UPI money TWICE** (fixed, `a90aa4e`,
+    `20260926_payments_import_rules.sql`). `payments_manual_receipt` stores `source='manual'`; the
+    import looked only for its OWN source, so a Google Pay payment keyed by hand during an outage
+    was inserted again when the file came, and a BharatPe one with its UTR typed in **aborted the
+    whole file** on the UTR unique index. The advertised "linked to hand entry" path could never
+    fire. Also: a bill SAP later marks cancelled was cancelled **with money still matched to it**.
+    Now: linked, never copied; other clashes HELD and listed; cancellation-under-money a conflict.
+    ⭐ **`probe-import-parity.sql` is GENERATED** (`gen-probe-import-parity.mjs`) from the Import
+    screen's own diff functions, so it proves **preview == server**: old RPCs **27 checks / 17
+    failed**, fixed **27/0**, zero residue. Staging bodies md5-identical to the file.
+  - **Import tab** (accounts + admin only; `components/ImportPanel.jsx`, logic in
+    `lib/importPlan.js`): parse in the browser (xlsx reader lazy-loaded) → gates (same file twice,
+    a plant that is not PTB, a txn id twice in one file, >5,000 rows) → preview in the server's
+    terms → commit exactly the previewed rows → reconcile server vs preview. Bills carry
+    `source_pulled_at` = the EARLIER of the file's saved time and the end of its last billing day
+    (the report has no export time; upload time is never used). `selftest-import-plan` 59/0.
+    **Run on the four REAL UPI exports: 1,079 payments, 0 refused, all gates pass.** ⚠️ The real
+    Billing Report is no longer on disk — not re-run through the Import path.
+  - Step 2 (the Match screen): route, nav (Service Tools → *Match Payments*), mobile Create-sheet
+    entry, `AccessRules` route list, and a container (`src/service-payments/pages/PaymentsPage.jsx`)
+    that reads under RLS and writes only through the Edge Function with a `client_request_id`.
   - ⭐ **The READ gates had the same defect as the write gate.** `payments_can_read()` /
     `payments_can_read_back_office()` — which every payments RLS policy calls — admitted any
     manager/GM in ANY department, so a Sales/HR/Spares/BO/PDI manager could read every payer name,
@@ -60,8 +79,8 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   - ⭐⭐ **On every phone the Confirm button was hidden behind the bottom nav** (nav z-index 100 at
     `bottom: 0` below 760px; the bar z-index 50 at `bottom: 0`). Every test passed because every
     test rendered the screen ALONE. Found only by putting it inside the app shell. Now a CSS contract
-    in `selftest-mobile-render` (fails 3× on the old stylesheet). ⚠️ The **TIV detail sheet
-    (PR #120, on prod) has the same overlap** — flagged as a separate task, not fixed here.
+    in `selftest-mobile-render` (fails 3× on the old stylesheet). The TIV detail sheet had the
+    same overlap on prod — fixed separately in PR #125 (above).
   - **Also fixed:** the matcher dated a receipt by its UTC day, so every payment between midnight
     and 05:30 IST was dated the day before (`0db6d41`). Three new views
     (`20260926_payments_views_for_match.sql`): `v_payments_open_receipts` /
@@ -72,10 +91,11 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   - **The screen imports the Edge Function's own `authority.ts`** — it cannot offer a button the
     server refuses. Service staff see UPI receipts only; "Not a service payment" stays visible to
     them but says accounts decides; **"Bill not raised yet" is hidden — no write path exists.**
-  - Tests: parsers 140 · matcher **50** · authority 630 · **match-queue 63** (new; 2,000 generated
-    split shapes; mutations fail it 5× and 6×) · mobile-render **62**. Build + no-undef clean.
-  - ⚠️ **Never rendered in a browser and never used by a real login** — staging payments tables are
-    EMPTY, so there is nothing to match until the Import screen (step 3) exists.
+  - Tests: parsers 140 · matcher **50** · authority 630 · **match-queue 67** (2,000 generated
+    split shapes; mutations fail it 5× and 6×) · mobile-render **62** · **import-plan 59**. Build +
+    no-undef clean.
+  - ⚠️ **Neither screen has been rendered in a browser or used by a real login.** Staging payments
+    tables are still EMPTY: the next step is the owner importing a real file on staging.
 
 ## Current state (2026-09-20)
 
@@ -491,18 +511,22 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   2. ~~Wire the route + container.~~ ✅ **DONE 2026-09-26** (`1655afc`) — see the 2026-09-26 state
      block. Found on the way: the read gates' any-manager hole, and the confirm button hidden behind
      the phone nav.
-  3. **Import screen** (TIV chain: gates → client-side parse+diff → commit what was previewed).
-     ⚠️ It must send `p_batch.source_pulled_at` (the SAP export time) — the stale-bills brake reads
-     `v_payments_feed_status.covered_until`, which falls back to UPLOAD time without it, so a
-     Saturday export uploaded Monday would claim Monday coverage. It is also what makes the Match
-     screen testable at all: staging has no receipts or bills.
-  4. **"Bill not raised yet"** needs a write path (RPC + EF action + `authority.ts` gate + tests)
-     before MatchScreen may offer it; `awaiting_invoice` exists but nothing sets it.
-  5. Then prod: **four** migrations (`20260830`, `20260908`, `20260926_…read_gates…`,
-     `20260926_…views…`), then `probe-allocation.sql` + `probe-read-gates.sql` — ⛔ the latter is
-     staging-only and REFUSES on prod by design (ERP-sync webhook on `users`); on prod, prove the
-     gates by reading `pg_get_functiondef` md5 against staging instead. Then deploy the EF.
-     Owner-approved, separate step.
+  3. ~~Import screen.~~ ✅ **DONE 2026-09-26** (`f3ebee0`), and it found the double-count bug in
+     the import RPCs (`a90aa4e`) — see the 2026-09-26 state block.
+  4. **⏭️ NEXT — the first real run, by the owner, on staging** (`npm run dev` → localhost:3000,
+     which targets staging): import a Billing Report and a UPI export, then match a few on a phone.
+     ⚠️ That puts **real customer names, amounts and UTRs into the staging database** — the
+     owner's call, not a default. It is the first time either screen meets real data in a browser.
+  5. **"Bill not raised yet"** needs a write path (RPC + EF action + `authority.ts` gate + tests)
+     before MatchScreen may offer it; `awaiting_invoice` exists but nothing sets it. Also: search
+     picks ONE bill, so a parts+labour pair found only by search is confirmed twice.
+  6. Then prod: **five** migrations (`20260830`, `20260908`, `20260926_…read_gates…`,
+     `20260926_…views…`, `20260926_…import_rules`), then `probe-allocation.sql` +
+     `probe-import-parity.sql` (both self-aborting) — ⛔ `probe-read-gates.sql` is staging-only
+     and REFUSES on prod by design (ERP-sync webhook on `users`); on prod, prove the gates by md5
+     of `pg_get_functiondef` against staging instead. Then deploy the EF. Owner-approved, separate
+     step. (Staging shows the import-rules migration twice — the second is an exact-text re-apply;
+     prod takes the one file.)
 - **⏭️ SERVICE PAYMENTS — three owner/accounts items still gate GO-LIVE (not further building):**
   1. **Schedule the SAP Billing Report** as a regular export (one-off manual run today); ask for a
      stable transaction/variant so column names don't drift. ⛔ **Do not ask again for a billing

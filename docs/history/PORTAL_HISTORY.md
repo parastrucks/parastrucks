@@ -119,8 +119,8 @@ designed for — the one button that spends money sat underneath the nav. `selft
 passed throughout, because it checked the bar's CSS **on its own**; the collision exists only once
 the screen is inside the app shell. Now the bar stands on the nav below 760px, and the test asserts
 it at every width where the nav shows (against the old stylesheet those three checks fail).
-⚠️ **The TIV detail sheet (PR #120, live on prod) has the same overlap** — flagged as a separate
-task, not changed here.
+The TIV detail sheet (PR #120, live on prod) had the same overlap. It was flagged as a separate
+task and fixed in PR #125 (the entry above).
 
 ### 3. The matcher dated a receipt by its UTC day
 
@@ -160,20 +160,78 @@ of the window as four. Now `istDateOf`. Three new checks, all failing before the
   against staging PostgREST without a login: both real shapes parse (reaching "permission denied"),
   and a deliberately broken one fails with PGRST100.
 
+### 5. ⭐⭐ The Import screen — and the import RPCs counted hand-keyed UPI money twice
+
+Step 3, the same day (`a90aa4e` · `f3ebee0`). Reading the two import RPCs to mirror them in a
+preview found three things the screen would have exposed on its first real use:
+
+- **Hand-keyed UPI money was stored twice.** `payments_manual_receipt` always stores
+  `source = 'manual'`. The receipt import looked for an existing row with the **file's** source, so
+  it never recognised the hand-keyed copy of the same payment. A Google Pay payment keyed during a
+  parser outage was inserted a second time when the file arrived, which is exactly what the manual
+  RPC demands a transaction id to prevent. A BharatPe one whose UTR was typed in tripped the UTR
+  unique index and **rejected the whole file** with a database message. The advertised "linked to a
+  hand entry" path could never fire.
+- **A bill SAP later marks cancelled was cancelled with money still matched to it**, leaving the
+  payment settling a bill that no longer exists, silently.
+- **Re-uploading the same file** would surface as a raw duplicate-key error from the batch table's
+  file-hash index.
+
+**The fix lives on the server, not only in the preview** — the server is the contract
+(`20260926_payments_import_rules.sql`; CREATE OR REPLACE, same signatures, and the invoice body
+differs from `20260908` only by the new branch). An active manual receipt with the same id is now
+**linked**, never copied; any other clash on the id or UTR is **held and listed**, never an
+exception; a cancellation under matched money is a named conflict.
+
+⭐ **How it was proved.** `scripts/payments/probe-import-parity.sql` is **generated** by
+`gen-probe-import-parity.mjs` from the Import screen's own diff functions. One scenario is written
+once, the preview code predicts every count, and the SQL plays the same scenario through the real
+RPCs, failing on any difference. It also checks the invariants no count can hide: nothing stored
+twice, hand-keyed amounts untouched, no cancelled bill holding money. **Against the old RPCs:
+27 checks, 17 failed** — Google Pay stored twice, the BharatPe file rejected twice, a cancelled bill
+holding money. **Against the fix: 27/0**, zero residue (even the receipt-serial counter). Staging's
+function bodies are md5-identical to the file; EXECUTE is service-role only.
+
+**The screen** (`components/ImportPanel.jsx`, logic in `lib/importPlan.js`) is an Import tab for
+accounts and the admin, following the TIV chain:
+1. Parse in the browser. The ~490 KB spreadsheet reader loads only when a spreadsheet is chosen,
+   never on the morning Match screen, and CSVs are told apart by header, never by file name.
+2. Gates: the same file twice; bills from a plant that is not PTB (another company's export); a
+   transaction id twice inside one file; more than 5,000 rows.
+3. A preview in the server's own terms.
+4. Commit exactly the previewed rows.
+5. Reconcile: if the server did anything other than the preview said, the screen shows both
+   numbers.
+
+The Billing Report has no export time, so bills record `source_pulled_at` as **the earlier of the
+file's saved time and the end of its last billing day** — never upload time, which would let a
+Saturday export uploaded Monday lift the stale-bills brake for Sunday.
+
+`selftest-import-plan` **59/0**; it builds a real `.xlsx` with SheetJS. Negative controls: dropping
+the manual-link rule fails 3 checks, dropping the cancellation guard fails 3, rewording its reason
+fails 1. One of my own test edits made a reason check vacuous (`x?.reason ?? ''.includes(…)` binds
+as `x?.reason ?? (''.includes(…))`); it was caught by re-running the mutation, not by reading.
+**Run on the four real UPI exports: 1,079 payments, 0 refused, every gate passes, largest request
+140 KB.** The real Billing Report is no longer on disk, so it was not re-run through this path.
+
 ### State at the end
 
-Tests: parsers 140 · matcher 50 · authority 630 · match-queue 63 · mobile-render 62. `npm run
-build` passes; the throwaway no-undef pass is clean on `src/`. **Not rendered in a browser, and not
-used by a real login**: the staging payments tables are empty, so there is nothing to match until
-the Import screen exists. Prod is untouched.
+Tests: parsers 140 · matcher 50 · authority 630 · match-queue 67 · mobile-render 62 · import-plan
+59. `npm run build` passes; the throwaway no-undef pass is clean on `src/`. Merged with `portal`
+(the TIV fix, #125–#127) at `1a2744f`; both CSS contracts still pass on the merged stylesheet.
+**Neither screen has been rendered in a browser or used by a real login**, and the staging
+payments tables are still empty. Prod is untouched; five migrations are waiting for it.
 
-⏭️ **Next:** the Import screen. It must send `source_pulled_at` — without it, the brake reads upload
-time, and a Saturday export uploaded on Monday would claim Monday coverage. Then a write path for
-"Bill not raised yet". Then prod: **four** migrations, as a separate owner-approved step.
+⏭️ **Next:** the owner's first real run on staging — import a Billing Report and a UPI export, then
+match a few on a phone. That puts real customer data into staging, which is the owner's call. Then
+a write path for "Bill not raised yet", then prod as a separate owner-approved step.
 
 ⭐ **Lessons.** (1) A gate has two sides: fixing the write gate did not fix the read gate, which
 had the same shape — when a gate is fixed, grep for its twins. (2) A component proved in isolation
 is not proved in place: the collision was in the space between two things that were each correct.
+(3) **A preview is only as honest as its parity with the server** — generate the server test from
+the preview's own code, and the two cannot drift apart unnoticed. Mirroring the RPCs line by line
+is also what found the double count.
 
 ---
 
