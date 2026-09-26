@@ -26,6 +26,33 @@
 
 ---
 
+## Session log — 2026-09-26: the TIV detail sheet was behind the phone bottom nav
+
+**Found by reading CSS, not by a render**, the same day the identical defect was found in the
+Service Payments confirm bar (`1655afc`). Below 760px `.bottom-nav` is `position: fixed; bottom: 0;
+z-index: 100`. The PR #120 phone sheet (`.tiv-detail-sheet`, pinned under 720px) was `bottom: 0;
+z-index: 60` with `padding-bottom: 12px + safe-area`, so its last ~62px sat **behind** the nav and
+could never be scrolled into view. `selftest-detail-sheet` passed throughout: it rendered the sheet
+alone, and markup cannot show a stacking problem.
+
+- **Fix:** the sheet stands on the nav — `bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px))`;
+  the nav owns the safe-area inset, so the sheet's padding is back to 12px. Same approach as payments.
+- **What the lift broke, caught before shipping:** raising the sheet raises its top edge too, and the
+  top bar (z-index 95) sits over it. On a 667×375 landscape phone a plain `70vh` put the top ~6px —
+  where the close button is — under the top bar. Height is now capped at
+  `min(70dvh, 100dvh − top bar − nav − inset − 8px)` with a `vh` fallback line.
+- **Contract:** `selftest-detail-sheet` **19 → 25**. It evaluates the stylesheet's cascade for every
+  width 280–1400px × 7 real phone heights × inset 0/34 and asserts geometry: the sheet's bottom edge
+  clears the nav wherever both are pinned; it does not float over an empty gap where the nav is gone;
+  its top edge stays below the top bar. `TIV_CSS=<path>` runs it against another stylesheet.
+  **Negative controls, each failing only its own check:** the old CSS (882 cases = 441 widths × 2
+  insets) · lift without the height cap (882, all at 375px tall) · sheet breakpoint widened to 900px
+  (141 floating widths) · a 90px nav under 400px (121, inset 0 only — numeric, not a string match).
+- **Not verified on a device.** The internal browser pane crashes on this dev server; the owner's
+  phone check is the first real render.
+
+---
+
 ## Session log — 2026-08-25: TIV Forecast UI/UX — six-lane audit, four remediation waves, a course correction from the owner, and the first real upload
 
 **Outcome: twenty PRs shipped to prod (#102–#121)** — **#102** `485430e` · **#103** `5446ac8` · **#104**
