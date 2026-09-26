@@ -30,6 +30,40 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ---
 
+## Current state (2026-09-26)
+
+- **🔨 SERVICE PAYMENTS — `/payments` IS A REAL SCREEN (staging only, still unpushed).** Step 2 of the
+  queue is done: route, nav (Service Tools → *Match Payments*), mobile Create-sheet entry,
+  `AccessRules` route list, and a container (`src/service-payments/pages/PaymentsPage.jsx`) that
+  reads under RLS and writes only through the Edge Function with a `client_request_id`.
+  Branch now **25 commits**. Prod untouched.
+  - ⭐ **The READ gates had the same defect as the write gate.** `payments_can_read()` /
+    `payments_can_read_back_office()` — which every payments RLS policy calls — admitted any
+    manager/GM in ANY department, so a Sales/HR/Spares/BO/PDI manager could read every payer name,
+    bill and customer GSTIN straight from PostgREST. Fixed department-first
+    (`20260926_payments_read_gates_and_route.sql`). **`probe-read-gates.sql`: 29/28 before →
+    57/0 after**, zero residue; staging-only by PROPERTY (refuses if `users` has an HTTP trigger).
+    ⚠️ **`access_rules` only hides the nav link — RLS is the control.** Check both sides of any gate.
+  - ⭐⭐ **On every phone the Confirm button was hidden behind the bottom nav** (nav z-index 100 at
+    `bottom: 0` below 760px; the bar z-index 50 at `bottom: 0`). Every test passed because every
+    test rendered the screen ALONE. Found only by putting it inside the app shell. Now a CSS contract
+    in `selftest-mobile-render` (fails 3× on the old stylesheet). ⚠️ The **TIV detail sheet
+    (PR #120, on prod) has the same overlap** — flagged as a separate task, not fixed here.
+  - **Also fixed:** the matcher dated a receipt by its UTC day, so every payment between midnight
+    and 05:30 IST was dated the day before (`0db6d41`). Three new views
+    (`20260926_payments_views_for_match.sql`): `v_payments_open_receipts` /
+    `v_payments_open_invoices` (SECURITY INVOKER — "allocated < total" is a column comparison
+    PostgREST cannot filter, so without them a phone downloads every receipt ever) and
+    `v_payments_feed_status` (one timestamp for the stale-bills brake; definer view with its own
+    predicate). SELECT-only, verified with `has_table_privilege`.
+  - **The screen imports the Edge Function's own `authority.ts`** — it cannot offer a button the
+    server refuses. Service staff see UPI receipts only; "Not a service payment" stays visible to
+    them but says accounts decides; **"Bill not raised yet" is hidden — no write path exists.**
+  - Tests: parsers 140 · matcher **50** · authority 630 · **match-queue 63** (new; 2,000 generated
+    split shapes; mutations fail it 5× and 6×) · mobile-render **62**. Build + no-undef clean.
+  - ⚠️ **Never rendered in a browser and never used by a real login** — staging payments tables are
+    EMPTY, so there is nothing to match until the Import screen (step 3) exists.
+
 ## Current state (2026-09-20)
 
 - **✅ USER CREATION WAS BROKEN ON PROD FOR SIX WEEKS — FIXED AND VERIFIED LIVE.** HR reported
@@ -437,11 +471,21 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
      `probe-ef-authority` (owner-run, needs the staging password) = **72/72 live against the
      deployed function**, zero rows written. ⚠️ **Staging has no Sales/HR/BO test account** — those
      departments are covered offline only.
-  2. Wire the route: `App.jsx` lazy route `/payments`, `navConfig.js` Service Tools + a
-     `CREATE_ACTIONS` entry, `AccessRules.jsx` `ALL_ROUTES`, plus the data-fetching container that
-     feeds `MatchScreen` and calls the EF.
-  3. Import screen (TIV chain: gates → client-side parse+diff → commit what was previewed).
-  4. Then prod: same two migrations, then the probe. Owner-approved, separate step.
+  2. ~~Wire the route + container.~~ ✅ **DONE 2026-09-26** (`1655afc`) — see the 2026-09-26 state
+     block. Found on the way: the read gates' any-manager hole, and the confirm button hidden behind
+     the phone nav.
+  3. **Import screen** (TIV chain: gates → client-side parse+diff → commit what was previewed).
+     ⚠️ It must send `p_batch.source_pulled_at` (the SAP export time) — the stale-bills brake reads
+     `v_payments_feed_status.covered_until`, which falls back to UPLOAD time without it, so a
+     Saturday export uploaded Monday would claim Monday coverage. It is also what makes the Match
+     screen testable at all: staging has no receipts or bills.
+  4. **"Bill not raised yet"** needs a write path (RPC + EF action + `authority.ts` gate + tests)
+     before MatchScreen may offer it; `awaiting_invoice` exists but nothing sets it.
+  5. Then prod: **four** migrations (`20260830`, `20260908`, `20260926_…read_gates…`,
+     `20260926_…views…`), then `probe-allocation.sql` + `probe-read-gates.sql` — ⛔ the latter is
+     staging-only and REFUSES on prod by design (ERP-sync webhook on `users`); on prod, prove the
+     gates by reading `pg_get_functiondef` md5 against staging instead. Then deploy the EF.
+     Owner-approved, separate step.
 - **⏭️ SERVICE PAYMENTS — three owner/accounts items still gate GO-LIVE (not further building):**
   1. **Schedule the SAP Billing Report** as a regular export (one-off manual run today); ask for a
      stable transaction/variant so column names don't drift. ⛔ **Do not ask again for a billing

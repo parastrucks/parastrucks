@@ -26,6 +26,97 @@
 
 ---
 
+## Session log — 2026-09-26: `/payments` becomes a real screen — and the read gates, the phone layout and the matcher's clock were each wrong
+
+Step 2 of the Service Payments queue (wire the route and the data container). Branch
+`claude/payments-reconciliation-tool-6eaab4`, **staging only, unpushed**. Four commits of work:
+`2df6f69` · `b217e66` · `0db6d41` · `1655afc`.
+
+### 1. ⭐ The READ gates admitted every manager in the company — the same defect as the write gate
+
+The Edge Function's write gate was fixed on 2026-09-20. The two functions every payments RLS
+policy calls, `payments_can_read()` and `payments_can_read_back_office()`, still read "admin, OR
+any manager/GM, OR the right department". So a Sales, HR, Spares, Back Office or PDI manager could
+read every payer name, bill, allocation and customer GSTIN directly through PostgREST. Nothing in
+the app would have shown it: `access_rules` hides the nav link, but it is not a control.
+
+**Proof in both directions.** `scripts/payments/probe-read-gates.sql` borrows one staging account,
+rewrites its department and rank to every combination, asks both gates as that user, and rolls
+back. The expectations are written by hand. **Before: 29 passed, 28 failed** — every failure a
+manager or GM outside service/accounts. **After `20260926_payments_read_gates_and_route.sql`:
+57/0**, borrowed account verified unchanged, nothing recorded in the migration history. The probe
+is staging-only **by property**: it refuses if `public.users` carries an HTTP trigger, which is what
+prod's ERP-sync webhook is. (Run through MCP `apply_migration`; `execute_sql` is read-only.)
+
+The same migration seeds `/payments` page access: service + accounts × every non-admin rank, PTB
+only (v1 is PTB-only).
+
+### 2. ⭐⭐ On every phone, the Confirm button was hidden behind the bottom nav
+
+Below 760px the portal's bottom nav is `position: fixed; bottom: 0; z-index: 100`. The Match
+screen's confirm bar was `bottom: 0; z-index: 50`. So on phones — the device the whole feature was
+designed for — the one button that spends money sat underneath the nav. `selftest-mobile-render`
+passed throughout, because it checked the bar's CSS **on its own**; the collision exists only once
+the screen is inside the app shell. Now the bar stands on the nav below 760px, and the test asserts
+it at every width where the nav shows (against the old stylesheet those three checks fail).
+⚠️ **The TIV detail sheet (PR #120, live on prod) has the same overlap** — flagged as a separate
+task, not changed here.
+
+### 3. The matcher dated a receipt by its UTC day
+
+`matchCandidates` took the receipt's day as `received_at.slice(0, 10)`. Parsers store UTC instants
+and PostgREST returns them in UTC, so every payment made between midnight and 05:30 IST was dated
+the previous day: a same-day bill read as "billed a day later", and one three IST days away fell out
+of the window as four. Now `istDateOf`. Three new checks, all failing before the fix.
+
+### 4. The screen itself
+
+- **Views** (`20260926_payments_views_for_match.sql`): `v_payments_open_receipts` and
+  `v_payments_open_invoices` are SECURITY INVOKER pre-filters. "Not fully matched" is a
+  column-vs-column comparison PostgREST cannot filter on, so without them a phone would download
+  every receipt and bill ever recorded. `v_payments_feed_status` exposes one timestamp (when bills
+  last landed) from the back-office-only batch table for the stale-bills brake. It is a definer
+  view with its own predicate — the advisor's only new finding, and an intended one. The list views
+  are single-table and so auto-updatable, and Supabase's default grants would have handed
+  `authenticated` INSERT/UPDATE on them; revoked, and verified SELECT-only with
+  `has_table_privilege`.
+- **`lib/matchQueue.js`** holds the screen's decisions, kept out of React. It **imports the Edge
+  Function's own `authority.ts`**, so the screen cannot offer an action the server refuses. The
+  queue runs oldest first, with skipped receipts moved to the back. A confirm on a parts + labour
+  pair is split bill by bill at each bill's exact open amount, **cash-terms first**, never more
+  than the receipt holds or a bill owes. The stale-bills brake fails closed. `selftest-match-queue`
+  **63/0**, including 2,000 generated split shapes; the negative controls (drop cash-first: 5
+  failures and 593 violations; drop the per-bill cap: 6 failures and 1,462) prove it can fail.
+- **MatchScreen** now matches on what is still **open** on a receipt, so a part-matched ₹10,000
+  with ₹4,000 left is not offered bills against ₹10,000. The confirm button shows the amount that
+  will actually be placed. An action is offered only when its callback is supplied: "Bill not
+  raised yet" is **hidden, because no write path exists**. "Not a service payment" stays visible
+  to service staff but tells them accounts decides — hiding it is how non-service money ends up on
+  a customer's bill.
+- **Search** ("Search all bills") covers the quarter of payments no shortlist catches. A bare
+  number is searched as money **and** as a plate or bill fragment: 17 of 28 numbers typed into
+  August notes were plate last-4s, so reading "9044" only as ₹9,044 would have missed the most
+  common case. Filter values are quoted, and filter syntax is stripped from the input. Checked
+  against staging PostgREST without a login: both real shapes parse (reaching "permission denied"),
+  and a deliberately broken one fails with PGRST100.
+
+### State at the end
+
+Tests: parsers 140 · matcher 50 · authority 630 · match-queue 63 · mobile-render 62. `npm run
+build` passes; the throwaway no-undef pass is clean on `src/`. **Not rendered in a browser, and not
+used by a real login**: the staging payments tables are empty, so there is nothing to match until
+the Import screen exists. Prod is untouched.
+
+⏭️ **Next:** the Import screen. It must send `source_pulled_at` — without it, the brake reads upload
+time, and a Saturday export uploaded on Monday would claim Monday coverage. Then a write path for
+"Bill not raised yet". Then prod: **four** migrations, as a separate owner-approved step.
+
+⭐ **Lessons.** (1) A gate has two sides: fixing the write gate did not fix the read gate, which
+had the same shape — when a gate is fixed, grep for its twins. (2) A component proved in isolation
+is not proved in place: the collision was in the space between two things that were each correct.
+
+---
+
 ## Session log — 2026-09-19/20: HR could not create users (a crash live for six weeks), error reporting that never worked, and the payments Edge Function's authority gate
 
 Three pieces of work, in the order they happened. The first two are **on prod**; the third is on
