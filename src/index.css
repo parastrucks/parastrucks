@@ -3255,19 +3255,33 @@ tbody tr:hover td { background: var(--gray-50); }
    receipt rendered below them lands off-screen: the reader taps a number and
    nothing appears to happen. Pin it to the bottom of the viewport instead.
    Deliberately not a modal — the page behind stays readable, which is the
-   difference between a detail sheet and an interruption. */
+   difference between a detail sheet and an interruption.
+   It stands ON TOP of the app's bottom nav, not at bottom: 0. The nav is fixed
+   at bottom: 0 with z-index 100 below 760px — every width this rule covers —
+   so a sheet at bottom: 0 lost its last ~62px behind the nav, and with only
+   12px of its own padding those lines could never be scrolled into view. The
+   nav owns the safe-area inset, so the sheet no longer adds it. Same fix as the
+   payments confirm bar; scripts/tiv/selftest-detail-sheet.mjs holds the
+   contract.
+   Lifting it also lifts its top edge, and the fixed top bar (z-index 95) sits
+   over it. On a short landscape phone (667×375) a plain 70vh put the top ~6px —
+   where the close button lives — under the top bar, so the height is capped to
+   the space between the two bars. dvh follows the visible viewport as mobile
+   browser toolbars come and go; the vh line is the fallback for older engines. */
 @media (max-width: 720px) {
   .tiv-detail-sheet {
     position: fixed;
-    left: 0; right: 0; bottom: 0;
+    left: 0; right: 0;
+    bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px));
     z-index: 60;
     margin: 0;
-    max-height: 70vh;
+    max-height: min(70vh, calc(100vh - var(--topbar-h) - var(--bottom-nav-h) - env(safe-area-inset-bottom, 0px) - 8px));
+    max-height: min(70dvh, calc(100dvh - var(--topbar-h) - var(--bottom-nav-h) - env(safe-area-inset-bottom, 0px) - 8px));
     overflow-y: auto;
     border: 0;
     border-top: 3px solid var(--blue);
     border-radius: 0;
     box-shadow: 0 -6px 24px rgba(0, 0, 0, .12);
-    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: 12px;
   }
 }

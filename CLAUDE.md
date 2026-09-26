@@ -113,8 +113,9 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   `selftest-upload-diff` 27/27 · `selftest-quality` 31/31 · `selftest-chart` 22/22 ·
   `selftest-kpi-month` 13/13 · `selftest-trained-at` 14/14 · `selftest-table-header` 18/18 ·
   `selftest-data-cadence` 38/38 · `selftest-removals` 25/25 · `selftest-contrast` 8/8 ·
-  `selftest-vintage` 33/33 · `selftest-detail-sheet` 19/19
-  (renders the real component via `react-dom/server.browser`). Plus `diag-blank-zero` / `diag-raw-cells` workbook inspectors.
+  `selftest-vintage` 33/33 · `selftest-detail-sheet` 25/25
+  (renders the real component via `react-dom/server.browser`, plus a CSS cascade contract that the
+  phone sheet clears the bottom nav and the top bar — `TIV_CSS=<path>` runs it against another stylesheet). Plus `diag-blank-zero` / `diag-raw-cells` workbook inspectors.
 - ⚠️ **`npm run build` does NOT catch a stray top-level `x={y}`** — it parses as a valid non-strict
   assignment, but ES modules are strict so it throws on every page load. A `perl -0pi` JSX edit
   introduced exactly that. **Use the Edit tool for multi-line JSX; check `head -1` of every edited
