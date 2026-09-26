@@ -51,6 +51,34 @@ alone, and markup cannot show a stacking problem.
 - **Not verified on a device.** The internal browser pane crashes on this dev server; the owner's
   phone check is the first real render.
 
+**Shipped:** PR **#125** squash-merged → **`f98b99e`**. PR CI 9/9 green; post-merge CI 4/4 green
+(trivy-fs, npm-audit, gitleaks, CodeQL); Vercel `portal` production deploy **READY**. Prod verified
+the house way — fetched `team.parastrucks.in` HTML → hashed asset `index-CluuM-Ad.css` → the minified
+`.tiv-detail-sheet` rule carries the lift, both `max-height` lines in order (vh then dvh), and
+`padding-bottom:12px`; `/` and `/login` return 200.
+⏭️ **Owner phone check pending:** hard-refresh TIV Forecast → tap a number → scroll the sheet to
+the end (last line fully above the nav) → rotate to landscape (× fully below the top bar).
+
+**Sweep of every `position: fixed` bottom element in `index.css`, done after the fix.** Nothing else
+is hidden behind the nav. `.sj-filter-pop` (phone bottom sheet, z 1100) and the Create
+`.sheet-panel` (inside a z-120 backdrop) sit *over* the nav by design. `.sj-toast` (z 1200, bottom
+18px) and `.toast-container` (z 9999; bottom 24px at 601–759px, 72px at ≤600px) overlap the nav
+*on top of it* for a few seconds, more so with an iPhone home bar (nav top = 96px) — cosmetic,
+left alone. **Found dead:** `.tiv-detail` / `-head` / `-row` / `-close` (added in #104 `868857f`)
+are used by no JSX since #120 replaced them; `.tiv-detail` is itself `bottom: 0; z-index: 60` at
+every width, so reviving it would bring the collision back. Logged as a tidy item, not deleted here.
+
+**Working notes worth keeping:**
+- **Vite 8 bundles with rolldown, so there is no `esbuild` in `node_modules`.** The self-test
+  recipe is `npx --yes esbuild <script> --bundle --platform=node --format=esm --loader:.jsx=jsx
+  --jsx=automatic --outfile=<scratch>/x.mjs`, run from the repo root (tests read `src/index.css`
+  relative to cwd).
+- **Git Bash `sed -i` silently converts a CRLF file to LF.** It happened to the self-test mid-session
+  and was caught by `file`; restored with a node normalise. Use the Edit tool, then check `file`.
+- **A test's own evaluator can fail closed for the wrong reason.** The first run failed the top-bar
+  check at every width because the arithmetic allowlist lacked a lowercase `m` (`Math.min`) — the
+  value was NaN, not an overlap. A failure at *every* case is a smell for the harness, not the CSS.
+
 ---
 
 ## Session log — 2026-08-25: TIV Forecast UI/UX — six-lane audit, four remediation waves, a course correction from the owner, and the first real upload

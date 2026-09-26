@@ -29,6 +29,19 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ---
 
+## Current state (2026-09-26)
+
+- **✅ TIV detail sheet no longer hides behind the phone bottom nav — LIVE** (PR **#125** →
+  `f98b99e`; CI green pre- and post-merge, Vercel `portal` READY, prod CSS verified). The sheet was
+  `bottom: 0` under the `z-index: 100` nav; now lifted by `--bottom-nav-h` + inset, height capped
+  so its × stays below the top bar in landscape. `selftest-detail-sheet` 25/25 evaluates the CSS
+  cascade. ⏭️ **Owner phone check pending.** ⭐ Record: `PORTAL_HISTORY.md` 2026-09-26 entry.
+- ⚠️ **Any `position: fixed; bottom: 0` element under 760px collides with the bottom nav — and
+  lifting one moves its TOP edge under the top bar (`--topbar-h`, z-index 95).** Check both edges.
+- 🟢 Tidy: `.tiv-detail*` CSS in `src/index.css` is dead since #120 — delete when next there.
+- ⚠️ **Self-tests: `npx --yes esbuild …`** — Vite 8 uses rolldown, so no esbuild is installed.
+  **Git Bash `sed -i` converts CRLF files to LF** — use the Edit tool and check `file` afterwards.
+
 ## Current state (2026-08-25)
 
 - **✅ TIV FORECAST UI/UX — AUDITED, REMEDIATED IN FOUR WAVES, AND COURSE-CORRECTED. ALL LIVE.**
@@ -265,6 +278,9 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ## Next actions
 
+- **⏭️ Owner: check the TIV detail sheet on a real phone** (PR #125, live). Hard-refresh TIV
+  Forecast → tap a number → scroll the sheet to the end: last line fully above the bottom nav →
+  rotate to landscape: × fully below the top bar. First render on a device; nothing else pending.
 - ~~**DECISION NEEDED — `tiv_upload_all()` never `DELETE`s.**~~ ✅ **DECIDED AND BUILT 2026-08-25**
   (PR **#118** → `0807489`): owner chose *"ask me, then remove"*. `tiv_upload_and_prune()` lists
   every month that would go, per table, box unticked by default; opt-in, refuses on an empty
