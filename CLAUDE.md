@@ -32,6 +32,19 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ## Current state (2026-09-26)
 
+- **✅ TIV detail sheet no longer hides behind the phone bottom nav — LIVE** (PR **#125** →
+  `f98b99e`; CI green pre- and post-merge, Vercel `portal` READY, prod CSS verified). The sheet was
+  `bottom: 0` under the `z-index: 100` nav; now lifted by `--bottom-nav-h` + inset, height capped
+  so its × stays below the top bar in landscape. `selftest-detail-sheet` 25/25 evaluates the CSS
+  cascade. ⏭️ **Owner phone check pending.** ⭐ Record: `PORTAL_HISTORY.md` 2026-09-26 entry.
+- ⚠️ **Any `position: fixed; bottom: 0` element under 760px collides with the bottom nav — and
+  lifting one moves its TOP edge under the top bar (`--topbar-h`, z-index 95).** Check both edges.
+- ✅ Dead `.tiv-detail*` CSS (unused since #120) **deleted** (PR #127) — proven inert by an A/B
+  build: with hashes masked, 34/35 assets + `index.html` byte-identical; the CSS is the old CSS
+  minus exactly that block. ⭐ **Method: a CSS-only change re-hashes ~25 JS chunks** (the entry
+  names the CSS file, and chunks import the entry), so compare builds with hashed names masked.
+- ⚠️ **Self-tests: `npx --yes esbuild …`** — Vite 8 uses rolldown, so no esbuild is installed.
+  **Git Bash `sed -i` converts CRLF files to LF** — use the Edit tool and check `file` afterwards.
 - **🔨 SERVICE PAYMENTS — `/payments` IS A REAL SCREEN (staging only, still unpushed).** Step 2 of the
   queue is done: route, nav (Service Tools → *Match Payments*), mobile Create-sheet entry,
   `AccessRules` route list, and a container (`src/service-payments/pages/PaymentsPage.jsx`) that
@@ -299,8 +312,9 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   `selftest-upload-diff` 27/27 · `selftest-quality` 31/31 · `selftest-chart` 22/22 ·
   `selftest-kpi-month` 13/13 · `selftest-trained-at` 14/14 · `selftest-table-header` 18/18 ·
   `selftest-data-cadence` 38/38 · `selftest-removals` 25/25 · `selftest-contrast` 8/8 ·
-  `selftest-vintage` 33/33 · `selftest-detail-sheet` 19/19
-  (renders the real component via `react-dom/server.browser`). Plus `diag-blank-zero` / `diag-raw-cells` workbook inspectors.
+  `selftest-vintage` 33/33 · `selftest-detail-sheet` 25/25
+  (renders the real component via `react-dom/server.browser`, plus a CSS cascade contract that the
+  phone sheet clears the bottom nav and the top bar — `TIV_CSS=<path>` runs it against another stylesheet). Plus `diag-blank-zero` / `diag-raw-cells` workbook inspectors.
 - ⚠️ **`npm run build` does NOT catch a stray top-level `x={y}`** — it parses as a valid non-strict
   assignment, but ES modules are strict so it throws on every page load. A `perl -0pi` JSX edit
   introduced exactly that. **Use the Edit tool for multi-line JSX; check `head -1` of every edited
@@ -454,6 +468,9 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ## Next actions
 
+- **⏭️ Owner: check the TIV detail sheet on a real phone** (PR #125, live). Hard-refresh TIV
+  Forecast → tap a number → scroll the sheet to the end: last line fully above the bottom nav →
+  rotate to landscape: × fully below the top bar. First render on a device; nothing else pending.
 - **⏭️ SERVICE PAYMENTS — next build steps** (read `docs/backlog/service-payments-plan.md` first —
   it encodes several bugs already caught by measurement that are easy to reintroduce from first
   principles, including the ⭐ CORRECTION that a number in a payment note is a **number plate**,

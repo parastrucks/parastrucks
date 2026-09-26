@@ -26,6 +26,66 @@
 
 ---
 
+## Session log — 2026-09-26: the TIV detail sheet was behind the phone bottom nav
+
+**Found by reading CSS, not by a render**, the same day the identical defect was found in the
+Service Payments confirm bar (`1655afc`). Below 760px `.bottom-nav` is `position: fixed; bottom: 0;
+z-index: 100`. The PR #120 phone sheet (`.tiv-detail-sheet`, pinned under 720px) was `bottom: 0;
+z-index: 60` with `padding-bottom: 12px + safe-area`, so its last ~62px sat **behind** the nav and
+could never be scrolled into view. `selftest-detail-sheet` passed throughout: it rendered the sheet
+alone, and markup cannot show a stacking problem.
+
+- **Fix:** the sheet stands on the nav — `bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px))`;
+  the nav owns the safe-area inset, so the sheet's padding is back to 12px. Same approach as payments.
+- **What the lift broke, caught before shipping:** raising the sheet raises its top edge too, and the
+  top bar (z-index 95) sits over it. On a 667×375 landscape phone a plain `70vh` put the top ~6px —
+  where the close button is — under the top bar. Height is now capped at
+  `min(70dvh, 100dvh − top bar − nav − inset − 8px)` with a `vh` fallback line.
+- **Contract:** `selftest-detail-sheet` **19 → 25**. It evaluates the stylesheet's cascade for every
+  width 280–1400px × 7 real phone heights × inset 0/34 and asserts geometry: the sheet's bottom edge
+  clears the nav wherever both are pinned; it does not float over an empty gap where the nav is gone;
+  its top edge stays below the top bar. `TIV_CSS=<path>` runs it against another stylesheet.
+  **Negative controls, each failing only its own check:** the old CSS (882 cases = 441 widths × 2
+  insets) · lift without the height cap (882, all at 375px tall) · sheet breakpoint widened to 900px
+  (141 floating widths) · a 90px nav under 400px (121, inset 0 only — numeric, not a string match).
+- **Not verified on a device.** The internal browser pane crashes on this dev server; the owner's
+  phone check is the first real render.
+
+**Shipped:** PR **#125** squash-merged → **`f98b99e`**. PR CI 9/9 green; post-merge CI 4/4 green
+(trivy-fs, npm-audit, gitleaks, CodeQL); Vercel `portal` production deploy **READY**. Prod verified
+the house way — fetched `team.parastrucks.in` HTML → hashed asset `index-CluuM-Ad.css` → the minified
+`.tiv-detail-sheet` rule carries the lift, both `max-height` lines in order (vh then dvh), and
+`padding-bottom:12px`; `/` and `/login` return 200.
+⏭️ **Owner phone check pending:** hard-refresh TIV Forecast → tap a number → scroll the sheet to
+the end (last line fully above the nav) → rotate to landscape (× fully below the top bar).
+
+**Sweep of every `position: fixed` bottom element in `index.css`, done after the fix.** Nothing else
+is hidden behind the nav. `.sj-filter-pop` (phone bottom sheet, z 1100) and the Create
+`.sheet-panel` (inside a z-120 backdrop) sit *over* the nav by design. `.sj-toast` (z 1200, bottom
+18px) and `.toast-container` (z 9999; bottom 24px at 601–759px, 72px at ≤600px) overlap the nav
+*on top of it* for a few seconds, more so with an iPhone home bar (nav top = 96px) — cosmetic,
+left alone. **Found dead:** `.tiv-detail` / `-head` / `-row` / `-close` (added in #104 `868857f`)
+are used by no JSX since #120 replaced them; `.tiv-detail` is itself `bottom: 0; z-index: 60` at
+every width, so reviving it would bring the collision back. **Deleted the same day** (PR #127):
+an A/B build of old vs new stylesheet, hashed file names masked, left 34 of 35 emitted assets and
+`index.html` byte-identical; the CSS equals the old CSS minus exactly that block (508 chars). The
+old-CSS control build reproduced prod's own `index-CluuM-Ad.css`, so the local build is faithful.
+⭐ A CSS-only change re-hashes ~25 JS chunks (the entry names the CSS file; chunks import the entry)
+— a raw hash diff looks alarming and means nothing; mask the hashes before comparing.
+
+**Working notes worth keeping:**
+- **Vite 8 bundles with rolldown, so there is no `esbuild` in `node_modules`.** The self-test
+  recipe is `npx --yes esbuild <script> --bundle --platform=node --format=esm --loader:.jsx=jsx
+  --jsx=automatic --outfile=<scratch>/x.mjs`, run from the repo root (tests read `src/index.css`
+  relative to cwd).
+- **Git Bash `sed -i` silently converts a CRLF file to LF.** It happened to the self-test mid-session
+  and was caught by `file`; restored with a node normalise. Use the Edit tool, then check `file`.
+- **A test's own evaluator can fail closed for the wrong reason.** The first run failed the top-bar
+  check at every width because the arithmetic allowlist lacked a lowercase `m` (`Math.min`) — the
+  value was NaN, not an overlap. A failure at *every* case is a smell for the harness, not the CSS.
+
+---
+
 ## Session log — 2026-09-26: `/payments` becomes a real screen — and the read gates, the phone layout and the matcher's clock were each wrong
 
 Step 2 of the Service Payments queue (wire the route and the data container). Branch
