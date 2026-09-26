@@ -3426,6 +3426,21 @@ tbody tr:hover td { background: var(--gray-50); }
   background: var(--white);
   border-top: 1px solid var(--border-default);
 }
+/* Below 760px the app's own bottom nav is fixed at bottom: 0 with z-index 100.
+   Left at bottom: 0 this bar sat UNDER it — the confirm button, on every phone,
+   hidden behind the nav. It passed every test that rendered the screen alone;
+   it was found only when the screen was put inside the app shell. So on phones
+   the bar stands on top of the nav, and the nav owns the safe-area inset. */
+@media (max-width: 759px) {
+  .pay-confirmbar {
+    bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px));
+    padding-bottom: 10px;
+    box-shadow: 0 -4px 16px rgba(0, 0, 0, .06);
+  }
+  .pay-match {
+    padding-bottom: calc(150px + var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px));
+  }
+}
 @media (min-width: 721px) {
   .pay-confirmbar {
     max-width: 560px;
@@ -3459,6 +3474,28 @@ tbody tr:hover td { background: var(--gray-50); }
   color: var(--text-secondary);
   cursor: pointer;
 }
+
+/* Part-matched: the big number is what is LEFT; this says of how much. */
+.pay-receipt-part { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+
+/* Search — same column, same thumb zone. The field is 16px so iOS Safari does
+   not zoom the page when it takes focus. */
+.pay-search-for   { font-size: 14px; color: var(--text-secondary); margin-bottom: 12px; }
+.pay-search-for strong { color: var(--ink); font-size: 16px; }
+.pay-search-label { display: block; font-size: 13px; font-weight: 600; color: var(--ink); margin-bottom: 6px; }
+.pay-search-input {
+  width: 100%;
+  min-height: 48px;
+  font: inherit;
+  font-size: 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--white);
+  color: var(--ink);
+  margin-bottom: 8px;
+}
+.pay-search-input:focus { outline: 2px solid var(--blue); outline-offset: 1px; }
 
 .pay-match-empty { text-align: center; padding-top: 48px; }
 .pay-empty-tick  { font-size: 40px; color: var(--green); line-height: 1; }

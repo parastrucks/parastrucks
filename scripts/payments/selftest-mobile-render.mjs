@@ -139,7 +139,9 @@ section('money is never confirmed by accident')
 // ════════════════════════════════════════════════════════════════════════════
 section('the ways out stay on screen')
 {
-  const html = render({ receipt, result: { candidates: [candidate()] } })
+  const noop = () => {}
+  const html = render({ receipt, result: { candidates: [candidate()] },
+    onSearch: noop, onHoldAdvance: noop, onNotService: noop, onSkip: noop })
   // Someone who cannot find "this is not a service payment" will pick a bill
   // instead — and that is a wrong entry on a real customer's ledger.
   ok('search all bills', html.includes('Search all bills'))
@@ -147,11 +149,40 @@ section('the ways out stay on screen')
   ok('mark it not-service', html.includes('Not a service payment'))
   ok('and skip', html.includes('Skip for now'))
 }
+{
+  // The container offers an action only when the server will accept it. A
+  // button the server refuses teaches people the tool is broken.
+  const html = render({ receipt, result: { candidates: [candidate()] } })
+  ok('with no hold-as-advance write path, that button is not offered', !html.includes('Bill not raised yet'))
+  ok('with no search wired, that button is not offered', !html.includes('Search all bills'))
+  // ...but this exit stays for someone who may not classify: hiding it is how
+  // a non-service payment ends up on a customer's bill. The menu tells them
+  // accounts decides (state, so read in MatchScreen.jsx, not asserted here).
+  ok('"not a service payment" stays visible even for someone who may not classify',
+     html.includes('Not a service payment'))
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+section('a part-matched payment says what is left, and of how much')
+{
+  const html = render({
+    receipt: { ...receipt, amount_paise: 400000, face_paise: 1000000, partly_matched: true },
+    result: { candidates: [candidate()] },
+  })
+  ok('the headline is what is still to place', /class="pay-receipt-amount">₹4,000\.00</.test(html))
+  ok('and it says of how much', html.includes('left of ₹10,000.00'))
+}
+{
+  const html = render({ receipt, result: { candidates: [candidate()] } })
+  ok('an untouched payment carries no such line', !html.includes('pay-receipt-part'))
+}
 
 // ════════════════════════════════════════════════════════════════════════════
 section('everything interactive is a real button')
 {
-  const html = render({ receipt, result: { candidates: [candidate(), candidate({ id: 'c2' })] } })
+  const noop = () => {}
+  const html = render({ receipt, result: { candidates: [candidate(), candidate({ id: 'c2' })] },
+    onSearch: noop, onHoldAdvance: noop, onNotService: noop })
   const tags = html.match(/<(div|span|li)[^>]*onclick/gi) || []
   ok('nothing is a clickable div or span', tags.length === 0, tags.join(', '))
   const buttons = html.match(/<button[^>]*>/g) || []
@@ -201,6 +232,24 @@ section('the CSS contract — a phone claim that HTML cannot prove')
   ok('and clears the phone home indicator', /env\(safe-area-inset-bottom/.test(bar))
   ok('the page reserves room so the bar never covers the last candidate',
      /env\(safe-area-inset-bottom/.test(block('.pay-match')))
+
+  // Found only when the screen went inside the app: the portal's bottom nav is
+  // fixed at bottom: 0 with a HIGHER z-index below 760px, so a bar at bottom: 0
+  // put the confirm button behind it on every phone.
+  const navZ = Number((block('.bottom-nav').match(/z-index:\s*(\d+)/) || [])[1])
+  const barZ = Number((block('.pay-confirmbar').match(/z-index:\s*(\d+)/) || [])[1])
+  const navHides = css.match(/@media\s*\(min-width:\s*(\d+)px\)\s*\{\s*\.bottom-nav\s*\{\s*display:\s*none/)
+  const navGoneAt = navHides ? Number(navHides[1]) : null
+  const phoneRule = css.match(/@media\s*\(max-width:\s*(\d+)px\)\s*\{\s*\.pay-confirmbar\s*\{([^}]*)\}/)
+  ok('(the bottom nav really does sit above the bar — the premise of the next checks)',
+     navZ > barZ, `nav z ${navZ}, bar z ${barZ}`)
+  ok('on phones the confirm bar stands ON TOP of the bottom nav, not under it',
+     !!phoneRule && /bottom:\s*calc\(var\(--bottom-nav-h\)/.test(phoneRule[2]))
+  ok('...at every width where the nav is shown',
+     !!phoneRule && navGoneAt !== null && Number(phoneRule[1]) === navGoneAt - 1,
+     `bar rule to ${phoneRule?.[1]}px, nav hidden from ${navGoneAt}px`)
+  ok('...and the page leaves room for both',
+     /@media\s*\(max-width:\s*759px\)[\s\S]*?\.pay-match\s*\{[^}]*--bottom-nav-h/.test(css))
 
   // The cornerstone, stated as a test: there is no width at which this screen
   // becomes a list beside a detail pane.

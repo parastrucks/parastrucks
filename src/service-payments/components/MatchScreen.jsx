@@ -26,9 +26,15 @@ import { primaryReason, signalLabel, BOUNCE_REASONS, NOT_SERVICE_KINDS } from '.
  * @param {string|null} props.pendingId      candidate id currently being written
  * @param {(c:object)=>void} props.onConfirm
  * @param {()=>void} props.onSkip
- * @param {(kind:string)=>void} props.onNotService
- * @param {()=>void} props.onHoldAdvance
- * @param {()=>void} props.onSearch
+ * @param {(kind:string)=>void} [props.onNotService]  absent = this person may not
+ *        classify (accounts decides); the exit still shows and says who does
+ * @param {()=>void} [props.onHoldAdvance]  absent = hidden (no write path yet)
+ * @param {()=>void} [props.onSearch]       absent = hidden
+ *
+ * An action is offered only when its callback is supplied, so the container —
+ * which knows who is signed in and what the server will accept — decides. A
+ * button that the server refuses is worse than no button: it teaches people
+ * the tool is broken.
  */
 export default function MatchScreen({
   receipt,
@@ -64,6 +70,11 @@ export default function MatchScreen({
   const { candidates, refuse_to_rank: unordered, reason } = result
   const selected = candidates.find((c) => c.id === selectedId) || null
   const busy = pendingId !== null
+  // What will actually be placed: never more than the payment holds, never more
+  // than the bill owes. A button reading "Confirm ₹1,930" that places ₹1,500 is
+  // a lie told at the exact moment someone is deciding about money.
+  const placing = selected ? Math.min(selected.amount_paise, receipt.amount_paise) : 0
+  const partPay = selected && receipt.amount_paise < selected.amount_paise
 
   return (
     <div className="pay-match">
@@ -84,6 +95,9 @@ export default function MatchScreen({
       {/* ── the receipt ─────────────────────────────────────────────── */}
       <section className="pay-receipt" aria-label="Payment received">
         <p className="pay-receipt-amount">{formatINR(receipt.amount_paise)}</p>
+        {receipt.partly_matched && receipt.face_paise > receipt.amount_paise && (
+          <p className="pay-receipt-part">left of {formatINR(receipt.face_paise)} — the rest is already matched</p>
+        )}
         <p className="pay-receipt-payer">{receipt.payer_name || 'No name given'}</p>
         <p className="pay-receipt-meta">
           {sourceLabel(receipt.source)} · {timeLabel(receipt.received_at)}
@@ -145,12 +159,16 @@ export default function MatchScreen({
 
       {/* ── the ways out, always visible, never buried in a menu ─────── */}
       <div className="pay-escapes">
-        <button type="button" className="pay-secondary" onClick={onSearch} disabled={busy}>
-          Search all bills
-        </button>
-        <button type="button" className="pay-secondary" onClick={onHoldAdvance} disabled={busy}>
-          Bill not raised yet
-        </button>
+        {onSearch && (
+          <button type="button" className="pay-secondary" onClick={onSearch} disabled={busy}>
+            Search all bills
+          </button>
+        )}
+        {onHoldAdvance && (
+          <button type="button" className="pay-secondary" onClick={onHoldAdvance} disabled={busy}>
+            Bill not raised yet
+          </button>
+        )}
         <button
           type="button"
           className="pay-secondary"
@@ -162,7 +180,17 @@ export default function MatchScreen({
         </button>
       </div>
 
-      {menuOpen && (
+      {/* Kept visible even for someone who may not classify: a person who
+          cannot find this exit picks a bill instead, and that is a wrong
+          entry on a real customer's ledger. They are told who decides. */}
+      {menuOpen && !onNotService && (
+        <p className="pay-hint" role="status">
+          Accounts decides what is not a service payment. Skip it for now — it
+          stays in the queue for them.
+        </p>
+      )}
+
+      {menuOpen && onNotService && (
         <ul className="pay-reasons" aria-label="What kind of payment is this?">
           {NOT_SERVICE_KINDS.map((k) => (
             <li key={k.value}>
@@ -170,7 +198,7 @@ export default function MatchScreen({
                 type="button"
                 className="pay-reason"
                 disabled={busy}
-                onClick={() => { setMenuOpen(false); onNotService?.(k.value) }}
+                onClick={() => { setMenuOpen(false); onNotService(k.value) }}
               >
                 {k.label}
               </button>
@@ -193,7 +221,7 @@ export default function MatchScreen({
           {busy
             ? 'Saving…'
             : selected
-              ? `Confirm ${formatINR(selected.amount_paise)}`
+              ? `Confirm ${formatINR(placing)}${partPay ? ' · part-paid' : ''}`
               : candidates.length ? 'Pick a bill above' : 'Nothing to confirm'}
         </button>
         <button type="button" className="pay-skip" onClick={onSkip} disabled={busy}>

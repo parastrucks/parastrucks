@@ -20,6 +20,7 @@ const ALL_ROUTES = [
   { route: '/catalog',        label: 'Vehicle Catalog' },
   { route: '/bus-calculator', label: 'Bus Calculator'  },
   { route: '/tiv-forecast',   label: 'TIV Forecast'    },
+  { route: '/payments',       label: 'Match Payments'  },
 ]
 
 /* ══════════════════════════════════════════════════════════════

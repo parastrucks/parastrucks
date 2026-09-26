@@ -35,6 +35,9 @@ export function signalLabel(s) {
       return 'Payer name is similar'
     case 'date':
       return dayLabel(d)
+    case 'search':
+      // Said plainly: the tool did NOT suggest this bill, a person found it.
+      return d ? `Found by search · billed ${d}` : 'Found by search'
     default:
       return s?.signal ?? ''
   }
@@ -57,7 +60,7 @@ export function primaryReason(candidate) {
   const order = [
     'reg_full', 'reg_last4', 'amount_unique', 'note_bill_number',
     'payer_memory', 'name_overlap_strong', 'amount_ambiguous',
-    'payer_memory_weak', 'name_overlap',
+    'payer_memory_weak', 'name_overlap', 'search',
   ]
   for (const want of order) {
     const hit = (candidate?.signals || []).find((s) => s.signal === want)
