@@ -29,6 +29,24 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ---
 
+## Current state (2026-10-05)
+
+- **✅ AL October 2026 pricelist is on prod** (WEF 1-Oct-26, data-only, no deploy). The owner
+  imported it through **Catalog → Import**. Verified with an aggregate query: 815 rows
+  `price_circular='Oct2026'`, **sum MRP = the source file to the rupee** (₹2,945,086,768),
+  catalog **1006 → 1079** (742 re-priced, 73 new). ⏭️ **45 new CBNs sit in Triage** for a family.
+  ✅ **Owner decision: the 155 active CBNs absent from every October circular STAY ACTIVE** at
+  their Jul/Apr prices — do not propose deactivating them. ⭐ Record: `PORTAL_HISTORY.md` 2026-10-05.
+- ⭐ **Pricelist method (reuse next time):** source = `D:\Claude CoWork\PTB\Pricelist\PTB_CombinedPricelist_<date>.xlsx`
+  → build a file in the **portal template format** (`CBN, Description, Sub-Category, Tyres, MRP Incl. GST, Segment`,
+  sheet `All Vehicles`) → round-trip it through a copy of `ImportTab.processFile`'s parsing → owner
+  uploads → verify with `sum(mrp_incl_gst)` per circular. Pre-fill a new CBN's family **only when
+  every existing sibling in its AL sub-segment shares one family**; anything else goes to Triage
+  (majority vote would have filed 19 MAV CBNs as "MAV 35T" on 56/159).
+- ⚠️ **Bulk reads of prod tables via the Supabase MCP get refused by the auto-mode classifier;
+  aggregate queries go through.** Diff against the repo snapshot `docs/db/seed-reference.sql`
+  (catalog as of 2026-07-21) and let the live import preview give the real counts.
+
 ## Current state (2026-09-26)
 
 - **✅ TIV detail sheet no longer hides behind the phone bottom nav — LIVE** (PR **#125** →
@@ -281,6 +299,8 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ## Next actions
 
+- **⏭️ Owner: file the 45 new October CBNs in Catalog → Triage** (MAV 19, Haulage 9, Oyster
+  Staff/Wide shells 12, RMC 3, Ecomet 1215 1, 10x2 Tipper 1). Until then they have no family.
 - **⏭️ Owner: check the TIV detail sheet on a real phone** (PR #125, live). Hard-refresh TIV
   Forecast → tap a number → scroll the sheet to the end: last line fully above the bottom nav →
   rotate to landscape: × fully below the top bar. First render on a device; nothing else pending.
