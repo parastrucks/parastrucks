@@ -26,6 +26,35 @@
 
 ---
 
+## Session log — 2026-10-05: AL October 2026 pricelist imported (data-only, no deploy)
+
+- **Source:** `D:\Claude CoWork\PTB\Pricelist\PTB_CombinedPricelist_20261005.xlsx` — 815 CBNs from the
+  four AL circulars WEF **1-Oct-26** (ICV 343 · Long Haul 269 · Tipper 59 · Passenger 144).
+- **Applied by the owner through Catalog → Import** (the designed path — existing CBNs get price /
+  description / tyres only; family and `is_active` are never touched). The import file
+  `PTB_Catalog_Import_Oct2026.xlsx` (same folder) was built in the portal template format and
+  round-tripped through a copy of `ImportTab.processFile`'s parsing first: 815 rows, 0 zero-MRP,
+  0 mismatches against the source.
+- **Verified on prod:** 815 rows `price_circular='Oct2026'`, `effective_date=2026-10-01`,
+  **sum MRP ₹2,945,086,768 = the file exactly**, 0 bad MRP, 0 null `brand_id`. Catalog **1006 → 1079**
+  (742 re-priced, 73 new). Note the circular label is `Oct2026`, not the `Oct 2026 Circular` style
+  used in July — cosmetic, labels were already mixed (`Sep2025`, `PC-155 (Apr 2026)`).
+- **New CBNs' families:** pre-assigned **only when every existing sibling in the same AL sub-segment
+  sat in one portal family** (28). Majority vote was rejected — MAV new CBNs would have been filed
+  as "MAV 35T" on a 56/159 vote. The other **45 landed unassigned → Triage**, as predicted.
+- **Prices:** ~+1% across the board; outliers **CBG15099D49004 +13.2%**, **CBG15106D52004 (+ `_YW`)
+  +11.0%** (flagged to the owner to eyeball against the circular).
+- The **Sep-26 air-suspension update (20260826 sheet) was never applied to prod** — superseded by
+  October, so nothing lost; its 2 new CBNs arrived as part of the 73.
+- **⏭️ Open — owner decision:** **155 active CBNs are in no October circular** (128 Jul-26 + 19
+  Apr-26 tippers + 8 PC-155 buses) and still quote at old prices. Import never deactivates.
+  List: tab "Active, not in Oct" of the import file. Also: 45 CBNs to file in Triage.
+- **Method note:** a bulk read of prod `vehicle_catalog` via MCP was refused by the auto-mode
+  classifier; aggregate queries were allowed. The diff was done against the repo's catalog snapshot
+  (`docs/db/seed-reference.sql`, 2026-07-21), with the live import preview as the real check.
+
+---
+
 ## Session log — 2026-09-26: the TIV detail sheet was behind the phone bottom nav
 
 **Found by reading CSS, not by a render**, the same day the identical defect was found in the
