@@ -46,9 +46,16 @@
   +11.0%** (flagged to the owner to eyeball against the circular).
 - The **Sep-26 air-suspension update (20260826 sheet) was never applied to prod** — superseded by
   October, so nothing lost; its 2 new CBNs arrived as part of the 73.
-- **⏭️ Open — owner decision:** **155 active CBNs are in no October circular** (128 Jul-26 + 19
-  Apr-26 tippers + 8 PC-155 buses) and still quote at old prices. Import never deactivates.
-  List: tab "Active, not in Oct" of the import file. Also: 45 CBNs to file in Triage.
+- **✅ Decided — the 155 active CBNs in no October circular STAY ACTIVE** (128 Jul-26 + 19 Apr-26
+  tippers + 8 PC-155 buses; owner: *"let those 155 remain in the system"*). They keep their old
+  prices; nothing was changed (an import never deactivates). List: tab "Active, not in Oct" of the
+  import file. **⏭️ Still open:** 45 new CBNs to file in Triage — MAV 19, Haulage 9, Oyster
+  Staff/Wide shells 12, RMC 3, Ecomet 1215 1, 10x2 Tipper 1.
+- **Shipped:** this record via PR #128 → `b4fd7ee` (CI 4/4 green post-merge, Vercel `portal`
+  READY, `/` + `/login` 200); the decision and close-out in the follow-up docs PR.
+- **Working notes:** a Git Bash `cat > file` with no heredoc waits on stdin forever (cost one 120s
+  timeout); `\n` / `\t` inside a heredoc'd `node -e` patch get expanded into real newlines and break
+  the JS — write helper modules with the Write tool instead.
 - **Method note:** a bulk read of prod `vehicle_catalog` via MCP was refused by the auto-mode
   classifier; aggregate queries were allowed. The diff was done against the repo's catalog snapshot
   (`docs/db/seed-reference.sql`, 2026-07-21), with the live import preview as the real check.
