@@ -30,6 +30,49 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ---
 
+## Current state (2026-10-09)
+
+- **🔨 SERVICE PAYMENTS — UPI IS NOW HDFC. Parser, database and Import screen built (staging only,
+  unpushed; branch 34 ahead of `portal`).** Owner, 2026-10-09: HDFC static QRs replace BharatPe and
+  Google Pay (**both completely retired**); merchant **KTR510** has one QR today, more coming; HDFC's
+  API will come later. **Owner chose: accounts uploads the daily HDFC report on the Import tab
+  ("D") until the API ("E").** A Google Apps Script mail-to-portal feed ("B") was proposed and NOT
+  chosen. ⛔ **The Gmail connector cannot read attachments** — it finds the HDFC email but cannot
+  open the transaction file, so "Claude reads the inbox daily" is not possible through it.
+  - **The feed:** HDFC SmartHub Vyapar "Transaction Report" (.xlsx, from `information@hdfcbank.net`,
+    sent on request from the app — not yet known to arrive daily on its own). One sheet, header in
+    row 1, 25 columns. Keys: `Mintoak Transaction ID` (19–20 digits, dedup key, text), `RRN No`
+    (12-digit bank ref = UTR), `Merchant ID`+`Terminal ID` (= the QR → stored as `qr_ref`
+    "KTR510/82388473"), `Transaction State` (SaleSuccess / **SaleFailed**), `Payer’s name` (full
+    names). **No note field → the plate-number signal (17 of 28 August note numbers) is GONE**;
+    matching now leans on amount + payer name.
+  - ⭐⭐ **It ties to the bank to the rupee:** successful payments on 7 Oct = **₹1,48,693 = HDFC's
+    "UPI SETTLEMENT -KTR510- 08/10/26" credit** (alert email from `alerts@hdfcbank.bank.in`). So:
+    amounts are gross (no fee), settlement is next-day for the whole day, and the success filter is
+    right. **All 3 SaleFailed rows had a successful retry the same day** — importing them would
+    double-count. The Import preview now shows success per day to tick against the settlement.
+  - `src/service-payments/lib/parseHdfc.js` + `selftest-parse-hdfc` **35/0 (+5 with `--real <file>`,
+    incl. the settlement tie)**; removing the success filter fails 6, incl. the real ₹1,48,693.
+    Refuses: a Mintoak id stored as an Excel NUMBER (digits already lost), mismatched amount columns,
+    a non-12-digit RRN, an ambiguous date, non-SALE types (refunds held for a person).
+  - **`20261009_payments_hdfc_source.sql` (STAGING):** `source` CHECK widened to allow `hdfc` (old
+    values stay valid) · `payment_receipts.qr_ref` · `v_payments_open_receipts` carries it ·
+    ⭐ **`payments_import_receipts` links a hand-keyed HDFC payment by its RRN** (the Mintoak id is
+    shown to nobody; the RRN is what the payer's phone shows) **and only when the AMOUNTS agree** — a
+    mistyped RRN matching another real payment would otherwise swallow it; a mismatch is HELD.
+    **`probe-import-parity` (generator now SIMULATES state from the preview's own decisions): 41/0.
+    Negative control (old function swapped in, rolled back): 2 payments STORED TWICE, 0 QRs.**
+    Staging body md5 `df40fb27…` = the file.
+  - **Import screen:** an `.xlsx` is recognised as HDFC by its columns, never its name; "failed
+    attempts — not money" shown apart from unreadable rows; overlapping daily uploads are fine.
+    The real report through the browser path: 15 payments + 3 failed attempts, gates pass. **Not
+    sent to staging** — the owner chose dummy data there.
+  - ⚠️ **The real HDFC report sits in the MAIN checkout's `docs/`, unignored there** (its branch is
+    ~10 weeks old). This branch's `.gitignore` now has `docs/Transaction_report*.xlsx`.
+  - ⏭️ **Unfinished, next:** the dummy files + `WALKTHROUGH.md` still use the retired BharatPe/GPay
+    files — rework `make-demo-files.mjs` / `selftest-demo-files.mjs` / the walkthrough to ONE dummy
+    HDFC report (no notes; add a failed attempt + retry) BEFORE the owner's walkthrough.
+
 ## Current state (2026-10-05)
 
 - **✅ AL October 2026 pricelist is on prod** (WEF 1-Oct-26, data-only, no deploy). The owner
@@ -533,20 +576,28 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
      the phone nav.
   3. ~~Import screen.~~ ✅ **DONE 2026-09-26** (`f3ebee0`), and it found the double-count bug in
      the import RPCs (`a90aa4e`) — see the 2026-09-26 state block.
-  4. **⏭️ NEXT — the first real run, by the owner, on staging** (`npm run dev` → localhost:3000,
-     which targets staging): import a Billing Report and a UPI export, then match a few on a phone.
-     ⚠️ That puts **real customer names, amounts and UTRs into the staging database** — the
-     owner's call, not a default. It is the first time either screen meets real data in a browser.
-  5. **"Bill not raised yet"** needs a write path (RPC + EF action + `authority.ts` gate + tests)
+  4. ✅ **HDFC as the UPI source — DONE 2026-10-09** (`917a7c0` · `69ec588` · `9f4ccc2`); see the
+     2026-10-09 state block. BharatPe + Google Pay retired (owner).
+  5. **⏭️ NEXT (me): rework the dummy walkthrough to HDFC** — `make-demo-files.mjs`,
+     `selftest-demo-files.mjs`, `docs/backlog/payments-demo-walkthrough.md` still use the retired
+     BharatPe/GPay CSVs. One dummy HDFC report: no notes (so the plate scenarios become amount/name
+     ones), plus a SaleFailed attempt and its retry, plus the settlement tie-out on screen.
+  6. **⏭️ Then the OWNER runs the dummy walkthrough on staging** (owner chose **dummy** data: "the
+     real UPI data is going to change"). Remake the files on the day — they are dated around today.
+  7. **"Bill not raised yet"** needs a write path (RPC + EF action + `authority.ts` gate + tests)
      before MatchScreen may offer it; `awaiting_invoice` exists but nothing sets it. Also: search
      picks ONE bill, so a parts+labour pair found only by search is confirmed twice.
-  6. Then prod: **five** migrations (`20260830`, `20260908`, `20260926_…read_gates…`,
-     `20260926_…views…`, `20260926_…import_rules`), then `probe-allocation.sql` +
-     `probe-import-parity.sql` (both self-aborting) — ⛔ `probe-read-gates.sql` is staging-only
-     and REFUSES on prod by design (ERP-sync webhook on `users`); on prod, prove the gates by md5
-     of `pg_get_functiondef` against staging instead. Then deploy the EF. Owner-approved, separate
-     step. (Staging shows the import-rules migration twice — the second is an exact-text re-apply;
-     prod takes the one file.)
+  8. **Multiple QRs:** when the next QR is added, map `qr_ref` → outlet and give same-outlet bills a
+     small RANKING bonus (never a filter — owner rule, 2026-09-11).
+  9. Then prod: **six** migrations (`20260830`, `20260908`, `20260926_…read_gates…`,
+     `20260926_…views…`, `20260926_…import_rules`, `20261009_payments_hdfc_source`), then
+     `probe-allocation.sql` + `probe-import-parity.sql` (both self-aborting) — ⛔
+     `probe-read-gates.sql` is staging-only and REFUSES on prod by design (ERP-sync webhook on
+     `users`); on prod, prove the gates by md5 of `pg_get_functiondef` against staging instead.
+     Then deploy the EF. Owner-approved, separate step. (Staging shows the import-rules migration
+     twice — the second is an exact-text re-apply; prod takes the one file.)
+  10. **HDFC API (later, "E")** replaces the daily upload; the same parser shape and import RPC
+      sit behind it. Ask HDFC whether SmartHub can SCHEDULE a daily report meanwhile.
 - **⏭️ SERVICE PAYMENTS — three owner/accounts items still gate GO-LIVE (not further building):**
   1. **Schedule the SAP Billing Report** as a regular export (one-off manual run today); ask for a
      stable transaction/variant so column names don't drift. ⛔ **Do not ask again for a billing

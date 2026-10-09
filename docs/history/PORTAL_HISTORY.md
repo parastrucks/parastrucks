@@ -26,6 +26,111 @@
 
 ---
 
+## Session log — 2026-09-26 → 10-09: a dummy walkthrough, and UPI moves to HDFC (it ties to the bank to the rupee)
+
+Branch `claude/payments-reconciliation-tool-6eaab4`, **staging only, unpushed** (34 commits ahead of
+`portal` at the end). Prod untouched.
+
+### 1. Dummy data for the first walkthrough (2026-09-26)
+
+The owner chose **dummy** data for the first browser run on staging ("the real UPI data is going to
+change"). `scripts/payments/make-demo-files.mjs` writes a set dated around **today** (so it never
+goes stale): two Billing Reports (the day's, and a next-day re-export with one change, one new bill
+and one cancellation), a BharatPe statement and a Google Pay export. Every row is obviously fake
+(`DEMO` customers, `0099` codes, `99` UTRs, `DM` plates) and each shows one behaviour.
+`selftest-demo-files` (37/0) runs them through the screens' own code and **asserts every expected
+result in `docs/backlog/payments-demo-walkthrough.md`** — and caught two of my own wrong expectations
+first (a ₹30 top-up IS offered its payer's bill by name until that bill is paid; the job split's
+tiebreak is by invoice number). The rows were also sent once through the real staging RPCs and
+rolled back (20 bills, 7 + 4 payments, every bill with its outlet). Commit `df8c5f7`.
+The owner had not run it by 10-09; the set was remade on 10-03 and 10-09 because it is dated.
+⚠️ **Since 10-09 the set is out of date in kind, not just in date** — see §4.
+
+### 2. Two merges from `portal`
+
+The TIV detail-sheet fix (#125–#127, merged `1a2744f`; the doc files conflicted only because both
+sides added a 2026-09-26 entry — both kept) and the AL October pricelist docs (#128, #129, merged
+`b70466c`, clean).
+
+### 3. ⭐ UPI moves to HDFC (2026-10-09)
+
+**Owner:** HDFC static QRs are integrated; merchant **KTR510**, one QR today, more coming; an API
+will follow; **BharatPe and Google Pay are completely retired**. Asked to "link to the Gmail inbox
+and take the transaction data every day".
+
+**What the inbox showed** (read-only; nothing sent or changed):
+- `information@hdfcbank.net` — "Your SmartHub Vyapar Transaction Report", the transactions as an
+  **.xlsx attachment**, sent "as per your request" (one so far; not yet known to come daily).
+- `alerts@hdfcbank.bank.in` — a credit alert per settlement: "UPI SETTLEMENT -KTR510- 08/10/26",
+  ₹1,48,693.
+- ⛔ **The Gmail connector cannot download attachments**, so a daily "Claude reads the inbox" job
+  can see that a report arrived but not what is in it.
+
+Options laid out: (A) Claude via the connector — blocked; **(B) a Google Apps Script in the owner's
+Google account posting the file to the portal** — free, no PC needed; (C) Cloudflare email worker;
+**(D) accounts uploads the daily report on the Import tab**; (E) HDFC's API. **Owner chose D now,
+then E** — and will instruct accounts to upload daily. B was not chosen.
+
+**The report, measured** (6–8 Oct, 18 rows; saved by the owner to the MAIN checkout's `docs/`):
+one sheet, header in row 1, 25 columns; `Mintoak Transaction ID` unique (19–20 digits); `RRN No`
+12 digits; `Merchant ID` KTR510 + `Terminal ID` = the QR; `Transaction State` SaleSuccess /
+SaleFailed; full payer names; **no note field, no payer UPI id**; `Invoice No` present but empty.
+
+⭐⭐ **It reconciles to the bank to the rupee:** successful payments on 7 Oct total **₹1,48,693 —
+exactly the 8 Oct "UPI SETTLEMENT -KTR510-" credit.** That one check proves the amounts are gross
+(no fee deducted), settlement is next-day for the whole day, and the success filter is right
+(counting the failed ₹1,000 would give ₹1,49,693). **All 3 SaleFailed rows had a successful retry of
+the same amount the same day** — importing them would double-count.
+
+A slip, recorded: my first structure dump printed a few payer names unmasked (a length heuristic
+let them through). Nothing was written to the repo; every later measurement printed counts only.
+
+### 4. What was built (staging)
+
+- **`parseHdfc.js`** (`917a7c0`) — same output shape as the old UPI parsers, so the Import screen's
+  gates, preview and commit are shared. Refuses a Mintoak id stored as an Excel NUMBER (past 15
+  digits its tail is lost), mismatched amount columns, a non-12-digit RRN, a non-ISO date, and any
+  non-SALE type (refunds held for a person). `selftest-parse-hdfc` 35/0, +5 with `--real <file>`
+  including the ₹1,48,693 tie; removing the success filter fails 6.
+- **`20261009_payments_hdfc_source.sql`** (`69ec588`): `source` CHECK widened to `hdfc`;
+  `payment_receipts.qr_ref`; the open-receipts view carries it; and ⭐ **the import links a hand-keyed
+  HDFC payment by its RRN** — the Mintoak id is shown to nobody, the RRN is what the payer's phone
+  shows. Without it the 09-26 double count returns for every hand-keyed HDFC payment. **A link also
+  needs the AMOUNTS to agree**: a mistyped RRN that happens to be another real payment's would
+  otherwise swallow that payment and its money would never be imported; a mismatch is HELD.
+  The parity-probe generator now **simulates the stored state from the preview's own decisions**
+  between steps (it had hand-written state, which the new link rule invalidated). **41/0 on
+  staging. Negative control — the 09-26 function swapped back in inside the rolled-back transaction:
+  3 new instead of 1, 0 linked, 0 held, 2 payments STORED TWICE, 0 QRs.** Body md5 `df40fb27…`.
+- **Import screen** (`9f4ccc2`): an .xlsx is HDFC by its columns, never its name; "failed attempts —
+  not money" shown apart from unreadable rows; ⭐ **success per day on screen, to tick against HDFC's
+  next-morning settlement credit**; Match labels the source "HDFC QR". The real report through the
+  exact browser path: 15 payments to send with their QR, 3 failed attempts not sent, gates pass —
+  **not sent to staging** (dummy data there, by the owner's choice). `selftest-import-plan` 65/0.
+- `.gitignore` (this branch): `docs/Transaction_report*.xlsx`.
+
+### State at the end
+
+Tests: parsers 140 · matcher 50 · import-plan 65 · parse-hdfc 35 (+5 real) · authority 630 ·
+match-queue 67 · mobile-render 62 · demo-files 37. Build and the undefined-name check clean.
+Staging: six payments migrations, all tables empty.
+
+⏭️ **Next:** rework the dummy walkthrough to ONE HDFC report (no notes — the plate scenarios become
+amount and name ones; add a failed attempt and its retry) — the owner's run waits on it. Then
+"Bill not raised yet", then a `qr_ref` → outlet ranking bonus when a second QR exists, then prod
+(six migrations), then HDFC's API.
+Still with the owner: the customer-data files (now including the HDFC report) sit unignored in the
+main checkout's `docs/` — move them out, and say yes/no to the ignore-rules PR on `portal`; PR #85
+(July docs) still open.
+
+⭐ **Lessons.** (1) **Find the independent check before trusting a new feed** — the settlement credit
+proved three properties of the HDFC report at once, and would catch a missing day forever after.
+(2) A reference typed by a person is a lookup key AND a source of errors: **link on it only when a
+second fact (the amount) agrees.** (3) A test whose expected state was written by hand goes stale
+the moment a rule changes; **derive it from the rules under test, then check it against the server.**
+
+---
+
 ## Session log — 2026-10-05: AL October 2026 pricelist imported (data-only, no deploy)
 
 - **Source:** `D:\Claude CoWork\PTB\Pricelist\PTB_CombinedPricelist_20261005.xlsx` — 815 CBNs from the

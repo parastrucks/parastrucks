@@ -886,7 +886,18 @@ working; 10-minute weekly numbers review *with* the pilot users.
    money paid back out *(owner: "ask accounts")*. Excluded from outstanding until answered.
 7. Confirm ₹1,700 / ₹3,400 are current counter prices (they are absent from the July R7 fixture).
 8. Wrapper laptop → always-on PC (owner, "later") — prerequisite for full reliance, tracked.
-9. UPI source consolidation → single provider → API (owner will notify; v1 stays multi-source).
+9. ✅ **DECIDED 2026-10-09 *(owner)*: UPI is HDFC.** Static QRs on merchant **KTR510** (one QR now,
+   more coming); **BharatPe and Google Pay completely retired**; accounts uploads the daily HDFC
+   SmartHub Vyapar "Transaction Report" (.xlsx) on the Import tab until HDFC's API arrives (an
+   Apps-Script mail feed was offered and not chosen; the Gmail connector cannot read attachments).
+   Measured on the first report: **no customer note and no payer VPA** (so the A1–A3 fields below
+   are still what the API must add); `Merchant ID`+`Terminal ID` DO identify the QR (stored as
+   `qr_ref`); successful payments for a day equal HDFC's next-morning "UPI SETTLEMENT -KTR510-"
+   credit **to the rupee** (₹1,48,693 for 7 Oct); SaleFailed rows are retried attempts and never
+   money. Parser `src/service-payments/lib/parseHdfc.js`; migration `20261009_payments_hdfc_source.sql`.
+   Full record: `docs/history/PORTAL_HISTORY.md` (2026-09-26 → 10-09 entry).
+   *(Was: "UPI source consolidation → single provider → API (owner will notify; v1 stays
+   multi-source)".)*
    ⭐ **Discovery questionnaire ready: `docs/backlog/upi-api-bank-questionnaire.md`** (v3,
    2026-09-11). **Settled *(owner)*: STATIC QR, ONE PER BRANCH** — even though the bank allows as
    many as we like. A static QR cannot carry a bill reference, so the matcher stays as designed.
