@@ -16,6 +16,7 @@
 //     recognise as the same money
 
 import { PLANT_CITY } from './parseBillingReport.js'
+import { looksLikeHdfc } from './parseHdfc.js'
 
 /** The EF refuses more than this in one call (service-payments/index.ts). */
 export const MAX_ROWS_PER_IMPORT = 5000
@@ -30,6 +31,8 @@ const GPAY_MARKERS = ['Payer/Receiver', 'Creation time', 'Processing fee']
  */
 export function detectFileKind(fileName, firstLine = '') {
   const name = String(fileName || '').toLowerCase()
+  // A spreadsheet is the Billing Report OR an HDFC report — only its contents
+  // can tell, so parseImportFile decides. By name alone, assume the bills.
   if (/\.(xlsx|xls)$/.test(name)) return 'billing_report'
   if (!name.endsWith('.csv')) return null
   const head = String(firstLine).replace(/^﻿/, '')
@@ -41,8 +44,9 @@ export function detectFileKind(fileName, firstLine = '') {
 
 export const KIND_LABEL = {
   billing_report: 'SAP Billing Report',
-  bharatpe: 'BharatPe statement',
-  gpay: 'Google Pay Business export',
+  hdfc: 'HDFC SmartHub transaction report',
+  bharatpe: 'BharatPe statement (retired)',
+  gpay: 'Google Pay Business export (retired)',
 }
 
 // ── Bills ────────────────────────────────────────────────────────────────
@@ -240,7 +244,7 @@ export function importGates({ kind, parsed, diff, priorBatch, entityPlants = Obj
     if (parsed.receipts.length === 0) blocking.push('No payment in this file could be read.')
     if (parsed.receipts.length > MAX_ROWS_PER_IMPORT) blocking.push(`More than ${MAX_ROWS_PER_IMPORT} payments — export a shorter date range.`)
     const refused = parsed.review.filter((r) => r.refused)
-    if (refused.length) warnings.push(`${refused.length} row${plural(refused.length)} not imported (not settled, or unreadable — listed below).`)
+    if (refused.length) warnings.push(`${refused.length} row${plural(refused.length)} not imported (failed or unsettled attempts, or unreadable — listed below).`)
     if (parsed.summary.small_amount_flagged) warnings.push(`${parsed.summary.small_amount_flagged} payment${plural(parsed.summary.small_amount_flagged)} of ₹50 or less — imported; they are usually a customer topping up, not a test.`)
     if (diff?.held.length) warnings.push(`${diff.held.length} payment${plural(diff.held.length)} held back — the UTR is already recorded (listed below).`)
   }
@@ -322,11 +326,14 @@ export async function parseImportFile(file, { XLSX, parsers, entityId, outlets =
     const wb = XLSX.read(new Uint8Array(file.buffer), { type: 'array', cellDates: false, raw: true })
     const sheet = wb.Sheets[wb.SheetNames[0]]
     const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: null })
+    // Both feeds are spreadsheets; the HDFC report is told apart by its own
+    // columns (Mintoak id + RRN), never by its file name.
+    if (looksLikeHdfc(rows)) return { kind: 'hdfc', hash, parsed: parsers.parseHdfcSmartHub(rows, { entityId }) }
     const parsed = parsers.parseBillingReport(rows, { entityId, outletIdByPlant: outletIdByPlant(outlets) })
     return { kind: 'billing_report', hash, parsed }
   }
   if (!/\.csv$/i.test(name)) {
-    throw new Error('Choose the SAP Billing Report (.xlsx), or a BharatPe or Google Pay export (.csv).')
+    throw new Error('Choose the SAP Billing Report or the HDFC SmartHub transaction report (both .xlsx).')
   }
   const text = new TextDecoder('utf-8').decode(file.buffer)
   const kind = detectFileKind(name, text.split(/\r?\n/, 1)[0])

@@ -233,7 +233,7 @@ export default function MatchScreen({
 }
 
 function sourceLabel(source) {
-  return { gpay: 'Google Pay', bharatpe: 'BharatPe', manual: 'Entered by hand',
+  return { hdfc: 'HDFC QR', gpay: 'Google Pay', bharatpe: 'BharatPe', manual: 'Entered by hand',
            bank_statement: 'Bank statement', opening_balance: 'Opening balance' }[source] || source
 }
 

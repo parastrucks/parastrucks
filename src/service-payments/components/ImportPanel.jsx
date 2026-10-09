@@ -14,6 +14,7 @@ import { callEdge } from '../../lib/api'
 import { formatINR } from '../lib/paise.js'
 import { parseBillingReport } from '../lib/parseBillingReport.js'
 import { parseBharatPe, parseGpay } from '../lib/parseUpi.js'
+import { parseHdfcSmartHub } from '../lib/parseHdfc.js'
 import {
   KIND_LABEL, parseImportFile, existingInvoiceFromRow, diffInvoices, diffReceipts,
   importGates, rowsToCommit, expectedCounts, reconcile, billCoverage,
@@ -48,7 +49,7 @@ export default function ImportPanel({ entityId, onImported, onGoMatch }) {
       const XLSX = /\.(xlsx|xls)$/i.test(file.name) ? await import('xlsx') : null
       const { kind, hash, parsed } = await parseImportFile(
         { name: file.name, buffer },
-        { XLSX, parsers: { parseBillingReport, parseBharatPe, parseGpay }, entityId, outlets })
+        { XLSX, parsers: { parseBillingReport, parseHdfcSmartHub, parseBharatPe, parseGpay }, entityId, outlets })
 
       const batchKind = kind === 'billing_report' ? 'invoices' : 'receipts'
       const priorBatch = await findPriorBatch(entityId, batchKind, hash)
@@ -122,9 +123,10 @@ export default function ImportPanel({ entityId, onImported, onGoMatch }) {
             Choose a file to import
           </label>
           <p className="pay-hint">
-            The SAP <strong>Billing Report</strong> (.xlsx), or a <strong>BharatPe</strong> or{' '}
-            <strong>Google Pay Business</strong> export (.csv). Nothing is saved until you have
-            seen what it will change.
+            The SAP <strong>Billing Report</strong>, or the day’s <strong>HDFC SmartHub
+            transaction report</strong> (both .xlsx). Nothing is saved until you have seen what
+            it will change. Uploading a report that overlaps an earlier one is fine — payments
+            already imported are recognised and skipped.
           </p>
           <input
             id="pay-import-file"
@@ -157,6 +159,9 @@ function Preview({ plan, committing, onCommit, onCancel }) {
   const { kind, parsed, diff, gates, coverage, file } = plan
   const bills = kind === 'billing_report'
   const refused = bills ? parsed.refused : parsed.review.filter((r) => r.refused)
+  const failed = parsed.summary?.failed_attempts ?? 0
+  const settles = Object.entries(parsed.summary?.settles_by_day_paise ?? {}).sort(([a], [b]) => a.localeCompare(b))
+  const qrs = parsed.summary?.qrs ?? []
   const newValue = diff.new.reduce((a, r) => a + (bills ? r.total_paise : r.amount_paise), 0)
   const newCount = diff.new.length
   const actionLabel = committing
@@ -193,7 +198,10 @@ function Preview({ plan, committing, onCommit, onCancel }) {
           </>
         )}
         <Count label="Held back" n={diff.held.length} warn />
-        <Count label="Could not be read" n={refused.length} warn />
+        {/* A failed attempt is not an unreadable row: the payer retried, and
+            the retry is in this file as a payment. Shown, never imported. */}
+        <Count label="Failed attempts — not money" n={failed} />
+        <Count label="Could not be read" n={refused.length - failed} warn />
       </dl>
 
       {bills && coverage && (
@@ -201,6 +209,21 @@ function Preview({ plan, committing, onCommit, onCancel }) {
           Bills are complete up to <strong>{stamp(coverage)}</strong>. Payments after that will show
           “bills out of date” on the Match screen until the next Billing Report.
         </p>
+      )}
+
+      {/* The daily tie-out. Measured: successful payments for a day equal
+          HDFC's "UPI SETTLEMENT -<merchant>-" credit the next morning, to the
+          rupee. If they do not, something is missing from this file. */}
+      {kind === 'hdfc' && settles.length > 0 && (
+        <div className="pay-import-settle">
+          <p className="pay-hint">
+            Each day below should equal the <strong>UPI SETTLEMENT</strong> credit HDFC pays into
+            the account the next morning{qrs.length ? ` (QR ${qrs.join(', ')})` : ''}:
+          </p>
+          <ul className="pay-import-list">
+            {settles.map(([day, paise]) => <li key={day}>{dayLabel(day)} — <strong>{formatINR(paise)}</strong></li>)}
+          </ul>
+        </div>
       )}
 
       {gates.warnings.length > 0 && (
@@ -282,6 +305,13 @@ function Fold({ title, items, render }) {
 
 function label(row) {
   return row.invoice_number || (row.external_txn_id ? `${formatINR(row.amount_paise)} · ${row.external_txn_id}` : '')
+}
+
+/** "2026-10-07" -> "Wed 7 Oct". The date is a calendar day already; no zone maths. */
+function dayLabel(isoDay) {
+  const d = new Date(`${isoDay}T00:00:00Z`)
+  if (Number.isNaN(d.getTime())) return isoDay
+  return new Intl.DateTimeFormat('en-IN', { timeZone: 'UTC', weekday: 'short', day: 'numeric', month: 'short' }).format(d)
 }
 
 function stamp(iso) {

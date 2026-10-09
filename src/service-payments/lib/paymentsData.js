@@ -10,7 +10,7 @@ import { supabase } from '../../lib/supabase'
 import { fetchAllRows } from '../../lib/fetchAll'
 
 const RECEIPT_COLS = 'id, entity_id, mode, source, amount_paise, allocated_paise, open_paise, ' +
-  'received_at, payer_name, payer_remark, classification, awaiting_invoice'
+  'received_at, payer_name, payer_remark, classification, awaiting_invoice, qr_ref'
 const INVOICE_COLS = 'id, entity_id, invoice_number, invoice_kind, job_ref, dealer_order_no, ' +
   'sap_billing_doc, invoice_date, customer_id, customer_name, vehicle_reg_no, payment_terms, ' +
   'total_paise, allocated_paise, open_paise, status'

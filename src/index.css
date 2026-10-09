@@ -3542,6 +3542,13 @@ tbody tr:hover td { background: var(--gray-50); }
 }
 .pay-import-actions { display: flex; flex-direction: column; gap: 6px; margin-top: 16px; }
 .pay-import-done { text-align: center; padding-top: 24px; }
+.pay-import-settle {
+  background: var(--surface-sunken);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+.pay-import-settle .pay-hint { margin-bottom: 4px; }
 
 .pay-match-empty { text-align: center; padding-top: 48px; }
 .pay-empty-tick  { font-size: 40px; color: var(--green); line-height: 1; }

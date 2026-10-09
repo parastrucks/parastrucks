@@ -18,6 +18,7 @@ import {
 } from '../../src/service-payments/lib/importPlan.js'
 import { parseBillingReport } from '../../src/service-payments/lib/parseBillingReport.js'
 import { parseBharatPe, parseGpay } from '../../src/service-payments/lib/parseUpi.js'
+import { parseHdfcSmartHub } from '../../src/service-payments/lib/parseHdfc.js'
 
 let pass = 0, fail = 0
 const ok = (name, cond, detail = '') => {
@@ -262,6 +263,23 @@ section('a whole file, end to end, as the browser reads it')
   msg = ''
   try { await parseImportFile({ name: 'wrong.xlsx', buffer: xlsxBuffer([['Sales Report'], ['No. of entries', '0'], [], ['Plant']]) }, { XLSX, parsers }) } catch (e) { msg = e.message }
   ok('a spreadsheet that is not the Billing Report is refused by the parser\'s own gate', msg.includes('Billing Report'), msg)
+
+  // HDFC: a spreadsheet too — told apart from the Billing Report by its columns.
+  const H = ['Transaction Date', 'Transaction Time', 'Merchant ID', 'Terminal ID', 'Transaction Type',
+    'Transaction State', 'Mintoak Transaction ID', 'Amount(Rs.)', 'Transaction Amount', 'RRN No', 'Payer’s name']
+  const hrow = (id, state, amt, rrn) => ['2026-10-07', '11:43:08 AM', 'KTR510', '82388473', 'SALE', state, id, amt, amt, rrn, 'DEMO PAYER']
+  const hbuf = xlsxBuffer([H, hrow('99000000000000000001', 'SaleFailed', 1000, '990000000001'),
+    hrow('99000000000000000002', 'SaleSuccess', 1000, '990000000002')])
+  const hd = await parseImportFile({ name: 'Transaction_report_from0710_0000_to0810_0900_1.xlsx', buffer: hbuf },
+    { XLSX, parsers: { ...parsers, parseHdfcSmartHub }, entityId: 'E' })
+  eq('an HDFC SmartHub report is recognised by its columns, not its name', hd.kind, 'hdfc')
+  eq('...its failed attempt is not money, its retry is', [hd.parsed.receipts.length, hd.parsed.summary.failed_attempts], [1, 1])
+  const hg = importGates({ kind: 'hdfc', parsed: hd.parsed, diff: diffReceipts(hd.parsed.receipts, [], []), priorBatch: null })
+  ok('...and it passes the gates, the failed attempt listed as a warning', hg.ok && hg.warnings.some((w) => w.includes('failed')))
+  ok('...the QR travels to the server', rowsToCommit('hdfc', hd.parsed, diffReceipts(hd.parsed.receipts, [], []))[0].qr_ref === 'KTR510/82388473')
+  const renamed = await parseImportFile({ name: 'Billing Report.xlsx', buffer: hbuf },
+    { XLSX, parsers: { ...parsers, parseHdfcSmartHub }, entityId: 'E' })
+  eq('...even if someone renames it "Billing Report.xlsx"', renamed.kind, 'hdfc')
 
   eq('the hash helper agrees with Node', await sha256Hex(textBuffer('abc')),
      'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad')
