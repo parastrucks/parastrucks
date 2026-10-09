@@ -21,3 +21,5 @@ docs/GPay_Business_Transactions_*.csv
 docs/statement*.csv
 docs/*TAX INVOICE*.pdf
 docs/Billing Report*.xlsx
+# HDFC SmartHub Vyapar reports (from Oct 2026) — real payer names, amounts, RRNs.
+docs/Transaction_report*.xlsx
