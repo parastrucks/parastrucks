@@ -53,7 +53,9 @@ const rc = (source, txn, amount, utr = null) => ({
 const manual = [
   { key: 'M1', txn: '990000000001', utr: '990000000001', amount: 11000 },  // BharatPe, UTR typed in
   { key: 'M2', txn: 'ZZPROBE-GPAY-1', utr: null, amount: 22000 },          // Google Pay
-  { key: 'M3', txn: 'ZZPROBE-OTHER', utr: '990000000009', amount: 33000 }, // a UTR under another id
+  { key: 'M3', txn: 'ZZPROBE-OTHER', utr: '990000000009', amount: 66000 }, // the right UTR, under its own id
+  { key: 'M4', txn: '700000000011', utr: null, amount: 88000 },            // HDFC: the RRN typed AS the id
+  { key: 'M5', txn: '700000000012', utr: null, amount: 12300 },            // HDFC: right RRN, WRONG amount
 ]
 const setupRow = rc('bharatpe', '990000000003', 44000, '990000000003')    // imported earlier
 const bharatpe1 = [rc('bharatpe', '990000000001', 11000, '990000000001'),
@@ -61,26 +63,45 @@ const bharatpe1 = [rc('bharatpe', '990000000001', 11000, '990000000001'),
   rc('bharatpe', '990000000004', 55000, '990000000004'),
   rc('bharatpe', '990000000009', 66000, '990000000009')]
 const gpay1 = [rc('gpay', 'ZZPROBE-GPAY-1', 22000), rc('gpay', 'ZZPROBE-GPAY-2', 77000)]
+const QR = 'KTR510/82388473'
+const hdfc1 = [
+  { ...rc('hdfc', 'ZZMINT00000000000001', 88000, '700000000011'), qr_ref: QR },  // links M4 by its RRN
+  { ...rc('hdfc', 'ZZMINT00000000000002', 12000, '700000000012'), qr_ref: QR },  // M5's amount disagrees: held
+  { ...rc('hdfc', 'ZZMINT00000000000003', 45600, '700000000013'), qr_ref: QR },  // new
+]
 
-const m = (x, batch = null) => ({ source: 'manual', external_txn_id: x.txn, normalized_utr: x.utr,
-  import_batch_id: batch, status: 'active' })
-const setupStored = { source: 'bharatpe', external_txn_id: '990000000003', normalized_utr: '990000000003',
-  import_batch_id: 'setup', status: 'active' }
-const beforeB1 = [...manual.map((x) => m(x)), setupStored]
-const pB1 = diffReceipts(bharatpe1, beforeB1, beforeB1)
-// After bharatpe1: M1 linked, 004 imported, the 009 row held (not stored).
-const afterB1 = [m(manual[0], 'b1'), m(manual[1]), m(manual[2]), setupStored,
-  { source: 'bharatpe', external_txn_id: '990000000004', normalized_utr: '990000000004', import_batch_id: 'b1', status: 'active' }]
-const pG1 = diffReceipts(gpay1, afterB1, afterB1)
-const afterG1 = [...afterB1.map((e) => e.external_txn_id === 'ZZPROBE-GPAY-1' ? { ...e, import_batch_id: 'g1' } : e),
-  { source: 'gpay', external_txn_id: 'ZZPROBE-GPAY-2', normalized_utr: null, import_batch_id: 'g1', status: 'active' }]
-const pB2 = diffReceipts(bharatpe1, afterG1, afterG1)   // the same BharatPe rows, a second time
+// The stored state is SIMULATED from the preview's own decisions, step by
+// step — never written out by hand — so a change to the rules moves the
+// predictions and the probe together.
+const m = (x) => ({ source: 'manual', external_txn_id: x.txn, normalized_utr: x.utr, amount_paise: x.amount,
+  import_batch_id: null, status: 'active', key: x.key })
+let paid = [...manual.map(m), { source: 'bharatpe', external_txn_id: '990000000003', normalized_utr: '990000000003',
+  amount_paise: 44000, import_batch_id: 'setup', status: 'active' }]
+function step(rows, batch) {
+  const d = diffReceipts(rows, paid, paid)
+  for (const r of d.linkManual) {
+    const hand = paid.find((e) => e.source === 'manual' && e.status === 'active' && !e.import_batch_id &&
+      (e.external_txn_id === r.external_txn_id || (r.normalized_utr &&
+        (e.normalized_utr === r.normalized_utr || e.external_txn_id === r.normalized_utr))))
+    hand.import_batch_id = batch
+    hand.normalized_utr ??= r.normalized_utr
+  }
+  for (const r of d.new) paid.push({ source: r.source, external_txn_id: r.external_txn_id,
+    normalized_utr: r.normalized_utr, amount_paise: r.amount_paise, import_batch_id: batch, status: 'active' })
+  return d
+}
+const pB1 = step(bharatpe1, 'b1')
+const pG1 = step(gpay1, 'g1')
+const pB2 = step(bharatpe1, 'b2')   // the same BharatPe rows, a second time
+const pH1 = step(hdfc1, 'h1')
+const pH2 = step(hdfc1, 'h2')       // the same HDFC rows, a second time
+const linkedHands = paid.filter((e) => e.source === 'manual' && e.import_batch_id).map((e) => e.key)
 
 const counts = (d) => ({ new: d.new.length, already: d.already.length, linked: d.linkManual.length, held: d.held.length })
 const pred = {
   inv1: { new: pInv1.new.length, amended: pInv1.amended.length, unchanged: pInv1.unchanged.length, conflicts: pInv1.conflict.length },
   inv2: { new: pInv2.new.length, amended: pInv2.amended.length, unchanged: pInv2.unchanged.length, conflicts: pInv2.conflict.length },
-  b1: counts(pB1), g1: counts(pG1), b2: counts(pB2),
+  b1: counts(pB1), g1: counts(pG1), b2: counts(pB2), h1: counts(pH1), h2: counts(pH2), linkedHands,
 }
 
 // ── SQL ──────────────────────────────────────────────────────────────────
@@ -190,6 +211,10 @@ ${manual.map((x) => `  PERFORM public.payments_manual_receipt(v_entity, jsonb_bu
   ${cmpRc('Google Pay #1', 'v_res', pred.g1)}
   ${call('BharatPe again', 'payments_import_receipts', bharatpe1)}
   ${cmpRc('BharatPe again', 'v_res', pred.b2)}
+  ${call('HDFC #1', 'payments_import_receipts', hdfc1)}
+  ${cmpRc('HDFC #1', 'v_res', pred.h1)}
+  ${call('HDFC again', 'payments_import_receipts', hdfc1)}
+  ${cmpRc('HDFC again', 'v_res', pred.h2)}
 
   -- Invariants no count can hide.
   SELECT count(*) INTO v_n FROM (
@@ -210,7 +235,19 @@ ${manual.map((x) => `  SELECT amount_paise INTO v_n FROM public.payment_receipts
   SELECT count(*) INTO v_n FROM public.payment_receipts
    WHERE entity_id = v_entity AND source = 'manual' AND payer_name = 'ZZ PROBE PAYER'
      AND mode = 'upi' AND import_batch_id IS NOT NULL;
-  PERFORM pg_temp.zz_check('payments: the two matching hand entries are now linked to a file', v_n::int, 2);
+  PERFORM pg_temp.zz_check('payments: exactly the hand entries the preview linked (${pred.linkedHands.join(', ')}) are linked to a file', v_n::int, ${pred.linkedHands.length});
+  SELECT count(*) INTO v_n FROM public.payment_receipts
+   WHERE entity_id = v_entity AND source = 'manual' AND external_txn_id = '700000000011' AND qr_ref = '${QR}';
+  PERFORM pg_temp.zz_check('payments: the linked HDFC hand entry learned which QR it came on', v_n::int, 1);
+  SELECT count(*) INTO v_n FROM public.payment_receipts
+   WHERE entity_id = v_entity AND (normalized_utr = '700000000012' OR external_txn_id = 'ZZMINT00000000000002');
+  PERFORM pg_temp.zz_check('payments: the wrong-amount entry was neither linked nor copied (only the hand entry exists)', v_n::int, 0);
+  SELECT count(*) INTO v_n FROM public.payment_receipts
+   WHERE entity_id = v_entity AND external_txn_id = '700000000012' AND import_batch_id IS NULL;
+  PERFORM pg_temp.zz_check('payments: ...and the hand entry itself is untouched', v_n::int, 1);
+  SELECT count(*) INTO v_n FROM public.payment_receipts
+   WHERE entity_id = v_entity AND source = 'hdfc' AND qr_ref = '${QR}';
+  PERFORM pg_temp.zz_check('payments: the new HDFC row records its QR', v_n::int, 1);
 
   v_fails := current_setting('zz.fails', true);
   RAISE EXCEPTION 'PROBE COMPLETE — % checks, % failed. Nothing was written; this rollback is deliberate.%',

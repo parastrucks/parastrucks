@@ -102,8 +102,16 @@ BEGIN
     'normalized_utr',NULL,'payer_name','ZZ PROBE PAYER',
     'received_at','2026-09-20T05:00:00Z'), v_actor);
   PERFORM public.payments_manual_receipt(v_entity, jsonb_build_object(
-    'mode','upi','amount_paise',33000,'external_txn_id','ZZPROBE-OTHER',
+    'mode','upi','amount_paise',66000,'external_txn_id','ZZPROBE-OTHER',
     'normalized_utr','990000000009','payer_name','ZZ PROBE PAYER',
+    'received_at','2026-09-20T05:00:00Z'), v_actor);
+  PERFORM public.payments_manual_receipt(v_entity, jsonb_build_object(
+    'mode','upi','amount_paise',88000,'external_txn_id','700000000011',
+    'normalized_utr',NULL,'payer_name','ZZ PROBE PAYER',
+    'received_at','2026-09-20T05:00:00Z'), v_actor);
+  PERFORM public.payments_manual_receipt(v_entity, jsonb_build_object(
+    'mode','upi','amount_paise',12300,'external_txn_id','700000000012',
+    'normalized_utr',NULL,'payer_name','ZZ PROBE PAYER',
     'received_at','2026-09-20T05:00:00Z'), v_actor);
   
   BEGIN
@@ -123,8 +131,8 @@ BEGIN
   
   PERFORM pg_temp.zz_check('BharatPe #1 new', (v_res->>'new')::int, 1);
   PERFORM pg_temp.zz_check('BharatPe #1 already present', (v_res->>'already_present')::int, 1);
-  PERFORM pg_temp.zz_check('BharatPe #1 linked to hand entry', (v_res->>'already_present_manual')::int, 1);
-  PERFORM pg_temp.zz_check('BharatPe #1 held', coalesce(jsonb_array_length(v_res->'held'), 0), 1);
+  PERFORM pg_temp.zz_check('BharatPe #1 linked to hand entry', (v_res->>'already_present_manual')::int, 2);
+  PERFORM pg_temp.zz_check('BharatPe #1 held', coalesce(jsonb_array_length(v_res->'held'), 0), 0);
   
   BEGIN
     v_res := public.payments_import_receipts(v_entity, '[{"source":"gpay","mode":"upi","external_txn_id":"ZZPROBE-GPAY-1","normalized_utr":null,"amount_paise":22000,"gross_paise":22000,"fee_paise":0,"received_at":"2026-09-20T05:00:00Z","payer_name":"ZZ PROBE PAYER","payer_remark":"ZZ note"},{"source":"gpay","mode":"upi","external_txn_id":"ZZPROBE-GPAY-2","normalized_utr":null,"amount_paise":77000,"gross_paise":77000,"fee_paise":0,"received_at":"2026-09-20T05:00:00Z","payer_name":"ZZ PROBE PAYER","payer_remark":"ZZ note"}]'::jsonb, '{"source":"probe","parser_version":"probe"}'::jsonb, v_actor);
@@ -146,9 +154,33 @@ BEGIN
   END;
   
   PERFORM pg_temp.zz_check('BharatPe again new', (v_res->>'new')::int, 0);
-  PERFORM pg_temp.zz_check('BharatPe again already present', (v_res->>'already_present')::int, 3);
+  PERFORM pg_temp.zz_check('BharatPe again already present', (v_res->>'already_present')::int, 4);
   PERFORM pg_temp.zz_check('BharatPe again linked to hand entry', (v_res->>'already_present_manual')::int, 0);
-  PERFORM pg_temp.zz_check('BharatPe again held', coalesce(jsonb_array_length(v_res->'held'), 0), 1);
+  PERFORM pg_temp.zz_check('BharatPe again held', coalesce(jsonb_array_length(v_res->'held'), 0), 0);
+  
+  BEGIN
+    v_res := public.payments_import_receipts(v_entity, '[{"source":"hdfc","mode":"upi","external_txn_id":"ZZMINT00000000000001","normalized_utr":"700000000011","amount_paise":88000,"gross_paise":88000,"fee_paise":0,"received_at":"2026-09-20T05:00:00Z","payer_name":"ZZ PROBE PAYER","payer_remark":null,"qr_ref":"KTR510/82388473"},{"source":"hdfc","mode":"upi","external_txn_id":"ZZMINT00000000000002","normalized_utr":"700000000012","amount_paise":12000,"gross_paise":12000,"fee_paise":0,"received_at":"2026-09-20T05:00:00Z","payer_name":"ZZ PROBE PAYER","payer_remark":null,"qr_ref":"KTR510/82388473"},{"source":"hdfc","mode":"upi","external_txn_id":"ZZMINT00000000000003","normalized_utr":"700000000013","amount_paise":45600,"gross_paise":45600,"fee_paise":0,"received_at":"2026-09-20T05:00:00Z","payer_name":"ZZ PROBE PAYER","payer_remark":null,"qr_ref":"KTR510/82388473"}]'::jsonb, '{"source":"probe","parser_version":"probe"}'::jsonb, v_actor);
+  EXCEPTION WHEN others THEN
+    v_res := jsonb_build_object('error', SQLERRM);
+    PERFORM pg_temp.zz_fail('HDFC #1 THREW: ' || SQLERRM);
+  END;
+  
+  PERFORM pg_temp.zz_check('HDFC #1 new', (v_res->>'new')::int, 1);
+  PERFORM pg_temp.zz_check('HDFC #1 already present', (v_res->>'already_present')::int, 0);
+  PERFORM pg_temp.zz_check('HDFC #1 linked to hand entry', (v_res->>'already_present_manual')::int, 1);
+  PERFORM pg_temp.zz_check('HDFC #1 held', coalesce(jsonb_array_length(v_res->'held'), 0), 1);
+  
+  BEGIN
+    v_res := public.payments_import_receipts(v_entity, '[{"source":"hdfc","mode":"upi","external_txn_id":"ZZMINT00000000000001","normalized_utr":"700000000011","amount_paise":88000,"gross_paise":88000,"fee_paise":0,"received_at":"2026-09-20T05:00:00Z","payer_name":"ZZ PROBE PAYER","payer_remark":null,"qr_ref":"KTR510/82388473"},{"source":"hdfc","mode":"upi","external_txn_id":"ZZMINT00000000000002","normalized_utr":"700000000012","amount_paise":12000,"gross_paise":12000,"fee_paise":0,"received_at":"2026-09-20T05:00:00Z","payer_name":"ZZ PROBE PAYER","payer_remark":null,"qr_ref":"KTR510/82388473"},{"source":"hdfc","mode":"upi","external_txn_id":"ZZMINT00000000000003","normalized_utr":"700000000013","amount_paise":45600,"gross_paise":45600,"fee_paise":0,"received_at":"2026-09-20T05:00:00Z","payer_name":"ZZ PROBE PAYER","payer_remark":null,"qr_ref":"KTR510/82388473"}]'::jsonb, '{"source":"probe","parser_version":"probe"}'::jsonb, v_actor);
+  EXCEPTION WHEN others THEN
+    v_res := jsonb_build_object('error', SQLERRM);
+    PERFORM pg_temp.zz_fail('HDFC again THREW: ' || SQLERRM);
+  END;
+  
+  PERFORM pg_temp.zz_check('HDFC again new', (v_res->>'new')::int, 0);
+  PERFORM pg_temp.zz_check('HDFC again already present', (v_res->>'already_present')::int, 2);
+  PERFORM pg_temp.zz_check('HDFC again linked to hand entry', (v_res->>'already_present_manual')::int, 0);
+  PERFORM pg_temp.zz_check('HDFC again held', coalesce(jsonb_array_length(v_res->'held'), 0), 1);
 
   -- Invariants no count can hide.
   SELECT count(*) INTO v_n FROM (
@@ -171,11 +203,29 @@ BEGIN
   PERFORM pg_temp.zz_check('payments: hand-keyed M2 amount untouched', v_n::int, 22000);
   SELECT amount_paise INTO v_n FROM public.payment_receipts
    WHERE entity_id = v_entity AND source = 'manual' AND external_txn_id = 'ZZPROBE-OTHER';
-  PERFORM pg_temp.zz_check('payments: hand-keyed M3 amount untouched', v_n::int, 33000);
+  PERFORM pg_temp.zz_check('payments: hand-keyed M3 amount untouched', v_n::int, 66000);
+  SELECT amount_paise INTO v_n FROM public.payment_receipts
+   WHERE entity_id = v_entity AND source = 'manual' AND external_txn_id = '700000000011';
+  PERFORM pg_temp.zz_check('payments: hand-keyed M4 amount untouched', v_n::int, 88000);
+  SELECT amount_paise INTO v_n FROM public.payment_receipts
+   WHERE entity_id = v_entity AND source = 'manual' AND external_txn_id = '700000000012';
+  PERFORM pg_temp.zz_check('payments: hand-keyed M5 amount untouched', v_n::int, 12300);
   SELECT count(*) INTO v_n FROM public.payment_receipts
    WHERE entity_id = v_entity AND source = 'manual' AND payer_name = 'ZZ PROBE PAYER'
      AND mode = 'upi' AND import_batch_id IS NOT NULL;
-  PERFORM pg_temp.zz_check('payments: the two matching hand entries are now linked to a file', v_n::int, 2);
+  PERFORM pg_temp.zz_check('payments: exactly the hand entries the preview linked (M1, M2, M3, M4) are linked to a file', v_n::int, 4);
+  SELECT count(*) INTO v_n FROM public.payment_receipts
+   WHERE entity_id = v_entity AND source = 'manual' AND external_txn_id = '700000000011' AND qr_ref = 'KTR510/82388473';
+  PERFORM pg_temp.zz_check('payments: the linked HDFC hand entry learned which QR it came on', v_n::int, 1);
+  SELECT count(*) INTO v_n FROM public.payment_receipts
+   WHERE entity_id = v_entity AND (normalized_utr = '700000000012' OR external_txn_id = 'ZZMINT00000000000002');
+  PERFORM pg_temp.zz_check('payments: the wrong-amount entry was neither linked nor copied (only the hand entry exists)', v_n::int, 0);
+  SELECT count(*) INTO v_n FROM public.payment_receipts
+   WHERE entity_id = v_entity AND external_txn_id = '700000000012' AND import_batch_id IS NULL;
+  PERFORM pg_temp.zz_check('payments: ...and the hand entry itself is untouched', v_n::int, 1);
+  SELECT count(*) INTO v_n FROM public.payment_receipts
+   WHERE entity_id = v_entity AND source = 'hdfc' AND qr_ref = 'KTR510/82388473';
+  PERFORM pg_temp.zz_check('payments: the new HDFC row records its QR', v_n::int, 1);
 
   v_fails := current_setting('zz.fails', true);
   RAISE EXCEPTION 'PROBE COMPLETE — % checks, % failed. Nothing was written; this rollback is deliberate.%',

@@ -143,7 +143,7 @@ section('payments: one payment is stored once, whoever entered it first')
 {
   const r = (source, txn, utr = null) => ({ source, external_txn_id: txn, normalized_utr: utr, amount_paise: 100 })
   const e = (source, txn, o = {}) => ({ source, external_txn_id: txn, normalized_utr: null,
-    import_batch_id: 'b', status: 'active', ...o })
+    amount_paise: 100, import_batch_id: 'b', status: 'active', ...o })
   const stored = [
     e('bharatpe', 'SEEN'),
     e('manual', 'HAND', { import_batch_id: null }),
@@ -151,17 +151,26 @@ section('payments: one payment is stored once, whoever entered it first')
     e('manual', 'HAND-VOID', { import_batch_id: null, status: 'voided' }),
     e('gpay', 'CLAIMED'),
     e('manual', 'OTHER', { normalized_utr: '555', import_batch_id: null }),
+    e('bharatpe', 'B-UTR', { normalized_utr: '666' }),
+    // HDFC: the cashier can only see the RRN, so it is typed as the hand entry's id.
+    e('manual', '700000000001', { import_batch_id: null }),
+    e('manual', '700000000002', { import_batch_id: null, amount_paise: 250 }),
   ]
   const d = diffReceipts([
     r('bharatpe', 'SEEN'), r('bharatpe', 'HAND'), r('gpay', 'HAND-LINKED'), r('bharatpe', 'HAND-VOID'),
-    r('bharatpe', 'CLAIMED'), r('bharatpe', '555', '555'), r('bharatpe', 'FRESH', '777'),
+    r('bharatpe', 'CLAIMED'), r('bharatpe', '555', '555'), r('hdfc', 'MINT-666', '666'), r('bharatpe', 'FRESH', '777'),
+    r('hdfc', 'MINT-1', '700000000001'), r('hdfc', 'MINT-2', '700000000002'),
   ], stored, stored)
   const ids = (list) => list.map((x) => (x.row ?? x).external_txn_id).sort()
   eq('already imported from this source', ids(d.already), ['HAND-LINKED', 'SEEN'])
-  eq('a hand-keyed copy is LINKED, never stored a second time', ids(d.linkManual), ['HAND'])
+  eq('a hand entry is LINKED, never copied — by its id, by its UTR, or by an RRN typed as its id',
+     ids(d.linkManual), ['555', 'HAND', 'MINT-1'])
   eq('a voided hand entry does not swallow the real payment', ids(d.new), ['FRESH', 'HAND-VOID'])
-  eq('held: the id under another import source, and a UTR on another receipt', ids(d.held), ['555', 'CLAIMED'])
+  eq('held: the id under another import source; a UTR on another FILE\'s receipt; a hand entry whose amount disagrees',
+     ids(d.held), ['CLAIMED', 'MINT-2', 'MINT-666'])
   ok('...each with its reason', d.held.every((h) => h.reason.length > 10))
+  ok('...and the amount clash names both amounts',
+     (d.held.find((h) => h.row.external_txn_id === 'MINT-2')?.reason ?? '').includes('₹2.5'))
 }
 
 // ════════════════════════════════════════════════════════════════════════════

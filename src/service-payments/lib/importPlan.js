@@ -149,36 +149,52 @@ export function diffInvoices(parsed, existing) {
 
 /**
  * What importing these payments would do. Mirrors payments_import_receipts
- * (as of 20260926_payments_import_rules.sql), in the server's order:
+ * (as of 20261009_payments_hdfc_source.sql), in the server's order:
  *   same source + transaction id already stored      -> already present
- *   an ACTIVE hand-keyed (source 'manual') receipt with this transaction id
+ *   an ACTIVE hand-keyed (source 'manual') receipt that is the same money —
+ *   same transaction id, OR the row's bank reference (RRN/UTR) typed in as
+ *   the hand entry's UTR or its transaction id (HDFC: the RRN is the only
+ *   reference a cashier can see; an exact id match wins)
  *     · not yet linked to a file                     -> linked, never a 2nd copy
  *     · already linked                               -> already present
  *   the id held under some other import source       -> held
  *   the UTR held by any other active receipt         -> held
  *   otherwise                                        -> new
  *
- * @param existingByTxn  stored receipts sharing a transaction id, from ANY source
+ * @param existingByTxn  stored receipts whose transaction id is any of this
+ *                       file's ids OR bank references, from ANY source
+ * @param existingByUtr  stored receipts whose UTR is any of this file's
  */
 export function diffReceipts(parsed, existingByTxn, existingByUtr) {
-  const byTxn = new Map()
-  for (const e of existingByTxn) {
-    if (!byTxn.has(e.external_txn_id)) byTxn.set(e.external_txn_id, [])
-    byTxn.get(e.external_txn_id).push(e)
-  }
+  const all = [...existingByTxn, ...existingByUtr]
   const byUtr = new Map(existingByUtr.filter((e) => e.status === 'active').map((e) => [e.normalized_utr, e]))
   const out = { new: [], already: [], linkManual: [], held: [] }
   for (const r of parsed) {
-    const same = byTxn.get(r.external_txn_id) || []
+    const same = all.filter((e) => e.external_txn_id === r.external_txn_id)
     if (same.some((e) => e.source === r.source)) { out.already.push(r); continue }
-    const manual = same.find((e) => e.source === 'manual' && e.status === 'active')
-    if (manual) { (manual.import_batch_id ? out.already : out.linkManual).push(r); continue }
+    const utr = r.normalized_utr || null
+    const manuals = all.filter((e) => e.source === 'manual' && e.status === 'active' &&
+      (e.external_txn_id === r.external_txn_id ||
+       (utr && (e.normalized_utr === utr || e.external_txn_id === utr))))
+    const manual = manuals.find((e) => e.external_txn_id === r.external_txn_id) ?? manuals[0]
+    if (manual) {
+      // Same reference, different amount: one of them is wrong — a mistyped
+      // reference, or a mistyped amount. Linking would leave the hand entry's
+      // amount standing and drop the file's; a new row would count it twice.
+      // Neither is safe, so a person decides.
+      if (manual.amount_paise !== undefined && Number(manual.amount_paise) !== r.amount_paise) {
+        out.held.push({ row: r, reason: `a hand-keyed entry${manual.receipt_serial ? ` (${manual.receipt_serial})` : ''} has this reference but ₹${(Number(manual.amount_paise) / 100).toLocaleString('en-IN')}, the file says ₹${(r.amount_paise / 100).toLocaleString('en-IN')} — check which is right` })
+        continue
+      }
+      ;(manual.import_batch_id ? out.already : out.linkManual).push(r)
+      continue
+    }
     const other = same.find((e) => e.source !== 'manual' && e.status === 'active')
     if (other) {
       out.held.push({ row: r, reason: `this transaction id is already recorded as a ${other.source} payment — two exports claim the same money` })
       continue
     }
-    const u = r.normalized_utr ? byUtr.get(r.normalized_utr) : null
+    const u = utr ? byUtr.get(utr) : null
     if (u) {
       out.held.push({ row: r, reason: `this UTR is already recorded (${u.source}${u.receipt_serial ? ' ' + u.receipt_serial : ''}) — check it was not entered twice` })
       continue

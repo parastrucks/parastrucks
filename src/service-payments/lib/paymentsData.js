@@ -188,7 +188,7 @@ export async function fetchExistingReceiptsByTxn(entityId, txnIds) {
   for (let i = 0; i < unique.length; i += 150) {
     const { data, error } = await supabase
       .from('payment_receipts')
-      .select('source, external_txn_id, import_batch_id, status, receipt_serial')
+      .select('source, external_txn_id, normalized_utr, amount_paise, import_batch_id, status, receipt_serial')
       .eq('entity_id', entityId)
       .in('external_txn_id', unique.slice(i, i + 150))
     if (error) throw error
@@ -204,7 +204,7 @@ export async function fetchExistingReceiptsByUtr(entityId, utrs) {
   for (let i = 0; i < unique.length; i += 150) {
     const { data, error } = await supabase
       .from('payment_receipts')
-      .select('source, external_txn_id, normalized_utr, receipt_serial, status')
+      .select('source, external_txn_id, normalized_utr, amount_paise, import_batch_id, receipt_serial, status')
       .eq('entity_id', entityId)
       .in('normalized_utr', unique.slice(i, i + 150))
     if (error) throw error

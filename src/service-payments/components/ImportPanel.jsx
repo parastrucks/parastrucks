@@ -59,7 +59,9 @@ export default function ImportPanel({ entityId, onImported, onGoMatch }) {
         diff = diffInvoices(parsed.invoices, rows.map(existingInvoiceFromRow))
       } else {
         const [byTxn, byUtr] = await Promise.all([
-          fetchExistingReceiptsByTxn(entityId, parsed.receipts.map((r) => r.external_txn_id)),
+          // Ids AND bank references: a hand-keyed HDFC payment carries the RRN,
+          // typed as its transaction id, since the report's own id is shown to nobody.
+          fetchExistingReceiptsByTxn(entityId, parsed.receipts.flatMap((r) => [r.external_txn_id, r.normalized_utr])),
           fetchExistingReceiptsByUtr(entityId, parsed.receipts.map((r) => r.normalized_utr)),
         ])
         diff = diffReceipts(parsed.receipts, byTxn, byUtr)
