@@ -115,8 +115,33 @@ Tests: parsers 140 · matcher 50 · import-plan 65 · parse-hdfc 35 (+5 real) ·
 match-queue 67 · mobile-render 62 · demo-files 37. Build and the undefined-name check clean.
 Staging: six payments migrations, all tables empty.
 
-⏭️ **Next:** rework the dummy walkthrough to ONE HDFC report (no notes — the plate scenarios become
-amount and name ones; add a failed attempt and its retry) — the owner's run waits on it. Then
+### 5. The dummy walkthrough, reworked to HDFC (`ac4f93c`)
+
+Two Billing Reports (unchanged) and two HDFC reports: one up to yesterday — 11 rows, 10 payments,
+RAMESH's failed ₹4,800 and its retry three minutes later — and this morning's, which repeats
+yesterday's two rows (daily downloads overlap) and adds BHAVIN. Payer names on every row, no notes,
+so the plate scenarios became amount and name ones: SURESH ₹11,650 is found as the SUM of the
+parts+labour job, GANGA ₹10,000 by her name, RAMESH by his unique amount, and a JAYESH paying for
+JAY BATTERIES by amount alone. The Import preview's tie-out lists ₹2,150 / ₹22,375.67 / ₹27,627 /
+₹3,860 for the four days.
+
+`selftest-demo-files` 70/0. ⭐ **New: it replays the Match tab in the walkthrough's own order**,
+rebuilding the open bills after every Confirm and carrying payer memory — the checks it already had
+looked at each payment against untouched bills, which is not what anyone will see. The replay found
+two things those could not: (1) name weight is rarity among OPEN bills, so in a 20-bill demo a
+payer sharing two words with the customer scored **14.98 against the 15 "strong" bar** — and lower
+still once two bills had closed — so GANGA's bill would have shown nothing; it now shares three
+words (harmless at ~1,000 real bills, where one rare word clears the bar alone); (2) NIRAV is
+offered **four** ₹1,930 bills, not five, because ASHA's is paid by then. Mutations: importing failed
+attempts (6+ fail), forgetting each Confirm (3 fail), a two-word name (6 fail). A missing candidate
+is now a failed check rather than a crash that hides every later check.
+
+The set was sent through the real staging import RPCs and rolled back (`PROBE COMPLETE fails=[]`):
+20 bills new; report 1 → 10 new; report 2 → 1 new + 2 already present, 0 held; all 11 stored with
+`qr_ref`; RAMESH's ₹4,800 stored once; each IST day's total exact; visible in the open-receipts
+view. Staging afterwards: 0 receipts, 0 invoices, 0 batches, 0 customers.
+
+⏭️ **Next:** the owner runs the walkthrough (unblocked). Then
 "Bill not raised yet", then a `qr_ref` → outlet ranking bonus when a second QR exists, then prod
 (six migrations), then HDFC's API.
 Still with the owner: the customer-data files (now including the HDFC report) sit unignored in the

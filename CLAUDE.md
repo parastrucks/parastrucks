@@ -33,7 +33,7 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 ## Current state (2026-10-09)
 
 - **🔨 SERVICE PAYMENTS — UPI IS NOW HDFC. Parser, database and Import screen built (staging only,
-  unpushed; branch 34 ahead of `portal`).** Owner, 2026-10-09: HDFC static QRs replace BharatPe and
+  unpushed; branch 36 ahead of `portal`).** Owner, 2026-10-09: HDFC static QRs replace BharatPe and
   Google Pay (**both completely retired**); merchant **KTR510** has one QR today, more coming; HDFC's
   API will come later. **Owner chose: accounts uploads the daily HDFC report on the Import tab
   ("D") until the API ("E").** A Google Apps Script mail-to-portal feed ("B") was proposed and NOT
@@ -69,9 +69,17 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
     sent to staging** — the owner chose dummy data there.
   - ⚠️ **The real HDFC report sits in the MAIN checkout's `docs/`, unignored there** (its branch is
     ~10 weeks old). This branch's `.gitignore` now has `docs/Transaction_report*.xlsx`.
-  - ⏭️ **Unfinished, next:** the dummy files + `WALKTHROUGH.md` still use the retired BharatPe/GPay
-    files — rework `make-demo-files.mjs` / `selftest-demo-files.mjs` / the walkthrough to ONE dummy
-    HDFC report (no notes; add a failed attempt + retry) BEFORE the owner's walkthrough.
+  - ✅ **Dummy walkthrough reworked to HDFC** (`ac4f93c`): two Billing Reports + two HDFC reports
+    (up to yesterday with a failed attempt + retry; this morning's overlapping yesterday). No plate
+    scenarios — every payment found by amount or name. `selftest-demo-files` **70/0**, now including
+    a **replay of the Match tab in the walkthrough's own order** (open bills rebuilt after every
+    Confirm). ⭐ It caught two things the per-payment checks could not: a two-word payer name scored
+    **14.98 vs the 15 "strong" bar** among ~20 demo bills and sank further as bills closed (name
+    weight is rarity among OPEN bills — fine at ~1,000 real bills, fragile in a demo), and NIRAV is
+    offered **four** bills, not five. Sent through the real staging RPCs and rolled back: 20 bills,
+    10 then 1 new + 2 already, every QR stored, each day's total exact, **zero residue**.
+    ⏭️ **The owner's walkthrough is unblocked** — files in `Downloads\payments-demo` (dated 9 Oct;
+    remake on the day).
 
 ## Current state (2026-10-05)
 
@@ -578,11 +586,9 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
      the import RPCs (`a90aa4e`) — see the 2026-09-26 state block.
   4. ✅ **HDFC as the UPI source — DONE 2026-10-09** (`917a7c0` · `69ec588` · `9f4ccc2`); see the
      2026-10-09 state block. BharatPe + Google Pay retired (owner).
-  5. **⏭️ NEXT (me): rework the dummy walkthrough to HDFC** — `make-demo-files.mjs`,
-     `selftest-demo-files.mjs`, `docs/backlog/payments-demo-walkthrough.md` still use the retired
-     BharatPe/GPay CSVs. One dummy HDFC report: no notes (so the plate scenarios become amount/name
-     ones), plus a SaleFailed attempt and its retry, plus the settlement tie-out on screen.
-  6. **⏭️ Then the OWNER runs the dummy walkthrough on staging** (owner chose **dummy** data: "the
+  5. ✅ **Dummy walkthrough reworked to HDFC — DONE 2026-10-09** (`ac4f93c`); see the 2026-10-09
+     state block.
+  6. **⏭️ NEXT: the OWNER runs the dummy walkthrough on staging** (owner chose **dummy** data: "the
      real UPI data is going to change"). Remake the files on the day — they are dated around today.
   7. **"Bill not raised yet"** needs a write path (RPC + EF action + `authority.ts` gate + tests)
      before MatchScreen may offer it; `awaiting_invoice` exists but nothing sets it. Also: search
