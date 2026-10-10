@@ -26,6 +26,74 @@
 
 ---
 
+## Session log — 2026-10-10: the first browser walk-through — money right, screen wrong in nine places
+
+Branch `claude/payments-reconciliation-tool-6eaab4`, staging only, unpushed. Prod untouched.
+
+The owner asked for the dummy walkthrough step by step, then: *"Don't you think you can run these
+checks on your own in the native browser?"* — and chose the built-in browser pane (crash-prone in
+August) over Claude in Chrome. It held for the whole run.
+
+**Getting the pane to work** (each a real obstacle): Cloudflare Turnstile failed in it. Before
+touching anything I checked staging's verify-login: no `TURNSTILE_SECRET`, and `REQUIRE_CAPTCHA`
+= `false` (identified by matching the secret's sha256 digest, never reading the value) — so the
+widget was decoration on staging, and commenting out `VITE_TURNSTILE_SITE_KEY` in the worktree's
+gitignored `.env` changed nothing real. Prod reads Vercel env and keeps its check. The auto-mode
+classifier then blocked me typing the staging password into the pane; the owner signed in once.
+The pane has no file picker: the four files were served from gitignored
+`node_modules/payments-demo-files/` through Vite's `/@fs/` and handed to the file input with a
+`DataTransfer` — byte-identical to a manual pick.
+
+**The money — all as predicted, each step checked against the database:** Billing Report 1: 20 bills
+(18 payable, 1 free of cost, 1 parts return parked), 17 customers, outlets set; the same file again
+blocked. HDFC report 1: 10 payments, RAMESH's failed ₹4,800 not stored, per-day totals ₹2,150 /
+₹22,375.67 / ₹27,627 / ₹3,860 equal to the stored rows. HDFC report 2: 1 new + 2 already, no double.
+Matching in queue order: JAYESH→JAY (amount), KISAN, ₹30 nothing, GANGA ₹10,000 part-paid by NAME,
+QUICK FREIGHT none (search "lalit" proved search finds things), RAMESH once, MEHUL→INDU (a human
+choice), SURESH→the parts+labour job split ₹8,450 + ₹3,200, ASHA first of five, NIRAV unranked
+among four, BHAVIN locked by the stale-bills brake (Confirm verified `disabled` with a bill
+selected). Billing Report 2: 1 new, 1 changed, 18 unchanged, ASHA's cancellation held as a clash
+("reverse that match first"); BHAVIN then confirmable, his own bill first.
+
+**Nine screen findings, none seen by 70 passing checks** (they test counts, not what a person reads):
+1. the failed attempt listed under "Could not be read (1)", named by a 20-digit id (`297e03e`: the
+   parser flags it; listed apart with amount, payer, time);
+2. "same amount as 2 other bills" on a pair — the count includes the bill itself;
+   `selftest-mobile-render` had copied the off-by-one into its expectation;
+3. "Payer name is similar" on every card — the shared word was "DEMO" (on real data "MOTORS");
+   now silent below 5/25;
+4. the first of five identical bills did not say why; cards now show up to two pieces of evidence
+   (never the date alone), and selecting no longer repeats the headline;
+5. "…or hold it as an advance" — no such button exists yet;
+6. a matched payment stayed on screen 3–5 s with the counter already moved (inviting a second tap;
+   the DB would have refused it). Now it leaves when the server answers — **measured 1.7 s** — and the
+   next card stays locked, saying "Updating the list…", until bills reload;
+7. skips cleared after any import — right after a BILLS import (a skipped payment may have been
+   waiting for its bill), pointless after a payments import; now bills only;
+8. the bills preview said 20 · ₹1,13,076.72, of which ₹3,200 nobody owes; owner chose the split
+   "18 to be paid · ₹1,09,876.72" plus a not-owed line;
+9. "Import 1 new bill" silently also applied a change; "1 bill clash … as they are".
+(I also flagged unlabelled bill buttons; on reflection the button's text IS its accessible name —
+the inspection tool simply does not compute names from content. Not a finding.)
+
+All fixed in `94f6e0e`, each seen working in the pane (the preview split checked with a
+preview-only file, then discarded — nothing imported). `selftest-demo-files` 84/0, mobile-render
+62/0, the rest unchanged and green, build and no-undef clean.
+
+**Staging now holds the DEMO rows** — 21 bills, 11 payments, 9 matches (one, NIRAV→CHIRAG, made only
+to time the Confirm fix). Deleting them needs the owner's approval.
+
+⏭️ Left from the sheet: the role checks (`svc.exec@`, `pt.mgr@`) — the owner must sign in as each.
+
+⭐ **Lessons.** (1) **A green test estate checks what was written down; a screen shows what a person
+reads.** Nine findings in one run, every one invisible to tests that all passed — and one test had
+enshrined a bug by copying the code's answer. (2) **Check the server before changing the client:**
+"turn off the captcha" sounds like weakening security; reading staging's settings first showed the
+server had never checked it. (3) **Re-read a finding before fixing it** — "skips forgotten" was half
+a feature, and the a11y note was a tool limitation.
+
+---
+
 ## Session log — 2026-09-26 → 10-09: a dummy walkthrough, and UPI moves to HDFC (it ties to the bank to the rupee)
 
 Branch `claude/payments-reconciliation-tool-6eaab4`, **staging only, unpushed** (34 commits ahead of

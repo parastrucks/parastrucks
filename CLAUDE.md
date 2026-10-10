@@ -30,6 +30,32 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ---
 
+## Current state (2026-10-10)
+
+- **✅ SERVICE PAYMENTS — FIRST BROWSER WALK-THROUGH ON STAGING: EVERY MONEY RULE PASSED; 9 SCREEN
+  FINDINGS, ALL FIXED** (`297e03e`, `94f6e0e`; staging only, unpushed). Run by me in the built-in
+  browser pane at the owner's request, as `tester@` (accounts manager): Billing Report 1 → HDFC
+  report 1 → HDFC report 2 (overlap) → 8 matches → Billing Report 2. Every count checked against the
+  DB: 20 bills / 17 customers; 10 then 1+2-already payments; failed attempt never stored; split job
+  ₹8,450+₹3,200; part payment ₹10,000 of ₹25,000; stale-bills brake held Confirm OFF (verified
+  `disabled`) until report 2; cancellation-under-money became a clash.
+  ⭐ **70 green checks missed all nine screen findings** — they test counts, not how the screen
+  reads: failed attempt filed under "Could not be read" · "same amount as 2 other bills" on a pair
+  (off-by-one, and `selftest-mobile-render` had COPIED it into its expectation) · "Payer name is
+  similar" on every card from a shared common word · the first-ranked of five identical bills not
+  saying why · "hold it as an advance" with no such button · matched payment lingering 3–5 s after
+  Confirm · skips cleared after any import · bills preview total counting ₹3,200 nobody owes (owner
+  chose "18 to be paid" split) · button/grammar wording. `selftest-demo-files` **84/0**.
+  - ⭐ **The built-in browser pane now WORKS here** (the Aug crashes did not recur). Turnstile is
+    off for local only (worktree `.env`, commented; staging has no `TURNSTILE_SECRET` and
+    `REQUIRE_CAPTCHA=false`); the owner signs in (the classifier blocks Claude typing a password);
+    files go in via `fetch('/@fs/…')` + `DataTransfer` from gitignored
+    `node_modules/payments-demo-files/`. Memory `feedback_no_internal_browser.md` has the recipe.
+  - **Staging now holds the DEMO rows** (21 bills, 11 payments, 9 matches incl. NIRAV→CHIRAG used to
+    time the Confirm fix). Deleting them needs owner approval.
+  - ⏭️ **Not yet done:** the role checks (`svc.exec@`: no Import tab; `pt.mgr@`: no page) — need
+    the owner to sign in as each.
+
 ## Current state (2026-10-09)
 
 - **🔨 SERVICE PAYMENTS — UPI IS NOW HDFC. Parser, database and Import screen built (staging only,
@@ -588,8 +614,8 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
      2026-10-09 state block. BharatPe + Google Pay retired (owner).
   5. ✅ **Dummy walkthrough reworked to HDFC — DONE 2026-10-09** (`ac4f93c`); see the 2026-10-09
      state block.
-  6. **⏭️ NEXT: the OWNER runs the dummy walkthrough on staging** (owner chose **dummy** data: "the
-     real UPI data is going to change"). Remake the files on the day — they are dated around today.
+  6. ✅ **Dummy walkthrough RUN 2026-10-10** (in the browser pane; see the 2026-10-10 state block).
+     ⏭️ Left: the role checks as `svc.exec@` and `pt.mgr@` (owner signs in).
   7. **"Bill not raised yet"** needs a write path (RPC + EF action + `authority.ts` gate + tests)
      before MatchScreen may offer it; `awaiting_invoice` exists but nothing sets it. Also: search
      picks ONE bill, so a parts+labour pair found only by search is confirmed twice.
