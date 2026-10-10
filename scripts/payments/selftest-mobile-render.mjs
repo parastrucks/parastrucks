@@ -79,7 +79,10 @@ section('every candidate says WHY, in words a person can disagree with')
     },
   })
   ok('a plate match is explained as a truck', html.includes('Truck GJ15AV9044'))
-  ok('an ambiguous amount says how many others', html.includes('Same amount as 3 other'))
+  // "3 bills at this amount" counts this one: the OTHERS are two. This check
+  // used to expect "3 other" — it had copied the code's off-by-one, found on
+  // the first browser run (a pair read "same amount as 2 other bills").
+  ok('an ambiguous amount says how many OTHERS (3 at the amount = 2 others)', html.includes('Same amount as 2 other bills'))
   ok('payer memory is explained in plain words', html.includes('has paid for them before'))
   // The internal signal names are for the audit log, never the counter.
   for (const jargon of ['amount_unique', 'amount_ambiguous', 'reg_last4', 'payer_memory', 'name_overlap']) {

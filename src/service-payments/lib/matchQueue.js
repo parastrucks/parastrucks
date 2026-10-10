@@ -17,6 +17,13 @@ import {
 } from '../../../supabase/functions/service-payments/authority.ts'
 
 /** What this person may do on the Match screen. */
+/**
+ * The pending marker while the queue reloads after a write. The next payment is
+ * already on screen but its bills are not fresh yet, so it stays locked — and
+ * says so, rather than "Saving…" over a payment nobody has touched.
+ */
+export const REFRESHING = 'refreshing'
+
 export function capabilitiesFor(profile, departmentCode) {
   const caller = {
     id: profile?.id ?? null,

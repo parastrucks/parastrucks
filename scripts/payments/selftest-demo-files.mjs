@@ -17,12 +17,14 @@ import * as XLSX from 'xlsx'
 import { writeDemoFiles, DAYS, DEMO_QR, hdfcTxnId } from './make-demo-files.mjs'
 import {
   parseImportFile, importGates, diffInvoices, diffReceipts, billCoverage, expectedCounts, notImported,
+  newBillsSummary, importActionLabel,
 } from '../../src/service-payments/lib/importPlan.js'
 import { parseBillingReport } from '../../src/service-payments/lib/parseBillingReport.js'
 import { parseBharatPe, parseGpay } from '../../src/service-payments/lib/parseUpi.js'
 import { parseHdfcSmartHub } from '../../src/service-payments/lib/parseHdfc.js'
 import { buildCandidateIndex, matchCandidates } from '../../src/service-payments/lib/matchCandidates.js'
 import { toMatchReceipt, allocationTargets, feedIsStaleFor, orderQueue } from '../../src/service-payments/lib/matchQueue.js'
+import { cardReasons } from '../../src/service-payments/lib/signalLabels.js'
 
 let pass = 0, fail = 0
 const ok = (name, cond, detail = '') => {
@@ -70,6 +72,16 @@ const d1 = diffInvoices(br1.parsed.invoices, [])
   const g = importGates({ kind: 'billing_report', parsed: br1.parsed, diff: d1, priorBatch: null })
   ok('the gates pass', g.ok, g.blocking.join(' / '))
   eq('first import: all 20 are new', d1.new.length, 20)
+  {
+    // First browser run: the preview said "20 · ₹1,13,076.72", which includes
+    // ₹3,200 nobody owes. The owner chose to show what is owed separately.
+    const s = newBillsSummary(d1)
+    eq('...of which 18 are to be paid, ₹1,09,876.72', [s.payable.n, s.payable.paise], [18, 10987672])
+    eq('...plus 1 free of cost (₹2,000) and 1 parts return on hold (₹1,200)',
+       [s.freeOfCost.n, s.freeOfCost.paise, s.onHold.n, s.onHold.paise], [1, 200000, 1, 120000])
+    eq('...the parts add up to the whole', s.payable.paise + s.freeOfCost.paise + s.onHold.paise + s.cancelled.paise, s.all.paise)
+    eq('...and the button says "Import 20 new bills"', importActionLabel('billing_report', d1), 'Import 20 new bills')
+  }
   const again = importGates({ kind: 'billing_report', parsed: br1.parsed, diff: d1,
     priorBatch: { uploaded_at: new Date().toISOString(), file_name: 'DEMO Billing Report 1.xlsx' } })
   ok('choosing the same file again is BLOCKED', !again.ok)
@@ -230,6 +242,12 @@ const br2 = await read('DEMO Billing Report 2.xlsx')
   eq('ASHA already matched: her cancellation becomes a CLASH — reverse the match first',
      [d.amended.length, d.conflict.length, d.conflict[0]?.row.invoice_number], [1, 1, 'MPI5756260009101'])
   ok('...and the clash says so', (d.conflict[0]?.reason ?? '').includes('reverse that match first'))
+  {
+    const g = importGates({ kind: 'billing_report', parsed: br2.parsed, diff: d, priorBatch: null })
+    ok('...in plain singular English ("1 bill clashes … as it is")',
+       g.warnings.includes('1 bill clashes with what is stored and will be left as it is (listed below).'), g.warnings.join(' / '))
+    eq('...and the button names the change it will also apply', importActionLabel('billing_report', d), 'Import 1 new bill and 1 change')
+  }
 
   // Report 2 is the first feed that covers TODAY, so it lifts the brake on the
   // payment made this morning — provided the file was saved after 09:15 IST.
@@ -290,6 +308,8 @@ section('The walkthrough IN ORDER, as the Match tab will show it')
   confirm(s.r, s.res.candidates[0])
   s = step(2)
   eq('3 · KISAN ₹30 → nothing to match (his bill is paid) → Skip', s.res.candidates.length, 0)
+  ok('    ...and the screen offers nothing it cannot do (no "hold it as an advance" — there is no such button yet)',
+     s.res.reason.includes('skip it for now') && !s.res.reason.includes('advance'), s.res.reason)
   s = step(3)
   ok('4 · GANGA ₹10,000 → GANGA\'s ₹25,000 bill first, by name, after two bills have closed',
      s.res.candidates[0]?.label === 'PCR6370260009401' && sig(s.res.candidates[0]).includes('name_overlap_strong'),
@@ -303,6 +323,8 @@ section('The walkthrough IN ORDER, as the Match tab will show it')
   s = step(6)
   eq('7 · MEHUL ₹3,400 → HARSH\'s and INDU\'s bills, both offered', s.res.candidates.map((c) => c.customer_name).sort(),
      ['DEMO HARSH TYRES', 'DEMO INDU SPARES'])
+  eq('    each card says "Same amount as 1 other bill" — a pair is one OTHER, not two (first browser run)',
+     s.res.candidates.map((c) => cardReasons(c).face[0]), ['Same amount as 1 other bill', 'Same amount as 1 other bill'])
   confirm(s.r, s.res.candidates.find((c) => c.customer_name === 'DEMO INDU SPARES'))
   s = step(7)
   ok('8 · SURESH ₹11,650 → the 2-bill FLEET CARRIERS job', s.res.candidates[0]?.kind === 'job' && s.res.candidates[0]?.member_count === 2)
@@ -311,6 +333,16 @@ section('The walkthrough IN ORDER, as the Match tab will show it')
   s = step(8)
   ok('9 · ASHA ₹1,930 → five ₹1,930 bills, ASHA\'s first and ranked',
      s.res.candidates.length === 5 && s.res.candidates[0]?.label === 'MPI5756260009101' && !s.res.refuse_to_rank)
+  {
+    // First browser run: all five cards read only "Same amount as 5 other
+    // bills", so nothing said why ASHA's was first; selecting it then printed
+    // that same line twice.
+    const top = cardReasons(s.res.candidates[0])
+    eq('    ASHA\'s card says WHY it is first, without a tap', top.face, ['Same amount as 4 other bills', 'Payer name is similar'])
+    ok('    ...the others say only the amount', s.res.candidates.slice(1).every((c) => cardReasons(c).face.length === 1))
+    const said = [...top.face, ...top.more]
+    eq('    ...and selecting it repeats nothing', said.length, new Set(said).size)
+  }
   confirm(s.r, s.res.candidates[0])
   s = step(9)
   ok('10 · NIRAV ₹1,930 → the FOUR bills left, unranked, with the banner → Skip',

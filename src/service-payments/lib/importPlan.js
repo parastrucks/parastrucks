@@ -234,8 +234,18 @@ export function importGates({ kind, parsed, diff, priorBatch, entityPlants = Obj
     if (parsed.invoices.length === 0) blocking.push('No bill in this file could be read.')
     if (parsed.invoices.length > MAX_ROWS_PER_IMPORT) blocking.push(`More than ${MAX_ROWS_PER_IMPORT} bills — export a shorter date range.`)
     if (parsed.refused.length) warnings.push(`${parsed.refused.length} row${plural(parsed.refused.length)} could not be read and will not be imported (listed below).`)
-    if (diff?.conflict.length) warnings.push(`${diff.conflict.length} bill${plural(diff.conflict.length)} clash with what is stored and will be left as they are (listed below).`)
-    if (diff?.held.length) warnings.push(`${diff.held.length} bill${plural(diff.held.length)} held back — importing them would strand money already matched (listed below).`)
+    if (diff?.conflict.length) {
+      const one = diff.conflict.length === 1
+      warnings.push(one
+        ? '1 bill clashes with what is stored and will be left as it is (listed below).'
+        : `${diff.conflict.length} bills clash with what is stored and will be left as they are (listed below).`)
+    }
+    if (diff?.held.length) {
+      const one = diff.held.length === 1
+      warnings.push(one
+        ? '1 bill held back — importing it would strand money already matched (listed below).'
+        : `${diff.held.length} bills held back — importing them would strand money already matched (listed below).`)
+    }
   } else {
     const dupes = parsed.summary.duplicate_txn_ids || []
     if (dupes.length) {
@@ -270,6 +280,41 @@ export function notImported(kind, parsed) {
     failedAttempts: all.filter((r) => r.failed_attempt),
     unreadable: all.filter((r) => !r.failed_attempt),
   }
+}
+
+/**
+ * New bills split by what they mean for money. A free-of-cost bill and a parts
+ * return held for accounts are bills, but nobody owes them; one total over all
+ * of them overstated what customers owe (first browser run: ₹1,13,076.72 shown,
+ * ₹1,09,876.72 actually owed).
+ */
+export function newBillsSummary(diff) {
+  const sum = (rows) => ({ n: rows.length, paise: rows.reduce((a, r) => a + (r.total_paise ?? 0), 0) })
+  const rows = diff?.new ?? []
+  return {
+    all: sum(rows),
+    payable: sum(rows.filter((r) => r.status === 'active')),
+    freeOfCost: sum(rows.filter((r) => r.status === 'not_payable')),
+    onHold: sum(rows.filter((r) => r.status === 'parked')),
+    cancelled: sum(rows.filter((r) => r.status === 'cancelled')),
+  }
+}
+
+/** The commit button says everything it will do, not just the new rows. */
+export function importActionLabel(kind, diff) {
+  const n = (x, one, many) => `${x} ${x === 1 ? one : many}`
+  if (kind === 'billing_report') {
+    const parts = []
+    if (diff.new.length) parts.push(n(diff.new.length, 'new bill', 'new bills'))
+    if (diff.amended.length) parts.push(n(diff.amended.length, 'change', 'changes'))
+    if (!parts.length) return 'Record this file (nothing new)'
+    return `${diff.new.length ? 'Import' : 'Apply'} ${parts.join(' and ')}`
+  }
+  const parts = []
+  if (diff.new.length) parts.push(n(diff.new.length, 'new payment', 'new payments'))
+  if (diff.linkManual.length) parts.push(`link ${n(diff.linkManual.length, 'hand entry', 'hand entries')}`)
+  if (!parts.length) return 'Record this file (nothing new)'
+  return diff.new.length ? `Import ${parts.join(' and ')}` : parts[0].replace(/^link/, 'Link')
 }
 
 /** The rows to send: everything read, minus what the preview held back. */

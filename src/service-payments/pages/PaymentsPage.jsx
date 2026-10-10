@@ -19,7 +19,7 @@ import ImportPanel from '../components/ImportPanel.jsx'
 import { buildCandidateIndex, matchCandidates, DEFAULT_WINDOW_DAYS } from '../lib/matchCandidates.js'
 import {
   capabilitiesFor, toMatchReceipt, orderQueue, invoiceWindow, attachCustomerCodes,
-  memoryForMatcher, allocationTargets, matchSignalOf, feedIsStaleFor, searchCandidates,
+  memoryForMatcher, allocationTargets, matchSignalOf, feedIsStaleFor, searchCandidates, REFRESHING,
 } from '../lib/matchQueue.js'
 import {
   fetchPaymentsEntityId, fetchDepartmentCode, fetchOpenReceipts, fetchOpenInvoices,
@@ -137,6 +137,14 @@ export default function PaymentsPage() {
       toast.success(`Matched ${formatINR(placed)} to ${candidate.label}`)
       setDoneToday((n) => n + 1)
       setOverride(null)
+      // Move on NOW. The full reload takes seconds on a phone, and the first
+      // browser run showed the matched payment sitting there with the counter
+      // already at "done" — an invitation to tap again. A payment only leaves
+      // the queue here when this match used all of it; a part-used one waits
+      // for the reload to show what is left.
+      const doneId = current.id
+      if (placed >= current.amount_paise) setReceipts((rs) => rs.filter((r) => r.id !== doneId))
+      setPendingId(REFRESHING)
       await load({ quiet: true })
     } catch (e) {
       // Reload even on failure: if the write DID land and only the answer was
@@ -160,6 +168,9 @@ export default function PaymentsPage() {
       })
       toast.success('Set aside as not a service payment')
       setOverride(null)
+      const doneId = current.id
+      setReceipts((rs) => rs.filter((r) => r.id !== doneId))
+      setPendingId(REFRESHING)
       await load({ quiet: true })
     } catch (e) {
       toast.error(e?.message || 'Could not set it aside')
@@ -246,7 +257,14 @@ export default function PaymentsPage() {
         <ImportPanel
           entityId={entityId}
           onImported={() => load({ quiet: true })}
-          onGoMatch={() => { setSkipped([]); setOverride(null); setTab('match') }}
+          onGoMatch={(kind) => {
+            // New BILLS may be what a skipped payment was waiting for, so those
+            // come back for another look. New PAYMENTS change nothing about the
+            // skipped ones — keep them at the back (first browser run).
+            if (kind === 'billing_report') setSkipped([])
+            setOverride(null)
+            setTab('match')
+          }}
         />
       </div>
     )

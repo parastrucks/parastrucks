@@ -293,7 +293,7 @@ export function matchCandidates(receipt, index, {
 
   let reason = ''
   if (feedIsStale) reason = 'The invoice feed is out of date — confirm is disabled until fresh bills land.'
-  else if (!top.length) reason = 'No open bill within 3 days at this amount. Search by name or amount, or hold it as an advance.'
+  else if (!top.length) reason = 'No open bill within 3 days at this amount. Search by name or amount, or skip it for now.'
   else if (refuse) reason = `${top.length} bills look equally likely. Pick the one you recognise — they are not ranked.`
 
   return {

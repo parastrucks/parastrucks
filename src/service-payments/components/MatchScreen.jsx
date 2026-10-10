@@ -13,7 +13,8 @@
 
 import { useState } from 'react'
 import { formatINR } from '../lib/paise.js'
-import { primaryReason, signalLabel, BOUNCE_REASONS, NOT_SERVICE_KINDS } from '../lib/signalLabels.js'
+import { cardReasons, BOUNCE_REASONS, NOT_SERVICE_KINDS } from '../lib/signalLabels.js'
+import { REFRESHING } from '../lib/matchQueue.js'
 
 /**
  * @param {object}   props
@@ -143,11 +144,11 @@ export default function MatchScreen({
                   {c.label}
                   {c.sap_customer_code ? ` · ${c.sap_customer_code}` : ''}
                 </span>
-                <span className="pay-candidate-why">{primaryReason(c)}</span>
-                {isSel && c.signals?.length > 1 && (
+                <span className="pay-candidate-why">{cardReasons(c).face.join(' · ')}</span>
+                {isSel && cardReasons(c).more.length > 0 && (
                   <span className="pay-candidate-all">
-                    {c.signals.map((s, i) => (
-                      <span className="pay-chip" key={i}>{signalLabel(s)}</span>
+                    {cardReasons(c).more.map((label) => (
+                      <span className="pay-chip" key={label}>{label}</span>
                     ))}
                   </span>
                 )}
@@ -219,7 +220,7 @@ export default function MatchScreen({
           onClick={() => selected && onConfirm?.(selected)}
         >
           {busy
-            ? 'Saving…'
+            ? (pendingId === REFRESHING ? 'Updating the list…' : 'Saving…')
             : selected
               ? `Confirm ${formatINR(placing)}${partPay ? ' · part-paid' : ''}`
               : candidates.length ? 'Pick a bill above' : 'Nothing to confirm'}

@@ -18,6 +18,7 @@ import { parseHdfcSmartHub } from '../lib/parseHdfc.js'
 import {
   KIND_LABEL, parseImportFile, existingInvoiceFromRow, diffInvoices, diffReceipts,
   importGates, rowsToCommit, expectedCounts, reconcile, billCoverage, notImported,
+  newBillsSummary, importActionLabel,
 } from '../lib/importPlan.js'
 import {
   fetchOutlets, findPriorBatch, fetchExistingInvoices,
@@ -163,11 +164,18 @@ function Preview({ plan, committing, onCommit, onCancel }) {
   const qrs = parsed.summary?.qrs ?? []
   const newValue = diff.new.reduce((a, r) => a + (bills ? r.total_paise : r.amount_paise), 0)
   const newCount = diff.new.length
-  const actionLabel = committing
-    ? 'Importing…'
-    : newCount + (bills ? diff.amended.length : diff.linkManual.length) > 0
-      ? `Import ${newCount} new ${bills ? 'bill' : 'payment'}${newCount === 1 ? '' : 's'}`
-      : 'Record this file (nothing new)'
+  const owed = bills ? newBillsSummary(diff) : null
+  // Bills: lead with what customers owe; the rest are bills but not money due.
+  const newSub = !newCount ? null
+    : bills && owed.payable.n !== newCount
+      ? `${owed.payable.n} to be paid · ${formatINR(owed.payable.paise)}`
+      : formatINR(newValue)
+  const notOwed = !bills ? [] : [
+    owed.freeOfCost.n && `${owed.freeOfCost.n} free of cost (${formatINR(owed.freeOfCost.paise)})`,
+    owed.onHold.n && `${owed.onHold.n} parts return${owed.onHold.n === 1 ? '' : 's'}, on hold until accounts decide (${formatINR(owed.onHold.paise)})`,
+    owed.cancelled.n && `${owed.cancelled.n} already cancelled in SAP (${formatINR(owed.cancelled.paise)})`,
+  ].filter(Boolean)
+  const actionLabel = committing ? 'Importing…' : importActionLabel(kind, diff)
 
   return (
     <section className="pay-import-preview" aria-label="What this import will do">
@@ -183,7 +191,7 @@ function Preview({ plan, committing, onCommit, onCancel }) {
       )}
 
       <dl className="pay-import-counts">
-        <Count label={bills ? 'New bills' : 'New payments'} n={newCount} sub={newCount ? formatINR(newValue) : null} strong />
+        <Count label={bills ? 'New bills' : 'New payments'} n={newCount} sub={newSub} strong />
         {bills ? (
           <>
             <Count label="Changed since last import" n={diff.amended.length} />
@@ -202,6 +210,10 @@ function Preview({ plan, committing, onCommit, onCancel }) {
         <Count label="Failed attempts — not money" n={failedAttempts.length} />
         <Count label="Could not be read" n={unreadable.length} warn />
       </dl>
+
+      {notOwed.length > 0 && (
+        <p className="pay-hint">Also new, but not owed by customers: {notOwed.join(' · ')}.</p>
+      )}
 
       {bills && coverage && (
         <p className="pay-hint">
@@ -261,7 +273,7 @@ function Done({ plan, done, onAnother, onGoMatch }) {
       <h2 className="pay-empty-title">Imported</h2>
       <p className="pay-empty-sub">
         {bills
-          ? `${res.new ?? 0} new · ${res.amended ?? 0} changed · ${res.unchanged ?? 0} unchanged${conflicts ? ` · ${conflicts} left as they were` : ''}`
+          ? `${res.new ?? 0} new · ${res.amended ?? 0} changed · ${res.unchanged ?? 0} unchanged${conflicts ? ` · ${conflicts} left as ${conflicts === 1 ? 'it was' : 'they were'}` : ''}`
           : `${res.new ?? 0} new · ${res.already_present ?? 0} already there${res.already_present_manual ? ` · ${res.already_present_manual} linked to hand entries` : ''}`}
       </p>
       {mismatches.length > 0 && (
@@ -275,7 +287,7 @@ function Done({ plan, done, onAnother, onGoMatch }) {
       <div className="pay-import-actions">
         {/* Always offered: new bills can unlock payments that were already
             waiting, and a fresh Billing Report lifts the stale-bills brake. */}
-        <button type="button" className="pay-confirm" onClick={onGoMatch}>Go to matching</button>
+        <button type="button" className="pay-confirm" onClick={() => onGoMatch?.(plan.kind)}>Go to matching</button>
         <button type="button" className="pay-skip" onClick={onAnother}>Import another file</button>
       </div>
     </section>

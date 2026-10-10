@@ -39,7 +39,7 @@ same days, one payment made this morning. Re-make them on the day you run this, 
 
 | # | Choose | You should see |
 |---|---|---|
-| 1 | `DEMO Billing Report 1.xlsx` | SAP Billing Report · **20 new bills**. "Bills are complete up to" the end of yesterday. Nothing held, nothing unreadable. |
+| 1 | `DEMO Billing Report 1.xlsx` | SAP Billing Report · **20 new bills · 18 to be paid · ₹1,09,876.72**, and beneath it "Also new, but not owed by customers: 1 free of cost (₹2,000.00) · 1 parts return, on hold…". Button: **Import 20 new bills**. "Bills are complete up to" the end of yesterday. Nothing held, nothing unreadable. |
 | 2 | Import it | ✓ Imported · 20 new |
 | 3 | `DEMO Billing Report 1.xlsx` **again** | **Blocked**: "This exact file was already imported…" and the Import button is off |
 | 4 | `DEMO HDFC report 1.xlsx` | HDFC SmartHub transaction report · **10 new payments, ₹56,012.67** · **Failed attempts — not money: 1** (RAMESH's first try) · Could not be read: 0 · notes "1 row not imported" and "1 payment of ₹50 or less" (the ₹30 top-up) · the daily tie-out for QR **KTR510/DEMO0001**: four days ago **₹2,150** · three days ago **₹22,375.67** · two days ago **₹27,627** · yesterday **₹3,860** |
@@ -64,15 +64,15 @@ have two ₹4,800 payments competing for it.
 | ₹4,800 RAMESH SHARMA | RAMESH SHARMA's bill, "Only bill at this exact amount" — and only **one** ₹4,800 payment in the queue | Confirm |
 | ₹3,400 MEHUL SHAH | Two ₹3,400 bills (HARSH and INDU) | Pick INDU's — this is the human decision |
 | ₹11,650 SURESH DESAI | A **"2 bills"** card for FLEET CARRIERS (parts + labour), by the **sum** of the two | Confirm — both bills paid |
-| ₹1,930 DEMO ASHA ENTERPRISE | Five identical ₹1,930 bills, **ASHA's first** (name) | Confirm ASHA's |
-| ₹1,930 NIRAV PATEL | The **four** ₹1,930 bills left, **unranked**, with the "equally likely … not ranked" banner | Skip |
+| ₹1,930 DEMO ASHA ENTERPRISE | Five identical ₹1,930 bills, **ASHA's first**, and only hers says why: "Same amount as 4 other bills · Payer name is similar" | Confirm ASHA's |
+| ₹1,930 NIRAV PATEL | The **four** ₹1,930 bills left, **unranked**, with the "equally likely … not ranked" banner; each says "Same amount as 3 other bills" | Skip |
 | ₹1,930 DEMO BHAVIN TRADING (today) | **"Bills are out of date"** banner, Confirm off | Leave it |
 
 ## Then the next day's bills (Import tab)
 
 | # | Choose | You should see |
 |---|---|---|
-| 8 | `DEMO Billing Report 2.xlsx` | 1 new (PRIYA), 1 changed (MANAN ₹745 → ₹845), 18 unchanged, and **1 clash**: ASHA's bill is now cancelled in SAP, but you matched money to it — "reverse that match first" |
+| 8 | `DEMO Billing Report 2.xlsx` | 1 new (PRIYA), 1 changed (MANAN ₹745 → ₹845), 18 unchanged, and **1 clash** ("1 bill clashes with what is stored and will be left as it is"), button **Import 1 new bill and 1 change**: ASHA's bill is now cancelled in SAP, but you matched money to it — "reverse that match first" |
 | 9 | Import it, go to Match | BHAVIN's ₹1,930 from this morning is **no longer out of date** — report 2 covers today. His own bill is first among the four unpaid ₹1,930 bills → Confirm |
 
 ## Also worth a look
