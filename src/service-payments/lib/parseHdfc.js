@@ -93,8 +93,15 @@ export function parseHdfcSmartHub(rows, { entityId = null } = {}) {
       const state = text(r, 'Transaction State')
       if (state !== 'SaleSuccess') {
         // Not money. Measured: every failed attempt was retried successfully.
-        review.push({ row: rowNo, txnId, refused: true,
-          reason: state === 'SaleFailed' ? 'a failed attempt — not money received' : `transaction state is "${state}", not SaleSuccess` })
+        // Flagged, not recognised by its wording, and carrying what a person
+        // needs to find the retry: the amount, the payer and when.
+        const failed = state === 'SaleFailed'
+        let amount_paise = null
+        try { amount_paise = rupeeStringToPaise(cell(r, 'Transaction Amount')) } catch { /* shown without it */ }
+        review.push({ row: rowNo, txnId, refused: true, failed_attempt: failed,
+          amount_paise, payer_name: text(r, "Payer's name") || null,
+          when: `${text(r, 'Transaction Date')} ${text(r, 'Transaction Time')}`.trim(),
+          reason: failed ? 'a failed attempt — not money received' : `transaction state is "${state}", not SaleSuccess` })
         continue
       }
       const type = text(r, 'Transaction Type')
@@ -172,7 +179,7 @@ export function parseHdfcSmartHub(rows, { entityId = null } = {}) {
       rows_in_file: body.length,
       receipts: receipts.length,
       refused: review.filter((x) => x.refused).length,
-      failed_attempts: review.filter((x) => x.refused && x.reason.startsWith('a failed attempt')).length,
+      failed_attempts: review.filter((x) => x.failed_attempt).length,
       small_amount_flagged: receipts.filter((x) => x._small).length,
       duplicate_txn_ids: dupes,
       total_paise: receipts.reduce((a, x) => a + x.amount_paise, 0),

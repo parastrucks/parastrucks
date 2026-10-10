@@ -17,7 +17,7 @@ import { parseBharatPe, parseGpay } from '../lib/parseUpi.js'
 import { parseHdfcSmartHub } from '../lib/parseHdfc.js'
 import {
   KIND_LABEL, parseImportFile, existingInvoiceFromRow, diffInvoices, diffReceipts,
-  importGates, rowsToCommit, expectedCounts, reconcile, billCoverage,
+  importGates, rowsToCommit, expectedCounts, reconcile, billCoverage, notImported,
 } from '../lib/importPlan.js'
 import {
   fetchOutlets, findPriorBatch, fetchExistingInvoices,
@@ -158,8 +158,7 @@ export default function ImportPanel({ entityId, onImported, onGoMatch }) {
 function Preview({ plan, committing, onCommit, onCancel }) {
   const { kind, parsed, diff, gates, coverage, file } = plan
   const bills = kind === 'billing_report'
-  const refused = bills ? parsed.refused : parsed.review.filter((r) => r.refused)
-  const failed = parsed.summary?.failed_attempts ?? 0
+  const { failedAttempts, unreadable } = notImported(kind, parsed)
   const settles = Object.entries(parsed.summary?.settles_by_day_paise ?? {}).sort(([a], [b]) => a.localeCompare(b))
   const qrs = parsed.summary?.qrs ?? []
   const newValue = diff.new.reduce((a, r) => a + (bills ? r.total_paise : r.amount_paise), 0)
@@ -200,8 +199,8 @@ function Preview({ plan, committing, onCommit, onCancel }) {
         <Count label="Held back" n={diff.held.length} warn />
         {/* A failed attempt is not an unreadable row: the payer retried, and
             the retry is in this file as a payment. Shown, never imported. */}
-        <Count label="Failed attempts — not money" n={failed} />
-        <Count label="Could not be read" n={refused.length - failed} warn />
+        <Count label="Failed attempts — not money" n={failedAttempts.length} />
+        <Count label="Could not be read" n={unreadable.length} warn />
       </dl>
 
       {bills && coverage && (
@@ -232,7 +231,10 @@ function Preview({ plan, committing, onCommit, onCancel }) {
 
       <Fold title="Held back" items={diff.held} render={(h) => `${label(h.row)} — ${h.reason}`} />
       {bills && <Fold title="Clashes" items={diff.conflict} render={(c) => `${c.row.invoice_number} — ${c.reason}`} />}
-      <Fold title="Could not be read" items={refused}
+      <Fold title="Failed attempts — not money" items={failedAttempts}
+            render={(r) => `Row ${r.row} — ${r.amount_paise != null ? formatINR(r.amount_paise) : 'amount unreadable'}` +
+              `${r.payer_name ? ` from ${r.payer_name}` : ''}${r.when ? `, ${r.when}` : ''} — not imported; the payer usually tried again`} />
+      <Fold title="Could not be read" items={unreadable}
             render={(r) => `Row ${r.row}${r.invoice_number || r.txnId ? ` (${r.invoice_number || r.txnId})` : ''} — ${r.reason}`} />
       {bills && <Fold title="Changed since last import" items={diff.amended}
             render={(a) => `${a.row.invoice_number} — ${a.changed.join(', ')}: ${formatINR(a.was.total_paise)} → ${formatINR(a.row.total_paise)}${a.row.status !== a.was.status ? `, ${a.was.status} → ${a.row.status}` : ''}`} />}

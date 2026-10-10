@@ -257,6 +257,21 @@ export function importGates({ kind, parsed, diff, priorBatch, entityPlants = Obj
   return { blocking, warnings, ok: blocking.length === 0 }
 }
 
+/**
+ * The rows a file holds that will NOT be imported, in two kinds a person
+ * treats differently. A failed attempt is not money and is normal (the payer
+ * retried); an unreadable row means the file is not what we think it is.
+ * Listing both under "Could not be read" made a routine retry look like a
+ * damaged file (first browser walk-through, 2026-10-10).
+ */
+export function notImported(kind, parsed) {
+  const all = kind === 'billing_report' ? (parsed.refused ?? []) : (parsed.review ?? []).filter((r) => r.refused)
+  return {
+    failedAttempts: all.filter((r) => r.failed_attempt),
+    unreadable: all.filter((r) => !r.failed_attempt),
+  }
+}
+
 /** The rows to send: everything read, minus what the preview held back. */
 export function rowsToCommit(kind, parsed, diff) {
   const held = new Set(diff.held.map((h) => h.row))

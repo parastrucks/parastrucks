@@ -16,7 +16,7 @@ import path from 'node:path'
 import * as XLSX from 'xlsx'
 import { writeDemoFiles, DAYS, DEMO_QR, hdfcTxnId } from './make-demo-files.mjs'
 import {
-  parseImportFile, importGates, diffInvoices, diffReceipts, billCoverage, expectedCounts,
+  parseImportFile, importGates, diffInvoices, diffReceipts, billCoverage, expectedCounts, notImported,
 } from '../../src/service-payments/lib/importPlan.js'
 import { parseBillingReport } from '../../src/service-payments/lib/parseBillingReport.js'
 import { parseBharatPe, parseGpay } from '../../src/service-payments/lib/parseUpi.js'
@@ -99,6 +99,15 @@ const rupees = (paise) => paise / 100
      Object.entries(h1.parsed.summary.settles_by_day_paise).map(([d, p]) => [d, rupees(p)]),
      [[DAYS.d4, 2150], [DAYS.d3, 22375.67], [DAYS.d2, 27627], [DAYS.d1, 3860]])
   eq('Ramesh\'s ₹4,800 arrives ONCE, not twice', h1.parsed.receipts.filter((r) => r.amount_paise === 480000).length, 1)
+  // Found on the first browser run: the folded list put the failed attempt
+  // under "Could not be read", making a routine retry look like a bad file.
+  const ni = notImported('hdfc', h1.parsed)
+  eq('the not-imported rows split: 1 failed attempt, 0 unreadable', [ni.failedAttempts.length, ni.unreadable.length], [1, 0])
+  eq('...and the failed attempt says whose and how much, so the retry can be found',
+     [ni.failedAttempts[0]?.payer_name, ni.failedAttempts[0]?.amount_paise, ni.failedAttempts[0]?.when.startsWith(DAYS.d2)],
+     ['RAMESH SHARMA', 480000, true])
+  eq('a Billing Report has no failed attempts; its refusals stay "could not be read"',
+     notImported('billing_report', { refused: [{ row: 9, reason: 'x' }] }).unreadable.length, 1)
 }
 
 // ════════════════════════════════════════════════════════════════════════════
