@@ -55,6 +55,10 @@ export const ROLE_GATES: Record<string, (c: Caller) => boolean> = {
   create_group:          (c) => isGmPlus(c),
   assign_customer_group: (c) => isGmPlus(c),
   set_credit_limit:      (c) => isGmPlus(c),
+  // "Bill not raised yet": moves no money and classifies nothing, so it follows
+  // the matching rule. UPI: service and accounts; anything else adds
+  // allocateModeAllowed, exactly as a match would.
+  set_awaiting_invoice:  (c) => inScope(c),
 }
 
 export const DENIED_MESSAGE: Record<string, string> = {
@@ -70,6 +74,7 @@ export const DENIED_MESSAGE: Record<string, string> = {
   create_group:          "A GM or admin creates customer groups.",
   assign_customer_group: "A GM or admin assigns customers to groups.",
   set_credit_limit:      "A GM or admin sets credit limits.",
+  set_awaiting_invoice:  "Service payments is for the service and accounts teams.",
 }
 
 /** Anything not UPI — cash, cheque, bank — is keyed and matched by accounts. */

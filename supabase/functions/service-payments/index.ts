@@ -242,6 +242,34 @@ Deno.serve(async (req: Request) => {
         })
       }
 
+      case "set_awaiting_invoice": {
+        // "Bill not raised yet": the payment waits, out of the daily queue,
+        // until a bill that could be its own is imported. No money moves.
+        const receiptId = str(payload.receipt_id)
+        if (!receiptId) return json({ error: "receipt_id required" }, 400)
+        if (typeof payload.awaiting !== "boolean") {
+          return json({ error: "awaiting must be true or false" }, 400)
+        }
+        // Same line as matching: service staff for UPI; cash, cheque and bank
+        // money is accounts' to place, and so accounts' to call "waiting".
+        {
+          const { data: rcpt, error: rErr } = await admin
+            .from("payment_receipts").select("mode")
+            .eq("id", receiptId).eq("entity_id", entityId).maybeSingle()
+          if (rErr) return json({ error: rErr.message }, 400)
+          if (!rcpt) return json({ error: "Receipt not found" }, 404)
+          if (!allocateModeAllowed(caller, rcpt.mode)) {
+            return json({ error: "Accounts handles cash, cheque and bank receipts." }, 403)
+          }
+        }
+        return await rpc("payments_set_awaiting_invoice", {
+          p_entity_id: entityId,
+          p_receipt_id: receiptId,
+          p_awaiting: payload.awaiting,
+          p_actor: caller.id,
+        })
+      }
+
       case "close_tds": {
         // Accounts closes up to the 5% cap; a GM may be the one asked to go over.
         const invoiceId = str(payload.invoice_id)

@@ -63,6 +63,9 @@ const EXPECT = {
   create_group:          payGm,
   assign_customer_group: payGm,
   set_credit_limit:      payGm,
+  // "Bill not raised yet" (2026-10-12): moves no money, so it follows matching —
+  // service and accounts for UPI; cash/cheque/bank stays accounts (mode check).
+  set_awaiting_invoice:  (p) => admin(p) || inDept(p),
 }
 
 // 1. The gate table covers exactly the actions the plan names.
@@ -111,6 +114,8 @@ const named = [
   ['a Service executive CAN match',              { dept: 'service', level: 'executive' }, 'allocate',         true],
   ['an Accounts executive CAN void a receipt',   { dept: 'accounts', level: 'executive' },'void_receipt',     true],
   ['the admin (no department) CAN import bills', { dept: null, level: 'admin' },          'import_invoices',  true],
+  ['a Service executive CAN say a bill is not raised yet', { dept: 'service', level: 'executive' }, 'set_awaiting_invoice', true],
+  ['a Sales manager cannot say a bill is not raised yet',  { dept: 'sales', level: 'manager' },     'set_awaiting_invoice', false],
 ]
 for (const [label, p, a, want] of named) check(label, ROLE_GATES[a](caller(p)), want)
 check('a Service executive cannot match a CASH receipt',
