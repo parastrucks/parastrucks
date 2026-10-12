@@ -174,8 +174,18 @@ export function matchCandidates(receipt, index, {
   windowDays = DEFAULT_WINDOW_DAYS,
   limit = 8,
   feedIsStale = false,
+  undone = [],
 } = {}) {
   const receiptDate = receiptDayOf(receipt.received_at)
+  // Bills this payment was placed on and then taken off again (an undone
+  // match). A person has already said "not this one" about them, so they are
+  // never offered to this payment again — the pre-mortem's F1 loop: an advance
+  // confirmed onto the only same-amount bill, reversed, and the same bill back
+  // the next morning as "only bill at this exact amount", three times running.
+  // Search can still find one; the screen then says it was taken off before.
+  const ruledOut = new Set(undone)
+  const isRuledOut = (d) => (d.invoice_ids ?? [d.id]).some((id) => ruledOut.has(id))
+  let hidden = 0
   const noteNumbers = receipt.note_numbers || []
   const regNos = receipt.reg_nos || []
   const payer = receipt.normalized_payer_name || normalizePayerName(receipt.payer_name)
@@ -194,6 +204,9 @@ export function matchCandidates(receipt, index, {
     // The window is a filter, not a score: a bill from three weeks ago is not
     // a weak candidate, it is a different question (and lives under search).
     if (days === null || Math.abs(days) > windowDays) continue
+    // An order whose parts OR labour bill was taken off goes too: the person
+    // ruled out that pairing, and the order card would offer it again.
+    if (ruledOut.size && isRuledOut(d)) { hidden++; continue }
 
     let score = 0
     const signals = []
@@ -228,6 +241,7 @@ export function matchCandidates(receipt, index, {
     if (d.amount_paise === receipt.amount_paise) {
       const sameAmount = (index.byAmount.get(d.amount_paise) || [])
         .filter((o) => { const g = dayGap(receiptDate, o.date); return g !== null && Math.abs(g) <= windowDays })
+        .filter((o) => !(ruledOut.size && isRuledOut(o)))
       const unique = sameAmount.length === 1
       score += unique ? WEIGHTS.AMOUNT_UNIQUE : WEIGHTS.AMOUNT_AMBIGUOUS
       signals.push({
@@ -291,16 +305,25 @@ export function matchCandidates(receipt, index, {
   // When the top two are within epsilon and nothing decisive separates them,
   // presenting an order is a lie about how much we know. Show the list
   // unordered and say so.
+  //
+  // Once a payment has been taken off a bill, "only bill at this amount" no
+  // longer counts as strong for it: the first "only" was wrong, and the usual
+  // reason (an advance whose bill was not raised yet) makes the next "only"
+  // no more trustworthy. The label stays true — the bill taken off is not
+  // counted — but nothing is presented as the confident answer.
   const hasStrong = top[0]?.signals?.some((s) =>
     s.signal === 'reg_full' || s.signal === 'reg_last4' ||
-    s.signal === 'amount_unique' || s.signal === 'payer_memory')
+    (s.signal === 'amount_unique' && !ruledOut.size) || s.signal === 'payer_memory')
   const tied = top.length >= 2 && (top[0].score - top[1].score) < TIE_EPSILON
   const refuse = Boolean(tied && !hasStrong)
 
   let reason = ''
   if (feedIsStale) reason = 'The invoice feed is out of date — confirm is disabled until fresh bills land.'
-  else if (!top.length) reason = 'No open bill within 3 days at this amount. Search by name or amount, or skip it for now.'
+  else if (!top.length) reason = hidden
+    ? 'No other open bill within 3 days at this amount — the bill it was taken off is not offered again. Search by name or amount, or skip it for now.'
+    : 'No open bill within 3 days at this amount. Search by name or amount, or skip it for now.'
   else if (refuse) reason = `${top.length} bills look equally likely. Pick the one you recognise — they are not ranked.`
+  else if (hidden) reason = 'The bill this payment was taken off before is not offered again.'
 
   return {
     candidates: refuse ? top.map((c) => ({ ...c, rank: null })) : top.map((c, i) => ({ ...c, rank: i + 1 })),
@@ -309,6 +332,7 @@ export function matchCandidates(receipt, index, {
                        (top.length === 1 || top[0].score - top[1].score >= 30)),
     reason,
     searched: index.docCount,
+    hidden_undone: hidden,
   }
 }
 

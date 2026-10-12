@@ -71,6 +71,28 @@ export async function fetchPayerMemory(entityId, names) {
   return out
 }
 
+/**
+ * Matches that were undone for these payments — the bills a person already
+ * said "not this one" about. Same read gate as the payments themselves
+ * (payment_allocations_select), so service staff see their own UPI history.
+ */
+export async function fetchUndoneMatches(entityId, receiptIds) {
+  const unique = [...new Set(receiptIds.filter(Boolean))]
+  const out = []
+  for (let i = 0; i < unique.length; i += 100) {
+    const { data, error } = await supabase
+      .from('payment_allocations')
+      .select('receipt_id, invoice_id, reversed_at, reverse_reason')
+      .eq('entity_id', entityId)
+      .eq('alloc_type', 'payment')
+      .not('reversed_at', 'is', null)
+      .in('receipt_id', unique.slice(i, i + 100))
+    if (error) throw error
+    out.push(...(data || []))
+  }
+  return out
+}
+
 /** When the bill feed last landed. Null when nothing has ever been imported. */
 export async function fetchInvoiceFeed(entityId) {
   const { data, error } = await supabase

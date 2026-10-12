@@ -13,7 +13,7 @@
 import {
   capabilitiesFor, toMatchReceipt, orderQueue, invoiceWindow, attachCustomerCodes,
   memoryForMatcher, allocationTargets, matchSignalOf, feedIsStaleFor, searchCandidates,
-  parseSearch, splitWaiting, searchPickCandidates, windowDaysFor,
+  parseSearch, splitWaiting, searchPickCandidates, windowDaysFor, undoneByReceipt, undoneNote,
 } from '../../src/service-payments/lib/matchQueue.js'
 import { buildCandidateIndex, matchCandidates } from '../../src/service-payments/lib/matchCandidates.js'
 
@@ -307,6 +307,49 @@ section('a bill found by SEARCH brings its order partner (parts + labour)')
      searchPickCandidates(parts, [labour], 1165000)[0].invoice_ids.sort(), ['LCS1', 'PCS1'])
   eq('a part-paid partner counts only what it still owes',
      searchPickCandidates(parts, [{ ...labour, allocated_paise: 100000 }], 1065000)[0].amount_paise, 1065000)
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+section('undone matches — remembered per payment (pre-mortem F1)')
+{
+  const rows = [
+    { receipt_id: 'r1', invoice_id: 'A', reversed_at: '2026-10-10T05:00:00.000Z', reverse_reason: 'Wrong customer' },
+    { receipt_id: 'r1', invoice_id: 'A', reversed_at: '2026-10-12T20:00:00.000Z', reverse_reason: 'Still wrong' },
+    { receipt_id: 'r1', invoice_id: 'B', reversed_at: '2026-10-11T05:00:00.000Z', reverse_reason: null },
+    { receipt_id: 'r2', invoice_id: 'A', reversed_at: '2026-10-11T05:00:00.000Z', reverse_reason: 'x' },
+    { receipt_id: 'r3', invoice_id: 'C', reversed_at: null },   // not undone: ignored
+  ]
+  const m = undoneByReceipt(rows)
+  eq('grouped by payment, one entry per bill, newest first',
+     m.get('r1').map((u) => [u.invoice_id, u.reverse_reason]), [['A', 'Still wrong'], ['B', '']])
+  ok('another payment\'s undo is its own', m.get('r2').length === 1 && !m.has('r3'))
+  eq('nothing in, nothing out', undoneByReceipt(undefined).size, 0)
+
+  // 20:00 UTC on the 12th is 01:30 on the 13th in India.
+  eq('a search pick of that bill says so, with the IST day and the reason',
+     undoneNote(m.get('r1'), ['A']),
+     'This payment was taken off this bill before on 13 Oct ("Still wrong"). Check it is really the one before you confirm again.')
+  ok('...also when the bill is one of the picked order\'s bills', /taken off this bill before/.test(undoneNote(m.get('r1'), ['Z', 'B'])))
+  eq('...and says nothing for a bill it was never taken off', undoneNote(m.get('r1'), ['Z']), '')
+  eq('...or for a payment with no undo', undoneNote(undefined, ['A']), '')
+  ok('an unreadable time drops the date, never the warning',
+     /^This payment was taken off this bill before\. /.test(undoneNote([{ invoice_id: 'A', reversed_at: 'garbage', reverse_reason: '' }], ['A'])))
+
+  // A waiting payment must not come back for the bill it was taken off: the
+  // person said "not this one" about it, which "bill imported since" would
+  // otherwise overrule every morning.
+  const MARKED = '2026-10-10T06:00:00.000Z'
+  const bill = { id: 'N', invoice_number: 'MPI1', status: 'active', total_paise: 777700, allocated_paise: 0,
+                 invoice_date: '2026-10-11', customer_name: 'QUICK FREIGHT', created_at: '2026-10-11T18:00:00.000Z' }
+  const idx = buildCandidateIndex([bill])
+  const r = toMatchReceipt({ id: 'w', amount_paise: 777700, allocated_paise: 0, received_at: '2026-10-08T06:00:00.000Z',
+                             payer_name: 'QUICK FREIGHT', awaiting_invoice: true, awaiting_since: MARKED })
+  const byId = new Map([[bill.id, bill]])
+  const today = '2026-10-12'
+  const withUndo = (und) => splitWaiting([r], (x) => matchCandidates(x, idx, {
+    windowDays: windowDaysFor(x, today, 3), undone: und }).candidates, byId)
+  ok('control: a new bill at its amount brings a waiting payment back', withUndo([]).queue.length === 1)
+  ok('...but not the bill it was taken off', withUndo(['N']).queue.length === 0 && withUndo(['N']).waiting.length === 1)
 }
 
 console.log(`\n${'═'.repeat(64)}`)

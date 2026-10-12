@@ -174,6 +174,44 @@ export function memoryForMatcher(memoryRows, customers) {
 }
 
 /**
+ * Undone matches, by payment: receipt id -> [{invoice_id, reversed_at,
+ * reverse_reason}], newest first, one entry per bill. The matcher takes the
+ * bill ids (`undone`) and never offers them to that payment again; a search
+ * pick reads the date and reason to say so (pre-mortem F1).
+ */
+export function undoneByReceipt(rows) {
+  const out = new Map()
+  const sorted = [...(rows ?? [])]
+    .filter((r) => r.receipt_id && r.invoice_id && r.reversed_at)
+    .sort((a, b) => String(b.reversed_at).localeCompare(String(a.reversed_at)))
+  for (const r of sorted) {
+    if (!out.has(r.receipt_id)) out.set(r.receipt_id, [])
+    const list = out.get(r.receipt_id)
+    if (!list.some((x) => x.invoice_id === r.invoice_id)) {
+      list.push({ invoice_id: r.invoice_id, reversed_at: r.reversed_at, reverse_reason: r.reverse_reason ?? '' })
+    }
+  }
+  return out
+}
+
+/**
+ * What a search pick says when the payment was taken off that bill (or one
+ * of its order's bills) before. Empty when it never was.
+ */
+export function undoneNote(undoneForReceipt, invoiceIds) {
+  const hit = (undoneForReceipt ?? []).find((u) => invoiceIds.includes(u.invoice_id))
+  if (!hit) return ''
+  let when = ''
+  try {
+    const day = istDateOf(hit.reversed_at)
+    when = ` on ${new Intl.DateTimeFormat('en-IN', { timeZone: 'UTC', day: 'numeric', month: 'short' })
+      .format(new Date(`${day}T00:00:00Z`))}`
+  } catch { /* an unreadable time drops the date, never the warning */ }
+  const why = hit.reverse_reason ? ` ("${hit.reverse_reason}")` : ''
+  return `This payment was taken off this bill before${when}${why}. Check it is really the one before you confirm again.`
+}
+
+/**
  * Turn a picked candidate into the RPC's targets.
  *
  * A job candidate is two or more bills. The customer paid one sum, so the

@@ -296,6 +296,62 @@ section('shape of the answer')
 
 ok('tie epsilon is small enough to be meaningful', TIE_EPSILON > 0 && TIE_EPSILON < 20)
 
+// ════════════════════════════════════════════════════════════════════════════
+section('a bill the payment was taken off is not offered to it again (pre-mortem F1)')
+
+{
+  // The loop the pre-mortem reproduced three times on one payment: a ₹3,400
+  // advance paid on the 23rd, its real bill not raised until the 28th. The one
+  // ₹3,400 bill in the window is offered as "only bill at this exact amount",
+  // confirmed, taken off by accounts — and offered again the next morning.
+  const X = invoice({ total_paise: 340000, invoice_date: '2026-10-24', customer_name: 'RAJ CARRIERS' })
+  const R = receipt({ amount_paise: 340000, received_at: '2026-10-23T06:00:00.000Z' })
+  const idx = buildCandidateIndex([X])
+  const first = matchCandidates(R, idx)
+  ok('before: the lone same-amount bill is the confident "only bill"',
+     first.confident && first.candidates[0]?.id === X.id &&
+     first.candidates[0].signals.some((s) => s.signal === 'amount_unique'))
+  eq('an empty undo list changes nothing at all', matchCandidates(R, idx, { undone: [] }), first)
+
+  const after = matchCandidates(R, idx, { undone: [X.id] })
+  eq('after it was taken off: that bill is not offered', after.candidates.length, 0)
+  ok('...nothing is confident', !after.confident)
+  ok('...and the screen says why the list is empty',
+     /taken off is not offered again/.test(after.reason) && /Search/.test(after.reason), after.reason)
+  eq('...one bill was left out', after.hidden_undone, 1)
+
+  // Two same-amount bills; the payment was taken off one of them.
+  const Y = invoice({ total_paise: 340000, invoice_date: '2026-10-23', customer_name: 'ALPHA ROADLINES' })
+  const Z = invoice({ total_paise: 340000, invoice_date: '2026-10-23', customer_name: 'BETA FREIGHT' })
+  const idx2 = buildCandidateIndex([Y, Z])
+  ok('two same-amount bills: both offered, neither confident',
+     matchCandidates(R, idx2).candidates.length === 2 && !matchCandidates(R, idx2).confident)
+  const after2 = matchCandidates(R, idx2, { undone: [Y.id] })
+  eq('taken off one: only the other is offered', after2.candidates.map((c) => c.id), [Z.id])
+  ok('...it is the only one left at the amount, and says so',
+     after2.candidates[0].signals.some((s) => s.signal === 'amount_unique'))
+  ok('...but after an undo "only" is not presented as the confident answer', !after2.confident)
+  ok('...and the screen says the other was left out', /not offered again/.test(after2.reason), after2.reason)
+
+  // A parts + labour order: taken off the labour bill rules out the order too.
+  const parts = invoice({ total_paise: 800000, job_ref: 'J-77', invoice_date: '2026-10-23' })
+  const labour = invoice({ total_paise: 265000, job_ref: 'J-77', invoice_date: '2026-10-23' })
+  const R3 = receipt({ amount_paise: 1065000, received_at: '2026-10-23T06:00:00.000Z' })
+  const idx3 = buildCandidateIndex([parts, labour])
+  ok('before: the whole order is offered', matchCandidates(R3, idx3).candidates.some((c) => c.id === 'job:J-77'))
+  const after3 = matchCandidates(R3, idx3, { undone: [labour.id] })
+  ok('taken off its labour bill: no card containing that bill is offered',
+     after3.candidates.every((c) => !c.invoice_ids.includes(labour.id)) &&
+     !after3.candidates.some((c) => c.id === 'job:J-77'))
+
+  // A bill outside the window is not "left out" — it was never in view.
+  const far = matchCandidates(R, idx, { undone: ['inv-far-away'] })
+  eq('an undo for a bill not in view leaves the list as it was',
+     far.candidates.map((c) => c.id), first.candidates.map((c) => c.id))
+  ok('...still not confident: this payment has been wrong once', !far.confident)
+  eq('...and nothing is said about a hidden bill', far.reason, '')
+}
+
 console.log(`\n${'═'.repeat(64)}`)
 console.log(`${fail === 0 ? 'ALL PASS' : 'FAILURES'}   ${pass} passed, ${fail} failed`)
 process.exit(fail === 0 ? 0 : 1)

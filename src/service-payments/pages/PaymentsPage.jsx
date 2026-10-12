@@ -20,10 +20,12 @@ import { buildCandidateIndex, matchCandidates, DEFAULT_WINDOW_DAYS } from '../li
 import {
   capabilitiesFor, toMatchReceipt, orderQueue, splitWaiting, invoiceWindow, attachCustomerCodes,
   memoryForMatcher, allocationTargets, matchSignalOf, feedIsStaleFor, searchPickCandidates, REFRESHING, windowDaysFor,
+  undoneByReceipt, undoneNote,
 } from '../lib/matchQueue.js'
 import {
   fetchPaymentsEntityId, fetchDepartmentCode, fetchOpenReceipts, fetchOpenInvoices,
   fetchCustomerCodes, fetchPayerMemory, fetchInvoiceFeed, searchOpenInvoices, fetchOpenJobBills,
+  fetchUndoneMatches,
 } from '../lib/paymentsData.js'
 import { formatINR } from '../lib/paise.js'
 import { istDateOf } from '../lib/dates.js'
@@ -51,6 +53,7 @@ export default function PaymentsPage() {
   const [invoices, setInvoices] = useState([])
   const [found, setFound] = useState([])          // bills picked through search
   const [memory, setMemory] = useState([])
+  const [undone, setUndone] = useState(() => new Map())   // receipt id -> bills it was taken off
   const [feed, setFeed] = useState(null)
   const [skipped, setSkipped] = useState([])
   const [doneToday, setDoneToday] = useState(0)
@@ -90,9 +93,10 @@ export default function PaymentsPage() {
       const workable = rows.filter((r) => c.canMatchMode(r.mode)).map(toMatchReceipt)
 
       const win = invoiceWindow(workable, DEFAULT_WINDOW_DAYS, { today: istDateOf(new Date().toISOString()) })
-      const [inv, mem] = await Promise.all([
+      const [inv, mem, und] = await Promise.all([
         win ? fetchOpenInvoices(ent, win) : [],
         fetchPayerMemory(ent, workable.map((r) => r.normalized_payer_name)),
+        fetchUndoneMatches(ent, workable.map((r) => r.id)),
       ])
       const customers = await fetchCustomerCodes([
         ...inv.map((v) => v.customer_id), ...mem.map((m) => m.customer_id),
@@ -101,6 +105,7 @@ export default function PaymentsPage() {
       setReceipts(workable)
       setInvoices(attachCustomerCodes(inv, customers))
       setMemory(memoryForMatcher(mem, customers))
+      setUndone(undoneByReceipt(und))
       setFeed(feedRow)
       setPhase('ready')
     } catch (e) {
@@ -121,11 +126,15 @@ export default function PaymentsPage() {
 
   // Payments waiting for their bill stay out of today's list until a bill
   // imported since they were marked could be theirs (splitWaiting).
+  // A bill a payment was taken off is never offered to it again (pre-mortem F1).
+  const undoneIds = useCallback((r) => (undone.get(r.id) ?? []).map((u) => u.invoice_id), [undone])
   const { queue, waiting } = useMemo(() => splitWaiting(
     receipts,
-    (r) => matchCandidates(r, index, { payerMemory: memory, windowDays: windowDaysFor(r, today, DEFAULT_WINDOW_DAYS) }).candidates,
+    (r) => matchCandidates(r, index, {
+      payerMemory: memory, windowDays: windowDaysFor(r, today, DEFAULT_WINDOW_DAYS), undone: undoneIds(r),
+    }).candidates,
     invoicesById,
-  ), [receipts, index, memory, invoicesById, today])
+  ), [receipts, index, memory, invoicesById, today, undoneIds])
   const pool = showWaiting ? waiting : queue
   useEffect(() => { if (showWaiting && waiting.length === 0) setShowWaiting(false) }, [showWaiting, waiting.length])
 
@@ -139,8 +148,9 @@ export default function PaymentsPage() {
     if (override?.receiptId === current.id) return override.result
     return matchCandidates(current, index, {
       payerMemory: memory, feedIsStale: stale, windowDays: windowDaysFor(current, today, DEFAULT_WINDOW_DAYS),
+      undone: undoneIds(current),
     })
-  }, [current, index, memory, stale, override, today])
+  }, [current, index, memory, stale, override, today, undoneIds])
 
   const search = useCallback(async (q) => {
     const rows = await searchOpenInvoices(entityId, q)
@@ -270,6 +280,8 @@ export default function PaymentsPage() {
       } catch { orderBills = [] }
     }
     const candidates = searchPickCandidates(invoice, orderBills, current.amount_paise)
+    // Search can still reach a bill this payment was taken off — say so first.
+    const before = undoneNote(undone.get(current.id), [invoice.id, ...orderBills.map((o) => o.id)])
     setFound((f) => [...f.filter((v) => v.id !== invoice.id && !orderBills.some((o) => o.id === v.id)), invoice,
                      ...orderBills.filter((o) => o.id !== invoice.id)])
     // The bill the person tapped comes back PICKED — they chose it; making
@@ -282,9 +294,9 @@ export default function PaymentsPage() {
         candidates,
         refuse_to_rank: false,
         confident: false,
-        reason: candidates.length > 1
+        reason: before || (candidates.length > 1
           ? `You found this bill by searching, and it is picked. Its order has ${candidates.find((c) => c.kind === 'job').member_count} open bills — pick the whole order instead if the payment covers them all.`
-          : 'You found this bill by searching, and it is picked. Check the name and amount, then confirm.',
+          : 'You found this bill by searching, and it is picked. Check the name and amount, then confirm.'),
         searched: 1,
       },
     })
