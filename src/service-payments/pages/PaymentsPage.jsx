@@ -19,13 +19,14 @@ import ImportPanel from '../components/ImportPanel.jsx'
 import { buildCandidateIndex, matchCandidates, DEFAULT_WINDOW_DAYS } from '../lib/matchCandidates.js'
 import {
   capabilitiesFor, toMatchReceipt, orderQueue, splitWaiting, invoiceWindow, attachCustomerCodes,
-  memoryForMatcher, allocationTargets, matchSignalOf, feedIsStaleFor, searchPickCandidates, REFRESHING,
+  memoryForMatcher, allocationTargets, matchSignalOf, feedIsStaleFor, searchPickCandidates, REFRESHING, windowDaysFor,
 } from '../lib/matchQueue.js'
 import {
   fetchPaymentsEntityId, fetchDepartmentCode, fetchOpenReceipts, fetchOpenInvoices,
   fetchCustomerCodes, fetchPayerMemory, fetchInvoiceFeed, searchOpenInvoices, fetchOpenJobBills,
 } from '../lib/paymentsData.js'
 import { formatINR } from '../lib/paise.js'
+import { istDateOf } from '../lib/dates.js'
 
 const newRequestId = () => globalThis.crypto?.randomUUID?.() ?? null
 
@@ -71,7 +72,7 @@ export default function PaymentsPage() {
       // UPI; cash, cheque and bank money is accounts' to place.
       const workable = rows.filter((r) => c.canMatchMode(r.mode)).map(toMatchReceipt)
 
-      const win = invoiceWindow(workable, DEFAULT_WINDOW_DAYS)
+      const win = invoiceWindow(workable, DEFAULT_WINDOW_DAYS, { today: istDateOf(new Date().toISOString()) })
       const inv = win ? await fetchOpenInvoices(ent, win) : []
       const mem = await fetchPayerMemory(ent, workable.map((r) => r.normalized_payer_name))
       const customers = await fetchCustomerCodes([
@@ -96,13 +97,16 @@ export default function PaymentsPage() {
     () => new Map([...invoices, ...found].map((v) => [v.id, v])),
     [invoices, found])
 
+  // The IST calendar day — a waiting payment's bill may be dated up to it.
+  const today = istDateOf(new Date().toISOString())
+
   // Payments waiting for their bill stay out of today's list until a bill
   // imported since they were marked could be theirs (splitWaiting).
   const { queue, waiting } = useMemo(() => splitWaiting(
     receipts,
-    (r) => matchCandidates(r, index, { payerMemory: memory }).candidates,
+    (r) => matchCandidates(r, index, { payerMemory: memory, windowDays: windowDaysFor(r, today, DEFAULT_WINDOW_DAYS) }).candidates,
     invoicesById,
-  ), [receipts, index, memory, invoicesById])
+  ), [receipts, index, memory, invoicesById, today])
   const pool = showWaiting ? waiting : queue
   useEffect(() => { if (showWaiting && waiting.length === 0) setShowWaiting(false) }, [showWaiting, waiting.length])
 
@@ -114,8 +118,10 @@ export default function PaymentsPage() {
   const result = useMemo(() => {
     if (!current) return undefined
     if (override?.receiptId === current.id) return override.result
-    return matchCandidates(current, index, { payerMemory: memory, feedIsStale: stale })
-  }, [current, index, memory, stale, override])
+    return matchCandidates(current, index, {
+      payerMemory: memory, feedIsStale: stale, windowDays: windowDaysFor(current, today, DEFAULT_WINDOW_DAYS),
+    })
+  }, [current, index, memory, stale, override, today])
 
   const search = useCallback(async (q) => {
     const rows = await searchOpenInvoices(entityId, q)

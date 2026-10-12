@@ -13,8 +13,9 @@
 import {
   capabilitiesFor, toMatchReceipt, orderQueue, invoiceWindow, attachCustomerCodes,
   memoryForMatcher, allocationTargets, matchSignalOf, feedIsStaleFor, searchCandidates,
-  parseSearch, splitWaiting, searchPickCandidates,
+  parseSearch, splitWaiting, searchPickCandidates, windowDaysFor,
 } from '../../src/service-payments/lib/matchQueue.js'
+import { buildCandidateIndex, matchCandidates } from '../../src/service-payments/lib/matchCandidates.js'
 
 let pass = 0, fail = 0
 const ok = (name, cond, detail = '') => {
@@ -250,6 +251,33 @@ section('"bill not raised yet" — who may say it, and when a waiting payment co
   ok('no record of when it was marked: comes back (one extra look beats never)', s.queue.length === 1)
   s = split([r('b'), r('a'), { id: 'n', awaiting_invoice: false }])
   eq('mixed: two in the list, one waiting', [s.queue.map((x) => x.id).sort(), s.waiting.map((x) => x.id)], [['b', 'n'], ['a']])
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+section('an ADVANCE paid days before its bill still comes back')
+{
+  const TODAY = '2026-10-10'
+  const paid = (o = {}) => ({ id: 'adv', received_at: '2026-10-01T05:00:00.000Z', awaiting_invoice: true,
+    awaiting_since: '2026-10-01T06:00:00.000Z', amount_paise: 1500000, payer_name: 'DEMO ADVANCE',
+    normalized_payer_name: 'DEMO ADVANCE', note_numbers: [], reg_nos: [], ...o })
+  eq('an ordinary payment keeps the usual window', windowDaysFor({ received_at: '2026-10-01T05:00:00Z' }, TODAY, 3), 3)
+  eq('a waiting one looks from its own day up to today (9 days)', windowDaysFor(paid(), TODAY, 3), 9)
+  eq('...never less than the usual window', windowDaysFor(paid({ received_at: '2026-10-09T05:00:00Z' }), TODAY, 3), 3)
+  eq('...and at most about a quarter', windowDaysFor(paid({ received_at: '2026-01-01T05:00:00Z' }), TODAY, 3), 90)
+
+  eq('the bills fetched for an ordinary queue stop 3 days after the last payment',
+     invoiceWindow([{ received_at: '2026-10-01T05:00:00Z' }], 3, { today: TODAY }), { from: '2026-09-28', to: '2026-10-04' })
+  eq('...but reach today when a payment is waiting',
+     invoiceWindow([paid()], 3, { today: TODAY }), { from: '2026-09-28', to: TODAY })
+
+  // The real shape: a ₹15,000 advance on the 1st, its bill raised on the 10th.
+  const bill = { id: 'B', invoice_number: 'B', invoice_date: TODAY, total_paise: 1500000, allocated_paise: 0,
+    status: 'active', customer_name: 'DEMO ADVANCE', created_at: '2026-10-10T12:00:00.000Z' }
+  const idx = buildCandidateIndex([bill])
+  const back = (days) => splitWaiting([paid()], (r) => matchCandidates(r, idx, { windowDays: days(r) }).candidates,
+    new Map([['B', bill]]))
+  ok('with the waiting window, the advance comes back for its bill', back((r) => windowDaysFor(r, TODAY, 3)).queue.length === 1)
+  ok('...with only the usual 3 days it would NEVER come back', back(() => 3).waiting.length === 1)
 }
 
 // ════════════════════════════════════════════════════════════════════════════

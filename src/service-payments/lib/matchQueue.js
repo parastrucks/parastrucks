@@ -124,13 +124,36 @@ function addDays(isoDate, n) {
  * widened by the matcher's window on both sides. Null when there is nothing to
  * match — the screen then fetches no bills at all.
  */
-export function invoiceWindow(receipts, windowDays) {
+export function invoiceWindow(receipts, windowDays, { today = null } = {}) {
   const days = receipts
     .map((r) => { try { return istDateOf(r.received_at) } catch { return null } })
     .filter(Boolean)
     .sort()
   if (!days.length) return null
-  return { from: addDays(days[0], -windowDays), to: addDays(days[days.length - 1], windowDays) }
+  let to = addDays(days[days.length - 1], windowDays)
+  // A payment waiting for its bill was paid BEFORE the bill: its bill may be
+  // dated any day up to today, not just within the usual few days.
+  if (today && receipts.some((r) => r.awaiting_invoice) && today > to) to = today
+  return { from: addDays(days[0], -windowDays), to }
+}
+
+/** How far back a waiting payment may be from its bill — about a quarter. */
+export const WAITING_MAX_DAYS = 90
+
+/**
+ * The matcher's date window for one receipt. Ordinary payments: the usual few
+ * days either side. A payment waiting for its bill ("Bill not raised yet"):
+ * from its own day up to today, so an advance paid on the 1st is found by a
+ * bill raised on the 10th — the 3-day window would never show it, and the
+ * payment would never come back. Bills that were already there when it was
+ * marked are kept out by splitWaiting, not by the window.
+ */
+export function windowDaysFor(receipt, today, defaultDays) {
+  if (!receipt?.awaiting_invoice || !today) return defaultDays
+  let day
+  try { day = istDateOf(receipt.received_at) } catch { return defaultDays }
+  const gap = Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${day}T00:00:00Z`)) / 86400000)
+  return Math.min(WAITING_MAX_DAYS, Math.max(defaultDays, gap))
 }
 
 /** Put the SAP customer code beside every bill — it is shown beside every name. */
