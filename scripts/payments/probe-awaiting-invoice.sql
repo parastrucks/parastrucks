@@ -92,11 +92,17 @@ BEGIN
    WHERE id = v_open AND classification = 'unknown' AND allocated_paise = 0;
   PERFORM pg_temp.zz_check('1 mark: moves no money, classifies nothing', v_n = 1, v_n::text);
 
-  -- ── 2. A repeated tap is a no-op ──────────────────────────────────────────
+  -- ── 2. Marking again = "still not raised": the clock restarts ────────────
+  -- (now() is fixed inside one transaction, so age the mark first.)
+  UPDATE public.payment_receipts SET awaiting_since = now() - interval '3 days' WHERE id = v_open;
   v_res := public.payments_set_awaiting_invoice(v_e, v_open, true, v_a);
-  PERFORM pg_temp.zz_check('2 again: changed = false', NOT (v_res->>'changed')::boolean, v_res::text);
-  SELECT count(*) INTO v_n FROM public.payment_events WHERE receipt_id = v_open AND event_type = 'awaiting_invoice';
-  PERFORM pg_temp.zz_check('2 again: still one event', v_n = 1, v_n::text);
+  PERFORM pg_temp.zz_check('2 again: a re-confirmation', (v_res->>'reconfirmed')::boolean, v_res::text);
+  SELECT count(*) INTO v_n FROM public.payment_receipts
+   WHERE id = v_open AND awaiting_invoice AND awaiting_since > now() - interval '1 minute';
+  PERFORM pg_temp.zz_check('2 again: restarts the clock', v_n = 1, v_n::text);
+  SELECT count(*) INTO v_n FROM public.payment_events
+   WHERE receipt_id = v_open AND event_type = 'awaiting_invoice' AND detail->>'reconfirmed' = 'true';
+  PERFORM pg_temp.zz_check('2 again: logged as "still waiting"', v_n = 1, v_n::text);
 
   -- ── 3. Unmark ─────────────────────────────────────────────────────────────
   v_res := public.payments_set_awaiting_invoice(v_e, v_open, false, v_a);
@@ -105,6 +111,10 @@ BEGIN
   SELECT count(*) INTO v_n FROM public.payment_events
    WHERE receipt_id = v_open AND event_type = 'awaiting_invoice' AND detail->>'awaiting_invoice' = 'false';
   PERFORM pg_temp.zz_check('3 unmark: logged too', v_n = 1, v_n::text);
+  v_res := public.payments_set_awaiting_invoice(v_e, v_open, false, v_a);
+  SELECT count(*) INTO v_n FROM public.payment_events
+   WHERE receipt_id = v_open AND event_type = 'awaiting_invoice' AND detail->>'awaiting_invoice' = 'false';
+  PERFORM pg_temp.zz_check('3 unmark again: changes and logs nothing', NOT (v_res->>'changed')::boolean AND v_n = 1, v_res::text);
 
   -- ── 4. Part-matched money can wait for its second bill ────────────────────
   v_res := public.payments_set_awaiting_invoice(v_e, v_part, true, v_a);

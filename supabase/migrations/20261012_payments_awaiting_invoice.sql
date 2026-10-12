@@ -105,11 +105,15 @@ BEGIN
     END IF;
   END IF;
 
-  -- Asking twice (a retried tap, a dropped connection) changes nothing and
-  -- logs nothing.
-  IF v_r.awaiting_invoice = p_awaiting THEN
-    RETURN jsonb_build_object('receipt_id', p_receipt_id, 'awaiting_invoice', p_awaiting, 'changed', false);
+  -- Unmarking what is not marked changes nothing and logs nothing.
+  IF NOT p_awaiting AND NOT v_r.awaiting_invoice THEN
+    RETURN jsonb_build_object('receipt_id', p_receipt_id, 'awaiting_invoice', false, 'changed', false);
   END IF;
+  -- Marking what is ALREADY marked is a re-confirmation, not a no-op: a waiting
+  -- payment comes back when a newer bill arrives, and if that bill is not it
+  -- either, "still not raised" must restart the clock — or it would come back
+  -- every morning for that same bill. Logged, so the history shows each "still
+  -- waiting". (A retried tap only restarts the clock a few seconds later.)
 
   -- payments_allocate clears the flag on a match but leaves awaiting_since
   -- as it was; it means nothing once the flag is false, and is reset here the
@@ -125,10 +129,12 @@ BEGIN
   ) VALUES (
     p_entity_id, 'awaiting_invoice', p_actor, v_actor_name,
     v_r.amount_paise - v_r.allocated_paise, p_receipt_id,
-    jsonb_build_object('awaiting_invoice', p_awaiting)
+    jsonb_build_object('awaiting_invoice', p_awaiting,
+                       'reconfirmed', p_awaiting AND v_r.awaiting_invoice)
   );
 
-  RETURN jsonb_build_object('receipt_id', p_receipt_id, 'awaiting_invoice', p_awaiting, 'changed', true);
+  RETURN jsonb_build_object('receipt_id', p_receipt_id, 'awaiting_invoice', p_awaiting, 'changed', true,
+                            'reconfirmed', p_awaiting AND v_r.awaiting_invoice);
 END;
 $fn$;
 
