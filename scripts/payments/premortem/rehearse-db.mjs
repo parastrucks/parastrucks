@@ -31,6 +31,12 @@ const SNAPSHOT_DATE = '20260721'
 const args = process.argv.slice(2)
 const through = args.includes('--through') ? args[args.indexOf('--through') + 1] : null
 const STATEMENT_TIMEOUT = args.includes('--timeout') ? args[args.indexOf('--timeout') + 1] : '90s'
+// Files not applied, each with the reason. 20260825_tiv_upload_and_prune.sql
+// hangs PGlite indefinitely (twice, >20 min each; statement_timeout does not
+// fire in WASM). It creates tiv_upload_and_prune(), a TIV-only function no
+// payments object references (verified by grep: no payments file mentions
+// tiv_*). Prod applied it on 2026-08-25 (CLAUDE.md). --include-all re-enables it.
+const SKIP_FILES = args.includes('--include-all') ? [] : ['20260825_tiv_upload_and_prune.sql']
 const keep = args.includes('--keep') ? args[args.indexOf('--keep') + 1] : null
 
 export async function openRehearsalDb({ log = console.log, quiet = false, seed = true } = {}) {
@@ -108,6 +114,12 @@ export async function openRehearsalDb({ log = console.log, quiet = false, seed =
   const applied = []
   for (const f of files) {
     if (through && f > through) break
+    if (SKIP_FILES.includes(f)) {
+      stubs.push(`migration ${f} NOT applied (hangs PGlite; TIV-only, nothing in payments depends on it)`)
+      applied.push({ file: f, statements: 0, ran: 0, errors: [], secs: '0', skipped: true })
+      say(`${f}: SKIPPED (see stubs)`)
+      continue
+    }
     const sql = fs.readFileSync(path.join(dir, f), 'utf8')
     const parts = splitSql(sql)
     const errs = []
