@@ -32,6 +32,23 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ## Current state (2026-10-12)
 
+- **🧪 SERVICE PAYMENTS — PRE-MORTEM 1 ("30 days after go-live") IN PROGRESS on branch
+  `premortem-1`** (cloud session; base `32d3484`; no live system touched). Track A: a
+  **PGlite (PostgreSQL 17.5, WASM) rehearsal of the prod migration** — prod snapshot
+  `docs/db/schema-current.sql` + seed + every migration after 2026-07-21 in filename order,
+  statement by statement, every gap stated — built in `scripts/payments/premortem/`; first run
+  loaded the snapshot (9 benign failures: psql meta-lines, extension COMMENTs, pgcrypto/uuid-ossp
+  unavailable and unused) and the seed, then stalled CPU-bound in the 2026-07/08 migrations;
+  **post-migration checks and the four probes not yet run.** Track B: `simulate-month.mjs`
+  (30 days through the real parsers/matcher/RPCs, modelled world with `[plan]`/`[assumed]`
+  knobs) written, **not yet run** (`node --experimental-strip-types …`). Track C chosen: the
+  **five verbs with no UI** — only `allocate`, `classify_receipt`, `set_awaiting_invoice` and
+  the two imports have callers in `src/`; `reverse_allocation`, `manual_receipt`, `void`,
+  `on_account`, `close_tds`, groups are RPC-only — so a cancelled-under-money clash, a wrong
+  confirm, and every cash/cheque-settled bill stay as they are until someone runs SQL.
+  ⭐ **Record, candidate findings P1–P10 with evidence tags, owner questions Q1–Q5, rehearsal
+  gaps and the resume log: `docs/backlog/service-payments-premortem-1.md`.** ⚠️ GitHub push
+  from the cloud session was 403 all day → the branch will arrive as a git bundle.
 - **🔎 SERVICE PAYMENTS — RED TEAM 4 (layman UI/UX) RUN; 31 consolidated findings, no fixes.**
   Seven cold-started lanes (mechanic · counter advisor · accounts clerk · first-day user ·
   plain-English editor · "can I undo?" supervisor · one code-reading expert) over 46 static

@@ -26,6 +26,46 @@
 
 ---
 
+## Session log — 2026-10-12 (night, cloud): pre-mortem 1 — "Service Payments, 30 days after go-live" (in progress)
+
+**Why.** With red team 4's first fix batch in, the owner set a pre-mortem: assume money went
+on the wrong bill, was counted twice or lost, or the morning stopped working, and find out
+what, before prod. Three tracks (migration rehearsal on a prod-shaped database · a simulated
+first month through the real code · the reader's own pick), hard evidence rules
+([Reproduced] / [Read in code] / [Inferred]), no live systems, no fixes, severity by money.
+
+**What exists at this commit.** `scripts/payments/premortem/`: a PGlite (PostgreSQL 17.5)
+loader that takes the prod schema snapshot, the reference seed and every later migration
+statement by statement the way psql would, printing every gap; seven synthetic users (prod's
+are PII); a post-migration check list (one `source` CHECK left, one `event_type` CHECK left,
+`NULLS NOT DISTINCT` idempotency index, security_invoker views, grants, the six
+`/payments` access rules, the btree_gist EXCLUDE); a probe runner for the four self-aborting
+probes; and a 30-day simulation that drives the real parsers, `importPlan`, matcher,
+`matchQueue` and RPCs with a modelled workshop (the plan's measured rates where it has them,
+stated assumptions elsewhere) and scores the month against ground truth. The rehearsal's own
+gaps are written before any result: no Supabase default privileges, no PostgREST role
+switching (reads run as superuser, so RLS is not enforced here), no pg_net/HTTP trigger, WASM
+timing, no real users.
+
+**What the reading already established (tags in the doc).** Only five of thirteen Edge
+Function actions have a caller in `src/` — reverse, void, manual receipt, on-account, TDS and
+the group verbs are RPC-only — so the import rules' three conflict branches (cancelled under
+money, customer changed, total below paid) produce a clash every morning that the product
+cannot clear; "Only bill at this exact amount" is computed inside the ±3-day window and the
+page fetches only that window, so the same open amount outside it is invisible to the label;
+a concurrent import can trip `customers_entity_code_key` and the Import screen then says the
+file was already imported; invoice amendments never update date, plate, job or terms;
+`payer_memory` is never written; open bills only fall when UPI pays them (no manual receipt
+UI, no `openingBalanceAsOf`). Owner questions: the RPC statement timeout, credit-terms payment
+lag, HDFC's settlement day boundary, Mintoak id stability, which verbs need a UI before
+go-live.
+
+**State.** Branch `premortem-1` on `32d3484`; the rehearsal's first full run was CPU-bound in
+the 2026-07/08 migrations when this was written; probes and the simulation not yet run.
+Cloud pushes 403 → bundle. Full resume log in `docs/backlog/service-payments-premortem-1.md`.
+
+---
+
 ## Session log — 2026-10-12 (evening): red team 4 — the Service Payments screens from a layman's seat
 
 **Why.** Three red-team rounds attacked the design; one browser walk-through found nine screen
