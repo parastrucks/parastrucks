@@ -1,7 +1,30 @@
 # Service Payments — red team 4: end-to-end UI/UX from a layman's seat
 
-**Status: FINDINGS CONSOLIDATED (2026-10-12). No fixes made. Owner to rank fixes.**
+**Status: FINDINGS CONSOLIDATED (2026-10-12). First batch of fixes landed (`e49ea7b`); design items
+await the owner.**
 Raw lane outputs: `docs/backlog/redteam4-lanes/` (L1–L6, X1). Rig: `scripts/payments/redteam4-rig/`.
+
+### Fix status (2026-10-12, PC session)
+
+| Item | Status | Note |
+|---|---|---|
+| R4-1 desktop bar pill | ✅ `e49ea7b` | measured in the pane at 1024: 560 px, centre = column centre (630 = 630) |
+| R4-2 fold marker | ✅ `e49ea7b` | own ▸/▾; Clashes open by default. Not seen on screen (no clash on staging) — CSS contract |
+| R4-8 picked card | ◐ `e49ea7b` | 4 px bar + ✓; toast names the customer. **Button naming the customer: owner** |
+| R4-10 stale said twice | ✅ `e49ea7b` | one message, who loads; bar "Confirm is off — bills not loaded yet" even after a pick |
+| R4-11 after Confirm | ◐ `e49ea7b` | Skip fades; reload skips who-am-I, bills + memory in parallel. Toast position + "Undo" in it: with R4-3 |
+| R4-13 same name "similar" | ◐ `e49ea7b` | identical names say "matches". **"Name is different" line: owner (wording)** |
+| R4-15 opened block off-screen | ◐ `e49ea7b` | scrolls into view above the bar (measured at 360: all 5 reasons above it). Per-escape explainer lines: owner |
+| R4-16 waiting flow | ◐ `e49ea7b` | strip padding fixed. **"Stop waiting" button + grey returned line: owner** |
+| R4-17 end screens | ◐ `e49ea7b` | "All matched except 1 waiting…", "could be its own", skipped ≠ waiting. "When did the file come in" on M12a: owner |
+| R4-19 denied | ✅ `e49ea7b` | says what is wrong and who fixes it |
+| R4-20 search | ◐ `e49ea7b` | returns picked; "10 Oct" dates; <3 digits = amount only. Tap-chips + balance wording: owner |
+| R4-22 contrast | ✅ `e49ea7b` | 6.2–7.3:1 (was 1.84–4.13), measured |
+| R4-25 dead scroll | ✅ `e49ea7b` | measured contract in `selftest-mobile-render` |
+| R4-26 a11y | ◐ `e49ea7b` | stale banner is a status. "Saving…" announcement + strip live region: later |
+| R4-27 TypeError | ✅ `e49ea7b` | "No connection. Check the internet and try again." |
+| R4-28 blank names | ◐ `e49ea7b` | "No name on the payment / on the bill". "Sister concern", refund direction: with the wordlist |
+| R4-3 undo, R4-4/7 phone head + landscape, R4-5 date + plate on cards, R4-6 part-pay remainder, R4-9 not-service confirm, R4-12 "2 bills" breakdown, R4-14 nav, R4-18 tie-out, R4-21 wordlist, R4-23 keyboard, R4-24 link-blue reasons + the + button, R4-29/30/31 | ⏭️ owner | design choices — see the chat; R4-3 needs no server work (`reverse_allocation` exists: reason required, maker/accounts pre-export, GM after) |
 
 ## Why this round
 
