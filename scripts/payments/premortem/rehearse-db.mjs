@@ -31,17 +31,19 @@ const SNAPSHOT_DATE = '20260721'
 const args = process.argv.slice(2)
 const through = args.includes('--through') ? args[args.indexOf('--through') + 1] : null
 const STATEMENT_TIMEOUT = args.includes('--timeout') ? args[args.indexOf('--timeout') + 1] : '90s'
-// Files not applied, each with the reason. 20260825_tiv_upload_and_prune.sql
-// hangs PGlite indefinitely (twice, >20 min each; statement_timeout does not
-// fire in WASM). It creates tiv_upload_and_prune(), a TIV-only function no
-// payments object references (verified by grep: no payments file mentions
-// tiv_*). Prod applied it on 2026-08-25 (CLAUDE.md). --include-all re-enables it.
-const SKIP_FILES = args.includes('--include-all') ? [] : ['20260825_tiv_upload_and_prune.sql']
+// Files not applied. None by default: the "PGlite hang" on
+// 20260825_tiv_upload_and_prune.sql (and later on 20260830_payments_a1_schema.sql)
+// was an exponential regex in sql-split.mjs, fixed 2026-10-12; every
+// post-snapshot migration now applies. --skip <name> leaves one out on purpose.
+const SKIP_FILES = args.includes('--skip') ? [args[args.indexOf('--skip') + 1]] : []
 const TRACE = args.includes('--trace')   // print each migration statement before running it
 const keep = args.includes('--keep') ? args[args.indexOf('--keep') + 1] : null
 
 export async function openRehearsalDb({ log = console.log, quiet = false, seed = true } = {}) {
-  const db = new PGlite(keep || undefined, { extensions: { btree_gist, uuid_ossp } })
+  // One options object: PGlite treats a non-string first argument AS the options
+  // and drops the second, so `new PGlite(undefined, { extensions })` silently
+  // loads no extensions and btree_gist reads "not available".
+  const db = new PGlite({ ...(keep ? { dataDir: keep } : {}), extensions: { btree_gist, uuid_ossp } })
   await db.waitReady
   const say = quiet ? () => {} : log
 
