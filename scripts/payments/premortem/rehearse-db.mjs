@@ -30,6 +30,7 @@ const SNAPSHOT = path.join(REPO, 'docs/db/schema-current.sql')
 const SNAPSHOT_DATE = '20260721'
 const args = process.argv.slice(2)
 const through = args.includes('--through') ? args[args.indexOf('--through') + 1] : null
+const STATEMENT_TIMEOUT = args.includes('--timeout') ? args[args.indexOf('--timeout') + 1] : '90s'
 const keep = args.includes('--keep') ? args[args.indexOf('--keep') + 1] : null
 
 export async function openRehearsalDb({ log = console.log, quiet = false, seed = true } = {}) {
@@ -76,6 +77,12 @@ export async function openRehearsalDb({ log = console.log, quiet = false, seed =
 
   // Session search_path for everything after the snapshot (the dump reset it to '').
   await db.exec(`SET search_path = public, extensions;`)
+  // A statement that never returns would otherwise hang the whole rehearsal
+  // (20260825_tiv_upload_and_prune.sql did, >20 minutes in WASM). With a
+  // timeout it is recorded as a failure like any other — a stated gap, not a
+  // silent one. Prod's own statement_timeout is unknown to the repo (Q1).
+  await stub(`statement_timeout = ${STATEMENT_TIMEOUT} for every post-snapshot statement (PGlite would otherwise hang forever on one)`,
+    `SET statement_timeout = '${STATEMENT_TIMEOUT}';`)
 
   // ── reference rows (prod seed snapshot, same date) + synthetic users ─────
   // Stated gaps: the seed holds reference tables only (no users, no business
@@ -105,11 +112,13 @@ export async function openRehearsalDb({ log = console.log, quiet = false, seed =
     const parts = splitSql(sql)
     const errs = []
     let ran = 0
+    const t0 = Date.now()
     for (const s of parts) {
       try { await db.exec(s); ran++ } catch (e) { errs.push({ error: e.message.split('\n')[0], head: head(s) }) }
     }
-    applied.push({ file: f, statements: parts.length, ran, errors: errs })
-    say(`${f}: ${ran}/${parts.length} statements${errs.length ? ` — ${errs.length} FAILED` : ''}`)
+    const secs = ((Date.now() - t0) / 1000).toFixed(1)
+    applied.push({ file: f, statements: parts.length, ran, errors: errs, secs })
+    say(`${f}: ${ran}/${parts.length} statements in ${secs}s${errs.length ? ` — ${errs.length} FAILED` : ''}`)
     for (const e of errs) say(`    ✗ ${e.error}\n      at: ${e.head}`)
   }
   return { db, stubs, skipped, failed, applied, files, seeded }
