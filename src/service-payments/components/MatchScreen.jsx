@@ -29,7 +29,9 @@ import { REFRESHING } from '../lib/matchQueue.js'
  * @param {()=>void} props.onSkip
  * @param {(kind:string)=>void} [props.onNotService]  absent = this person may not
  *        classify (accounts decides); the exit still shows and says who does
- * @param {()=>void} [props.onHoldAdvance]  absent = hidden (no write path yet)
+ * @param {(awaiting:boolean)=>void} [props.onHoldAdvance]  "Bill not raised yet":
+ *        true = wait for the bill (again = "still not raised"), false = back to
+ *        today's list. Absent = hidden (this person may not, for this mode).
  * @param {()=>void} [props.onSearch]       absent = hidden
  *
  * An action is offered only when its callback is supplied, so the container —
@@ -53,6 +55,7 @@ export default function MatchScreen({
 }) {
   const [selectedId, setSelectedId] = useState(null)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [waitOpen, setWaitOpen] = useState(false)
 
   if (!receipt) {
     return (
@@ -103,6 +106,13 @@ export default function MatchScreen({
         <p className="pay-receipt-meta">
           {sourceLabel(receipt.source)} · {timeLabel(receipt.received_at)}
         </p>
+        {receipt.awaiting_invoice && (
+          <p className="pay-receipt-waiting">
+            {receipt.back_for_new_bill
+              ? 'Was waiting for its bill — a bill imported since could be it'
+              : `Waiting for its bill${receipt.awaiting_since ? ` since ${dayLabel(receipt.awaiting_since)}` : ''}`}
+          </p>
+        )}
         {receipt.payer_remark && (
           <p className="pay-receipt-note">“{receipt.payer_remark}”</p>
         )}
@@ -166,20 +176,49 @@ export default function MatchScreen({
           </button>
         )}
         {onHoldAdvance && (
-          <button type="button" className="pay-secondary" onClick={onHoldAdvance} disabled={busy}>
-            Bill not raised yet
+          <button type="button" className="pay-secondary" aria-expanded={waitOpen}
+                  onClick={() => { setMenuOpen(false); setWaitOpen((v) => !v) }} disabled={busy}>
+            {receipt.awaiting_invoice ? 'Still not raised' : 'Bill not raised yet'}
           </button>
         )}
         <button
           type="button"
           className="pay-secondary"
           aria-expanded={menuOpen}
-          onClick={() => setMenuOpen((v) => !v)}
+          onClick={() => { setWaitOpen(false); setMenuOpen((v) => !v) }}
           disabled={busy}
         >
           Not a service payment
         </button>
       </div>
+
+      {/* One tap to open, one to confirm: the payment is about to leave today's
+          list, so say where it goes and when it comes back. */}
+      {waitOpen && onHoldAdvance && (
+        <div className="pay-wait" role="group" aria-label="Wait for its bill">
+          <p className="pay-hint">
+            {receipt.awaiting_invoice
+              ? 'Still not raised? It goes back to waiting, and returns only for a bill imported after now.'
+              : 'Wait for its bill? It leaves today’s list and comes back by itself when a newly imported bill could be its own.'}
+          </p>
+          <div className="pay-escapes">
+            <button type="button" className="pay-secondary" disabled={busy}
+                    onClick={() => { setWaitOpen(false); onHoldAdvance(true) }}>
+              {receipt.awaiting_invoice ? 'Yes, keep waiting' : 'Yes, wait for the bill'}
+            </button>
+            {receipt.awaiting_invoice ? (
+              <button type="button" className="pay-secondary" disabled={busy}
+                      onClick={() => { setWaitOpen(false); onHoldAdvance(false) }}>
+                Not waiting — keep it in today’s list
+              </button>
+            ) : (
+              <button type="button" className="pay-secondary" onClick={() => setWaitOpen(false)}>
+                Cancel
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Kept visible even for someone who may not classify: a person who
           cannot find this exit picks a bill instead, and that is a wrong
@@ -236,6 +275,13 @@ export default function MatchScreen({
 function sourceLabel(source) {
   return { hdfc: 'HDFC QR', gpay: 'Google Pay', bharatpe: 'BharatPe', manual: 'Entered by hand',
            bank_statement: 'Bank statement', opening_balance: 'Opening balance' }[source] || source
+}
+
+/** "12 Oct" — the day a payment started waiting; the hour adds nothing. */
+function dayLabel(iso) {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  return new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short' }).format(d)
 }
 
 function timeLabel(iso) {

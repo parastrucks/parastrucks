@@ -13,7 +13,7 @@
 import {
   capabilitiesFor, toMatchReceipt, orderQueue, invoiceWindow, attachCustomerCodes,
   memoryForMatcher, allocationTargets, matchSignalOf, feedIsStaleFor, searchCandidates,
-  parseSearch,
+  parseSearch, splitWaiting,
 } from '../../src/service-payments/lib/matchQueue.js'
 
 let pass = 0, fail = 0
@@ -213,6 +213,43 @@ section('codes, memory, search results and the audit signal')
   eq('the strongest signal is recorded, not the first listed',
      matchSignalOf({ signals: [{ signal: 'date' }, { signal: 'amount_ambiguous' }, { signal: 'reg_last4' }] }), 'reg_last4')
   eq('date alone is never recorded as the reason', matchSignalOf({ signals: [{ signal: 'date' }] }), null)
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+section('"bill not raised yet" — who may say it, and when a waiting payment comes back')
+{
+  const who = (level, dept) => capabilitiesFor({ permission_level: level, is_active: true }, dept)
+  // Moves no money, so it follows matching (plan: "Allocate UPI: service, accounts").
+  ok('a service executive may say it for UPI', who('executive', 'service').canMarkWaiting('upi'))
+  ok('...not for cash — that money is accounts\' to place', !who('executive', 'service').canMarkWaiting('cash'))
+  ok('accounts may say it for cash', who('executive', 'accounts').canMarkWaiting('cash'))
+  ok('a Sales manager may not say it at all', !who('manager', 'sales').canMarkWaiting('upi'))
+
+  const MARKED = '2026-10-10T06:00:00.000Z'
+  const bills = new Map([
+    ['old', { id: 'old', created_at: '2026-10-09T18:00:00.000Z' }],   // there when it was marked
+    ['new', { id: 'new', created_at: '2026-10-11T18:00:00.000Z' }],   // imported since
+  ])
+  const r = (id, o = {}) => ({ id, awaiting_invoice: true, awaiting_since: MARKED, ...o })
+  const cands = { a: [{ invoice_ids: ['old'] }], b: [{ invoice_ids: ['old'] }, { invoice_ids: ['new'] }],
+                  c: [], d: [{ invoice_ids: ['old', 'new'] }] }
+  const split = (rs) => splitWaiting(rs, (x) => cands[x.id] ?? [], bills)
+
+  let s = split([{ id: 'n', awaiting_invoice: false }])
+  eq('an ordinary payment is in today\'s list', [s.queue.length, s.waiting.length], [1, 0])
+  s = split([r('a')])
+  eq('marked while a ₹1,930 bill was already open: STAYS waiting (the person saw it and said no)',
+     [s.queue.length, s.waiting.length], [0, 1])
+  s = split([r('b')])
+  ok('a bill imported SINCE it was marked: comes back, flagged', s.queue.length === 1 && s.queue[0].back_for_new_bill)
+  s = split([r('c')])
+  eq('no possible bill at all: stays waiting', [s.queue.length, s.waiting.length], [0, 1])
+  s = split([r('d')])
+  ok('a parts+labour pair with one new bill in it: comes back', s.queue.length === 1)
+  s = split([r('a', { awaiting_since: null })])
+  ok('no record of when it was marked: comes back (one extra look beats never)', s.queue.length === 1)
+  s = split([r('b'), r('a'), { id: 'n', awaiting_invoice: false }])
+  eq('mixed: two in the list, one waiting', [s.queue.map((x) => x.id).sort(), s.waiting.map((x) => x.id)], [['b', 'n'], ['a']])
 }
 
 console.log(`\n${'═'.repeat(64)}`)

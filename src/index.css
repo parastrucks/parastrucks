@@ -3469,6 +3469,20 @@ tbody tr:hover td { background: var(--gray-50); }
 
 /* Part-matched: the big number is what is LEFT; this says of how much. */
 .pay-receipt-part { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+/* "Bill not raised yet" — the plan's amber chip: waiting is not unfinished
+   work, but it must never be forgotten either. */
+.pay-receipt-waiting {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--amber-light);
+  color: var(--amber);
+  border: 1px solid var(--amber);
+  border-radius: 2px;
+  padding: 2px 8px;
+}
+.pay-wait { margin-top: 8px; }
 
 /* Search — same column, same thumb zone. The field is 16px so iOS Safari does
    not zoom the page when it takes focus. */

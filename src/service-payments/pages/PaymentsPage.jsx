@@ -18,7 +18,7 @@ import SearchPanel from '../components/SearchPanel.jsx'
 import ImportPanel from '../components/ImportPanel.jsx'
 import { buildCandidateIndex, matchCandidates, DEFAULT_WINDOW_DAYS } from '../lib/matchCandidates.js'
 import {
-  capabilitiesFor, toMatchReceipt, orderQueue, invoiceWindow, attachCustomerCodes,
+  capabilitiesFor, toMatchReceipt, orderQueue, splitWaiting, invoiceWindow, attachCustomerCodes,
   memoryForMatcher, allocationTargets, matchSignalOf, feedIsStaleFor, searchCandidates, REFRESHING,
 } from '../lib/matchQueue.js'
 import {
@@ -48,6 +48,7 @@ export default function PaymentsPage() {
   const [override, setOverride] = useState(null)  // { receiptId, result } from search
   const [searching, setSearching] = useState(false)
   const [tab, setTab] = useState('match')          // match | import (import: accounts/admin)
+  const [showWaiting, setShowWaiting] = useState(false) // looking at "bill not raised yet" payments
 
   // One idempotency key per (receipt, candidate, amount). A retry after a
   // dropped connection reuses it, so the server answers "already done" instead
@@ -95,8 +96,18 @@ export default function PaymentsPage() {
     () => new Map([...invoices, ...found].map((v) => [v.id, v])),
     [invoices, found])
 
+  // Payments waiting for their bill stay out of today's list until a bill
+  // imported since they were marked could be theirs (splitWaiting).
+  const { queue, waiting } = useMemo(() => splitWaiting(
+    receipts,
+    (r) => matchCandidates(r, index, { payerMemory: memory }).candidates,
+    invoicesById,
+  ), [receipts, index, memory, invoicesById])
+  const pool = showWaiting ? waiting : queue
+  useEffect(() => { if (showWaiting && waiting.length === 0) setShowWaiting(false) }, [showWaiting, waiting.length])
+
   const skippedSet = useMemo(() => new Set(skipped), [skipped])
-  const ordered = useMemo(() => orderQueue(receipts, skipped), [receipts, skipped])
+  const ordered = useMemo(() => orderQueue(pool, skipped), [pool, skipped])
   const current = ordered.find((r) => !skippedSet.has(r.id)) ?? null
   const stale = current ? feedIsStaleFor(current, feed) : false
 
@@ -179,6 +190,42 @@ export default function PaymentsPage() {
     }
   }
 
+  // "Bill not raised yet" (true; again = "still not raised") or back to today's
+  // list (false). Moves no money; the server checks the same rule as matching.
+  const handleWaiting = async (awaiting) => {
+    if (!current) return
+    setPendingId('waiting')
+    try {
+      await callEdge('service-payments', 'set_awaiting_invoice', {
+        entity_id: entityId,
+        receipt_id: current.id,
+        awaiting,
+      })
+      toast.success(awaiting
+        ? 'Waiting for its bill — it comes back when a new bill could be its own'
+        : 'Back in today’s list')
+      setOverride(null)
+      // Show the outcome now; the reload confirms it. The server's clock is the
+      // one that counts — this local stamp only has to be "now-ish" for the
+      // split until the reload replaces it.
+      const id = current.id
+      const since = new Date().toISOString()
+      // Looking through the waiting ones, "still waiting" keeps it in that list —
+      // move past it rather than showing the same card again.
+      if (showWaiting && awaiting) setSkipped((s) => [...s, id])
+      setReceipts((rs) => rs.map((r) => (r.id === id
+        ? { ...r, awaiting_invoice: awaiting, awaiting_since: awaiting ? since : null, back_for_new_bill: false }
+        : r)))
+      setPendingId(REFRESHING)
+      await load({ quiet: true })
+    } catch (e) {
+      toast.error(e?.message || 'Could not save that')
+      await load({ quiet: true })
+    } finally {
+      setPendingId(null)
+    }
+  }
+
   const handleSkip = () => {
     if (!current) return
     setOverride(null)
@@ -215,7 +262,8 @@ export default function PaymentsPage() {
         <div className="seg pay-tabs" role="tablist" aria-label="Payments">
           <button type="button" role="tab" aria-selected={tab === 'match'}
                   className={`seg-btn ${tab === 'match' ? 'active' : ''}`} onClick={() => setTab('match')}>
-            Match{receipts.length ? ` (${receipts.length})` : ''}
+            {/* Waiting payments are not unfinished work, so they are not counted. */}
+            Match{queue.length ? ` (${queue.length})` : ''}
           </button>
           <button type="button" role="tab" aria-selected={tab === 'import'}
                   className={`seg-btn ${tab === 'import' ? 'active' : ''}`} onClick={() => setTab('import')}>
@@ -263,6 +311,7 @@ export default function PaymentsPage() {
             // skipped ones — keep them at the back (first browser run).
             if (kind === 'billing_report') setSkipped([])
             setOverride(null)
+            setShowWaiting(false)
             setTab('match')
           }}
         />
@@ -270,18 +319,69 @@ export default function PaymentsPage() {
     )
   }
 
-  if (!current && skipped.length > 0) {
+  const skippedHere = pool.filter((r) => skippedSet.has(r.id)).length
+  const lookAtWaiting = (
+    <button type="button" className="pay-secondary"
+            onClick={() => { setSkipped([]); setOverride(null); setShowWaiting(true) }}>
+      Look at the {waiting.length} waiting for {waiting.length === 1 ? 'its bill' : 'their bills'}
+    </button>
+  )
+  const backToToday = (
+    <button type="button" className="pay-secondary"
+            onClick={() => { setSkipped([]); setOverride(null); setShowWaiting(false) }}>
+      Back to today’s list
+    </button>
+  )
+
+  if (!current && showWaiting) {
     return (
       <div className="page">{header}
         <div className="pay-match pay-match-empty">
-          <h2 className="pay-empty-title">{skipped.length} skipped</h2>
+          <h2 className="pay-empty-title">That’s all the waiting ones</h2>
+          <p className="pay-empty-sub">
+            They stay out of today’s list and come back by themselves when a newly imported bill
+            could be theirs.
+          </p>
+          {backToToday}
+        </div>
+      </div>
+    )
+  }
+
+  if (!current && skippedHere > 0) {
+    return (
+      <div className="page">{header}
+        <div className="pay-match pay-match-empty">
+          <h2 className="pay-empty-title">{skippedHere} skipped</h2>
           <p className="pay-empty-sub">
             Everything else is matched. The skipped payments are still waiting
             {caps?.canClassify ? '.' : ' — accounts will see them too.'}
+            {waiting.length > 0 && ` ${waiting.length} more ${waiting.length === 1 ? 'is' : 'are'} waiting for ${waiting.length === 1 ? 'its bill' : 'their bills'}.`}
           </p>
           <button type="button" className="pay-secondary" onClick={() => setSkipped([])}>
             Go through the skipped ones again
           </button>
+          {waiting.length > 0 && lookAtWaiting}
+        </div>
+      </div>
+    )
+  }
+
+  // Today's list is done, and the rest are waiting for bills not yet raised —
+  // not unfinished work, but never out of sight either.
+  if (!current && waiting.length > 0) {
+    return (
+      <div className="page">{header}
+        <div className="pay-match pay-match-empty">
+          <p className="pay-empty-tick" aria-hidden="true">✓</p>
+          <h2 className="pay-empty-title">Everything is matched</h2>
+          <p className="pay-empty-sub">
+            {waiting.length} {waiting.length === 1 ? 'payment is' : 'payments are'} waiting for{' '}
+            {waiting.length === 1 ? 'its bill' : 'their bills'}. {waiting.length === 1 ? 'It comes' : 'They come'} back
+            by {waiting.length === 1 ? 'itself' : 'themselves'} when a newly imported bill could be{' '}
+            {waiting.length === 1 ? 'its' : 'theirs'}.
+          </p>
+          {lookAtWaiting}
         </div>
       </div>
     )
@@ -303,13 +403,19 @@ export default function PaymentsPage() {
   return (
     <div className="page">
       {header}
+      {showWaiting && (
+        <div className="pay-match pay-waiting-strip" role="status">
+          <p className="pay-hint">Looking at payments waiting for their bills.</p>
+          {backToToday}
+        </div>
+      )}
       <MatchScreen
         // A new receipt, or a new list for the same one, starts with nothing
         // picked — a selection must never carry over to a different bill.
         key={`${current?.id ?? 'none'}:${current?.amount_paise ?? 0}:${override?.receiptId === current?.id ? 'search' : 'shortlist'}`}
         receipt={current}
         result={result}
-        remaining={receipts.length}
+        remaining={pool.length}
         doneToday={doneToday}
         feedIsStale={stale}
         feedAsOf={feedLabel(feed)}
@@ -318,6 +424,7 @@ export default function PaymentsPage() {
         onSkip={handleSkip}
         onNotService={caps?.canClassify ? handleNotService : undefined}
         onSearch={() => setSearching(true)}
+        onHoldAdvance={current && caps?.canMarkWaiting(current.mode) ? handleWaiting : undefined}
       />
     </div>
   )

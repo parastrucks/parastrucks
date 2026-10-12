@@ -40,7 +40,42 @@ export function capabilitiesFor(profile, departmentCode) {
     // Bills and payments are imported by accounts (admin during the pilot).
     canImport: ROLE_GATES.import_invoices(caller) && ROLE_GATES.import_receipts(caller),
     canMatchMode: (mode) => allocateModeAllowed(caller, mode),
+    // "Bill not raised yet" follows matching: the server checks the same pair.
+    canMarkWaiting: (mode) => ROLE_GATES.set_awaiting_invoice(caller) && allocateModeAllowed(caller, mode),
   }
+}
+
+/**
+ * "Bill not raised yet" payments wait OUTSIDE the daily queue, and come back
+ * only when a bill that could be theirs has been imported SINCE they were
+ * marked (the plan: "the matcher re-offers it when invoices import").
+ *
+ * Not "since it has any candidate": a ₹1,930 payment marked while four ₹1,930
+ * bills were open — the person looked at them and said none was it — would
+ * otherwise bounce straight back every morning.
+ *
+ * @param receipts        open receipts (toMatchReceipt shape)
+ * @param candidatesFor   (receipt) => the matcher's candidates for it
+ * @param invoicesById    Map id -> open invoice (carries created_at)
+ * @returns {{queue: object[], waiting: object[]}}  queue rows that came back
+ *          carry `back_for_new_bill: true` so the screen can say why.
+ */
+export function splitWaiting(receipts, candidatesFor, invoicesById) {
+  const queue = []
+  const waiting = []
+  for (const r of receipts) {
+    if (!r.awaiting_invoice) { queue.push(r); continue }
+    const since = Date.parse(r.awaiting_since ?? '')
+    const newer = (c) => (c.invoice_ids ?? []).some((id) => {
+      const made = Date.parse(invoicesById.get(id)?.created_at ?? '')
+      // An unknown time on either side counts as newer: better one extra look
+      // than a payment that never comes back.
+      return Number.isNaN(since) || Number.isNaN(made) || made > since
+    })
+    if (candidatesFor(r).some(newer)) queue.push({ ...r, back_for_new_bill: true })
+    else waiting.push(r)
+  }
+  return { queue, waiting }
 }
 
 /**

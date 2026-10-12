@@ -152,6 +152,29 @@ section('the ways out stay on screen')
   ok('mark it not-service', html.includes('Not a service payment'))
   ok('and skip', html.includes('Skip for now'))
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+section('"bill not raised yet" — offered only when allowed, and a waiting payment says so')
+{
+  const noop = () => {}
+  const base = { result: { candidates: [candidate()] }, onSkip: noop }
+  let html = render({ ...base, receipt })
+  ok('hidden when the container does not allow it (e.g. a service executive on cash)', !html.includes('Bill not raised yet'))
+  html = render({ ...base, receipt, onHoldAdvance: noop })
+  ok('shown when allowed', html.includes('Bill not raised yet') && !html.includes('Still not raised'))
+  ok('an ordinary payment carries no waiting note', !html.includes('pay-receipt-waiting'))
+
+  html = render({ ...base, onHoldAdvance: noop,
+    receipt: { ...receipt, awaiting_invoice: true, awaiting_since: '2026-10-10T06:00:00.000Z' } })
+  ok('a waiting payment shows the amber note, with the day it started waiting',
+     html.includes('pay-receipt-waiting') && html.includes('Waiting for its bill since 10 Oct'))
+  ok('...and the button becomes "Still not raised"', html.includes('Still not raised') && !html.includes('Bill not raised yet'))
+
+  html = render({ ...base, onHoldAdvance: noop,
+    receipt: { ...receipt, awaiting_invoice: true, awaiting_since: '2026-10-10T06:00:00.000Z', back_for_new_bill: true } })
+  ok('one that came back says WHY it is in today\'s list again',
+     html.includes('a bill imported since could be it'))
+}
 {
   // The container offers an action only when the server will accept it. A
   // button the server refuses teaches people the tool is broken.
