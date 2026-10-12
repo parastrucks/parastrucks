@@ -15,10 +15,45 @@
 -- service and accounts for UPI, accounts for cash/cheque/bank (enforced in the
 -- Edge Function, authority.ts: set_awaiting_invoice + allocateModeAllowed).
 --
+-- WHEN it was marked matters. A waiting payment leaves the daily queue and
+-- comes back only when a bill imported AFTER it was marked could be its own
+-- ("the matcher re-offers it when invoices import"). Without the time, a
+-- ₹1,930 payment marked while four ₹1,930 bills were open would bounce straight
+-- back every morning — the very nagging this exists to stop.
+--
 -- Additive only: one event type joins the log's allowed list (all fourteen
--- existing types kept) and one function is created. Nothing is dropped except
+-- existing types kept), one nullable column (awaiting_since), one column
+-- appended to each open-items view (the views keep every existing column, in
+-- order, and stay SECURITY INVOKER), and one function. Nothing is dropped except
 -- the CHECK constraint that is immediately re-created wider.
 -- ============================================================================
+
+ALTER TABLE public.payment_receipts ADD COLUMN IF NOT EXISTS awaiting_since timestamptz;
+
+-- Same columns as 20261009_payments_hdfc_source.sql, plus awaiting_since.
+CREATE OR REPLACE VIEW public.v_payments_open_receipts
+WITH (security_invoker = true) AS
+SELECT r.id, r.entity_id, r.mode, r.source, r.amount_paise, r.allocated_paise,
+       r.amount_paise - r.allocated_paise AS open_paise,
+       r.received_at, r.payer_name, r.payer_remark, r.classification, r.awaiting_invoice,
+       r.qr_ref, r.awaiting_since
+  FROM public.payment_receipts r
+ WHERE r.status = 'active'
+   AND r.allocated_paise < r.amount_paise
+   AND r.classification <> 'not_service';
+
+-- Same columns as 20260926_payments_views_for_match.sql, plus created_at: when
+-- the bill first arrived, which is what "imported since it was marked" compares.
+CREATE OR REPLACE VIEW public.v_payments_open_invoices
+WITH (security_invoker = true) AS
+SELECT i.id, i.entity_id, i.invoice_number, i.invoice_kind, i.job_ref, i.dealer_order_no,
+       i.sap_billing_doc, i.invoice_date, i.customer_id, i.customer_name, i.vehicle_reg_no,
+       i.payment_terms, i.total_paise, i.allocated_paise,
+       i.total_paise - i.allocated_paise AS open_paise,
+       i.status, i.created_at
+  FROM public.service_invoices i
+ WHERE i.status = 'active'
+   AND i.allocated_paise < i.total_paise;
 
 ALTER TABLE public.payment_events DROP CONSTRAINT IF EXISTS payment_events_event_type_check;
 ALTER TABLE public.payment_events ADD CONSTRAINT payment_events_event_type_check
@@ -76,8 +111,12 @@ BEGIN
     RETURN jsonb_build_object('receipt_id', p_receipt_id, 'awaiting_invoice', p_awaiting, 'changed', false);
   END IF;
 
+  -- payments_allocate clears the flag on a match but leaves awaiting_since
+  -- as it was; it means nothing once the flag is false, and is reset here the
+  -- next time the payment is marked.
   UPDATE public.payment_receipts
      SET awaiting_invoice = p_awaiting,
+         awaiting_since   = CASE WHEN p_awaiting THEN now() ELSE NULL END,
          updated_at       = now()
    WHERE id = p_receipt_id;
 

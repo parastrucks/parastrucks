@@ -53,11 +53,12 @@ BEGIN
   SELECT id INTO v_a FROM public.users WHERE permission_level = 'admin' LIMIT 1;
   IF v_e IS NULL OR v_a IS NULL THEN RAISE EXCEPTION 'need the PTB entity and an admin'; END IF;
 
-  -- Three bills to match against (the third for case 6).
+  -- Four bills: three to match against (the third for case 6), one left open (case 9).
   PERFORM public.payments_import_invoices(v_e,
     '[{"invoice_number":"ZZPROBE-AW1","sap_customer_code":"ZZAW1","customer_name":"ZZ PROBE AW","invoice_kind":"counter_sale","invoice_date":"2026-10-12","payment_terms":"cash","net_paise":40000,"tax_paise":0,"total_paise":40000,"status":"active","cancelled_flag":null},
       {"invoice_number":"ZZPROBE-AW2","sap_customer_code":"ZZAW1","customer_name":"ZZ PROBE AW","invoice_kind":"counter_sale","invoice_date":"2026-10-12","payment_terms":"cash","net_paise":50000,"tax_paise":0,"total_paise":50000,"status":"active","cancelled_flag":null},
-      {"invoice_number":"ZZPROBE-AW3","sap_customer_code":"ZZAW1","customer_name":"ZZ PROBE AW","invoice_kind":"counter_sale","invoice_date":"2026-10-12","payment_terms":"cash","net_paise":30000,"tax_paise":0,"total_paise":30000,"status":"active","cancelled_flag":null}]'::jsonb,
+      {"invoice_number":"ZZPROBE-AW3","sap_customer_code":"ZZAW1","customer_name":"ZZ PROBE AW","invoice_kind":"counter_sale","invoice_date":"2026-10-12","payment_terms":"cash","net_paise":30000,"tax_paise":0,"total_paise":30000,"status":"active","cancelled_flag":null},
+      {"invoice_number":"ZZPROBE-AW4","sap_customer_code":"ZZAW1","customer_name":"ZZ PROBE AW","invoice_kind":"counter_sale","invoice_date":"2026-10-12","payment_terms":"cash","net_paise":20000,"tax_paise":0,"total_paise":20000,"status":"active","cancelled_flag":null}]'::jsonb,
     '{"source":"probe","parser_version":"probe"}'::jsonb, v_a);
   SELECT id INTO v_inv  FROM public.service_invoices WHERE entity_id = v_e AND invoice_number = 'ZZPROBE-AW1';
   SELECT id INTO v_inv2 FROM public.service_invoices WHERE entity_id = v_e AND invoice_number = 'ZZPROBE-AW2';
@@ -146,6 +147,41 @@ BEGIN
   PERFORM public.payments_set_awaiting_invoice(v_e, v_part, true, v_a);
   SELECT count(*) INTO v_n FROM public.v_payments_open_receipts WHERE id = v_part AND awaiting_invoice;
   PERFORM pg_temp.zz_check('8 a waiting payment stays readable, flagged', v_n = 1, v_n::text);
+
+  -- ── 9. WHEN it was marked — what "a bill imported since" compares ────────
+  SELECT count(*) INTO v_n FROM public.v_payments_open_receipts
+   WHERE id = v_part AND awaiting_since IS NOT NULL AND awaiting_since > now() - interval '1 minute';
+  PERFORM pg_temp.zz_check('9 marking records when (awaiting_since)', v_n = 1, v_n::text);
+  PERFORM public.payments_set_awaiting_invoice(v_e, v_part, false, v_a);
+  SELECT count(*) INTO v_n FROM public.payment_receipts WHERE id = v_part AND awaiting_since IS NULL;
+  PERFORM pg_temp.zz_check('9 unmarking clears it', v_n = 1, v_n::text);
+  SELECT count(*) INTO v_n FROM public.v_payments_open_invoices
+   WHERE invoice_number = 'ZZPROBE-AW4' AND created_at > now() - interval '1 minute';
+  PERFORM pg_temp.zz_check('9 an open bill carries when it arrived (created_at)', v_n = 1, v_n::text);
+
+  -- ── 10. The re-created views keep their shape and their safety ──────────
+  SELECT count(*) INTO v_n FROM information_schema.columns
+   WHERE table_schema = 'public' AND table_name = 'v_payments_open_receipts'
+     AND column_name IN ('id','entity_id','mode','source','amount_paise','allocated_paise','open_paise',
+                         'received_at','payer_name','payer_remark','classification','awaiting_invoice',
+                         'qr_ref','awaiting_since');
+  PERFORM pg_temp.zz_check('10 receipts view: all 13 old columns + awaiting_since', v_n = 14, v_n::text);
+  SELECT count(*) INTO v_n FROM information_schema.columns
+   WHERE table_schema = 'public' AND table_name = 'v_payments_open_invoices'
+     AND column_name IN ('id','entity_id','invoice_number','invoice_kind','job_ref','dealer_order_no',
+                         'sap_billing_doc','invoice_date','customer_id','customer_name','vehicle_reg_no',
+                         'payment_terms','total_paise','allocated_paise','open_paise','status','created_at');
+  PERFORM pg_temp.zz_check('10 invoices view: all 16 old columns + created_at', v_n = 17, v_n::text);
+  SELECT count(*) INTO v_n FROM pg_class
+   WHERE relname IN ('v_payments_open_receipts','v_payments_open_invoices')
+     AND 'security_invoker=true' = ANY(reloptions);
+  PERFORM pg_temp.zz_check('10 both views still run as the reader (RLS applies)', v_n = 2, v_n::text);
+  PERFORM pg_temp.zz_check('10 readers can still SELECT the views',
+    has_table_privilege('authenticated', 'public.v_payments_open_receipts', 'SELECT')
+    AND has_table_privilege('authenticated', 'public.v_payments_open_invoices', 'SELECT'));
+  PERFORM pg_temp.zz_check('10 and still cannot write through them',
+    NOT has_table_privilege('authenticated', 'public.v_payments_open_receipts', 'INSERT,UPDATE,DELETE')
+    AND NOT has_table_privilege('authenticated', 'public.v_payments_open_invoices', 'INSERT,UPDATE,DELETE'));
 
   RAISE EXCEPTION 'PROBE COMPLETE — % checks, % failed%',
     current_setting('zz.checks'),
