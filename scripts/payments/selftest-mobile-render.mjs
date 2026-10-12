@@ -270,6 +270,9 @@ section('red team 4 — order, announcements and dates')
   // R4-26: "Saving…" was announced by nothing.
   ok('the confirm bar announces its changes politely', /class="pay-confirmbar" aria-live="polite"/.test(html))
   // R4-30: "Billed yesterday" — from today, or from the payment?
+  ok('after a bill was left out, the next one says "Only other bill at this amount in 3 days"',
+     signalLabel({ signal: 'amount_unique', detail: 'only other bill at this amount' }) === 'Only other bill at this amount in 3 days' &&
+     signalLabel({ signal: 'amount_unique', detail: 'only bill at this amount' }) === 'Only bill at this exact amount')
   ok('a date reason says it is counted from the payment',
      signalLabel({ signal: 'date', detail: '1d' }) === 'Billed the day before the payment' &&
      signalLabel({ signal: 'date', detail: '3d' }) === 'Billed 3 days before the payment' &&

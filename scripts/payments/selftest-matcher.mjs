@@ -328,8 +328,10 @@ section('a bill the payment was taken off is not offered to it again (pre-mortem
      matchCandidates(R, idx2).candidates.length === 2 && !matchCandidates(R, idx2).confident)
   const after2 = matchCandidates(R, idx2, { undone: [Y.id] })
   eq('taken off one: only the other is offered', after2.candidates.map((c) => c.id), [Z.id])
-  ok('...it is the only one left at the amount, and says so',
-     after2.candidates[0].signals.some((s) => s.signal === 'amount_unique'))
+  ok('...it is the only one left at the amount, and says "other" (not yesterday\'s words)',
+     after2.candidates[0].signals.some((s) => s.signal === 'amount_unique' && s.detail === 'only other bill at this amount'))
+  ok('a lone bill with nothing left out still says plainly "only"',
+     first.candidates[0].signals.some((s) => s.detail === 'only bill at this amount'))
   ok('...but after an undo "only" is not presented as the confident answer', !after2.confident)
   ok('...and the screen says the other was left out', /not offered again/.test(after2.reason), after2.reason)
 

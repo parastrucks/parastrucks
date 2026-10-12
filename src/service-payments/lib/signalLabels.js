@@ -23,7 +23,8 @@ export function signalLabel(s) {
       // detail arrives as "…9044 of GJ15AV9044"
       return `Truck ${d.split(' of ').pop()} — the note says ${d.split(' of ')[0].replace(/^…/, '')}`
     case 'amount_unique':
-      return 'Only bill at this exact amount'
+      // "other" when the bill this payment was taken off shares the amount.
+      return /other/.test(d) ? 'Only other bill at this amount in 3 days' : 'Only bill at this exact amount'
     case 'amount_ambiguous': {
       // detail arrives as "5 bills at this amount" — a count that INCLUDES this
       // bill, so the others are one fewer (the first browser run read "same

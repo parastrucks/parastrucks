@@ -243,10 +243,16 @@ export function matchCandidates(receipt, index, {
         .filter((o) => { const g = dayGap(receiptDate, o.date); return g !== null && Math.abs(g) <= windowDays })
         .filter((o) => !(ruledOut.size && isRuledOut(o)))
       const unique = sameAmount.length === 1
+      // When a same-amount bill was left out, "only bill at this exact amount"
+      // carried over to the next one in yesterday's words (seen on staging,
+      // 2026-10-13: HARSH TYRES after INDU SPARES was taken off). Say "other".
+      const otherLeftOut = unique && ruledOut.size > 0 && (index.byAmount.get(d.amount_paise) || [])
+        .some((o) => { const g = dayGap(receiptDate, o.date); return g !== null && Math.abs(g) <= windowDays && isRuledOut(o) })
       score += unique ? WEIGHTS.AMOUNT_UNIQUE : WEIGHTS.AMOUNT_AMBIGUOUS
       signals.push({
         signal: unique ? 'amount_unique' : 'amount_ambiguous',
-        detail: unique ? 'only bill at this amount' : `${sameAmount.length} bills at this amount`,
+        detail: unique ? (otherLeftOut ? 'only other bill at this amount' : 'only bill at this amount')
+                       : `${sameAmount.length} bills at this amount`,
       })
     }
 
@@ -309,8 +315,10 @@ export function matchCandidates(receipt, index, {
   // Once a payment has been taken off a bill, "only bill at this amount" no
   // longer counts as strong for it: the first "only" was wrong, and the usual
   // reason (an advance whose bill was not raised yet) makes the next "only"
-  // no more trustworthy. The label stays true — the bill taken off is not
-  // counted — but nothing is presented as the confident answer.
+  // no more trustworthy. What that changes on screen is small: a near-tie is
+  // shown unranked instead of ranked. `confident` is not read by the screen
+  // (MatchScreen never uses it), so it is not a safeguard — leaving the bill
+  // out is (cloud review of 1b9fc87, 2026-10-13).
   const hasStrong = top[0]?.signals?.some((s) =>
     s.signal === 'reg_full' || s.signal === 'reg_last4' ||
     (s.signal === 'amount_unique' && !ruledOut.size) || s.signal === 'payer_memory')
@@ -322,7 +330,8 @@ export function matchCandidates(receipt, index, {
   else if (!top.length) reason = hidden
     ? 'No other open bill within 3 days at this amount — the bill it was taken off is not offered again. Search by name or amount, or skip it for now.'
     : 'No open bill within 3 days at this amount. Search by name or amount, or skip it for now.'
-  else if (refuse) reason = `${top.length} bills look equally likely. Pick the one you recognise — they are not ranked.`
+  else if (refuse) reason = `${top.length} bills look equally likely. Pick the one you recognise — they are not ranked.` +
+    (hidden ? ' The bill this payment was taken off before is not offered again.' : '')
   else if (hidden) reason = 'The bill this payment was taken off before is not offered again.'
 
   return {
