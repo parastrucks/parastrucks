@@ -41,7 +41,10 @@ export function signalLabel(s) {
     case 'name_overlap_strong':
       return 'Payer name matches the customer'
     case 'name_overlap': {
-      // detail arrives as "score/25". A faint echo — only a common word shared,
+      // detail arrives as "score/25", plus " same" when the names are the same
+      // words — identical names are said to match whatever their rarity.
+      if (/\bsame$/.test(d)) return 'Payer name matches the customer'
+      // A faint echo — only a common word shared,
       // like "MOTORS", or "DEMO" on every demo customer — is not "similar"; it
       // put that label on all five ₹1,930 cards and explained nothing. Below
       // the floor it says nothing (one rare word scores ~17 on real data).

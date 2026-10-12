@@ -302,7 +302,9 @@ export function parseSearch(input) {
   if (/^\d+(\.\d{1,2})?$/.test(plain) && plain.split('.')[0].length <= 8) {
     const [r, p = ''] = plain.split('.')
     const paise = Number(r) * 100 + Number((p + '00').slice(0, 2))
-    const moneyOnly = plain.includes('.') || s.includes('₹')
+    // Under three digits a bill/plate fragment matches nearly everything and
+    // churns the list mid-typing (red team 4, R4-20): amount only.
+    const moneyOnly = plain.includes('.') || s.includes('₹') || r.length < 3
     return { kind: 'number', paise, text: moneyOnly ? null : r }
   }
   // PostgREST .or() treats , ( ) " as syntax and * % _ as pattern; strip

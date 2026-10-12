@@ -78,13 +78,14 @@ export default function SearchPanel({ receipt, search, onPick, onCancel, initial
               <span className="pay-candidate-top">
                 <span className="pay-candidate-amount">{formatINR(v.total_paise - (v.allocated_paise ?? 0))}</span>
               </span>
-              <span className="pay-candidate-name">{v.customer_name || 'Unnamed customer'}</span>
+              <span className="pay-candidate-name">{v.customer_name || 'No name on the bill'}</span>
               <span className="pay-candidate-ref">
                 {v.invoice_number}
                 {v.sap_customer_code ? ` · ${v.sap_customer_code}` : ''}
               </span>
               <span className="pay-candidate-why">
-                Billed {v.invoice_date}{v.vehicle_reg_no ? ` · ${v.vehicle_reg_no}` : ''}
+                {/* "10 Oct", the date style used everywhere else (R4-20) */}
+                Billed {shortDay(v.invoice_date)}{v.vehicle_reg_no ? ` · ${v.vehicle_reg_no}` : ''}
                 {v.allocated_paise > 0 ? ` · ${formatINR(v.allocated_paise)} already paid` : ''}
               </span>
             </button>
@@ -99,4 +100,11 @@ export default function SearchPanel({ receipt, search, onPick, onCancel, initial
       </div>
     </div>
   )
+}
+
+/** "2026-10-10" -> "10 Oct". A calendar day already: no zone maths. */
+function shortDay(isoDay) {
+  const d = new Date(`${isoDay}T00:00:00Z`)
+  if (Number.isNaN(d.getTime())) return isoDay ?? ''
+  return new Intl.DateTimeFormat('en-IN', { timeZone: 'UTC', day: 'numeric', month: 'short' }).format(d)
 }

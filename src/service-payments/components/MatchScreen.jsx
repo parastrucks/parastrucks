@@ -11,7 +11,7 @@
 // a database or a network. The container that fetches receipts and calls the
 // Edge Function sits above this.
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { formatINR } from '../lib/paise.js'
 import { cardReasons, BOUNCE_REASONS, NOT_SERVICE_KINDS } from '../lib/signalLabels.js'
 import { REFRESHING } from '../lib/matchQueue.js'
@@ -33,6 +33,8 @@ import { REFRESHING } from '../lib/matchQueue.js'
  *        true = wait for the bill (again = "still not raised"), false = back to
  *        today's list. Absent = hidden (this person may not, for this mode).
  * @param {()=>void} [props.onSearch]       absent = hidden
+ * @param {string|null} [props.initialSelectedId]  a bill the person already
+ *        chose (in search) arrives picked; Confirm is still their tap
  *
  * An action is offered only when its callback is supplied, so the container —
  * which knows who is signed in and what the server will accept — decides. A
@@ -52,10 +54,17 @@ export default function MatchScreen({
   onNotService,
   onHoldAdvance,
   onSearch,
+  initialSelectedId = null,
 }) {
-  const [selectedId, setSelectedId] = useState(null)
+  const [selectedId, setSelectedId] = useState(initialSelectedId)
   const [menuOpen, setMenuOpen] = useState(false)
   const [waitOpen, setWaitOpen] = useState(false)
+  // What a way-out opens renders below all three buttons — at 360px that is
+  // under the confirm bar, and the tap looked like it did nothing (R4-15).
+  const openedRef = useRef(null)
+  useEffect(() => {
+    if (menuOpen || waitOpen) openedRef.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' })
+  }, [menuOpen, waitOpen])
 
   if (!receipt) {
     return (
@@ -74,9 +83,13 @@ export default function MatchScreen({
   const { candidates, refuse_to_rank: unordered } = result
   // The matcher's "no bill within 3 days" is wrong for a payment waiting for
   // its bill: it looks up to today. Say what is actually true for it.
-  const reason = receipt.awaiting_invoice && candidates.length === 0 && !feedIsStale
-    ? 'No bill for it yet. It stays waiting and comes back by itself when one is imported.'
-    : result.reason
+  // While bills are out of date the banner says so once; the matcher's own
+  // sentence repeated it 400px lower in other words (R4-10).
+  const reason = feedIsStale
+    ? ''
+    : receipt.awaiting_invoice && candidates.length === 0
+      ? 'No bill for it yet. It stays waiting and comes back by itself when one is imported.'
+      : result.reason
   const selected = candidates.find((c) => c.id === selectedId) || null
   const busy = pendingId !== null
   // What will actually be placed: never more than the payment holds, never more
@@ -90,10 +103,12 @@ export default function MatchScreen({
       {/* The staleness brake. A confident one-tap confirm against an invoice
           feed that has not caught up is an error amplifier: the bill that would
           have matched may simply not be imported yet. */}
+      {/* role=status, not alert: it is true every morning until the report
+          lands and would interrupt a screen reader on every payment (R4-26). */}
       {feedIsStale && (
-        <p className="pay-banner pay-banner-warn" role="alert">
-          <strong>Bills are out of date{feedAsOf ? ` (last imported ${feedAsOf})` : ''}.</strong>{' '}
-          You can still look, but confirming is off until today’s bills land.
+        <p className="pay-banner pay-banner-warn" role="status">
+          <strong>Today’s bills are not loaded yet{feedAsOf ? ` (last loaded ${feedAsOf})` : ''}.</strong>{' '}
+          You can look, but confirming is off until accounts loads them.
         </p>
       )}
 
@@ -107,7 +122,7 @@ export default function MatchScreen({
         {receipt.partly_matched && receipt.face_paise > receipt.amount_paise && (
           <p className="pay-receipt-part">left of {formatINR(receipt.face_paise)} — the rest is already matched</p>
         )}
-        <p className="pay-receipt-payer">{receipt.payer_name || 'No name given'}</p>
+        <p className="pay-receipt-payer">{receipt.payer_name || 'No name on the payment'}</p>
         <p className="pay-receipt-meta">
           {sourceLabel(receipt.source)} · {timeLabel(receipt.received_at)}
         </p>
@@ -154,7 +169,7 @@ export default function MatchScreen({
                     <span className="pay-chip pay-chip-job">{c.member_count} bills</span>
                   )}
                 </span>
-                <span className="pay-candidate-name">{c.customer_name || 'Unnamed customer'}</span>
+                <span className="pay-candidate-name">{c.customer_name || 'No name on the bill'}</span>
                 <span className="pay-candidate-ref">
                   {c.label}
                   {c.sap_customer_code ? ` · ${c.sap_customer_code}` : ''}
@@ -200,7 +215,7 @@ export default function MatchScreen({
       {/* One tap to open, one to confirm: the payment is about to leave today's
           list, so say where it goes and when it comes back. */}
       {waitOpen && onHoldAdvance && (
-        <div className="pay-wait" role="group" aria-label="Wait for its bill">
+        <div className="pay-wait" role="group" aria-label="Wait for its bill" ref={openedRef}>
           <p className="pay-hint">
             {receipt.awaiting_invoice
               ? 'Still not raised? It goes back to waiting, and returns only for a bill imported after now.'
@@ -229,14 +244,14 @@ export default function MatchScreen({
           cannot find this exit picks a bill instead, and that is a wrong
           entry on a real customer's ledger. They are told who decides. */}
       {menuOpen && !onNotService && (
-        <p className="pay-hint" role="status">
+        <p className="pay-hint pay-denied-note" role="status" ref={openedRef}>
           Accounts decides what is not a service payment. Skip it for now — it
           stays in the queue for them.
         </p>
       )}
 
       {menuOpen && onNotService && (
-        <ul className="pay-reasons" aria-label="What kind of payment is this?">
+        <ul className="pay-reasons" aria-label="What kind of payment is this?" ref={openedRef}>
           {NOT_SERVICE_KINDS.map((k) => (
             <li key={k.value}>
               <button
@@ -263,11 +278,15 @@ export default function MatchScreen({
           disabled={!selected || busy || feedIsStale}
           onClick={() => selected && onConfirm?.(selected)}
         >
+          {/* Stale wins over a pick: "Confirm ₹1,930" on a dead button reads as
+              broken (R4-10). */}
           {busy
             ? (pendingId === REFRESHING ? 'Updating the list…' : 'Saving…')
-            : selected
-              ? `Confirm ${formatINR(placing)}${partPay ? ' · part-paid' : ''}`
-              : candidates.length ? 'Pick a bill above' : 'Nothing to confirm'}
+            : feedIsStale
+              ? 'Confirm is off — bills not loaded yet'
+              : selected
+                ? `Confirm ${formatINR(placing)}${partPay ? ' · part-paid' : ''}`
+                : candidates.length ? 'Pick a bill above' : 'Nothing to confirm'}
         </button>
         <button type="button" className="pay-skip" onClick={onSkip} disabled={busy}>
           Skip for now

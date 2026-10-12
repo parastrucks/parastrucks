@@ -252,15 +252,21 @@ export function matchCandidates(receipt, index, {
     // names they do not share. A mismatched name is an absence of evidence,
     // not evidence of absence.
     if (payerToks.size && d.customer_name) {
-      const nameScore = overlapScore(payerToks, nameTokens(d.customer_name), index)
+      const custToks = new Set(nameTokens(d.customer_name))
+      const nameScore = overlapScore(payerToks, [...custToks], index)
       if (nameScore > 0) {
         score += nameScore
+        // The score is rarity among OPEN bills, so two IDENTICAL names can
+        // still score "weak" when their words are common — and the card then
+        // said "similar" about an exact match (red team 4, R4-13). Same words
+        // are flagged for the label; the score and ranking are unchanged.
+        const same = custToks.size === payerToks.size && [...custToks].every((t) => payerToks.has(t))
         // Only a STRONG overlap (a rare token, essentially the real name) can
         // put a bill on the list by itself. A faint echo rides along but never
         // qualifies, or every "SINGH" in the window becomes a candidate.
         signals.push({
           signal: nameScore >= WEIGHTS.NAME_MAX * 0.6 ? 'name_overlap_strong' : 'name_overlap',
-          detail: `${Math.round(nameScore)}/${WEIGHTS.NAME_MAX}`,
+          detail: `${Math.round(nameScore)}/${WEIGHTS.NAME_MAX}${same ? ' same' : ''}`,
         })
       }
     }

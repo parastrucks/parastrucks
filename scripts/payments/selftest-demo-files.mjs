@@ -349,7 +349,9 @@ section('The walkthrough IN ORDER, as the Match tab will show it')
     // bills", so nothing said why ASHA's was first; selecting it then printed
     // that same line twice.
     const top = cardReasons(s.res.candidates[0])
-    eq('    ASHA\'s card says WHY it is first, without a tap', top.face, ['Same amount as 4 other bills', 'Payer name is similar'])
+    eq('    ASHA\'s card says WHY it is first, without a tap', top.face, ['Same amount as 4 other bills', 'Payer name matches the customer'])
+    // Red team 4 (R4-13): payer and customer are the SAME name here; the rarity
+    // score is weak in a small demo, and the card used to say only "similar".
     ok('    ...the others say only the amount', s.res.candidates.slice(1).every((c) => cardReasons(c).face.length === 1))
     const said = [...top.face, ...top.more]
     eq('    ...and selecting it repeats nothing', said.length, new Set(said).size)

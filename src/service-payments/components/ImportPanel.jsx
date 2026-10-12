@@ -242,7 +242,7 @@ function Preview({ plan, committing, onCommit, onCancel }) {
       )}
 
       <Fold title="Held back" items={diff.held} render={(h) => `${label(h.row)} — ${h.reason}`} />
-      {bills && <Fold title="Clashes" items={diff.conflict} render={(c) => `${c.row.invoice_number} — ${c.reason}`} />}
+      {bills && <Fold title="Clashes" open items={diff.conflict} render={(c) => `${c.row.invoice_number} — ${c.reason}`} />}
       <Fold title="Failed attempts — not money" items={failedAttempts}
             render={(r) => `Row ${r.row} — ${r.amount_paise != null ? formatINR(r.amount_paise) : 'amount unreadable'}` +
               `${r.payer_name ? ` from ${r.payer_name}` : ''}${r.when ? `, ${r.when}` : ''} — not imported; the payer usually tried again`} />
@@ -304,10 +304,10 @@ function Count({ label, n, sub = null, strong = false, warn = false }) {
   )
 }
 
-function Fold({ title, items, render }) {
+function Fold({ title, items, render, open = false }) {
   if (!items?.length) return null
   return (
-    <details className="pay-import-fold">
+    <details className="pay-import-fold" open={open}>
       <summary>{title} ({items.length})</summary>
       <ul className="pay-import-list">
         {items.slice(0, LIST_CAP).map((x, i) => <li key={i}>{render(x)}</li>)}

@@ -30,6 +30,15 @@ import { istDateOf } from '../lib/dates.js'
 
 const newRequestId = () => globalThis.crypto?.randomUUID?.() ?? null
 
+// "TypeError: Failed to fetch" means nothing to a mechanic (R4-27).
+const plainError = (e, fallback) => {
+  const msg = e?.message || String(e || '')
+  if (/failed to fetch|networkerror|load failed|network request failed/i.test(msg)) {
+    return 'No connection. Check the internet and try again.'
+  }
+  return msg || fallback
+}
+
 export default function PaymentsPage() {
   const { profile } = useAuth()
   const toast = useToast()
@@ -55,26 +64,36 @@ export default function PaymentsPage() {
   // dropped connection reuses it, so the server answers "already done" instead
   // of allocating twice. It is forgotten only once the server has said yes.
   const requestIds = useRef(new Map())
+  // Who this person is and which company cannot change between two confirms;
+  // the reload after each one re-read them, six awaits in a row (R4-11).
+  const fixed = useRef(null)   // { profile, caps, ent }
 
   const load = useCallback(async ({ quiet = false } = {}) => {
     if (!profile) return
     if (!quiet) setPhase('loading')
     try {
-      const deptCode = await fetchDepartmentCode(profile.department_id)
-      const c = capabilitiesFor(profile, deptCode)
-      setCaps(c)
-      if (!c.canMatch) { setPhase('denied'); return }
-
-      const ent = await fetchPaymentsEntityId()
-      setEntityId(ent)
+      let c, ent
+      if (quiet && fixed.current?.profile === profile) {
+        ({ caps: c, ent } = fixed.current)
+      } else {
+        const deptCode = await fetchDepartmentCode(profile.department_id)
+        c = capabilitiesFor(profile, deptCode)
+        setCaps(c)
+        if (!c.canMatch) { setPhase('denied'); return }
+        ent = await fetchPaymentsEntityId()
+        setEntityId(ent)
+        fixed.current = { profile, caps: c, ent }
+      }
       const [rows, feedRow] = await Promise.all([fetchOpenReceipts(ent), fetchInvoiceFeed(ent)])
       // Only the receipts this person can actually confirm: service staff match
       // UPI; cash, cheque and bank money is accounts' to place.
       const workable = rows.filter((r) => c.canMatchMode(r.mode)).map(toMatchReceipt)
 
       const win = invoiceWindow(workable, DEFAULT_WINDOW_DAYS, { today: istDateOf(new Date().toISOString()) })
-      const inv = win ? await fetchOpenInvoices(ent, win) : []
-      const mem = await fetchPayerMemory(ent, workable.map((r) => r.normalized_payer_name))
+      const [inv, mem] = await Promise.all([
+        win ? fetchOpenInvoices(ent, win) : [],
+        fetchPayerMemory(ent, workable.map((r) => r.normalized_payer_name)),
+      ])
       const customers = await fetchCustomerCodes([
         ...inv.map((v) => v.customer_id), ...mem.map((m) => m.customer_id),
       ])
@@ -85,7 +104,7 @@ export default function PaymentsPage() {
       setFeed(feedRow)
       setPhase('ready')
     } catch (e) {
-      setLoadError(e?.message || String(e))
+      setLoadError(plainError(e, 'Something went wrong.'))
       setPhase('error')
     }
   }, [profile])
@@ -151,7 +170,8 @@ export default function PaymentsPage() {
       })
       requestIds.current.delete(key)
       const placed = targets.reduce((a, t) => a + t.amount_paise, 0)
-      toast.success(`Matched ${formatINR(placed)} to ${candidate.label}`)
+      // The customer's name, not only a bill number nobody remembers (R4-8).
+      toast.success(`Matched ${formatINR(placed)} to ${candidate.customer_name || candidate.label}`)
       setDoneToday((n) => n + 1)
       setOverride(null)
       // Move on NOW. The full reload takes seconds on a phone, and the first
@@ -166,7 +186,7 @@ export default function PaymentsPage() {
     } catch (e) {
       // Reload even on failure: if the write DID land and only the answer was
       // lost, the queue must show that before anyone picks a different bill.
-      toast.error(e?.message || 'Could not save the match')
+      toast.error(plainError(e, 'Could not save the match'))
       await load({ quiet: true })
     } finally {
       setPendingId(null)
@@ -190,7 +210,7 @@ export default function PaymentsPage() {
       setPendingId(REFRESHING)
       await load({ quiet: true })
     } catch (e) {
-      toast.error(e?.message || 'Could not set it aside')
+      toast.error(plainError(e, 'Could not set it aside'))
     } finally {
       setPendingId(null)
     }
@@ -225,7 +245,7 @@ export default function PaymentsPage() {
       setPendingId(REFRESHING)
       await load({ quiet: true })
     } catch (e) {
-      toast.error(e?.message || 'Could not save that')
+      toast.error(plainError(e, 'Could not save that'))
       await load({ quiet: true })
     } finally {
       setPendingId(null)
@@ -252,15 +272,19 @@ export default function PaymentsPage() {
     const candidates = searchPickCandidates(invoice, orderBills, current.amount_paise)
     setFound((f) => [...f.filter((v) => v.id !== invoice.id && !orderBills.some((o) => o.id === v.id)), invoice,
                      ...orderBills.filter((o) => o.id !== invoice.id)])
+    // The bill the person tapped comes back PICKED — they chose it; making
+    // them choose it again read as "it didn't take" (R4-20). Confirm is still
+    // their own tap.
     setOverride({
       receiptId: current.id,
+      selectedId: invoice.id,
       result: {
         candidates,
         refuse_to_rank: false,
         confident: false,
         reason: candidates.length > 1
-          ? `You found this bill by searching. Its order has ${candidates.find((c) => c.kind === 'job').member_count} open bills — pick the whole order if the payment covers them all.`
-          : 'You found this bill by searching. Check the customer and amount before confirming.',
+          ? `You found this bill by searching, and it is picked. Its order has ${candidates.find((c) => c.kind === 'job').member_count} open bills — pick the whole order instead if the payment covers them all.`
+          : 'You found this bill by searching, and it is picked. Check the name and amount, then confirm.',
         searched: 1,
       },
     })
@@ -313,7 +337,13 @@ export default function PaymentsPage() {
     return (
       <div className="page">{header}
         <div className="pay-match">
-          <p className="pay-hint" role="status">Matching payments is for the service and accounts teams.</p>
+          {/* Said to someone who may well BE in service: what is wrong and who
+              fixes it, not a rule (R4-19). */}
+          <p className="pay-ask">Your account isn’t set up for this page.</p>
+          <p className="pay-hint" role="status">
+            Matching payments is for the service and accounts teams. If that is your team, ask your
+            manager or HR to check your department in the portal.
+          </p>
         </div>
       </div>
     )
@@ -374,7 +404,8 @@ export default function PaymentsPage() {
         <div className="pay-match pay-match-empty">
           <h2 className="pay-empty-title">{skippedHere} skipped</h2>
           <p className="pay-empty-sub">
-            Everything else is matched. The skipped payments are still waiting
+            {/* "Waiting" means waiting for a bill everywhere else (R4-17). */}
+            Everything else is matched. The skipped payments are still in the list
             {caps?.canClassify ? '.' : ' — accounts will see them too.'}
             {waiting.length > 0 && ` ${waiting.length} more ${waiting.length === 1 ? 'is' : 'are'} waiting for ${waiting.length === 1 ? 'its bill' : 'their bills'}.`}
           </p>
@@ -394,12 +425,13 @@ export default function PaymentsPage() {
       <div className="page">{header}
         <div className="pay-match pay-match-empty">
           <p className="pay-empty-tick" aria-hidden="true">✓</p>
-          <h2 className="pay-empty-title">Everything is matched</h2>
+          {/* Not "Everything is matched" with one still open (R4-17). */}
+          <h2 className="pay-empty-title">
+            All matched except {waiting.length} waiting for {waiting.length === 1 ? 'its bill' : 'their bills'}
+          </h2>
           <p className="pay-empty-sub">
-            {waiting.length} {waiting.length === 1 ? 'payment is' : 'payments are'} waiting for{' '}
-            {waiting.length === 1 ? 'its bill' : 'their bills'}. {waiting.length === 1 ? 'It comes' : 'They come'} back
-            by {waiting.length === 1 ? 'itself' : 'themselves'} when a newly imported bill could be{' '}
-            {waiting.length === 1 ? 'its' : 'theirs'}.
+            {waiting.length === 1 ? 'It comes' : 'They come'} back by {waiting.length === 1 ? 'itself' : 'themselves'} when
+            a newly imported bill could be {waiting.length === 1 ? 'its own' : 'theirs'}.
           </p>
           {lookAtWaiting}
         </div>
@@ -445,6 +477,7 @@ export default function PaymentsPage() {
         onNotService={caps?.canClassify ? handleNotService : undefined}
         onSearch={() => setSearching(true)}
         onHoldAdvance={current && caps?.canMarkWaiting(current.mode) ? handleWaiting : undefined}
+        initialSelectedId={override?.receiptId === current?.id ? override.selectedId ?? null : null}
       />
     </div>
   )

@@ -61,7 +61,7 @@ section('the receipt leads, and the amount is the biggest thing on it')
 }
 {
   const html = render({ receipt: { ...receipt, payer_name: null }, result: { candidates: [] } })
-  ok('a nameless payer says so rather than rendering blank', html.includes('No name given'))
+  ok('a nameless payer says so rather than rendering blank', html.includes('No name on the payment'))
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -88,6 +88,15 @@ section('every candidate says WHY, in words a person can disagree with')
   for (const jargon of ['amount_unique', 'amount_ambiguous', 'reg_last4', 'payer_memory', 'name_overlap']) {
     ok(`the internal name "${jargon}" never reaches the screen`, !html.includes(jargon))
   }
+}
+{
+  // Red team 4 (R4-13): identical names scored "weak" among common words and
+  // the card said "similar" about an exact match.
+  const html = render({ receipt, result: { candidates: [
+    candidate({ signals: [{ signal: 'amount_ambiguous', detail: '5 bills at this amount' },
+                          { signal: 'name_overlap', detail: '4/25 same' }] }),
+  ] } })
+  ok('the SAME name says it matches, whatever its rarity score', html.includes('Payer name matches the customer') && !html.includes('similar'))
 }
 {
   const html = render({
@@ -126,11 +135,29 @@ section('money is never confirmed by accident')
   ok('and asks the person to pick', html.includes('Pick a bill above'))
 }
 {
-  const html = render({ receipt, result: { candidates: [candidate()] }, feedIsStale: true, feedAsOf: '2 days ago' })
-  ok('a stale feed raises an alert', html.includes('role="alert"'))
-  ok('...that says bills are out of date', html.includes('out of date'))
+  const html = render({ receipt, result: { candidates: [candidate()], reason: 'The invoice feed is out of date — confirm is disabled until fresh bills land.' },
+    feedIsStale: true, feedAsOf: '2 days ago' })
+  // role=status, not alert: true every morning until the report lands, so an
+  // alert interrupted a screen reader on every payment (R4-26).
+  ok('a stale feed is announced as a status', /pay-banner-warn" role="status"/.test(html))
+  ok('...that says today\'s bills are not loaded yet', html.includes('bills are not loaded yet'))
   ok('...and names when they last landed', html.includes('2 days ago'))
+  ok('...and who loads them', html.includes('accounts loads them'))
+  // R4-10: said once, not again 400px lower in the matcher's own words.
+  ok('...said ONCE: the matcher\'s stale sentence is not repeated', !html.includes('invoice feed'))
   ok('and confirm is disabled outright', /class="pay-confirm"[^>]*disabled/.test(html))
+}
+{
+  // R4-10: a pick used to turn the dead button into "Confirm ₹1,930.00".
+  const html = render({ receipt, result: { candidates: [candidate()] }, feedIsStale: true, initialSelectedId: 'c1' })
+  ok('while stale, even a picked bill shows "Confirm is off", not an amount',
+     html.includes('Confirm is off') && !/class="pay-confirm"[^>]*>Confirm ₹/.test(html))
+}
+{
+  // R4-20: a bill found by search comes back picked; Confirm stays a tap.
+  const html = render({ receipt, result: { candidates: [candidate()] }, initialSelectedId: 'c1' })
+  ok('a bill already chosen in search arrives selected', html.includes('is-selected') && html.includes('aria-pressed="true"'))
+  ok('...and Confirm names the amount, still waiting for the tap', html.includes('Confirm ₹1,930.00'))
 }
 {
   const html = render({ receipt, result: { candidates: [candidate()] }, pendingId: 'c1' })
@@ -268,6 +295,42 @@ section('the CSS contract — a phone claim that HTML cannot prove')
   ok('the page reserves room so the bar never covers the last candidate',
      /env\(safe-area-inset-bottom/.test(block('.pay-match')))
 
+  // Room under the last button, measured instead of guessed (R4-25: it was
+  // 105px too much on phones, because .app-main already pads for the nav).
+  const px = (re, src) => Number((src.match(re) || [])[1] ?? NaN)
+  const barH = minHeight('.pay-confirm') + px(/gap:\s*(\d+)px/, bar) + minHeight('.pay-skip') +
+    2 * px(/padding:\s*(\d+)px/, bar) + 1
+  const deskRoom = px(/calc\((\d+)px/, block('.pay-match')) + px(/padding:\s*\d+px\s+\d+px\s+(\d+)px/, (css.match(/@media \(min-width: 760px\) \{\s*\.app-main \{([^}]*)\}/) || [])[1] || '')
+  ok('desktop: room under the list covers the bar, without a screen of dead scroll',
+     deskRoom >= barH && deskRoom - barH <= 40, `bar ${barH}px, room ${deskRoom}px`)
+  const phoneMatch = (css.match(/@media\s*\(max-width:\s*759px\)[\s\S]*?\.pay-match\s*\{([^}]*)\}/) || [])[1] || ''
+  const phoneRoom = px(/padding-bottom:\s*(\d+)px/, phoneMatch) + 16
+  ok('phone: the same, on top of the nav padding .app-main already gives',
+     phoneRoom >= barH && phoneRoom - barH <= 40, `bar ${barH}px, room ${phoneRoom}px`)
+  ok('...and .app-main really does pad for the nav on phones (the premise)',
+     /--bottom-nav-h[^;]*\+ 16px/.test(block('.app-main')))
+
+  // R4-1: a fixed bar with left:50% + right:auto and no width shrank to a
+  // 132px pill on desktop. Both edges pinned + auto margins keep it the column.
+  const wide = (css.match(/@media \(min-width: 721px\) \{\s*\.pay-confirmbar \{([^}]*)\}/) || [])[1] || ''
+  ok('desktop bar: both edges pinned, centred by auto margins (no shrink-to-fit)',
+     /left:\s*0/.test(wide) && /right:\s*0/.test(wide) && /margin:\s*0 auto/.test(wide) &&
+     !/right:\s*auto/.test(wide) && !/translateX/.test(wide), wide.trim().replace(/\s+/g, ' '))
+  ok('...and with the sidebar showing it is centred over the page column, not the window',
+     /@media \(min-width: 760px\) \{\s*\.pay-confirmbar \{\s*left:\s*var\(--sidebar-w\)/.test(css) &&
+     /@media \(min-width: 760px\) \{\s*\.sidebar \{\s*display:\s*flex/.test(css))
+
+  // R4-16: the waiting strip shares .pay-match and inherited the bar's room.
+  ok('the waiting strip does not inherit the confirm bar\'s bottom room',
+     /\.pay-match\.pay-waiting-strip\s*\{\s*padding-bottom:\s*0/.test(css))
+  // R4-2: summary { display:flex } removes the browser's marker.
+  ok('Import fold headings draw their own ▸/▾ (display:flex removed the browser\'s)',
+     /\.pay-import-fold summary::before\s*\{[^}]*content:\s*'▸'/.test(css) &&
+     /\.pay-import-fold\[open\] > summary::before\s*\{[^}]*content:\s*'▾'/.test(css))
+  // R4-22: the disabled button still carries words.
+  ok('disabled Confirm is readable (no white text on light grey)',
+     /color:\s*var\(--gray-600\)/.test((css.match(/\.pay-confirm:disabled\s*\{([^}]*)\}/) || [])[1] || ''))
+
   // Found only when the screen went inside the app: the portal's bottom nav is
   // fixed at bottom: 0 with a HIGHER z-index below 760px, so a bar at bottom: 0
   // put the confirm button behind it on every phone.
@@ -283,8 +346,6 @@ section('the CSS contract — a phone claim that HTML cannot prove')
   ok('...at every width where the nav is shown',
      !!phoneRule && navGoneAt !== null && Number(phoneRule[1]) === navGoneAt - 1,
      `bar rule to ${phoneRule?.[1]}px, nav hidden from ${navGoneAt}px`)
-  ok('...and the page leaves room for both',
-     /@media\s*\(max-width:\s*759px\)[\s\S]*?\.pay-match\s*\{[^}]*--bottom-nav-h/.test(css))
 
   // The cornerstone, stated as a test: there is no width at which this screen
   // becomes a list beside a detail pane.
