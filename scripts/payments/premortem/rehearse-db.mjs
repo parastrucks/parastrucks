@@ -37,6 +37,7 @@ const STATEMENT_TIMEOUT = args.includes('--timeout') ? args[args.indexOf('--time
 // payments object references (verified by grep: no payments file mentions
 // tiv_*). Prod applied it on 2026-08-25 (CLAUDE.md). --include-all re-enables it.
 const SKIP_FILES = args.includes('--include-all') ? [] : ['20260825_tiv_upload_and_prune.sql']
+const TRACE = args.includes('--trace')   // print each migration statement before running it
 const keep = args.includes('--keep') ? args[args.indexOf('--keep') + 1] : null
 
 export async function openRehearsalDb({ log = console.log, quiet = false, seed = true } = {}) {
@@ -126,6 +127,7 @@ export async function openRehearsalDb({ log = console.log, quiet = false, seed =
     let ran = 0
     const t0 = Date.now()
     for (const s of parts) {
+      if (TRACE) process.stdout.write(`      → ${new Date().toISOString().slice(11, 19)} ${head(s).slice(0, 90)}\n`)
       try { await db.exec(s); ran++ } catch (e) { errs.push({ error: e.message.split('\n')[0], head: head(s) }) }
     }
     const secs = ((Date.now() - t0) / 1000).toFixed(1)
