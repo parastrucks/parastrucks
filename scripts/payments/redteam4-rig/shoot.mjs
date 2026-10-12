@@ -31,8 +31,8 @@ for (const vp of VIEWPORTS) {
       const total = await page.evaluate(() => document.documentElement.scrollHeight)
       const step = Math.round(vp.height * 0.8)
       for (let y = step, i = 1; y < total - vp.height + step && i <= 6; y += step, i++) {
-        await page.evaluate((yy) => window.scrollTo(0, yy), y)
-        await page.waitForTimeout(40)
+        await page.evaluate((yy) => { document.scrollingElement.scrollTop = yy }, y)
+        await page.waitForTimeout(300)
         await page.screenshot({ path: path.join(OUT, `${s.id}-${vp.name}-s${i}.png`) })
         n++
       }
