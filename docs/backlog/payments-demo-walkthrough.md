@@ -60,7 +60,7 @@ have two ₹4,800 payments competing for it.
 | ₹12,345.67 DEMO KISAN TRADERS | KISAN's bill first, "Only bill at this exact amount" | Confirm |
 | ₹30 DEMO KISAN TRADERS | **Nothing to match** — KISAN's bill is now paid | Skip for now |
 | ₹10,000 GANGA SAGAR MAHESHWARI | GANGA SAGAR MAHESHWARI's ₹25,000 bill, "Payer name matches the customer" (no amount matches). Button reads **"Confirm ₹10,000.00 · part-paid"** | Confirm |
-| ₹7,777 DEMO QUICK FREIGHT | "No bill matches this payment" | **Search all bills** → type `7777` → none → back → Skip |
+| ₹7,777 DEMO QUICK FREIGHT | "No bill matches this payment" — QUICK FREIGHT paid before the bill was raised | **Search all bills** → type `7777` → none → back → **Bill not raised yet** → "Yes, wait for the bill". It leaves the list; "Match (N)" drops by one |
 | ₹4,800 RAMESH SHARMA | RAMESH SHARMA's bill, "Only bill at this exact amount" — and only **one** ₹4,800 payment in the queue | Confirm |
 | ₹3,400 MEHUL SHAH | Two ₹3,400 bills (HARSH and INDU) | Pick INDU's — this is the human decision |
 | ₹11,650 SURESH DESAI | A **"2 bills"** card for FLEET CARRIERS (parts + labour), by the **sum** of the two | Confirm — both bills paid |
@@ -72,8 +72,9 @@ have two ₹4,800 payments competing for it.
 
 | # | Choose | You should see |
 |---|---|---|
-| 8 | `DEMO Billing Report 2.xlsx` | 1 new (PRIYA), 1 changed (MANAN ₹745 → ₹845), 18 unchanged, and **1 clash** ("1 bill clashes with what is stored and will be left as it is"), button **Import 1 new bill and 1 change**: ASHA's bill is now cancelled in SAP, but you matched money to it — "reverse that match first" |
+| 8 | `DEMO Billing Report 2.xlsx` | 2 new (PRIYA, and QUICK FREIGHT's ₹7,777 bill), 1 changed (MANAN ₹745 → ₹845), 18 unchanged, and **1 clash** ("1 bill clashes with what is stored and will be left as it is"), button **Import 2 new bills and 1 change**: ASHA's bill is now cancelled in SAP, but you matched money to it — "reverse that match first" |
 | 9 | Import it, go to Match | BHAVIN's ₹1,930 from this morning is **no longer out of date** — report 2 covers today. His own bill is first among the four unpaid ₹1,930 bills → Confirm |
+| 10 | (still on Match) | **QUICK FREIGHT's ₹7,777 is back by itself**, with an amber note "Was waiting for its bill — a bill imported since could be it" and its new bill, "Only bill at this exact amount" → Confirm |
 
 ## Also worth a look
 

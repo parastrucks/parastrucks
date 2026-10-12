@@ -90,6 +90,9 @@ export const BILLS_2 = [
     b.number === 'MPI5756260009101' ? { ...b, cancelled: 'X' } :            // DEMO ASHA cancelled in SAP
     b.cust === 'DEMO MANAN AUTO' ? { ...b, total: 84500, net: Math.round(84500 / 1.18), tax: 84500 - Math.round(84500 / 1.18) } : b), // ₹745 → ₹845
   bill('MPI', '6370', DAYS.today, 2990, 'DEMO PRIYA MOTORS', '0099000018', { number: 'MPI6370260009701' }), // new
+  // The bill QUICK FREIGHT paid for two days early. Marked "Bill not raised
+  // yet" in the walkthrough, the ₹7,777 payment comes back by itself with this.
+  bill('MPI', '5756', DAYS.today, 7777, 'DEMO QUICK FREIGHT', '0099000019', { number: 'MPI5756260009801' }), // new
 ]
 
 const BR_COLUMNS = ['Billing Date', 'Plant', 'Reg.No', 'Order number', 'Customer Name',

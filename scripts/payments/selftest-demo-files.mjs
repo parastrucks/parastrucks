@@ -23,7 +23,7 @@ import { parseBillingReport } from '../../src/service-payments/lib/parseBillingR
 import { parseBharatPe, parseGpay } from '../../src/service-payments/lib/parseUpi.js'
 import { parseHdfcSmartHub } from '../../src/service-payments/lib/parseHdfc.js'
 import { buildCandidateIndex, matchCandidates } from '../../src/service-payments/lib/matchCandidates.js'
-import { toMatchReceipt, allocationTargets, feedIsStaleFor, orderQueue } from '../../src/service-payments/lib/matchQueue.js'
+import { toMatchReceipt, allocationTargets, feedIsStaleFor, orderQueue, splitWaiting } from '../../src/service-payments/lib/matchQueue.js'
 import { cardReasons } from '../../src/service-payments/lib/signalLabels.js'
 
 let pass = 0, fail = 0
@@ -236,8 +236,8 @@ const br2 = await read('DEMO Billing Report 2.xlsx')
     total_paise: v.total_paise, allocated_paise: v.invoice_number === 'MPI5756260009101' ? allocatedAsha : 0,
     status: v.status, cancelled_flag: v.cancelled_flag }))
   let d = diffInvoices(br2.parsed.invoices, stored(0))
-  eq('ASHA not yet matched: 1 new, 2 changed (ASHA cancelled, MANAN ₹745→₹845), 18 unchanged',
-     [d.new.length, d.amended.length, d.unchanged.length, d.conflict.length], [1, 2, 18, 0])
+  eq('ASHA not yet matched: 2 new (PRIYA, QUICK FREIGHT), 2 changed (ASHA cancelled, MANAN ₹745→₹845), 18 unchanged',
+     [d.new.length, d.amended.length, d.unchanged.length, d.conflict.length], [2, 2, 18, 0])
   d = diffInvoices(br2.parsed.invoices, stored(193000))
   eq('ASHA already matched: her cancellation becomes a CLASH — reverse the match first',
      [d.amended.length, d.conflict.length, d.conflict[0]?.row.invoice_number], [1, 1, 'MPI5756260009101'])
@@ -246,7 +246,7 @@ const br2 = await read('DEMO Billing Report 2.xlsx')
     const g = importGates({ kind: 'billing_report', parsed: br2.parsed, diff: d, priorBatch: null })
     ok('...in plain singular English ("1 bill clashes … as it is")',
        g.warnings.includes('1 bill clashes with what is stored and will be left as it is (listed below).'), g.warnings.join(' / '))
-    eq('...and the button names the change it will also apply', importActionLabel('billing_report', d), 'Import 1 new bill and 1 change')
+    eq('...and the button names the change it will also apply', importActionLabel('billing_report', d), 'Import 2 new bills and 1 change')
   }
 
   // Report 2 is the first feed that covers TODAY, so it lifts the brake on the
@@ -316,7 +316,18 @@ section('The walkthrough IN ORDER, as the Match tab will show it')
      JSON.stringify(s.res.candidates.map((c) => [c.label, sig(c)])))
   eq('    → Confirm places ₹10,000 of ₹25,000', confirm(s.r, s.res.candidates[0]), [{ invoice_id: 'PCR6370260009401', amount_paise: 1000000 }])
   s = step(4)
-  eq('5 · QUICK FREIGHT ₹7,777 → nothing → Skip', s.res.candidates.length, 0)
+  eq('5 · QUICK FREIGHT ₹7,777 → nothing → "Bill not raised yet"', s.res.candidates.length, 0)
+  // Marked waiting (2026-10-12): it leaves today's list until a bill imported
+  // SINCE could be its own. Report 1's bills existed before; report 2's arrive after.
+  const T_BILLS1 = `${DAYS.d2}T12:00:00.000Z`, T_MARK = `${DAYS.d1}T12:00:00.000Z`, T_BILLS2 = `${DAYS.today}T12:00:00.000Z`
+  const quick = { ...s.r, awaiting_invoice: true, awaiting_since: T_MARK }
+  const fromReport1 = new Set(br1.parsed.invoices.map((v) => v.invoice_number))
+  const splitNow = () => {
+    const bills = open().map((v) => ({ ...v, created_at: fromReport1.has(v.invoice_number) ? T_BILLS1 : T_BILLS2 }))
+    const idx = buildCandidateIndex(bills)
+    return splitWaiting([quick], (x) => matchCandidates(x, idx).candidates, new Map(bills.map((v) => [v.id, v])))
+  }
+  eq('    → it leaves today\'s list (no bill for it yet)', [splitNow().queue.length, splitNow().waiting.length], [0, 1])
   s = step(5)
   ok('6 · RAMESH ₹4,800 → his bill → Confirm', s.res.candidates[0]?.label === 'LCS5756260009501')
   confirm(s.r, s.res.candidates[0])
@@ -353,8 +364,8 @@ section('The walkthrough IN ORDER, as the Match tab will show it')
   // Next day's bills: what the server stores. ASHA's cancellation is a clash
   // (money is matched to it) and is left as it was; the rest land.
   const d = diffInvoices(br2.parsed.invoices, open())
-  ok('Billing Report 2 now: 1 new, 1 changed, 1 clash (ASHA)',
-     d.new.length === 1 && d.amended.length === 1 && d.conflict.length === 1 && d.conflict[0].row.invoice_number === 'MPI5756260009101',
+  ok('Billing Report 2 now: 2 new, 1 changed, 1 clash (ASHA)',
+     d.new.length === 2 && d.amended.length === 1 && d.conflict.length === 1 && d.conflict[0].row.invoice_number === 'MPI5756260009101',
      JSON.stringify([d.new.length, d.amended.length, d.conflict.length]))
   const clash = new Set(d.conflict.map((c) => c.row.invoice_number))
   invoices = [...invoices.filter((v) => clash.has(v.invoice_number)),
@@ -365,6 +376,17 @@ section('The walkthrough IN ORDER, as the Match tab will show it')
      !b.stale && b.res.candidates[0]?.label === custBill('DEMO BHAVIN TRADING', 193000) && !b.res.refuse_to_rank,
      JSON.stringify(b.res.candidates.map((c) => [c.customer_name, Math.round(c.score)])))
   eq('    ...among the four ₹1,930 bills still unpaid (the one NIRAV was offered stays open)', b.res.candidates.length, 4)
+
+  // Report 2 brought QUICK FREIGHT's bill: the waiting payment comes back by itself.
+  const back = splitNow()
+  ok('13 · after report 2, QUICK FREIGHT ₹7,777 is BACK in today\'s list, flagged "a bill imported since could be it"',
+     back.queue.length === 1 && back.queue[0].back_for_new_bill, JSON.stringify([back.queue.length, back.waiting.length]))
+  {
+    const q = { r: back.queue[0], ...screen(back.queue[0], cov2) }
+    ok('    → its own new bill, by its unique amount → Confirm',
+       !q.stale && q.res.candidates[0]?.label === custBill('DEMO QUICK FREIGHT', 777700) && sig(q.res.candidates[0]).includes('amount_unique'),
+       JSON.stringify(q.res.candidates.map((c) => [c.label, sig(c)])))
+  }
 }
 
 fs.rmSync(dir, { recursive: true, force: true })
