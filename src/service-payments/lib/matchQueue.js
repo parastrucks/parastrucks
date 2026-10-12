@@ -232,6 +232,38 @@ export function searchCandidates(invoices) {
 }
 
 /**
+ * What to offer once a bill is picked from search. Alone, the picked bill; if
+ * its job order has other open bills (parts + labour, billed apart, paid as one
+ * transfer — 245 of 836 measured orders), the whole order as ONE choice too, so
+ * the person need not find and confirm the partner separately.
+ *
+ * Whichever is closer to the money paid comes first; nothing is ranked as a
+ * match — the person found it by searching and decides.
+ *
+ * @param picked        the bill chosen in search
+ * @param orderBills    open bills sharing its job_ref (may include picked)
+ * @param receiptPaise  what is left of the payment to place
+ */
+export function searchPickCandidates(picked, orderBills, receiptPaise) {
+  const [single] = searchCandidates([picked])
+  const members = [picked, ...(orderBills ?? []).filter((v) => v.id !== picked.id)]
+  if (!picked.job_ref || members.length < 2) return [single]
+  const open = (v) => v.total_paise - (v.allocated_paise ?? 0)
+  const order = {
+    ...single,
+    kind: 'job',
+    id: `job:${picked.job_ref}`,
+    invoice_ids: members.map((v) => v.id),
+    label: `${members.length} bills · order ${picked.job_ref}`,
+    invoice_number: members.map((v) => v.invoice_number).join(' + '),
+    amount_paise: members.reduce((a, v) => a + open(v), 0),
+    member_count: members.length,
+  }
+  const gap = (c) => Math.abs(c.amount_paise - receiptPaise)
+  return gap(order) < gap(single) ? [order, single] : [single, order]
+}
+
+/**
  * What the search box means.
  *
  * A bare number is AMBIGUOUS and is searched both ways: "9044" is as likely

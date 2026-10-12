@@ -19,11 +19,11 @@ import ImportPanel from '../components/ImportPanel.jsx'
 import { buildCandidateIndex, matchCandidates, DEFAULT_WINDOW_DAYS } from '../lib/matchCandidates.js'
 import {
   capabilitiesFor, toMatchReceipt, orderQueue, splitWaiting, invoiceWindow, attachCustomerCodes,
-  memoryForMatcher, allocationTargets, matchSignalOf, feedIsStaleFor, searchCandidates, REFRESHING,
+  memoryForMatcher, allocationTargets, matchSignalOf, feedIsStaleFor, searchPickCandidates, REFRESHING,
 } from '../lib/matchQueue.js'
 import {
   fetchPaymentsEntityId, fetchDepartmentCode, fetchOpenReceipts, fetchOpenInvoices,
-  fetchCustomerCodes, fetchPayerMemory, fetchInvoiceFeed, searchOpenInvoices,
+  fetchCustomerCodes, fetchPayerMemory, fetchInvoiceFeed, searchOpenInvoices, fetchOpenJobBills,
 } from '../lib/paymentsData.js'
 import { formatINR } from '../lib/paise.js'
 
@@ -232,15 +232,29 @@ export default function PaymentsPage() {
     setSkipped((s) => [...s, current.id])
   }
 
-  const handlePick = (invoice) => {
-    setFound((f) => [...f.filter((v) => v.id !== invoice.id), invoice])
+  const handlePick = async (invoice) => {
+    // Its order's other open bills, so a parts + labour pair paid as one
+    // transfer is one confirm, not two. If that read fails, the bill alone is
+    // still offered — the person found it and can confirm it.
+    let orderBills = []
+    if (invoice.job_ref) {
+      try {
+        const rows = await fetchOpenJobBills(entityId, invoice.job_ref)
+        orderBills = attachCustomerCodes(rows, await fetchCustomerCodes(rows.map((v) => v.customer_id)))
+      } catch { orderBills = [] }
+    }
+    const candidates = searchPickCandidates(invoice, orderBills, current.amount_paise)
+    setFound((f) => [...f.filter((v) => v.id !== invoice.id && !orderBills.some((o) => o.id === v.id)), invoice,
+                     ...orderBills.filter((o) => o.id !== invoice.id)])
     setOverride({
       receiptId: current.id,
       result: {
-        candidates: searchCandidates([invoice]),
+        candidates,
         refuse_to_rank: false,
         confident: false,
-        reason: 'You found this bill by searching. Check the customer and amount before confirming.',
+        reason: candidates.length > 1
+          ? `You found this bill by searching. Its order has ${candidates.find((c) => c.kind === 'job').member_count} open bills — pick the whole order if the payment covers them all.`
+          : 'You found this bill by searching. Check the customer and amount before confirming.',
         searched: 1,
       },
     })

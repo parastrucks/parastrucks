@@ -13,7 +13,7 @@
 import {
   capabilitiesFor, toMatchReceipt, orderQueue, invoiceWindow, attachCustomerCodes,
   memoryForMatcher, allocationTargets, matchSignalOf, feedIsStaleFor, searchCandidates,
-  parseSearch, splitWaiting,
+  parseSearch, splitWaiting, searchPickCandidates,
 } from '../../src/service-payments/lib/matchQueue.js'
 
 let pass = 0, fail = 0
@@ -250,6 +250,32 @@ section('"bill not raised yet" — who may say it, and when a waiting payment co
   ok('no record of when it was marked: comes back (one extra look beats never)', s.queue.length === 1)
   s = split([r('b'), r('a'), { id: 'n', awaiting_invoice: false }])
   eq('mixed: two in the list, one waiting', [s.queue.map((x) => x.id).sort(), s.waiting.map((x) => x.id)], [['b', 'n'], ['a']])
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+section('a bill found by SEARCH brings its order partner (parts + labour)')
+{
+  const bill = (id, rupees, o = {}) => ({ id, invoice_number: id, total_paise: rupees * 100, allocated_paise: 0,
+    invoice_date: '2026-10-07', customer_name: 'DEMO FLEET', job_ref: 'J1', ...o })
+  const parts = bill('PCS1', 8450), labour = bill('LCS1', 3200)
+
+  let c = searchPickCandidates(parts, [parts, labour], 1165000)
+  eq('paid ₹11,650 = the pair: the whole order is offered FIRST', c.map((x) => x.kind), ['job', 'invoice'])
+  eq('...covering both bills, at their sum', [c[0].invoice_ids.sort(), c[0].amount_paise, c[0].member_count],
+     [['LCS1', 'PCS1'], 1165000, 2])
+  ok('...and it is still marked as found by search, not as a suggestion', c[0].signals[0].signal === 'search' && c[0].rank === null)
+  eq('...confirming it pays both bills in full',
+     allocationTargets(c[0], new Map([parts, labour].map((v) => [v.id, v])), 1165000).map((t) => [t.invoice_id, t.amount_paise]).sort(),
+     [['LCS1', 320000], ['PCS1', 845000]])
+
+  c = searchPickCandidates(parts, [parts, labour], 845000)
+  eq('paid ₹8,450 = the parts bill alone: that bill first, the order second', c.map((x) => x.kind), ['invoice', 'job'])
+  eq('a bill with no partner: offered alone, as before', searchPickCandidates(parts, [parts], 845000).length, 1)
+  eq('a bill with no order number: alone', searchPickCandidates(bill('MPI1', 1930, { job_ref: null }), [], 193000).length, 1)
+  eq('the partner list need not include the picked bill',
+     searchPickCandidates(parts, [labour], 1165000)[0].invoice_ids.sort(), ['LCS1', 'PCS1'])
+  eq('a part-paid partner counts only what it still owes',
+     searchPickCandidates(parts, [{ ...labour, allocated_paise: 100000 }], 1065000)[0].amount_paise, 1065000)
 }
 
 console.log(`\n${'═'.repeat(64)}`)

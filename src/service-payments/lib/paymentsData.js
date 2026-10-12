@@ -115,6 +115,21 @@ export async function searchOpenInvoices(entityId, query, { limit = 20 } = {}) {
   return data || []
 }
 
+/**
+ * Every open bill of one job order — parts and labour are billed separately and
+ * paid together, so a bill found by search may have a partner the payment
+ * also covers. Capped: an order never has more than a handful of bills.
+ */
+export async function fetchOpenJobBills(entityId, jobRef) {
+  if (!entityId || !jobRef) return []
+  const { data, error } = await supabase
+    .from('v_payments_open_invoices').select(INVOICE_COLS)
+    .eq('entity_id', entityId).eq('job_ref', jobRef)
+    .order('invoice_number').limit(25)
+  if (error) throw error
+  return data || []
+}
+
 /** The caller's department code — the payments ladder is department first. */
 export async function fetchDepartmentCode(departmentId) {
   if (!departmentId) return null
