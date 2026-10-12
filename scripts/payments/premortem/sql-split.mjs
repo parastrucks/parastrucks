@@ -34,10 +34,18 @@ export function splitSql(text) {
       const j = text.indexOf('\n', i); const end = j === -1 ? n : j
       out.push(text.slice(i, end)); i = end + 1; cur = ''; continue
     }
-    if (ch === ';') { const s = cur.trim(); if (s && !/^(--[^\n]*\n?\s*)*$/.test(s)) out.push(s); cur = ''; i++; continue }
+    if (ch === ';') { const s = cur.trim(); if (!commentOnly(s)) out.push(s); cur = ''; i++; continue }
     cur += ch; i++
   }
   const last = cur.trim()
-  if (last && !/^(--[^\n]*\n?\s*)*$/.test(last)) out.push(last)
-  return out.filter((s) => s.replace(/--[^\n]*/g, '').trim() !== '')
+  if (!commentOnly(last)) out.push(last)
+  return out.filter((s) => !commentOnly(s))
+}
+
+// Linear-time "nothing but -- comments and whitespace" test. The earlier
+// /^(--[^\n]*\n?\s*)*$/ backtracked exponentially on a long comment header
+// (both 20260825_tiv_upload_and_prune.sql and 20260830_payments_a1_schema.sql
+// open with one) and looked exactly like a database hang.
+function commentOnly(s) {
+  return s.replace(/--[^\n]*/g, '').trim() === ''
 }
