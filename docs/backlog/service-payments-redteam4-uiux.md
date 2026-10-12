@@ -18,13 +18,18 @@ Raw lane outputs: `docs/backlog/redteam4-lanes/` (L1–L6, X1). Rig: `scripts/pa
 | R4-16 waiting flow | ◐ `e49ea7b` | strip padding fixed. **"Stop waiting" button + grey returned line: owner** |
 | R4-17 end screens | ◐ `e49ea7b` | "All matched except 1 waiting…", "could be its own", skipped ≠ waiting. "When did the file come in" on M12a: owner |
 | R4-19 denied | ✅ `e49ea7b` | says what is wrong and who fixes it |
-| R4-20 search | ◐ `e49ea7b` | returns picked; "10 Oct" dates; <3 digits = amount only. Tap-chips + balance wording: owner |
+| R4-20 search | ◐ `e49ea7b` + batch 2 | returns picked (seen in the pane: tick, 4 px bar, "Confirm ₹30.00 · part-paid"); "10 Oct" dates incl. the picked card; <3 digits = amount only. **Struck: "the big number changes meaning"** — Match cards (`matchCandidates.js:89`) and search (`matchQueue.js:245`) BOTH show what is still due; the rig shot the same bill before and after a part payment. Tap-chips + "due" wording: owner |
 | R4-22 contrast | ✅ `e49ea7b` | 6.2–7.3:1 (was 1.84–4.13), measured |
 | R4-25 dead scroll | ✅ `e49ea7b` | measured contract in `selftest-mobile-render` |
-| R4-26 a11y | ◐ `e49ea7b` | stale banner is a status. "Saving…" announcement + strip live region: later |
+| R4-26 a11y | ✅ `e49ea7b` + batch 2 | stale banner is a status; the confirm bar is `aria-live=polite` ("Saving…" is announced); the strip no longer wraps a button in a live region |
 | R4-27 TypeError | ✅ `e49ea7b` | "No connection. Check the internet and try again." |
 | R4-28 blank names | ◐ `e49ea7b` | "No name on the payment / on the bill". "Sister concern", refund direction: with the wordlist |
-| R4-3 undo, R4-4/7 phone head + landscape, R4-5 date + plate on cards, R4-6 part-pay remainder, R4-9 not-service confirm, R4-12 "2 bills" breakdown, R4-14 nav, R4-18 tie-out, R4-21 wordlist, R4-23 keyboard, R4-24 link-blue reasons + the + button, R4-29/30/31 | ⏭️ owner | design choices — see the chat; R4-3 needs no server work (`reverse_allocation` exists: reason required, maker/accounts pre-export, GM after) |
+| R4-4 landscape | ✅ batch 2 | `max-height: 480px` puts Confirm + Skip side by side: bar 73 px (was 123), 184 px between the bars at 667×375 (was 134) — measured in the pane |
+| R4-7 phone head | ✅ batch 2 | crumb + repeated sub-title hidden < 760 px, title 20 px: head 30 px tall (was 117) — measured at 360 |
+| R4-18 tie-out | ◐ batch 2 | "18 owed by customers, ₹…" labels the rupees; tie-out box has a Total line and says overlapping days are included; done screen shows rupees (only when the server matched the preview); the duplicate-file message gives the stored time instead of "most likely". Lists behind counts, naming the odd row: owner |
+| R4-23 keyboard | ✅ batch 2 | Confirm is next in Tab/reading order after the bills (bar is fixed, nothing moves on screen); Enter on the picked card focuses Confirm — seen in the pane |
+| R4-30 "billed yesterday" | ✅ batch 2 | "Billed the day before the payment" / "N days after the payment" |
+| R4-3 undo, R4-5 date + plate on cards, R4-6 part-pay remainder, R4-9 not-service confirm, R4-12 "2 bills" breakdown, R4-14 nav, R4-21 wordlist, R4-24 link-blue reasons + the + button, R4-29/31 | ⏭️ owner | design choices — see the chat; R4-3 needs no server work (`reverse_allocation` exists: reason required, maker/accounts pre-export, GM after) |
 
 ## Why this round
 

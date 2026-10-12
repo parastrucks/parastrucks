@@ -293,7 +293,7 @@ export default function PaymentsPage() {
 
   const header = (
     <>
-      <div className="page-head">
+      <div className="page-head pay-page-head">
         <div>
           <div className="page-head-crumb">Service Tools</div>
           <h1 className="page-head-title">Match Payments<span className="period-accent">.</span></h1>
@@ -456,8 +456,8 @@ export default function PaymentsPage() {
     <div className="page">
       {header}
       {showWaiting && (
-        <div className="pay-match pay-waiting-strip" role="status">
-          <p className="pay-hint">Looking at payments waiting for their bills.</p>
+        <div className="pay-match pay-waiting-strip">
+          <p className="pay-hint" role="status">Looking at payments waiting for their bills.</p>
           {backToToday}
         </div>
       )}

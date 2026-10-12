@@ -25,6 +25,7 @@ import path from 'node:path'
 import { createElement as h } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server.browser'
 import MatchScreen from '../../src/service-payments/components/MatchScreen.jsx'
+import { signalLabel } from '../../src/service-payments/lib/signalLabels.js'
 
 let pass = 0, fail = 0
 const ok = (label, cond, detail = '') => {
@@ -256,6 +257,29 @@ section('everything interactive is a real button')
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+section('red team 4 — order, announcements and dates')
+{
+  const noop = () => {}
+  const html = render({ receipt, result: { candidates: [candidate()] },
+    onSearch: noop, onHoldAdvance: noop, onNotService: noop, onSkip: noop })
+  // R4-23: Confirm was four Tabs away, after the ways out. The bar is fixed,
+  // so its place in the markup is only the keyboard / screen-reader order.
+  ok('Confirm comes right after the bills in reading and Tab order',
+     html.indexOf('class="pay-confirm"') > html.indexOf('pay-candidates') &&
+     html.indexOf('class="pay-confirm"') < html.indexOf('Search all bills'))
+  // R4-26: "Saving…" was announced by nothing.
+  ok('the confirm bar announces its changes politely', /class="pay-confirmbar" aria-live="polite"/.test(html))
+  // R4-30: "Billed yesterday" — from today, or from the payment?
+  ok('a date reason says it is counted from the payment',
+     signalLabel({ signal: 'date', detail: '1d' }) === 'Billed the day before the payment' &&
+     signalLabel({ signal: 'date', detail: '3d' }) === 'Billed 3 days before the payment' &&
+     signalLabel({ signal: 'date', detail: '-1d' }) === 'Billed the day after the payment' &&
+     signalLabel({ signal: 'date', detail: '0d' }) === 'Billed the same day')
+  ok('a bill found by search shows the same date style (10 Oct, not 2026-10-10)',
+     signalLabel({ signal: 'search', detail: '2026-10-10' }) === 'Found by search · billed 10 Oct')
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 section('the empty state is an ending, not a blank page')
 {
   const html = render({ receipt: null, doneToday: 18 })
@@ -327,6 +351,12 @@ section('the CSS contract — a phone claim that HTML cannot prove')
   ok('Import fold headings draw their own ▸/▾ (display:flex removed the browser\'s)',
      /\.pay-import-fold summary::before\s*\{[^}]*content:\s*'▸'/.test(css) &&
      /\.pay-import-fold\[open\] > summary::before\s*\{[^}]*content:\s*'▾'/.test(css))
+  // R4-4: sideways, a stacked bar left 134px for content.
+  ok('phone held sideways: Confirm and Skip sit side by side',
+     /@media \(max-height: 480px\) \{\s*\.pay-confirmbar \{[^}]*flex-direction:\s*row/.test(css))
+  // R4-7: the page head cost 117px on phones and repeated its sub-title.
+  ok('phones: the payments page head drops the crumb and the repeated sub-title',
+     /\.pay-page-head \.page-head-sub \{\s*display:\s*none/.test(css))
   // R4-22: the disabled button still carries words.
   ok('disabled Confirm is readable (no white text on light grey)',
      /color:\s*var\(--gray-600\)/.test((css.match(/\.pay-confirm:disabled\s*\{([^}]*)\}/) || [])[1] || ''))

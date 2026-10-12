@@ -108,10 +108,18 @@ export default function ImportPanel({ entityId, onImported, onGoMatch }) {
       const msg = e?.message || String(e)
       // A retry after a dropped connection lands here when the first attempt
       // DID commit: the batch table refuses the same file twice. Say that,
-      // not the database's words.
-      setError(/import_batches_hash_key|duplicate key/i.test(msg)
-        ? 'This file is already imported — most likely by your previous attempt, whose answer was lost. Nothing was imported twice.'
-        : msg)
+      // not the database's words — and say WHEN, from the stored batch,
+      // rather than "most likely" (red team 4, R4-18).
+      if (/import_batches_hash_key|duplicate key/i.test(msg)) {
+        let when = ''
+        try {
+          const prior = await findPriorBatch(entityId, kind === 'billing_report' ? 'invoices' : 'receipts', hash)
+          if (prior?.uploaded_at) when = ` at ${stamp(prior.uploaded_at)}`
+        } catch { /* the plain sentence still stands */ }
+        setError(`This file was already imported${when}. If you just tried, that attempt went through and only its answer was lost. Nothing was imported twice.`)
+      } else {
+        setError(msg)
+      }
       setStage('error')
     }
   }
@@ -168,7 +176,7 @@ function Preview({ plan, committing, onCommit, onCancel }) {
   // Bills: lead with what customers owe; the rest are bills but not money due.
   const newSub = !newCount ? null
     : bills && owed.payable.n !== newCount
-      ? `${owed.payable.n} to be paid · ${formatINR(owed.payable.paise)}`
+      ? `${owed.payable.n} owed by customers, ${formatINR(owed.payable.paise)}`
       : formatINR(newValue)
   const notOwed = !bills ? [] : [
     owed.freeOfCost.n && `${owed.freeOfCost.n} free of cost (${formatINR(owed.freeOfCost.paise)})`,
@@ -233,7 +241,17 @@ function Preview({ plan, committing, onCommit, onCancel }) {
           </p>
           <ul className="pay-import-list">
             {settles.map(([day, paise]) => <li key={day}>{dayLabel(day)} — <strong>{formatINR(paise)}</strong></li>)}
+            {/* The clerk added these up by hand (R4-18). */}
+            {settles.length > 1 && (
+              <li>Total — <strong>{formatINR(settles.reduce((a, [, p]) => a + p, 0))}</strong></li>
+            )}
           </ul>
+          {diff.already.length > 0 && (
+            <p className="pay-hint">
+              These totals include the {diff.already.length} payment{diff.already.length === 1 ? '' : 's'} already
+              imported from an earlier file — the whole day is shown so it can be ticked in one go.
+            </p>
+          )}
         </div>
       )}
 
@@ -276,6 +294,15 @@ function Done({ plan, done, onAnother, onGoMatch }) {
           ? `${res.new ?? 0} new · ${res.amended ?? 0} changed · ${res.unchanged ?? 0} unchanged${conflicts ? ` · ${conflicts} left as ${conflicts === 1 ? 'it was' : 'they were'}` : ''}`
           : `${res.new ?? 0} new · ${res.already_present ?? 0} already there${res.already_present_manual ? ` · ${res.already_present_manual} linked to hand entries` : ''}`}
       </p>
+      {/* Money too, not only counts — and only when the server did exactly
+          what the preview showed, since these figures come from the preview. */}
+      {mismatches.length === 0 && plan.diff.new.length > 0 && (
+        <p className="pay-empty-sub">
+          {bills
+            ? `New bills owed by customers: ${formatINR(newBillsSummary(plan.diff).payable.paise)}`
+            : `New payments: ${formatINR(plan.diff.new.reduce((a, r) => a + r.amount_paise, 0))}`}
+        </p>
+      )}
       {mismatches.length > 0 && (
         <p className="pay-banner pay-banner-warn" role="alert">
           <strong>This is not what the preview showed.</strong>{' '}

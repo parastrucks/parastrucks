@@ -62,6 +62,7 @@ export default function MatchScreen({
   // What a way-out opens renders below all three buttons — at 360px that is
   // under the confirm bar, and the tap looked like it did nothing (R4-15).
   const openedRef = useRef(null)
+  const confirmRef = useRef(null)
   useEffect(() => {
     if (menuOpen || waitOpen) openedRef.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' })
   }, [menuOpen, waitOpen])
@@ -162,6 +163,11 @@ export default function MatchScreen({
                 aria-pressed={isSel}
                 disabled={busy}
                 onClick={() => setSelectedId(isSel ? null : c.id)}
+                // At a PC, Enter on the picked card goes to Confirm instead of
+                // un-picking it (red team 4, R4-23). Taps are unchanged.
+                onKeyDown={(e) => {
+                  if (isSel && e.key === 'Enter') { e.preventDefault(); confirmRef.current?.focus() }
+                }}
               >
                 <span className="pay-candidate-top">
                   <span className="pay-candidate-amount">{formatINR(c.amount_paise)}</span>
@@ -187,6 +193,37 @@ export default function MatchScreen({
           )
         })}
       </ul>
+
+      {/* ── the thumb zone ──────────────────────────────────────────── */}
+      {/* Sticky, in the bottom third, ≥44px. No optimistic UI: on money the
+          row stays pending until the server answers, because a confirm that
+          looks done and silently failed is worse than a slow one.
+          Placed right after the bills in the markup — it is fixed, so this
+          moves nothing on screen; it puts Confirm next in the Tab order and
+          in a screen reader's reading, not after the ways out (R4-23).
+          aria-live: "Saving…" and "Updating the list…" are announced (R4-26). */}
+      <div className="pay-confirmbar" aria-live="polite">
+        <button
+          type="button"
+          className="pay-confirm"
+          ref={confirmRef}
+          disabled={!selected || busy || feedIsStale}
+          onClick={() => selected && onConfirm?.(selected)}
+        >
+          {/* Stale wins over a pick: "Confirm ₹1,930" on a dead button reads as
+              broken (R4-10). */}
+          {busy
+            ? (pendingId === REFRESHING ? 'Updating the list…' : 'Saving…')
+            : feedIsStale
+              ? 'Confirm is off — bills not loaded yet'
+              : selected
+                ? `Confirm ${formatINR(placing)}${partPay ? ' · part-paid' : ''}`
+                : candidates.length ? 'Pick a bill above' : 'Nothing to confirm'}
+        </button>
+        <button type="button" className="pay-skip" onClick={onSkip} disabled={busy}>
+          Skip for now
+        </button>
+      </div>
 
       {/* ── the ways out, always visible, never buried in a menu ─────── */}
       <div className="pay-escapes">
@@ -267,31 +304,6 @@ export default function MatchScreen({
         </ul>
       )}
 
-      {/* ── the thumb zone ──────────────────────────────────────────── */}
-      {/* Sticky, in the bottom third, ≥44px. No optimistic UI: on money the
-          row stays pending until the server answers, because a confirm that
-          looks done and silently failed is worse than a slow one. */}
-      <div className="pay-confirmbar">
-        <button
-          type="button"
-          className="pay-confirm"
-          disabled={!selected || busy || feedIsStale}
-          onClick={() => selected && onConfirm?.(selected)}
-        >
-          {/* Stale wins over a pick: "Confirm ₹1,930" on a dead button reads as
-              broken (R4-10). */}
-          {busy
-            ? (pendingId === REFRESHING ? 'Updating the list…' : 'Saving…')
-            : feedIsStale
-              ? 'Confirm is off — bills not loaded yet'
-              : selected
-                ? `Confirm ${formatINR(placing)}${partPay ? ' · part-paid' : ''}`
-                : candidates.length ? 'Pick a bill above' : 'Nothing to confirm'}
-        </button>
-        <button type="button" className="pay-skip" onClick={onSkip} disabled={busy}>
-          Skip for now
-        </button>
-      </div>
     </div>
   )
 }

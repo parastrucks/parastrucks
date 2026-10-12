@@ -55,19 +55,29 @@ export function signalLabel(s) {
       return dayLabel(d)
     case 'search':
       // Said plainly: the tool did NOT suggest this bill, a person found it.
-      return d ? `Found by search · billed ${d}` : 'Found by search'
+      return d ? `Found by search · billed ${shortDay(d)}` : 'Found by search'
     default:
       return s?.signal ?? ''
   }
 }
 
+/** "2026-10-10" -> "10 Oct", the one date style on these screens (R4-20). */
+function shortDay(isoDay) {
+  const t = new Date(`${isoDay}T00:00:00Z`)
+  if (Number.isNaN(t.getTime())) return String(isoDay)
+  return new Intl.DateTimeFormat('en-IN', { timeZone: 'UTC', day: 'numeric', month: 'short' }).format(t)
+}
+
+// Counted from the PAYMENT, and said so: "billed yesterday" read as
+// yesterday-from-today (red team 4, R4-30).
 function dayLabel(d) {
   const n = Number(String(d).replace('d', ''))
   if (!Number.isFinite(n)) return ''
   if (n === 0) return 'Billed the same day'
-  if (n === 1) return 'Billed yesterday'
-  if (n > 0) return `Billed ${n} days earlier`
-  return `Billed ${Math.abs(n)} days later`
+  if (n === 1) return 'Billed the day before the payment'
+  if (n > 0) return `Billed ${n} days before the payment`
+  if (n === -1) return 'Billed the day after the payment'
+  return `Billed ${Math.abs(n)} days after the payment`
 }
 
 /**
