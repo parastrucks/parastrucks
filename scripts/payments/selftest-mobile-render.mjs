@@ -174,6 +174,15 @@ section('"bill not raised yet" — offered only when allowed, and a waiting paym
     receipt: { ...receipt, awaiting_invoice: true, awaiting_since: '2026-10-10T06:00:00.000Z', back_for_new_bill: true } })
   ok('one that came back says WHY it is in today\'s list again',
      html.includes('a bill imported since could be it'))
+
+  // A waiting payment looks up to today, so "within 3 days" is untrue for it.
+  html = render({ onSkip: noop, onHoldAdvance: noop,
+    result: { candidates: [], reason: 'No open bill within 3 days at this amount. Search by name or amount, or skip it for now.' },
+    receipt: { ...receipt, awaiting_invoice: true, awaiting_since: '2026-10-10T06:00:00.000Z' } })
+  ok('a waiting payment with no bill yet is told the truth, not "within 3 days"',
+     html.includes('No bill for it yet') && !html.includes('within 3 days'))
+  html = render({ onSkip: noop, result: { candidates: [], reason: 'No open bill within 3 days at this amount.' }, receipt })
+  ok('...an ordinary payment keeps the matcher\'s wording', html.includes('within 3 days'))
 }
 {
   // The container offers an action only when the server will accept it. A

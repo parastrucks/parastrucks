@@ -71,7 +71,12 @@ export default function MatchScreen({
     )
   }
 
-  const { candidates, refuse_to_rank: unordered, reason } = result
+  const { candidates, refuse_to_rank: unordered } = result
+  // The matcher's "no bill within 3 days" is wrong for a payment waiting for
+  // its bill: it looks up to today. Say what is actually true for it.
+  const reason = receipt.awaiting_invoice && candidates.length === 0 && !feedIsStale
+    ? 'No bill for it yet. It stays waiting and comes back by itself when one is imported.'
+    : result.reason
   const selected = candidates.find((c) => c.id === selectedId) || null
   const busy = pendingId !== null
   // What will actually be placed: never more than the payment holds, never more

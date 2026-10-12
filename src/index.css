@@ -32,6 +32,9 @@
   --green-light:  #E7F4EC;
   --amber:        #B45309;
   --amber-light:  #FDF0E6;
+  /* Text on --amber-light: --amber there measures 4.49:1, a hair under WCAG AA
+     for small text; this measures 6.34:1 (2026-10-12). */
+  --amber-dark:   #92400E;
   --red:          #B42318;
   --red-light:    #FBEAEA;
 
@@ -3286,7 +3289,7 @@ tbody tr:hover td { background: var(--gray-50); }
 .pay-banner-warn {
   background: var(--amber-light);
   border: 1px solid var(--amber);
-  color: var(--amber);
+  color: var(--amber-dark);
 }
 
 .pay-daystatus {
@@ -3477,7 +3480,7 @@ tbody tr:hover td { background: var(--gray-50); }
   font-size: 12px;
   font-weight: 600;
   background: var(--amber-light);
-  color: var(--amber);
+  color: var(--amber-dark);
   border: 1px solid var(--amber);
   border-radius: 2px;
   padding: 2px 8px;
