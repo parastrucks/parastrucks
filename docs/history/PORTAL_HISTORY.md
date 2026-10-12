@@ -72,10 +72,27 @@ Two of my own slips, caught by tests: a probe that paid off every test bill befo
 one (27/28 — the probe, not the code), and shell quoting that silently ate a template string (the
 build would have passed; the bundle did not).
 
-⏭️ **Not yet seen in a browser** — the pane's session expired over the weekend; the owner signs in,
-then a one-bill file (QUICK FREIGHT ₹7,777 dated 12 Oct, 4 days after its staged payment) exercises
-mark → leave → return with the advance window. Prod now needs **seven** migrations, and they must
-land before this frontend (it reads `awaiting_since` and bill `created_at`).
+**Seen working in the browser pane** (the owner signed in; the weekend had expired the session).
+QUICK FREIGHT's ₹7,777 (paid 8 Oct, left open from the 10 Oct walkthrough): "Bill not raised yet" →
+the confirm ("It leaves today's list and comes back by itself…") → it left the list ("Match (2)" →
+"Match (1)", end screen "1 more is waiting for its bill"); the DB showed the flag, `awaiting_since`
+and one event naming the user, no money moved. "Look at the 1 waiting" showed the amber "Waiting for
+its bill since 12 Oct" and "Still not raised". Then a one-bill file — its ₹7,777 bill dated **12 Oct,
+4 days after the payment**, outside the old 3-day window — was imported: "Match" went back to 2 and
+the payment returned by itself, "Was waiting for its bill — a bill imported since could be it", its
+bill offered as "Only bill at this exact amount · Payer name is similar". Confirmed: placed in full,
+flag cleared, classified service. (First save after the EF deploy: ~8 s cold start.)
+
+**Two polish findings from that check** (`9a9335c`): amber text on `--amber-light` measured
+**4.49:1**, a hair under WCAG AA for small text — in the new note and the existing payments warn
+banner — so a new `--amber-dark` (#92400E, **6.34:1**, measured) for their text; and a waiting card
+with no bill repeated the matcher's "no open bill within 3 days", untrue for a payment that now looks up
+to today. `mobile-render` 70/0.
+
+**Staging now:** 22 bills, 11 payments, 10 matches; one open (KISAN ₹30, skipped) — all dummy.
+
+Prod now needs **seven** migrations, and they must land before this frontend (it reads
+`awaiting_since` and bill `created_at`).
 
 ⭐ **Lesson.** A flag is not a feature: the column existed for six weeks and "meant" something in the
 plan, but its meaning lived in what happens on the days AFTER it is set. Walk the next morning, and

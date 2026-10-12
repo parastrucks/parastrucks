@@ -55,9 +55,20 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   - **Also:** a bill found by SEARCH now brings its order partner (parts + labour = one confirm).
   - Tests: match-queue **95** · mobile-render **68** · demo-files **87** (the walkthrough now marks
     QUICK FREIGHT waiting; report 2 brings its bill and it returns) · build + no-undef clean.
-  - ⏭️ **Not yet seen in the browser** — the pane's session expired; needs the owner to sign in.
-    Ready: `node_modules/payments-demo-files/DEMO QUICK FREIGHT bill.xlsx` (one ₹7,777 bill dated
-    12 Oct, 4 days after the staged payment — also exercises the advance window).
+  - ✅ **Seen working in the browser pane (2026-10-12, owner signed in):** QUICK FREIGHT ₹7,777
+    (paid 8 Oct) → "Bill not raised yet" → confirm → left the list ("Match (2)" → 1; end screen "1 more
+    is waiting for its bill"); DB: flag + `awaiting_since` + one event, no money moved. "Look at the
+    waiting" → amber "Waiting for its bill since 12 Oct", button "Still not raised". Imported a one-bill
+    file (its ₹7,777 bill dated **12 Oct — 4 days after the payment**, outside the old window) → it came
+    back by itself ("a bill imported since could be it", "Only bill at this exact amount · Payer name is
+    similar") → Confirm → DB: placed in full, flag cleared automatically, classified service.
+    The first save after the EF deploy took ~8 s (cold start); later ones were quick.
+  - **Polish from that check** (`9a9335c`): amber text on `--amber-light` measured **4.49:1** (just
+    under AA) → new `--amber-dark` #92400E = **6.34:1** for the waiting note and the payments warn
+    banner; a waiting card no longer says "no open bill within 3 days". `mobile-render` **70/0**.
+    (Colours not re-checked on screen — no amber element was showing by then.)
+  - **Staging now:** 22 bills, 11 payments, 10 matches; one open payment (KISAN ₹30, skipped).
+    All DEMO/dummy. Deleting needs owner approval.
 
 ## Current state (2026-10-10)
 
@@ -645,8 +656,8 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
      state block.
   6. ✅ **Dummy walkthrough RUN 2026-10-10** (in the browser pane; see the 2026-10-10 state block).
      ⏭️ Left: the role checks as `svc.exec@` and `pt.mgr@` (owner signs in).
-  7. ✅ **"Bill not raised yet" — BUILT 2026-10-12** (staging; see the 2026-10-12 state block), and
-     search now offers a bill's order partner. ⏭️ Browser check once the owner signs in.
+  7. ✅ **"Bill not raised yet" — BUILT AND SEEN WORKING 2026-10-12** (staging; see the 2026-10-12
+     state block), and search now offers a bill's order partner.
   8. **Multiple QRs:** when the next QR is added, map `qr_ref` → outlet and give same-outlet bills a
      small RANKING bonus (never a filter — owner rule, 2026-09-11).
   9. Then prod: **seven** migrations (`20260830`, `20260908`, `20260926_…read_gates…`,
