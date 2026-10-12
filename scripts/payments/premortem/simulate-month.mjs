@@ -225,6 +225,11 @@ async function matchSessionAs(today, who, log, stats) {
     const r = orderQueue(st.queue, []).find((x) => !handled.has(x.id))
     if (!r) break
     handled.add(r.id)
+    // a bill already reversed OFF this payment, offered to it again (nothing remembers the rejection)
+    const rejected = stats.reversedFrom.get(r.id)
+    if (rejected) for (const c of (matchCandidates(r, index, { windowDays: windowDaysFor(r, today, DEFAULT_WINDOW_DAYS) }).candidates)) {
+      if (c.invoice_ids.some((id) => rejected.has(id))) { stats.reofferedAfterReversal++; if (c.signals.some((x) => x.signal === 'amount_unique')) stats.reofferedConfident++; break }
+    }
     const txn = txnOf.get(r.id)
     const truth = payments.find((p) => hdfcTxnId(p.n) === txn) ?? null
     const stale = feedIsStaleFor(r, feedRow)
@@ -242,9 +247,12 @@ async function matchSessionAs(today, who, log, stats) {
     if (result.candidates.length) {
       const top = result.candidates[0]
       const byName = result.candidates.find((c) => c.signals.some((x) => x.signal === 'name_overlap_strong' || /same$/.test(x.detail ?? '')))
+      // A careful layman: confirm only when the money equals what the pick is
+      // owed (red team 4 found nobody could say what a part payment does).
+      const fits = (c) => c && c.amount_paise === r.amount_paise
       if (result.confident) choice = top
-      else if (byName) choice = byName
-      else if (!result.refuse_to_rank && chance(0.7)) choice = top
+      else if (fits(byName)) choice = byName
+      else if (fits(top) && !result.refuse_to_rank && chance(0.7)) choice = top
       if (choice && result.candidates.length > 1 && chance(MODEL.wrongPickRate)) { choice = result.candidates.find((c) => c !== choice) ?? choice; deliberate = true }
     } else {
       searches++
@@ -301,7 +309,7 @@ async function matchSessionAs(today, who, log, stats) {
 }
 
 // ── run the month ────────────────────────────────────────────────────────
-const stats = { misplaced: [], falseUnique: 0, foundBySearch: 0, searchHow: {}, days: [], timings: [] }
+const stats = { misplaced: [], falseUnique: 0, foundBySearch: 0, searchHow: {}, days: [], timings: [], reversedFrom: new Map(), reofferedAfterReversal: 0, reofferedConfident: 0 }
 const sentTxns = new Set()            // every HDFC row that went into any file
 const timeline = []
 let pendingBills = []                 // bills issued on days not yet exported
@@ -366,7 +374,11 @@ for (let d = 0; d < DAYS; d++) {
     // Some wrong picks get noticed and reversed a few days later (by RPC —
     // there is no reverse in the UI, so this is optimistic by construction).
     for (const m of stats.misplaced.filter((m) => !m.reversed && !m.kept && addDays(m.day, MODEL.reverseWrongAfterDays) <= today)) {
-      if (chance(0.5)) { await rpc('payments_reverse_allocation', [m.allocation_id, ACCT, 'premortem: wrong bill']); m.reversed = today } else m.kept = true
+      if (chance(0.5)) {
+        await rpc('payments_reverse_allocation', [m.allocation_id, ACCT, 'premortem: wrong bill']); m.reversed = today
+        const rid = (await db.query(`select receipt_id, invoice_id from public.payment_allocations where id=$1`, [m.allocation_id])).rows[0]
+        if (rid) { if (!stats.reversedFrom.has(rid.receipt_id)) stats.reversedFrom.set(rid.receipt_id, new Set()); stats.reversedFrom.get(rid.receipt_id).add(rid.invoice_id) }
+      } else m.kept = true
     }
   }
 
@@ -418,7 +430,7 @@ const openNeverUpi = openInv.filter((v) => !trulyPaidNumbers.has(v.invoice_numbe
 const waitingNow = (await db.query(`select p.external_txn_id, r.amount_paise, r.awaiting_since, r.received_at from public.v_payments_open_receipts r join public.payment_receipts p on p.id=r.id where r.entity_id=$1 and r.awaiting_invoice`, [ENTITY])).rows
 const waitingWithBillPresent = waitingNow.filter((w) => { const t = payments.find((p) => hdfcTxnId(p.n) === w.external_txn_id); return t && t.pays.length && t.pays.every((b) => b.day <= addDays(START, DAYS - 2)) })
 const perDayTie = []
-for (const day of [...new Set(successes.map((p) => p.day))].sort()) {
+for (const day of [...new Set(successes.map((p) => p.day))].sort().filter((d) => d < addDays(START, DAYS - 1))) {   // the last day's rows arrive in tomorrow's file
   const bank = successes.filter((p) => p.day === day).reduce((a, p) => a + Math.round(p.rupees * 100), 0)
   const stored = Number((await db.query(`select coalesce(sum(amount_paise),0) as n from public.payment_receipts where entity_id=$1 and status='active' and source='hdfc' and (received_at at time zone 'Asia/Kolkata')::date = $2::date`, [ENTITY, day])).rows[0].n)
   if (bank !== stored) perDayTie.push({ day, bank, stored, diff: bank - stored })
@@ -435,6 +447,8 @@ const summary = {
     misplacedToolLedConfident: stats.misplaced.filter((m) => !m.deliberate && m.confident).length,
     misplacedTrueBillAbsent: stats.misplaced.filter((m) => !m.deliberate && m.trueBillsOpenInDb.length === 0).length,
     perDayTieDetail: perDayTie.slice(0, 5),
+    reofferedAfterReversal: stats.reofferedAfterReversal, reofferedConfident: stats.reofferedConfident,
+    testPaymentStillOpen: (await db.query(`select count(*)::int as n from public.v_payments_open_receipts where entity_id=$1 and amount_paise=100`, [ENTITY])).rows[0].n,
     misplaced: stats.misplaced.length, misplacedKept: stats.misplaced.filter((m) => m.kept || (!m.reversed)).length,
     misplacedPaise: stats.misplaced.filter((m) => !m.reversed).reduce((a, m) => a + m.paise, 0),
     bySignal: countBy(stats.misplaced, (m) => m.signal),

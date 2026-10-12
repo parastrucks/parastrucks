@@ -22,16 +22,23 @@ symlink is needed.)
     node scripts/payments/premortem/rehearse-db.mjs            # snapshot + seed + migrations, prints every gap
     node scripts/payments/premortem/run-probes.mjs             # post-migration checks + the 4 self-aborting probes
 
-`rehearse-db.mjs --through 20260926` stops after that prefix. Every failing statement is
-printed with its first 110 characters; the snapshot's 9 benign failures are listed in the doc.
+`rehearse-db.mjs --through 20260926` stops after that prefix; `--skip <file>` leaves one
+migration out; `--trace` prints each statement before it runs. Every failing statement is
+printed with its first 110 characters; the snapshot's 7 benign failures and the two TIV
+DO-blocks that refuse on empty tables are listed in the doc. A full run takes ≈ 3 minutes;
+`run-probes.mjs` ≈ 4 minutes (it builds the database again).
 
 ## Track B — live the first month
 
-    node --experimental-strip-types scripts/payments/premortem/simulate-month.mjs --days 30 --seed 7 --json /tmp/month.json
+    node --experimental-strip-types scripts/payments/premortem/simulate-month.mjs --days 30 --seed 7 --backlog 28 --export mtd --json /tmp/month.json
 
 `matchQueue.js` imports the Edge Function's `authority.ts`, hence `--experimental-strip-types`
-(Node 22.6+). Prints the scored month as JSON; the modelled knobs are in `MODEL` at the top of
-the script, each marked `[plan]` (measured in the plan) or `[assumed]`.
+(Node 22.6+). ≈ 100 s. Prints the scored month as JSON (the `--json` file also carries the
+per-day timeline and the first 40 misplaced allocations with their diagnosis). Flags:
+`--seed N` · `--days N` · `--backlog N` (N working days of bills before go-live in the first
+Billing Report, all paid outside UPI) · `--export mtd|delta` (the SAP export covers the last
+31 days every morning, or only days not yet exported). The modelled knobs are in `MODEL` at
+the top of the script, each marked `[plan]` (measured in the plan) or `[assumed]`.
 
 ## Files
 

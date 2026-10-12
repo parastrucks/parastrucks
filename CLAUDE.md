@@ -32,23 +32,36 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ## Current state (2026-10-12)
 
-- **🧪 SERVICE PAYMENTS — PRE-MORTEM 1 ("30 days after go-live") IN PROGRESS on branch
-  `premortem-1`** (cloud session; base `32d3484`; no live system touched). Track A: a
-  **PGlite (PostgreSQL 17.5, WASM) rehearsal of the prod migration** — prod snapshot
-  `docs/db/schema-current.sql` + seed + every migration after 2026-07-21 in filename order,
-  statement by statement, every gap stated — built in `scripts/payments/premortem/`; first run
-  loaded the snapshot (9 benign failures: psql meta-lines, extension COMMENTs, pgcrypto/uuid-ossp
-  unavailable and unused) and the seed, then stalled CPU-bound in the 2026-07/08 migrations;
-  **post-migration checks and the four probes not yet run.** Track B: `simulate-month.mjs`
-  (30 days through the real parsers/matcher/RPCs, modelled world with `[plan]`/`[assumed]`
-  knobs) written, **not yet run** (`node --experimental-strip-types …`). Track C chosen: the
-  **five verbs with no UI** — only `allocate`, `classify_receipt`, `set_awaiting_invoice` and
-  the two imports have callers in `src/`; `reverse_allocation`, `manual_receipt`, `void`,
-  `on_account`, `close_tds`, groups are RPC-only — so a cancelled-under-money clash, a wrong
-  confirm, and every cash/cheque-settled bill stay as they are until someone runs SQL.
-  ⭐ **Record, candidate findings P1–P10 with evidence tags, owner questions Q1–Q5, rehearsal
-  gaps and the resume log: `docs/backlog/service-payments-premortem-1.md`.** ⚠️ GitHub push
-  from the cloud session was 403 all day → the branch will arrive as a git bundle.
+- **🧪 SERVICE PAYMENTS — PRE-MORTEM 1 ("30 days after go-live") DONE on branch `premortem-1`**
+  (cloud session; base `32d3484`; no live system touched). ⭐ **Record, nine ranked findings
+  F1–F9 with evidence tags, two inferred, six owner questions Q1–Q6, proved-safe list, the
+  rehearsal's own gaps and the resume log: `docs/backlog/service-payments-premortem-1.md`.**
+  Scripts `scripts/payments/premortem/` (README; deps outside the repo).
+  - **Track A — the prod migration rehearsed on a prod-shaped PGlite 17.5 database** (snapshot
+    2026-07-21 + seed + every later migration, statement by statement): the seven payments
+    files **219/219 statements, zero failures**; 21 post-migration shape checks PASS (exactly one
+    `source` CHECK and one `event_type` CHECK survive, NULLS NOT DISTINCT idempotency index,
+    security_invoker views, grants, six access rules…); `probe-allocation` **26/0** ·
+    `probe-import-parity` **41/0** · `probe-awaiting-invoice` **30/0** · `probe-read-gates`
+    **57/0** (runs here because the ERP HTTP trigger is deliberately not loaded) · residue 0.
+    A 1,405-row Billing Report imports in ~0.5–1.0 s on WASM.
+  - **Track B — two simulated months** (seeds 7, 11; 28-day backlog; real parsers, importPlan,
+    matcher, matchQueue, RPCs; modelled person): **0 double counted · 0 lost · 0 cache drift ·
+    per-day totals tie on 29/29 days** (midnight pair, Sundays, holiday, overlapping files,
+    failed attempts, re-sent file blocked by hash). What breaks is the loop around the ledger:
+    ⭐ **F1** an advance payment confirmed as "only bill at this exact amount" onto the wrong
+    bill, and after a reversal **the same bill is offered again, still confident** (reproduced
+    3× on one payment; nothing reads `reversed_at` when ranking) · **F2** SAP cancelling a paid
+    bill = the same conflict for 9 mornings with no verb in the product to clear it, and with a
+    "new days only" export it never arrives at all (→ **Q1: export date range**) · **F4** the
+    service queue holds 12–13 % of the month's payments at day 30 and ~60 skips a morning
+    recur · **F5** 1,800 open bills after a month, 95 % never UPI-paid. Track C = the five verbs
+    with no UI (reverse first; lean Q5 (b): reverse + remember the rejection).
+  - ⚠️ Two rehearsal-tooling bugs looked like a "PGlite hang" and "btree_gist unavailable" (an
+    exponential comment regex in `sql-split.mjs`; PGlite dropping the options object when the
+    first argument is not a string). Both fixed; nothing is skipped by default. The earlier
+    bullet's "stalled CPU-bound in the 2026-07/08 migrations" was this.
+  - ⚠️ GitHub push from the cloud session was 403 all day → the branch arrives as a git bundle.
 - **🔎 SERVICE PAYMENTS — RED TEAM 4 (layman UI/UX) RUN; 31 consolidated findings, no fixes.**
   Seven cold-started lanes (mechanic · counter advisor · accounts clerk · first-day user ·
   plain-English editor · "can I undo?" supervisor · one code-reading expert) over 46 static
