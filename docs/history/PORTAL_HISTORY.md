@@ -85,8 +85,13 @@ in character; the one that read code produced the measurements, the six that did
 the reasons. Keep them apart until consolidation. (3) Fixture choices masquerade as findings
 (the M18 "no bill"); every claimed cause must be checked against code before it is written down.
 
-**State.** Branch `redteam4` (local only; the cloud session's GitHub push was refused 403 — the
-owner reconnects, then it pushes to the payments branch). Commits: rig · shooter fix · briefs +
+**State.** The cloud session's GitHub push was refused 403 (its write credential was minted at
+session start and did not refresh on reconnect), so its six commits reached the PC as a git bundle:
+sha256 matched what the cloud printed, prerequisite = `12450a3`, no `src/`/`supabase/`/package
+file, no secret or outside host, 0 lines deleted — then fast-forwarded onto the payments branch
+unchanged. A check from the PC confirmed it touched nothing live: staging still 22 bills / 11
+payments, last write = the earlier QUICK FREIGHT confirm, the day's API traffic only that session's;
+prod no payments tables, no migration since 25 Aug, no headless traffic. Commits: rig · shooter fix · briefs +
 skeleton · raw lanes L1–L6 · X1 · consolidation + this entry. ⏭️ Owner ranks R4-1…R4-31; a local
 session runs the 13 "needs a live run" items on a device; fixes land on the payments branch,
 each stating what it pushes down the page.

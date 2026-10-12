@@ -44,8 +44,12 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   payment does to the rest, could not tell same-amount bills apart (bill date and truck number
   are on the candidate but not on the card), and read "raised / imported / payer" as foreign.
   Wordlist for simpler English in the findings file. ⏭️ **Owner ranks the fixes; then a live run
-  on a device for the 13 items stills cannot judge.** ⚠️ Branch `redteam4` is local-only
-  (GitHub push refused 403 from the cloud session).
+  on a device for the 13 items stills cannot judge.** Run in a CLOUD session with no database, no
+  login and no app server (static renders of the real components); checked from here afterwards:
+  staging + prod untouched (row counts, last-write times, 24 h logs). Its 6 commits came to the PC
+  as a git bundle (the cloud push was refused 403; sha256 `c8822f8f…` matched) and were
+  fast-forwarded onto this branch — docs + rig only, 0 lines deleted. ⚠️ The rig's paths are the
+  container's (`/home/user/parastrucks`, a Linux chromium) — edit them before running it here.
 - **🔨 SERVICE PAYMENTS — "BILL NOT RAISED YET" BUILT (staging only, unpushed).** A payment made
   before its bill can now be marked waiting: it leaves today's list and **comes back by itself when a
   bill imported SINCE it was marked could be its own** (the plan's "matcher re-offers it on invoice
