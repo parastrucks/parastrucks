@@ -13,7 +13,9 @@ reconnect (403 on every push) — so either start a FRESH cloud session for work
 bring commits over as a verified git bundle (never the GitHub-API route, which rewrites SHAs).
 Method: memory `reference_cloud_session_handoff.md`, PORTAL_HISTORY 2026-10-12 (red team 4 entry).
 
-Both briefs below were written 2026-10-12. **Status at writing: neither answer has come back yet.**
+Briefs 1 and 2 were written 2026-10-12, Brief 3 on 2026-10-13. **Status (2026-10-13):** Brief 1 —
+answer not back yet · Brief 2 — ✅ done, merged `6809c5e` (`docs/backlog/service-payments-premortem-1.md`),
+owner answered its Q1–Q6 · Brief 3 — written, to be sent to the Brief 1 session.
 
 ---
 
@@ -150,3 +152,68 @@ WORKING RULES:
 a locally built copy has to imitate Supabase's sign-in system and roles, and that can hide
 differences. Prod still gets its real checks (the self-aborting probes + md5 of function bodies),
 run as planned and only with owner approval. Nor how real people behave — it simulates a person.
+
+---
+
+## Brief 3 — follow-up to Brief 1: the correction screens the pre-mortem made necessary
+
+Written 2026-10-13, after pre-mortem 1 was merged (`6809c5e`) and the owner answered its six
+questions. For the **same session as Brief 1** (it already knows red team 4; answer in chat only).
+When it answers: put the screen decisions to the owner beside our own view, then build.
+**Status at writing: not sent yet.**
+
+```text
+Follow-up to my last question (the 8 open design items). Answer in chat only; no commits or pushes. If you have not answered the first question yet, answer both in one reply, and say where one answer changes the other.
+
+What happened since: a separate cloud session ran a pre-mortem ("30 days after go-live, what went wrong?"). It rehearsed the prod migrations on a prod-shaped database and simulated a month of mornings through the real code. Its record is docs/backlog/service-payments-premortem-1.md on branch claude/payments-reconciliation-tool-6eaab4. Fetch that branch and read the code at commit 1b9fc87 or later; your own red team 4 branch does not have it.
+
+What it found:
+- The ledger held: nothing was counted twice or lost, and every day tied to the bank.
+- The loop around it failed. F1: an advance was confirmed onto the only same-amount bill in the 3-day window ("Only bill at this exact amount", confident), was undone, and the next morning the same bill was offered again, still confident, three times running.
+- F2: when SAP cancels a bill that already has money on it, Import shows the same clash every morning ("reverse that match first"), and no screen can reverse a match.
+- F3: wrong picks are kept, because no screen shows yesterday's matches.
+- F5: bills paid in cash or by cheque stay "open" for ever (1,800 open bills after a month, 95% never paid by UPI).
+
+The owner's decisions (final, do not re-open):
+- Q5: before go-live, build three things:
+  (1) a list of matches with Undo;
+  (2) a bill a payment was taken off is never offered to that payment again;
+  (3) a way for accounts to record cash and cheque payments.
+- Q6: Skip stays as it is, with an explanation that a skipped payment comes back tomorrow. There is no "not mine" button.
+- The SAP export covers the month to date. The match window stays ±3 days, and late payers are found by Search.
+
+(2) is BUILT (1b9fc87):
+- The page reads the undone matches for the payments in its queue.
+- matchCandidates() takes `undone` (bill ids). It leaves out any card holding one (order cards too), and does not count it when deciding another bill is "the only one".
+- Once a payment has been undone, "only bill at this amount" no longer makes it confident.
+- When a bill was left out, one hint line says "The bill this payment was taken off before is not offered again."
+- A waiting payment does not come back for that bill.
+- A search pick of it says "This payment was taken off this bill before on 13 Oct ("reason"). Check it is really the one before you confirm again."
+Critique this. In particular: leaving the bill out versus showing it demoted with a warning, and switching off "confident" for good on that payment.
+
+Facts the design must respect (verify them in the code; cite file:line for any claim you make about the code):
+- Undo is payments_reverse_allocation(allocation id, actor, reason). The reason is required ("a reversal must say why"). Who may undo is reverseAllowed() in supabase/functions/service-payments/authority.ts:
+  - before export to Busy: the person who made the match, accounts, or a GM;
+  - after export: only a GM, and it travels to Busy as a correcting entry.
+  The Busy export does not exist yet, so for now everything is "before export".
+  One payment split over a parts + labour pair is one confirm but TWO allocation rows.
+- A cash or cheque receipt is payments_manual_receipt(entity, row, actor). It is accounts-only and creates a RECEIPT, not a match. Placing it on a bill is a second call (allocate). Two calls are not atomic, and every write carries a client_request_id for safe retry.
+  Its UPI-mode error message still names BharatPe and Google Pay, both retired; HDFC is the only UPI source now.
+- Service staff (mechanics, counter staff) use 360px phones. Accounts uses a PC.
+- The TIV clutter lesson: every addition states what it pushes down the page; the default view answers the question and the rest folds one tap away.
+- Simpler English, never another language.
+
+What I want:
+1. The undo list. Where does it live: a fold on the Match tab, the toast after Confirm, the Import clash row, its own tab, or something else? Who sees whose matches? How is the reason asked for in one tap (canned reasons, like the four Skip reasons in signalLabels.js)? How is a parts + labour confirm shown and undone (as one thing or as two rows)? Give exact strings and the px or lines it adds to the default view.
+2. The clash in F2: should the clash row on Import carry its own "Undo this match", so accounts clears it where they see it?
+3. Cash and cheque (accounts, PC). Which is better:
+   (a) record the receipt, then match it in the normal queue;
+   (b) one form, "record a cash payment against this bill", making both calls;
+   (c) something else?
+   Name the fields. Say how a half-done (b) is avoided or recovered (receipt saved, match failed). Say where the form lives.
+4. Q6's explanation of Skip: where, if anywhere, can it go without adding a line?
+5. Rank all of it plus the 8 items from my first question, by value in the first month on prod, and say what you would NOT build before go-live.
+6. Anything the pre-mortem and I have both missed.
+
+Tag every claim [Read in code] (with file:line), [Measured] or [Inferred]. Say plainly where you are unsure.
+```

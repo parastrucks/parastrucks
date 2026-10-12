@@ -745,8 +745,9 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
      text in that doc's "Owner decisions"): Q1 SAP export = **month to date** · Q2 keep ±3 days +
      Search · Q3 measured: `statement_timeout` 8 s (authenticator; prod = staging) · Q4 ask HDFC ·
      **Q5 before go-live: undo list + never re-offer a reversed pair + cash/cheque receipts**
-     (all three server paths exist) · Q6 keep Skip, explain it. ⏭️ **Build Q5** (with R4-3's
-     design; the cloud's Brief 1 answer still pending) — BEFORE item 9.
+     (all three server paths exist) · Q6 keep Skip, explain it. ✅ **Q5 (2) "never re-offer" BUILT**
+     (`1b9fc87`: matcher `undone`; matcher 66, match-queue 107; read checked on staging). ⏭️ Q5 (1) undo
+     list + (3) cash/cheque: wait for the cloud's answers to Briefs 1 + 3 (`cloud-session-briefs.md`) — BEFORE item 9.
   8. **Multiple QRs:** when the next QR is added, map `qr_ref` → outlet and give same-outlet bills a
      small RANKING bonus (never a filter — owner rule, 2026-09-11).
   9. Then prod: **seven** migrations (`20260830`, `20260908`, `20260926_…read_gates…`,
