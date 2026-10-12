@@ -30,7 +30,7 @@ import { parseBillingReport } from '../../../src/service-payments/lib/parseBilli
 import { parseBharatPe, parseGpay } from '../../../src/service-payments/lib/parseUpi.js'
 import { parseHdfcSmartHub } from '../../../src/service-payments/lib/parseHdfc.js'
 import { buildCandidateIndex, matchCandidates, DEFAULT_WINDOW_DAYS } from '../../../src/service-payments/lib/matchCandidates.js'
-import { toMatchReceipt, orderQueue, invoiceWindow, windowDaysFor, splitWaiting, allocationTargets, matchSignalOf, feedIsStaleFor, attachCustomerCodes } from '../../../src/service-payments/lib/matchQueue.js'
+import { toMatchReceipt, orderQueue, invoiceWindow, windowDaysFor, splitWaiting, allocationTargets, matchSignalOf, feedIsStaleFor, attachCustomerCodes, searchPickCandidates } from '../../../src/service-payments/lib/matchQueue.js'
 import { istDateOf } from '../../../src/service-payments/lib/dates.js'
 
 const args = process.argv.slice(2)
@@ -59,10 +59,14 @@ const MODEL = {
   reverseWrongAfterDays: 3,        // [assumed] half of wrong picks are caught and reversed (by RPC: the UI has no reverse)
   sundaysOff: true, holiday: 12,   // [assumed] one holiday (day index), no bills, no file next morning
 }
-// Amounts with deliberate repeats, so same-day collisions happen as the plan
-// measured (24% of a day's bills share an amount). Rupees.
-const COUNTER_PRICES = [1930, 1930, 1930, 1930, 745, 845, 1250, 2150, 2990, 3400, 3400, 4800, 5555.55, 6120.5, 7777, 9800, 12345.67]
-const JOB_PRICES = [3200, 4800, 6150, 8450, 11650, 15260, 25000, 32000, 48000, 65000]
+// Amounts: a few hot prices (DEF ₹1,930, common counter items) plus bills that
+// are sums of MRPs and land on odd rupees. Tuned so the share of a day's bills
+// that share an amount with another bill that day is ~24% (the plan measured
+// 76% amount-unique) — printed as world.sameDayAmountCollisionShare.
+const HOT_COUNTER = [1930, 745, 845, 1250, 2150, 2990, 3400, 4800]
+const counterAmount = () => chance(0.3) ? pick(HOT_COUNTER) : Math.round(200 + Math.pow(rnd(), 2) * 11800)
+const jobAmount = () => Math.round(1500 + Math.pow(rnd(), 2.2) * 88500)
+const LABOUR = [2400, 3200, 4800, 5500]
 const FIRST = ['ASHA', 'BHAVIN', 'CHIRAG', 'DHRUVI', 'EKTA', 'FLEET', 'GANGA', 'HARSH', 'INDU', 'JAY', 'KAVYA', 'LALIT', 'MANAN', 'NEEL', 'OM', 'PRIYA', 'QUICK', 'RAMESH', 'SURESH', 'TANVI', 'UDAY', 'VIKAS', 'YASH', 'ZEEL', 'KISAN', 'MEHUL', 'NIRAV', 'JAYESH']
 const KIND = ['ENTERPRISE', 'TRADING', 'AUTO', 'MOTORS', 'LOGISTICS', 'CARRIERS', 'TRADERS', 'TYRES', 'SPARES', 'BATTERIES', 'TRANSPORT', 'CARGO', 'ROADLINES', 'BUILDERS', 'FREIGHT', 'SHARMA', 'PATEL', 'SHAH', 'DESAI']
 
@@ -106,12 +110,12 @@ function issueBills(day) {
     if (r < MODEL.focShare + MODEL.returnShare) { out.push(makeBill('MPR', plant, day, pick([600, 1200]), c)); continue }
     if (r < MODEL.focShare + MODEL.returnShare + MODEL.defShare) { out.push(makeBill('MPI', plant, day, 1930, c)); continue }
     if (r < MODEL.focShare + MODEL.returnShare + MODEL.counterShare) {
-      out.push(makeBill(chance(0.85) ? 'MPI' : 'MCI', plant, day, pick(COUNTER_PRICES), c)); continue
+      out.push(makeBill(chance(0.85) ? 'MPI' : 'MCI', plant, day, counterAmount(), c)); continue
     }
     const job = String(++jobSerial), cash = chance(0.65)
-    const parts = makeBill(cash ? 'PCS' : 'PCR', plant, day, pick(JOB_PRICES), c, { reg: c.reg, job })
+    const parts = makeBill(cash ? 'PCS' : 'PCR', plant, day, jobAmount(), c, { reg: c.reg, job })
     out.push(parts)
-    if (chance(MODEL.jobSplitShare)) out.push(makeBill(cash ? 'LCS' : 'LCR', plant, day, pick([3200, 4800, 2400, 5500]), c, { reg: c.reg, job }))
+    if (chance(MODEL.jobSplitShare)) out.push(makeBill(cash ? 'LCS' : 'LCR', plant, day, pick(LABOUR), c, { reg: c.reg, job }))
   }
   return out
 }
@@ -127,7 +131,8 @@ function schedulePayments(dayBills) {
     else if (r < MODEL.lag.same + MODEL.lag.next) offset = 1
     else if (r < MODEL.lag.same + MODEL.lag.next + MODEL.lag.late) offset = 2 + Math.floor(rnd() * (MODEL.lateDaysMax - 1))
     else offset = -(1 + Math.floor(rnd() * MODEL.advanceDaysMax))
-    const payDay = addDays(group[0].day, offset)
+    let payDay = addDays(group[0].day, offset)
+    if (payDay < START) payDay = START   // the world starts at go-live; nothing was paid before it
     const payer = group[0].customer.payer
     const hhmm = `${String(9 + Math.floor(rnd() * 10)).padStart(2, '0')}:${String(Math.floor(rnd() * 60)).padStart(2, '0')}`
     if (chance(MODEL.partPayShare) && total > 500000) {
@@ -181,26 +186,50 @@ async function importHdfc(rows, { name, log }) {
 
 // The Match screen's morning, as PaymentsPage.load() + the person's taps.
 async function matchSession(today, who, log, stats) {
-  const open = (await db.query(`select id, entity_id, mode, source, amount_paise, allocated_paise, open_paise, received_at, payer_name, payer_remark, classification, awaiting_invoice, qr_ref, awaiting_since from public.v_payments_open_receipts where entity_id=$1 order by received_at, id`, [ENTITY])).rows
-    .map((r) => ({ ...r, received_at: new Date(r.received_at).toISOString(), awaiting_since: r.awaiting_since ? new Date(r.awaiting_since).toISOString() : null, amount_paise: Number(r.amount_paise), allocated_paise: Number(r.allocated_paise), open_paise: Number(r.open_paise) }))
-  const feed = (await db.query(`select kind, last_uploaded_at, covered_until from public.payment_import_batches b where entity_id=$1 and kind='invoices' and status='committed' order by coalesce(source_pulled_at, uploaded_at) desc limit 1`, [ENTITY])).rows[0]
-  const feedRow = feed ? { covered_until: new Date((await db.query(`select max(coalesce(source_pulled_at, uploaded_at)) as c from public.payment_import_batches where entity_id=$1 and kind='invoices' and status='committed'`, [ENTITY])).rows[0].c).toISOString() } : null
-  const workable = open.map(toMatchReceipt)
-  const win = invoiceWindow(workable, DEFAULT_WINDOW_DAYS, { today })
-  const invRows = win ? (await db.query(`select i.id, i.entity_id, i.invoice_number, i.invoice_kind, i.job_ref, i.dealer_order_no, i.sap_billing_doc, i.invoice_date::text, i.customer_id, i.customer_name, i.vehicle_reg_no, i.payment_terms, i.total_paise, i.allocated_paise, i.open_paise, i.status, i.created_at, c.sap_customer_code from public.v_payments_open_invoices i left join public.customers c on c.id=i.customer_id where i.entity_id=$1 and i.invoice_date between $2 and $3 order by i.invoice_date, i.id`, [ENTITY, win.from, win.to])).rows
-    .map((v) => ({ ...v, total_paise: Number(v.total_paise), allocated_paise: Number(v.allocated_paise), open_paise: Number(v.open_paise), created_at: new Date(v.created_at).toISOString() })) : []
-  const invoices = invRows
-  const index = buildCandidateIndex(invoices)
-  const invoicesById = new Map(invoices.map((v) => [v.id, v]))
-  const { queue, waiting } = splitWaiting(workable, (r) => matchCandidates(r, index, { windowDays: windowDaysFor(r, today, DEFAULT_WINDOW_DAYS) }).candidates, invoicesById)
-  stats.waitingAtStart = waiting.length
-  const skipped = []
-  let confirms = 0, skips = 0, marks = 0, searches = 0, staleBlocked = 0
-  for (const r of orderQueue(queue, [])) {
-    const truth = payments.find((p) => hdfcTxnId(p.n) === r.external_txn_id) ?? null
+  // The page reads under RLS as the signed-in person. Session-level (not
+  // transaction-local) because each read below is its own statement.
+  await db.query(`SELECT set_config('request.jwt.claims', $1, false)`, [JSON.stringify({ sub: who, role: 'authenticated' })])
+  try { return await matchSessionAs(today, who, log, stats) }
+  finally { await db.query(`SELECT set_config('request.jwt.claims', '', false)`) }
+}
+
+async function matchSessionAs(today, who, log, stats) {
+  // One load = what PaymentsPage.load() reads. The page reloads after every
+  // Confirm / mark, so the loop below is: load, act on the first workable
+  // payment not yet handled, reload. A skip moves on without a reload (the
+  // page keeps its lists), exactly as the screen does.
+  async function loadState() {
+    const open = (await db.query(`select id, entity_id, mode, source, amount_paise, allocated_paise, open_paise, received_at, payer_name, payer_remark, classification, awaiting_invoice, qr_ref, awaiting_since from public.v_payments_open_receipts where entity_id=$1 order by received_at, id`, [ENTITY])).rows
+      .map((r) => ({ ...r, received_at: new Date(r.received_at).toISOString(), awaiting_since: r.awaiting_since ? new Date(r.awaiting_since).toISOString() : null, amount_paise: Number(r.amount_paise), allocated_paise: Number(r.allocated_paise), open_paise: Number(r.open_paise) }))
+    // Same read as PaymentsPage.load(): the definer view, invoices row only.
+    const feed = (await db.query(`select kind, last_uploaded_at, covered_until from public.v_payments_feed_status where entity_id=$1 and kind='invoices'`, [ENTITY])).rows[0]
+    const feedRow = feed ? { covered_until: new Date(feed.covered_until).toISOString() } : null
+    const workable = open.map(toMatchReceipt)
+    const win = invoiceWindow(workable, DEFAULT_WINDOW_DAYS, { today })
+    const invoices = win ? (await db.query(`select i.id, i.entity_id, i.invoice_number, i.invoice_kind, i.job_ref, i.dealer_order_no, i.sap_billing_doc, i.invoice_date::text, i.customer_id, i.customer_name, i.vehicle_reg_no, i.payment_terms, i.total_paise, i.allocated_paise, i.open_paise, i.status, i.created_at, c.sap_customer_code from public.v_payments_open_invoices i left join public.customers c on c.id=i.customer_id where i.entity_id=$1 and i.invoice_date between $2 and $3 order by i.invoice_date, i.id`, [ENTITY, win.from, win.to])).rows
+      .map((v) => ({ ...v, total_paise: Number(v.total_paise), allocated_paise: Number(v.allocated_paise), open_paise: Number(v.open_paise), created_at: new Date(v.created_at).toISOString() })) : []
+    const index = buildCandidateIndex(invoices)
+    const invoicesById = new Map(invoices.map((v) => [v.id, v]))
+    const { queue, waiting } = splitWaiting(workable, (r) => matchCandidates(r, index, { windowDays: windowDaysFor(r, today, DEFAULT_WINDOW_DAYS) }).candidates, invoicesById)
+    // scoring only (the page never sees this): receipt id -> HDFC txn id
+    const txnOf = new Map((await db.query(`select id, external_txn_id from public.payment_receipts where entity_id=$1 and status='active'`, [ENTITY])).rows.map((x) => [x.id, x.external_txn_id]))
+    return { feedRow, index, invoicesById, queue, waiting, txnOf }
+  }
+  const handled = new Set()
+  let confirms = 0, skips = 0, marks = 0, searches = 0, staleBlocked = 0, reloads = 0
+  let first = null
+  for (;;) {
+    const st = await loadState(); reloads++
+    if (!first) { first = st; stats.waitingAtStart = st.waiting.length }
+    const { feedRow, index, invoicesById, txnOf } = st
+    const r = orderQueue(st.queue, []).find((x) => !handled.has(x.id))
+    if (!r) break
+    handled.add(r.id)
+    const txn = txnOf.get(r.id)
+    const truth = payments.find((p) => hdfcTxnId(p.n) === txn) ?? null
     const stale = feedIsStaleFor(r, feedRow)
     const result = matchCandidates(r, index, { feedIsStale: stale, windowDays: windowDaysFor(r, today, DEFAULT_WINDOW_DAYS) })
-    if (stale) { staleBlocked++; skipped.push(r.id); continue }
+    if (stale) { staleBlocked++; continue }
     // the false-label check: "only bill at this exact amount" while another
     // OPEN bill anywhere has the same open amount
     for (const c of result.candidates) {
@@ -209,27 +238,50 @@ async function matchSession(today, who, log, stats) {
         if (others > 1) stats.falseUnique++
       }
     }
-    let choice = null
+    let choice = null, deliberate = false
     if (result.candidates.length) {
       const top = result.candidates[0]
       const byName = result.candidates.find((c) => c.signals.some((x) => x.signal === 'name_overlap_strong' || /same$/.test(x.detail ?? '')))
       if (result.confident) choice = top
       else if (byName) choice = byName
       else if (!result.refuse_to_rank && chance(0.7)) choice = top
-      if (choice && result.candidates.length > 1 && chance(MODEL.wrongPickRate)) choice = result.candidates.find((c) => c !== choice) ?? choice
+      if (choice && result.candidates.length > 1 && chance(MODEL.wrongPickRate)) { choice = result.candidates.find((c) => c !== choice) ?? choice; deliberate = true }
     } else {
       searches++
-      const exact = (await db.query(`select i.*, i.invoice_date::text as invoice_date, c.sap_customer_code from public.v_payments_open_invoices i left join public.customers c on c.id=i.customer_id where i.entity_id=$1 and i.open_paise=$2`, [ENTITY, r.amount_paise])).rows
-      if (exact.length === 1) {
-        const v = { ...exact[0], total_paise: Number(exact[0].total_paise), allocated_paise: Number(exact[0].allocated_paise) }
-        invoicesById.set(v.id, v)
-        choice = { kind: 'invoice', id: v.id, invoice_ids: [v.id], label: v.invoice_number, amount_paise: v.total_paise - v.allocated_paise, customer_name: v.customer_name, signals: [{ signal: 'search', detail: v.invoice_date }] }
-        stats.foundBySearch++
-      } else if (!exact.length && !r.awaiting_invoice && chance(0.5)) {
+      // "Search all bills", as searchOpenInvoices() does it: first the amount
+      // (owed now OR face value), then the payer's name; open bills, newest
+      // first, 20 at most. A hit is offered through searchPickCandidates, so a
+      // parts bill brings its labour partner.
+      const norm = (rows) => rows.map((v) => ({ ...v, total_paise: Number(v.total_paise), allocated_paise: Number(v.allocated_paise), open_paise: Number(v.open_paise) }))
+      let hits = norm((await db.query(`select i.*, i.invoice_date::text as invoice_date, c.sap_customer_code from public.v_payments_open_invoices i left join public.customers c on c.id=i.customer_id where i.entity_id=$1 and (i.open_paise=$2 or i.total_paise=$2) order by i.invoice_date desc, i.id limit 20`, [ENTITY, r.amount_paise])).rows)
+      let how = 'amount'
+      if (!hits.length) {
+        const token = String(r.payer_name ?? '').split(/\s+/).filter((w) => w.length > 2 && w !== 'DEMO')[0] ?? ''
+        hits = token ? norm((await db.query(`select i.*, i.invoice_date::text as invoice_date, c.sap_customer_code from public.v_payments_open_invoices i left join public.customers c on c.id=i.customer_id where i.entity_id=$1 and i.customer_name ilike $2 order by i.invoice_date desc, i.id limit 20`, [ENTITY, '%' + token + '%'])).rows) : []
+        how = 'name'
+      }
+      if (hits.length) {
+        // the person picks: an exact-amount hit, else (by name) the newest bill
+        // whose order sums to the money, else the newest hit if it is the only customer
+        let picked = hits.find((v) => v.open_paise === r.amount_paise || v.total_paise === r.amount_paise) ?? null
+        if (!picked && how === 'name') {
+          const customersHit = new Set(hits.map((v) => v.customer_id))
+          if (customersHit.size === 1) picked = hits[0]
+        }
+        if (picked) {
+          const orderBills = picked.job_ref ? norm((await db.query(`select i.*, i.invoice_date::text as invoice_date from public.v_payments_open_invoices i where i.entity_id=$1 and i.job_ref=$2`, [ENTITY, picked.job_ref])).rows) : []
+          for (const v of [picked, ...orderBills]) invoicesById.set(v.id, v)
+          const cands = searchPickCandidates(picked, orderBills, r.amount_paise)
+          choice = cands[0]
+          stats.foundBySearch++
+          stats.searchHow[how] = (stats.searchHow[how] || 0) + 1
+        }
+      }
+      if (!choice && !hits.length && !r.awaiting_invoice && chance(0.5)) {
         await rpc('payments_set_awaiting_invoice', [ENTITY, r.id, true, who]); marks++; continue
       }
     }
-    if (!choice) { skips++; skipped.push(r.id); continue }
+    if (!choice) { skips++; continue }
     let targets
     try { targets = allocationTargets(choice, invoicesById, r.amount_paise) } catch { skips++; continue }
     const res = await rpc('payments_allocate', [ENTITY, r.id, JSON.stringify(targets), who, crypto.randomUUID(), matchSignalOf(choice)])
@@ -238,18 +290,42 @@ async function matchSession(today, who, log, stats) {
     const trueNumbers = new Set((truth?.pays ?? []).map((b) => b.number))
     for (const a of res.allocations) {
       const num = invoicesById.get(a.invoice_id)?.invoice_number
-      if (!trueNumbers.has(num)) { stats.misplaced.push({ day: today, txn: r.external_txn_id, paise: Number(a.amount_paise), placedOn: num, trulyFor: [...trueNumbers], signal: matchSignalOf(choice), allocation_id: a.allocation_id }) }
+      if (!trueNumbers.has(num)) {
+        // was the true bill in the database when the person confirmed?
+        const inDb = trueNumbers.size ? (await db.query(`select invoice_number, invoice_date::text as d, status, open_paise from public.v_payments_open_invoices where entity_id=$1 and invoice_number = any($2)`, [ENTITY, [...trueNumbers]])).rows : []
+        stats.misplaced.push({ day: today, txn, paise: Number(a.amount_paise), placedOn: num, trulyFor: [...trueNumbers], trueBillsOpenInDb: inDb.map((x) => x.d), trueBillDays: (truth?.pays ?? []).map((b) => b.day), receiptDay: truth?.day ?? null, signal: matchSignalOf(choice), deliberate, confident: !!result.confident, allocation_id: a.allocation_id })
+      }
     }
   }
-  log.push({ match: { who: who === SVC ? 'service' : 'accounts', queue: queue.length, waiting: waiting.length, confirms, skips, marks, searches, staleBlocked } })
+  log.push({ match: { who: who === SVC ? 'service' : 'accounts', queue: first.queue.length, waiting: first.waiting.length, confirms, skips, marks, searches, staleBlocked, reloads } })
 }
 
 // ── run the month ────────────────────────────────────────────────────────
-const stats = { misplaced: [], falseUnique: 0, foundBySearch: 0, days: [] }
+const stats = { misplaced: [], falseUnique: 0, foundBySearch: 0, searchHow: {}, days: [], timings: [] }
+const sentTxns = new Set()            // every HDFC row that went into any file
 const timeline = []
 let pendingBills = []                 // bills issued on days not yet exported
 const holidayDay = addDays(START, MODEL.holiday)
+// --backlog N: N working days of bills BEFORE go-live, all paid outside UPI,
+// arriving in the first Billing Report (the real first import is a month's
+// report, ~1,085 rows). Times that import.
+const BACKLOG = args.includes('--backlog') ? Number(args[args.indexOf('--backlog') + 1]) : 0
+for (let k = BACKLOG; k >= 1; k--) { const day = addDays(START, -k); if (!(MODEL.sundaysOff && dow(day) === 0)) issueBills(day) }
+// The whole month is generated BEFORE it is lived, so an advance payment made
+// on the 16th for a bill raised on the 20th exists on the 16th (when it was
+// generated on the 20th, the 17th's HDFC file had already been made without it).
+const worldByDay = new Map()
+for (let d = 0; d < DAYS; d++) {
+  const day = addDays(START, d)
+  if (!(MODEL.sundaysOff && dow(day) === 0) && day !== holidayDay) { const issued = issueBills(day); schedulePayments(issued); worldByDay.set(day, issued) }
+}
+// --export mtd | delta — what date range accounts exports from SAP each morning.
+// 'delta' = only days not yet exported (a cancellation or amendment of an older
+// bill then NEVER reaches the portal); 'mtd' = the last 31 days every time, so
+// changes travel. [assumed — owner question; the plan does not say]
+const EXPORT = args.includes('--export') ? args[args.indexOf('--export') + 1] : 'mtd'
 let lastExportedThrough = null
+let lastHdfcThrough = null
 for (let d = 0; d < DAYS; d++) {
   const today = addDays(START, d)
   const yesterday = addDays(today, -1)
@@ -262,19 +338,26 @@ for (let d = 0; d < DAYS; d++) {
   if (d > 0 && today !== holidayDay) {
     if (workedYesterday || pendingBills.length) {
       // SAP export = every bill not yet exported, re-exported with any later changes
-      const since = lastExportedThrough ? addDays(lastExportedThrough, 1) : START
-      const exportRows = bills.filter((b) => b.day >= since && b.day <= yesterday)
-      // month-end shape: on day 20 SAP re-exports the last 10 days with changes
-      const reExport = d === 20 ? bills.filter((b) => b.day >= addDays(yesterday, -10) && b.day <= yesterday) : exportRows
+      const since = EXPORT === 'mtd' ? addDays(yesterday, -31) : (lastExportedThrough ? addDays(lastExportedThrough, 1) : addDays(START, -BACKLOG))
+      const exportRows = bills.filter((b) => b.day >= since && b.day <= yesterday && b.day >= addDays(START, -BACKLOG))
+      // month-end shape: on day 20 SAP re-exports the last 10 days with changes (delta mode only)
+      const reExport = (EXPORT === 'delta' && d === 20) ? bills.filter((b) => b.day >= addDays(yesterday, -10) && b.day <= yesterday) : exportRows
       if (reExport.length) {
+        const t0 = Date.now()
         const r = await importBillingReport(reExport, { name: `Billing Report ${today}.xlsx`, mtimeIso: istInstant(today, '09:00'), log })
+        stats.timings.push({ day: today, rows: reExport.length, ms: Date.now() - t0 })
         if (!r.blocked) lastExportedThrough = yesterday
       }
       pendingBills = []
     }
-    // HDFC: yesterday's rows plus this morning's (overlap by design)
-    const hdfcRows = payments.filter((p) => p.day === yesterday || (p.day === today && p.hhmm < '09:30') || (dow(yesterday) === 1 && p.day === addDays(yesterday, -1)))
+    // HDFC: the report is pulled for a date range — every day since the one
+    // before the last pull (so files OVERLAP by a day, by design) up to this
+    // morning's rows before 09:30. Covers Sundays and the day before a holiday.
+    const hdfcFrom = lastHdfcThrough ? addDays(lastHdfcThrough, -1) : START
+    const hdfcRows = payments.filter((p) => (p.day >= hdfcFrom && p.day <= yesterday) || (p.day === today && p.hhmm < '09:30'))
     if (hdfcRows.length) await importHdfc(hdfcRows, { name: `Transaction_report_${today}.xlsx`, log })
+    for (const p of hdfcRows) sentTxns.add(hdfcTxnId(p.n))
+    lastHdfcThrough = yesterday
     // The same file, sent again by mistake (day 9): must be blocked by hash.
     if (d === 9 && hdfcRows.length) await importHdfc(hdfcRows, { name: `Transaction_report_${today} (1).xlsx`, log })
     // Then the morning session: service first, then accounts clears the tail.
@@ -290,7 +373,7 @@ for (let d = 0; d < DAYS; d++) {
   // The day's business
   const works = !(MODEL.sundaysOff && dow(today) === 0) && today !== holidayDay
   if (works) {
-    const issued = issueBills(today)
+    const issued = worldByDay.get(today) ?? []
     // month-end events on day 18: SAP cancels one paid bill and one unpaid, amends one paid bill upward
     if (d === 18) {
       const paid = bills.find((b) => b.prefix === 'MPI' && b.day < today && payments.some((p) => p.pays.includes(b) && p.day < today))
@@ -300,7 +383,6 @@ for (let d = 0; d < DAYS; d++) {
       const amend = bills.find((b) => b.prefix === 'MCI' && b.day < today && payments.some((p) => p.pays.includes(b) && p.day < today))
       if (amend) { amend.total += 10000; amend.net = Math.round(amend.total / 1.18); amend.tax = amend.total - amend.net; log.push({ event: 'SAP amended a paid bill +₹100', bill: amend.number }) }
     }
-    schedulePayments(issued)
     pendingBills.push(...issued)
   }
   // odd payments: a ₹1 test on day 3; a 23:50 and a 00:10 pair on day 6; a Sunday payment
@@ -333,13 +415,13 @@ const trulyPaidNumbers = new Set(successes.flatMap((p) => p.pays.map((b) => b.nu
 const openInv = (await db.query(`select invoice_number, open_paise, invoice_date::text from public.v_payments_open_invoices where entity_id=$1`, [ENTITY])).rows
 const openButTrulyPaid = openInv.filter((v) => trulyPaidNumbers.has(v.invoice_number))
 const openNeverUpi = openInv.filter((v) => !trulyPaidNumbers.has(v.invoice_number))
-const waitingNow = (await db.query(`select r.external_txn_id, r.amount_paise, r.awaiting_since, r.received_at from public.v_payments_open_receipts r where r.entity_id=$1 and r.awaiting_invoice`, [ENTITY])).rows
+const waitingNow = (await db.query(`select p.external_txn_id, r.amount_paise, r.awaiting_since, r.received_at from public.v_payments_open_receipts r join public.payment_receipts p on p.id=r.id where r.entity_id=$1 and r.awaiting_invoice`, [ENTITY])).rows
 const waitingWithBillPresent = waitingNow.filter((w) => { const t = payments.find((p) => hdfcTxnId(p.n) === w.external_txn_id); return t && t.pays.length && t.pays.every((b) => b.day <= addDays(START, DAYS - 2)) })
 const perDayTie = []
 for (const day of [...new Set(successes.map((p) => p.day))].sort()) {
   const bank = successes.filter((p) => p.day === day).reduce((a, p) => a + Math.round(p.rupees * 100), 0)
   const stored = Number((await db.query(`select coalesce(sum(amount_paise),0) as n from public.payment_receipts where entity_id=$1 and status='active' and source='hdfc' and (received_at at time zone 'Asia/Kolkata')::date = $2::date`, [ENTITY, day])).rows[0].n)
-  if (bank !== stored) perDayTie.push({ day, bank, stored })
+  if (bank !== stored) perDayTie.push({ day, bank, stored, diff: bank - stored })
 }
 const conflictsNow = (await db.query(`select detail->'conflicts' as c from public.payment_events where entity_id=$1 and event_type='import' and detail->>'kind'='invoices' order by created_at desc limit 1`, [ENTITY])).rows[0]?.c ?? []
 
@@ -348,6 +430,11 @@ const summary = {
   world: { bills: bills.length, payable: bills.filter((b) => !['PEI', 'MPR'].includes(b.prefix)).length, upiSuccess: successes.length, upiFailed: payments.filter((p) => p.state === 'SaleFailed').length,
     sameDayAmountCollisionShare: measureCollisions() },
   money: {
+    misplacedDeliberate: stats.misplaced.filter((m) => m.deliberate).length,
+    misplacedToolLed: stats.misplaced.filter((m) => !m.deliberate).length,
+    misplacedToolLedConfident: stats.misplaced.filter((m) => !m.deliberate && m.confident).length,
+    misplacedTrueBillAbsent: stats.misplaced.filter((m) => !m.deliberate && m.trueBillsOpenInDb.length === 0).length,
+    perDayTieDetail: perDayTie.slice(0, 5),
     misplaced: stats.misplaced.length, misplacedKept: stats.misplaced.filter((m) => m.kept || (!m.reversed)).length,
     misplacedPaise: stats.misplaced.filter((m) => !m.reversed).reduce((a, m) => a + m.paise, 0),
     bySignal: countBy(stats.misplaced, (m) => m.signal),
@@ -358,9 +445,18 @@ const summary = {
     openInvoicesByDay: stats.days.map((d) => d.openInvoices), openInvoicePaiseEnd: stats.days.at(-1).openInvoicePaise,
     openInvoicesEnd: openInv.length, openButTrulyPaidByUpi: openButTrulyPaid.length, openNeverPaidByUpi: openNeverUpi.length,
     waitingNow: waitingNow.length, waitingWithBillAlreadyImported: waitingWithBillPresent.length,
-    falseUniqueLabels: stats.falseUnique, foundBySearch: stats.foundBySearch, lastImportConflicts: conflictsNow.length,
+    falseUniqueLabels: stats.falseUnique, foundBySearch: stats.foundBySearch, searchHow: stats.searchHow, lastImportConflicts: conflictsNow.length,
+    backlogBills: BACKLOG ? bills.filter((b) => b.day < START).length : 0, exportShape: EXPORT,
+    cancelledUnderMoney: (await db.query(`select count(*)::int as n from public.service_invoices i where i.entity_id=$1 and i.status='cancelled' and i.allocated_paise > 0`, [ENTITY])).rows[0].n,
+    conflictsSeenInMonth: timeline.reduce((a, d) => a + d.log.filter((l) => l.import === 'bills' && l.server).reduce((x, l) => x + (l.server.conflicts || 0), 0), 0),
+    amendedSeenInMonth: timeline.reduce((a, d) => a + d.log.filter((l) => l.import === 'bills' && l.server).reduce((x, l) => x + (l.server.amended || 0), 0), 0),
+    importTimings: { largest: stats.timings.slice().sort((a, b) => b.rows - a.rows)[0], slowestMs: Math.max(...stats.timings.map((x) => x.ms)) },
   },
-  misplacedDetail: stats.misplaced.slice(0, 20), lostDetail: lost.slice(0, 10).map((p) => ({ day: p.day, hhmm: p.hhmm, rupees: p.rupees })),
+  misplacedDetail: stats.misplaced.slice(0, 40), lostDetail: await Promise.all(lost.slice(0, 10).map(async (p) => {
+    const txn = hdfcTxnId(p.n), rrn = hdfcRrn(p.n)
+    const anyStatus = (await db.query(`select status, source, external_txn_id, normalized_utr from public.payment_receipts where entity_id=$1 and (external_txn_id=$2 or normalized_utr=$3)`, [ENTITY, txn, rrn])).rows
+    return { day: p.day, hhmm: p.hhmm, rupees: p.rupees, txn, rrn, inAnyFile: sentTxns.has(txn), rowsTouching: anyStatus }
+  })),
   waitingDetail: waitingWithBillPresent.slice(0, 10), conflictsDetail: conflictsNow.slice(0, 5), timeline,
 }
 function countBy(a, f) { const o = {}; for (const x of a) { const k = f(x) ?? 'null'; o[k] = (o[k] || 0) + 1 } return o }
