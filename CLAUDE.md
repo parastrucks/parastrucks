@@ -32,7 +32,29 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ## Current state (2026-10-12)
 
-- **🔎 SERVICE PAYMENTS — RED TEAM 4 (layman UI/UX) RUN; 31 consolidated findings, no fixes.**
+- **🔎 SERVICE PAYMENTS — RED TEAM 4 (layman UI/UX): 31 findings → 22 fixed or struck (2026-10-12/13,
+  `e49ea7b` + `93995d1`, pushed to the payments branch, staging only); 8 design items wait for the
+  owner after a cloud second opinion.** Fixed and MEASURED in the browser pane: desktop Confirm bar
+  560 px centred on the column to the pixel (was a 132 px pill — `left:50%;right:auto` with no width
+  shrink-wraps a fixed element; now both edges pinned + auto margins + `left: var(--sidebar-w)` ≥760);
+  what a way-out opens scrolls into view above the bar (360 px: all 5 reasons above it); phone page
+  head 30 px (was 117); landscape bar 73 px side-by-side (was 123); Enter on the picked card focuses
+  Confirm; a search pick returns selected. Plus: Import fold ▸/▾ (`summary{display:flex}` kills the
+  marker) + Clashes open; stale banner said once and the dead button never reads "Confirm ₹…";
+  contrast 6.2–7.3:1 (was 1.84–4.13); 105 px dead scroll gone; end-screen grammar ("could be its own");
+  identical names say "matches"; dates counted from the payment; accounts tie-out labels + totals;
+  "No connection" not TypeError. **Struck after reading code:** "the big number changes meaning
+  between Match and search" — both show what is still due (`matchCandidates.js:89`,
+  `matchQueue.js:245`). `selftest-mobile-render` **89/0** — 9 new CSS contracts, each FAILS on the
+  old stylesheet. ⭐ The pane caught one thing the tests missed (a picked card's "billed 2026-10-10").
+  ⏭️ **Open (owner decides, after the cloud's second opinion — Brief 1 in
+  `docs/backlog/cloud-session-briefs.md`):** R4-3 see/undo today's matches (NO server work —
+  `reverse_allocation` exists: reason required, maker/accounts pre-export, GM after) · R4-5 date +
+  plate on cards · R4-6 part-pay remainder · R4-9 not-service confirm · R4-12 "2 bills" breakdown ·
+  R4-14 nav tab · R4-21 wordlist · R4-24 blue reason line + the + button. ⚠️ Almost every one ADDS a
+  line — the TIV clutter lesson applies; ask what each pushes down. Per-item status table at the top
+  of `docs/backlog/service-payments-redteam4-uiux.md`.
+  **The run itself:**
   Seven cold-started lanes (mechanic · counter advisor · accounts clerk · first-day user ·
   plain-English editor · "can I undo?" supervisor · one code-reading expert) over 46 static
   states × 5 viewports rendered inside the app shell by `scripts/payments/redteam4-rig/`.
@@ -43,8 +65,8 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   reverses a match · landscape leaves 134 px for content. **Every persona** asked what a part
   payment does to the rest, could not tell same-amount bills apart (bill date and truck number
   are on the candidate but not on the card), and read "raised / imported / payer" as foreign.
-  Wordlist for simpler English in the findings file. ⏭️ **Owner ranks the fixes; then a live run
-  on a device for the 13 items stills cannot judge.** Run in a CLOUD session with no database, no
+  Wordlist for simpler English in the findings file. (Owner-ranking → partly done, see above;
+  ⏭️ a live run on a device for the 13 items stills cannot judge is still due.) Run in a CLOUD session with no database, no
   login and no app server (static renders of the real components); checked from here afterwards:
   staging + prod untouched (row counts, last-write times, 24 h logs). Its 6 commits came to the PC
   as a git bundle (the cloud push was refused 403; sha256 `c8822f8f…` matched) and were
@@ -676,6 +698,16 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
      ⏭️ Left: the role checks as `svc.exec@` and `pt.mgr@` (owner signs in).
   7. ✅ **"Bill not raised yet" — BUILT AND SEEN WORKING 2026-10-12** (staging; see the 2026-10-12
      state block), and search now offers a bill's order partner.
+  7b. ✅ **Red team 4 (cloud, layman UI/UX) — 22 of 31 fixed or struck** (`e49ea7b`, `93995d1`); see
+     the 2026-10-12 state block. ⏭️ The 8 design items: when the owner pastes back the cloud's
+     answer to **Brief 1** (`docs/backlog/cloud-session-briefs.md`), put the decisions to the owner
+     with both views side by side, then build. Plus the "needs a live run" list in the findings file
+     (on a real phone).
+  7c. ⏭️ **Pre-mortem (cloud, Brief 2 in `docs/backlog/cloud-session-briefs.md`)** — rehearse the
+     seven prod migrations on a prod-shaped local Postgres (PGlite from `schema-current.sql`) and
+     simulate 30 days of the routine. It pushes to its own branch `premortem-1`. When it reports:
+     verify that branch like the red-team-4 bundle (base = our tip, no src/supabase/package changes,
+     no secrets/hosts, 0 deletions), then triage its findings with the owner — BEFORE item 9.
   8. **Multiple QRs:** when the next QR is added, map `qr_ref` → outlet and give same-outlet bills a
      small RANKING bonus (never a filter — owner rule, 2026-09-11).
   9. Then prod: **seven** migrations (`20260830`, `20260908`, `20260926_…read_gates…`,

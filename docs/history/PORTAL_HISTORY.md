@@ -26,6 +26,85 @@
 
 ---
 
+## Session log — 2026-10-12/13 (PC): the cloud red team checked, brought in, and 22 of 31 fixed
+
+**"Did the cloud red team damage anything?"** (owner). Answered by measurement, not by its report:
+GitHub — no `redteam4` branch, `portal` unchanged at `4b4e65a`, payments branch at `12450a3`;
+staging — 22 bills / 11 payments / 19 customers / 6 logins, every table's last write = the earlier
+QUICK FREIGHT confirm (12:54 UTC), function md5 = file, last migration ours, EF `service-payments`
+v3; staging API logs for 24 h held only that session's traffic (12:51–13:02 UTC); prod — no payments
+tables, last migration 2026-08-25, last admin audit 2026-10-05, 710 edge requests with no headless or
+localhost user agent. Limit stated: logs cover 24 h only; the DB contents prove no writes. Its own
+account then confirmed it: static renders (`react-dom/server` + `file://` Chromium), no app, no
+Supabase, no login, no keys; only failed outbound calls were Chromium's own Google pings.
+⭐ Staging bills live in `service_invoices`; `payment_allocations` uses `allocated_at`.
+
+**Bringing it in.** The cloud push was refused **403, and reconnecting GitHub did not help** — its
+write credential is minted at session start and never refreshes. It offered pushing through the
+GitHub API (new SHAs, the app as committer) — refused. Route taken: a **git bundle** sent as a file,
+copied into an empty scratch dir, `sha256` = the cloud's printed value (`c8822f8f…eefd`),
+`git bundle verify` (prerequisite = our tip `12450a3`), fetched into a side branch without checkout,
+then checked: 6 commits, author ours, 21 files, **+2,746 / −0**, nothing in `src/`/`supabase/`/
+package files, no secrets, no outside hosts, rig only opens `file://`; the stray settings commit
+`2eb0429` absent. Fast-forwarded unchanged + one doc correction (`c50e100`), pushed.
+Memory: `reference_cloud_session_handoff.md`.
+
+**Fixes — batch 1 (`e49ea7b`), the clear defects.** R4-1 desktop bar: a `position: fixed` box
+with `left: 50%; right: auto` and no width shrink-wraps to its label (the 132 px pill) and centres
+on the WINDOW, not the column beside the 236 px sidebar → both edges pinned, `margin: 0 auto`,
+`max-width: 560px`, `left: var(--sidebar-w)` from 760 px — measured in the pane at 1024: 560 px,
+bar centre = column centre = 630. R4-2: `.pay-import-fold summary { display:flex }` replaces the
+list-item display that draws ▸ → own `::before` ▸/▾ + Clashes open by default. R4-16: the waiting
+strip shares `.pay-match` and inherited the bar's 212 px room → `.pay-match.pay-waiting-strip
+{ padding-bottom: 0 }` (two classes beat the media rule without !important). R4-25: 105 px of dead
+scroll — `.app-main` already pads the nav, so `.pay-match` needs only the bar (96 px desktop,
+116 px phone). R4-15: what a way-out opens is `scrollIntoView({block:'nearest'})` with
+`scroll-margin-bottom` = bar + nav — measured at 360: all five reasons end at 446 px, bar top 455
+(smooth scroll takes >900 ms; the first check read scrollY 0 too early). R4-22 contrast, measured:
+ref 2.81 → 7.34, hints 4.13 → 6.67, disabled Confirm 1.84 → 6.21. R4-10: the stale message once,
+"who loads them", and the bar reads "Confirm is off — bills not loaded yet" even after a pick.
+R4-13: identical names scored "weak" (rarity among open bills) and said "similar" → the matcher
+adds ` same` to the name signal's detail when the token sets are equal; label "Payer name matches
+the customer"; score and ranking unchanged. R4-20: a search pick returns selected
+(`initialSelectedId`), fewer than 3 digits search amounts only. R4-11: Skip fades while busy; the
+quiet reload skips who-am-I (cached per profile) and fetches bills + payer memory together.
+R4-17/19/27/28: end screens, the denied page, "No connection", one blank-name wording. Tests:
+mobile-render 83 (7 new CSS contracts, each FAILS on the old stylesheet — run from a scratch dir
+holding `git show HEAD:src/index.css`), match-queue 97, demo-files 87 (ASHA's face now "matches").
+
+**Fixes — batch 2 (`93995d1`).** R4-7 phone head (crumb + repeated sub-title hidden, title 20 px):
+30 px tall, was 117. R4-4 landscape (`max-height: 480px`: Confirm + Skip side by side): bar 73 px,
+was 123; 184 px between the bars at 667×375, was 134. R4-23: the bar moved right after the bills in
+the MARKUP (it is fixed, so nothing moves on screen; Tab and reading order change) + Enter on the
+picked card focuses Confirm — seen in the pane. R4-26: bar `aria-live=polite`. R4-30: "Billed the
+day before the payment". R4-18 (accounts): "18 owed by customers, ₹…", a tie-out Total + a note
+that overlapping days are included, rupees on the done screen only when the server matched the
+preview, and the duplicate-file message gives the stored time. **Struck:** R4-20's "big number
+changes meaning" — both views show what is still due; the rig shot one bill before and after a
+part payment. ⭐ **The pane caught what the tests did not:** a search-picked card still said
+"billed 2026-10-10" (the `search` signal formats its own date) → `shortDay()` + a test. Also a
+transient HMR crash between two edits (`shortDay is not defined`) — the served module was checked
+and the flow re-run with 0 errors. mobile-render **89/0**.
+
+**Lessons.** (1) Two fix batches cost no clutter because each item was asked "what does this push
+down?" — the remaining eight all ADD lines, so they go to the owner with a second opinion first.
+(2) A red-team claim about a cause is a hypothesis: one of 31 was the rig's own photography.
+(3) Verify the deployed module, not the console history, after an HMR error.
+
+**The cloud as a second brain.** Owner: use the cloud session (Fable) for second opinions,
+proactively. Two briefs written and kept verbatim in `docs/backlog/cloud-session-briefs.md`:
+**Brief 1** — second opinion on the 8 open design items (answer pending); **Brief 2** — a
+"pre-mortem, 30 days after go-live" discovery mission (prod-migration rehearsal on PGlite from
+`schema-current.sql` + a 30-day simulation through the real modules), with guardrails: no live
+systems, evidence tags [Reproduced]/[Read in code]/[Inferred], don't invent SAP/HDFC/Busy
+behaviour, frozen decisions, write scope outside `src/`/`supabase/`, a "proved safe" section,
+own branch `premortem-1`. Not started as of writing.
+
+**State.** Payments branch pushed, tip after this entry's commit; staging unchanged (22 bills,
+11 payments, KISAN ₹30 open — nothing confirmed during the checks). Prod untouched.
+
+---
+
 ## Session log — 2026-10-12 (evening): red team 4 — the Service Payments screens from a layman's seat
 
 **Why.** Three red-team rounds attacked the design; one browser walk-through found nine screen
