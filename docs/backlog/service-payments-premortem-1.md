@@ -353,6 +353,30 @@ staff a persistent "not mine, for accounts" that moves it off their list (no mon
 (c) nothing. Lean: **(b)** — it is `classify_receipt` with a new kind and a service gate, not
 a new table.
 
+## Owner decisions (2026-10-13, PC session) — do not re-ask
+
+Asked after the branch was brought in and F1, F6, F7, F8 were re-read in code and held.
+
+- **Q1 → month to date.** The daily Billing Report covers the 1st of the month to yesterday, so
+  SAP cancellations and amendments reach the portal (F2's "delta" shape is off the table). ⚠️
+  Known limit, said once and not re-litigated: in the first days of a month the file no longer
+  carries last month's bills, so a cancellation of one of those is not seen until someone looks.
+  (The rolling-31-days option covered that; the owner chose month to date.)
+- **Q2 → keep the ±3-day window; late credit-terms payments are found by Search.** No widening.
+- **Q3 → measured, not asked.** The Edge Function calls the RPCs as `service_role` through
+  PostgREST; `service_role` has no `rolconfig`, so the login role `authenticator`'s
+  **`statement_timeout=8s`** applies — **identical on prod and staging** (`pg_roles.rolconfig`,
+  read 2026-10-13). The rehearsal's worst import was ≤1.03 s on WASM: ~8× headroom.
+- **Q4 → open, HDFC's to answer.** Added to the "ask HDFC" list beside the scheduled report.
+- **Q5 → undo + "don't re-offer" + cash/cheque receipts, before go-live.** (1) A list of matches
+  with Undo, reason required (`reverse_allocation`; the server already enforces maker/accounts
+  pre-export, GM after). (2) A reversed (payment, bill) pair is never offered again to that
+  payment as "only bill at this amount" — F1's loop. (3) Accounts records cash/cheque payments
+  (`payments_manual_receipt` exists, accounts-only) so those bills stop counting as open — F5.
+  No database work for any of the three. TDS, on-account, void and groups wait for Phase B.
+- **Q6 → keep Skip, and explain it.** No "not mine" verb; the morning note (and, if it costs no
+  line, the screen) says a skipped payment comes back tomorrow and accounts clears the rest.
+
 ## Needs a live run / cannot be rehearsed here
 
 - RLS enforcement as `authenticated` through PostgREST (rehearsal reads run as superuser).

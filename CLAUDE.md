@@ -741,9 +741,12 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
      with both views side by side, then build. Plus the "needs a live run" list in the findings file
      (on a real phone).
   7c. ✅ **Pre-mortem 1 RUN and merged 2026-10-13** (cloud, Brief 2; see the 2026-10-12 state
-     block + `docs/backlog/service-payments-premortem-1.md`). ⏭️ **Owner answers Q1–Q6** (Q1 SAP
-     export date range and Q5 which verbs get a screen decide F1/F2), then fold F1–F5 into the
-     R4-3 design and build — BEFORE item 9.
+     block + `docs/backlog/service-payments-premortem-1.md`). ✅ **Owner decided 2026-10-13** (full
+     text in that doc's "Owner decisions"): Q1 SAP export = **month to date** · Q2 keep ±3 days +
+     Search · Q3 measured: `statement_timeout` 8 s (authenticator; prod = staging) · Q4 ask HDFC ·
+     **Q5 before go-live: undo list + never re-offer a reversed pair + cash/cheque receipts**
+     (all three server paths exist) · Q6 keep Skip, explain it. ⏭️ **Build Q5** (with R4-3's
+     design; the cloud's Brief 1 answer still pending) — BEFORE item 9.
   8. **Multiple QRs:** when the next QR is added, map `qr_ref` → outlet and give same-outlet bills a
      small RANKING bonus (never a filter — owner rule, 2026-09-11).
   9. Then prod: **seven** migrations (`20260830`, `20260908`, `20260926_…read_gates…`,
@@ -756,7 +759,9 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
      Then deploy the EF. Owner-approved, separate step. (Staging shows the import-rules migration
      twice — the second is an exact-text re-apply; prod takes the one file.)
   10. **HDFC API (later, "E")** replaces the daily upload; the same parser shape and import RPC
-      sit behind it. Ask HDFC whether SmartHub can SCHEDULE a daily report meanwhile.
+      sit behind it. Ask HDFC whether SmartHub can SCHEDULE a daily report meanwhile, and (pre-mortem
+      Q4) whether a Mintoak id is ever re-issued or changes when a report is regenerated — dedup
+      rests on it.
 - **⏭️ SERVICE PAYMENTS — three owner/accounts items still gate GO-LIVE (not further building):**
   1. **Schedule the SAP Billing Report** as a regular export (one-off manual run today); ask for a
      stable transaction/variant so column names don't drift. ⛔ **Do not ask again for a billing
