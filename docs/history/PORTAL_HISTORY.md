@@ -103,6 +103,71 @@ own branch `premortem-1`. Not started as of writing.
 **State.** Payments branch pushed, tip after this entry's commit; staging unchanged (22 bills,
 11 payments, KISAN ₹30 open — nothing confirmed during the checks). Prod untouched.
 
+## Session log — 2026-10-12 (night, cloud): pre-mortem 1 — "Service Payments, 30 days after go-live"
+
+**Why.** With red team 4's first fix batch in, the owner set a pre-mortem: assume money went
+on the wrong bill, was counted twice or lost, or the morning stopped working, and find out
+what, before prod. Three tracks (migration rehearsal on a prod-shaped database · a simulated
+first month through the real code · the reader's own pick), hard evidence rules
+([Reproduced] / [Read in code] / [Inferred]), no live systems, no fixes, severity by money.
+Record: `docs/backlog/service-payments-premortem-1.md`; scripts `scripts/payments/premortem/`.
+
+**Track A — the migration rehearsed.** PGlite 0.3.9 (PostgreSQL 17.5, WASM) loaded with the
+prod snapshot of 2026-07-21, the reference seed, seven synthetic users and every migration
+after the snapshot in filename order, statement by statement as psql would. The seven payments
+files applied 219/219 with zero failures; 21 shape checks passed (the `DROP CONSTRAINT IF
+EXISTS` names were right — exactly one `source` CHECK and one `event_type` CHECK remain;
+idempotency index `NULLS NOT DISTINCT`; security_invoker views; grants; access rules;
+btree_gist EXCLUDE; append-only events); the four self-aborting probes ran on the prod shape:
+allocation 26/0, import parity 41/0, awaiting invoice 30/0, read gates 57/0 (possible here
+because the ERP HTTP trigger on `users` is deliberately not loaded), zero residue. The three
+same-day 2026-09-26 files reference none of each other, so filename order and the CLAUDE.md
+order are equivalent. A 1,405-row Billing Report imported in 0.5–1.0 s on WASM, so the
+statement-timeout worry is retired bar a five-minute dashboard check.
+
+**Two tooling bugs that looked like database faults.** Three runs "hung" for 20–60 minutes
+after `20260825_tiv_atomic_upload.sql`; a per-statement trace showed the next file never
+started: the SQL splitter's comment-only regex `/^(--[^\n]*\n?\s*)*$/` was exponential on long
+comment headers (now linear, 1–7 ms). Then `btree_gist` read "not available": PGlite takes a
+non-string first constructor argument *as* the options, so `new PGlite(undefined, {
+extensions })` loaded none. Both fixed. Lesson kept: a rehearsal must prove its own tooling
+before it is allowed to blame the database.
+
+**Track B — two simulated months.** `simulate-month.mjs` drives the real parsers,
+`importPlan`, `matchCandidates`, `matchQueue` and the RPCs with a modelled workshop
+(plan-measured rates where the plan has them, stated assumptions elsewhere) and a modelled
+person (load → act → reload as the page does; confirm when confident or when the pick is owed
+exactly the money; search by amount then name as `searchOpenInvoices` does; 3 % deliberate
+slips; half the wrong picks reversed by RPC three days later). Seeds 7 and 11, 28-day backlog
+in the first file (~2,400 bills, ~480 UPI payments each). **The ledger held:** 0 double
+counted, 0 lost, 0 cache drift, per-day totals tie 29/29 days (23:50/00:10 pair, Sundays,
+holiday, overlapping files, failed attempts, a re-sent file blocked by hash, amendments
+carried, cancellation-under-money held). **The loop around it did not:** F1 — an advance
+payment confirmed as "only bill at this exact amount" onto the wrong bill, reversed, and
+offered the same bill again, still confident, three times on one payment (nothing reads
+`reversed_at` when ranking; "only" means only in the ±3-day window); F2 — SAP cancelling a
+paid bill produced the same conflict for nine mornings with no verb in the product to clear
+it, and with a "new days only" export the cancellation never arrived at all (owner question
+Q1: the export's date range); F3 — wrong picks are kept, not caught (₹21,897 / ₹46,280 on
+wrong bills at day 30 with a careful persona; ₹1.3–2.1 lakh with a careless one); F4 — the
+service queue held 12–13 % of the month's payments at day 30, ~60 skips re-decided every
+morning, the ₹1 test payment among them for 27 days; F5 — 1,800 open bills after a month,
+95 % never UPI-paid (no manual receipt, no opening balance). Read-in-code: concurrent-import
+"already imported" message (F6), amendments never update date/plate/job/terms (F7),
+`payer_memory` never written (F8), Excel-saved HDFC file refused whole (F9).
+
+**Track C.** The five verbs with no UI (reverse, manual receipt, void, on-account, TDS; plus
+groups): every remedy above passes through one, and every conflict message says "reverse that
+match first". Lean for Q5: reverse + remember the rejection, then manual receipt.
+
+**Owner questions.** Q1 SAP export date range (lean: month to date) · Q2 credit-terms payment
+lag (lean: measure two weeks from `payment_events`) · Q3 prod statement timeout (read it once)
+· Q4 Mintoak id stability (HDFC) · Q5 which verbs get a screen (lean: reverse + remembered
+rejection) · Q6 who clears the service queue (lean: a persistent "not mine, for accounts").
+
+**State.** Branch `premortem-1` on `32d3484`; cloud pushes 403 → delivered as a git bundle.
+Nothing live touched.
+
 ---
 
 ## Session log — 2026-10-12 (evening): red team 4 — the Service Payments screens from a layman's seat

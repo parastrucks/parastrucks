@@ -32,6 +32,43 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ## Current state (2026-10-12)
 
+- **🧪 SERVICE PAYMENTS — PRE-MORTEM 1 ("30 days after go-live") DONE on branch `premortem-1`**
+  (cloud session; base `32d3484`; no live system touched). ⭐ **Record, nine ranked findings
+  F1–F9 with evidence tags, two inferred, six owner questions Q1–Q6, proved-safe list, the
+  rehearsal's own gaps and the resume log: `docs/backlog/service-payments-premortem-1.md`.**
+  Scripts `scripts/payments/premortem/` (README; deps outside the repo).
+  - **Track A — the prod migration rehearsed on a prod-shaped PGlite 17.5 database** (snapshot
+    2026-07-21 + seed + every later migration, statement by statement): the seven payments
+    files **219/219 statements, zero failures**; 21 post-migration shape checks PASS (exactly one
+    `source` CHECK and one `event_type` CHECK survive, NULLS NOT DISTINCT idempotency index,
+    security_invoker views, grants, six access rules…); `probe-allocation` **26/0** ·
+    `probe-import-parity` **41/0** · `probe-awaiting-invoice` **30/0** · `probe-read-gates`
+    **57/0** (runs here because the ERP HTTP trigger is deliberately not loaded) · residue 0.
+    A 1,405-row Billing Report imports in ~0.5–1.0 s on WASM.
+  - **Track B — two simulated months** (seeds 7, 11; 28-day backlog; real parsers, importPlan,
+    matcher, matchQueue, RPCs; modelled person): **0 double counted · 0 lost · 0 cache drift ·
+    per-day totals tie on 29/29 days** (midnight pair, Sundays, holiday, overlapping files,
+    failed attempts, re-sent file blocked by hash). What breaks is the loop around the ledger:
+    ⭐ **F1** an advance payment confirmed as "only bill at this exact amount" onto the wrong
+    bill, and after a reversal **the same bill is offered again, still confident** (reproduced
+    3× on one payment; nothing reads `reversed_at` when ranking) · **F2** SAP cancelling a paid
+    bill = the same conflict for 9 mornings with no verb in the product to clear it, and with a
+    "new days only" export it never arrives at all (→ **Q1: export date range**) · **F4** the
+    service queue holds 12–13 % of the month's payments at day 30 and ~60 skips a morning
+    recur · **F5** 1,800 open bills after a month, 95 % never UPI-paid. Track C = the five verbs
+    with no UI (reverse first; lean Q5 (b): reverse + remember the rejection).
+  - ⚠️ Two rehearsal-tooling bugs looked like a "PGlite hang" and "btree_gist unavailable" (an
+    exponential comment regex in `sql-split.mjs`; PGlite dropping the options object when the
+    first argument is not a string). Both fixed; nothing is skipped by default. The earlier
+    bullet's "stalled CPU-bound in the 2026-07/08 migrations" was this.
+  - ⚠️ GitHub push from the cloud session was 403 all day → the branch arrives as a git bundle.
+  - ✅ **Brought in on the PC 2026-10-13** (merge commit on the payments branch): bundle sha256
+    `c75e141d…` = the cloud's value, `git bundle verify` ok, head `4553305`, 8 commits by us, net
+    +1,389 / −0, nothing in `src/`/`supabase/`/package, no hosts/keys/process calls. Its base was
+    `32d3484` (two behind), so a merge, not a fast-forward; `CLAUDE.md` + history conflicts were two
+    independent entries, both kept. **F1, F6, F7, F8 re-read in our code and hold.** ⭐ **F1, F2, F3
+    all converge on red team 4's R4-3 (see/undo matches)** — and F1 says undo must also make a
+    reversed (payment, bill) pair stop being offered as "only bill at this amount".
 - **🔎 SERVICE PAYMENTS — RED TEAM 4 (layman UI/UX): 31 findings → 22 fixed or struck (2026-10-12/13,
   `e49ea7b` + `93995d1`, pushed to the payments branch, staging only); 8 design items wait for the
   owner after a cloud second opinion.** Fixed and MEASURED in the browser pane: desktop Confirm bar
@@ -703,11 +740,10 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
      answer to **Brief 1** (`docs/backlog/cloud-session-briefs.md`), put the decisions to the owner
      with both views side by side, then build. Plus the "needs a live run" list in the findings file
      (on a real phone).
-  7c. ⏭️ **Pre-mortem (cloud, Brief 2 in `docs/backlog/cloud-session-briefs.md`)** — rehearse the
-     seven prod migrations on a prod-shaped local Postgres (PGlite from `schema-current.sql`) and
-     simulate 30 days of the routine. It pushes to its own branch `premortem-1`. When it reports:
-     verify that branch like the red-team-4 bundle (base = our tip, no src/supabase/package changes,
-     no secrets/hosts, 0 deletions), then triage its findings with the owner — BEFORE item 9.
+  7c. ✅ **Pre-mortem 1 RUN and merged 2026-10-13** (cloud, Brief 2; see the 2026-10-12 state
+     block + `docs/backlog/service-payments-premortem-1.md`). ⏭️ **Owner answers Q1–Q6** (Q1 SAP
+     export date range and Q5 which verbs get a screen decide F1/F2), then fold F1–F5 into the
+     R4-3 design and build — BEFORE item 9.
   8. **Multiple QRs:** when the next QR is added, map `qr_ref` → outlet and give same-outlet bills a
      small RANKING bonus (never a filter — owner rule, 2026-09-11).
   9. Then prod: **seven** migrations (`20260830`, `20260908`, `20260926_…read_gates…`,
