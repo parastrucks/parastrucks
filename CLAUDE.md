@@ -32,6 +32,20 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ## Current state (2026-10-12)
 
+- **🔎 SERVICE PAYMENTS — RED TEAM 4 (layman UI/UX) RUN; 31 consolidated findings, no fixes.**
+  Seven cold-started lanes (mechanic · counter advisor · accounts clerk · first-day user ·
+  plain-English editor · "can I undo?" supervisor · one code-reading expert) over 46 static
+  states × 5 viewports rendered inside the app shell by `scripts/payments/redteam4-rig/`.
+  ⭐ **Record and ranked list: `docs/backlog/service-payments-redteam4-uiux.md`**; raw lanes in
+  `docs/backlog/redteam4-lanes/`. **Blocks:** the desktop confirm bar shrinks to a 132 px pill
+  and floats over the list (no `width` in the ≥721 px rule) · Import fold headings have no ▸
+  (`summary { display:flex }`), so "reverse that match first" is invisible · no screen lists or
+  reverses a match · landscape leaves 134 px for content. **Every persona** asked what a part
+  payment does to the rest, could not tell same-amount bills apart (bill date and truck number
+  are on the candidate but not on the card), and read "raised / imported / payer" as foreign.
+  Wordlist for simpler English in the findings file. ⏭️ **Owner ranks the fixes; then a live run
+  on a device for the 13 items stills cannot judge.** ⚠️ Branch `redteam4` is local-only
+  (GitHub push refused 403 from the cloud session).
 - **🔨 SERVICE PAYMENTS — "BILL NOT RAISED YET" BUILT (staging only, unpushed).** A payment made
   before its bill can now be marked waiting: it leaves today's list and **comes back by itself when a
   bill imported SINCE it was marked could be its own** (the plan's "matcher re-offers it on invoice

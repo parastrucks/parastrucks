@@ -26,6 +26,73 @@
 
 ---
 
+## Session log — 2026-10-12 (evening): red team 4 — the Service Payments screens from a layman's seat
+
+**Why.** Three red-team rounds attacked the design; one browser walk-through found nine screen
+defects that seventy green checks missed. The owner asked for a fourth round on nothing but the
+end-to-end UI/UX, *"from a layman's perspective — mechanics and ground staff."* Decisions before
+the run: cloud, static renders, no live app · layman lanes see screenshots and text only, one
+expert lane reads code · all screens including the entry path and Import · simpler English,
+never another language · findings only, no fixes.
+
+**How.** A rig (`scripts/payments/redteam4-rig/`) renders the real `MatchScreen` and
+`SearchPanel`, plus hand-copied replicas of the page head, empty states, Import preview/done,
+nav, Create sheet and drawer, inside a replica of the app shell, then screenshots 46 states at
+five viewports with scroll-step shots (a full-page capture paints the fixed bars mid-page, which
+nobody ever sees; scroll steps needed a 300 ms settle). Seven agents, cold-started with a common
+brief (purpose paragraph, banned-word list, frozen owner decisions, finding template, severity
+rubric) and a persona brief each, ran in parallel: floor mechanic at 360 · counter advisor at
+390/landscape · accounts clerk on desktop · first-day coordinator at 412 · plain-English editor
+over the text dumps · once-blamed supervisor asking "can I undo?" · mobile web engineer with the
+CSS. 116 raw findings → deduped, verified against screenshots and (where a cause was claimed)
+against code → 31 consolidated items. Three lane claims struck as rig-caused: overlays shot 80 ms
+into a 200 ms slide, and a "bill not offered" that was the rig's own fixture (the matcher scores
+on `total − allocated`).
+
+**What it found.** ⭐ Record: `docs/backlog/service-payments-redteam4-uiux.md`; raw lanes in
+`docs/backlog/redteam4-lanes/`. **Blocks (4):** on a desktop the confirm bar shrinks to a 132 px
+pill and floats over the list — the ≥721 px rule sets `max-width` and `transform` but no
+`width`, so a fixed element shrink-wraps its label, and 50 % of the viewport is not the centre of
+the column once the sidebar is in play; the Import fold headings ("Clashes (1)", "Failed
+attempts (1)") draw no ▸ because `summary { display: flex }` replaces `list-item`, so the one
+line a clerk must act on ("reverse that match first") is invisible on every width; there is no
+screen that lists or reverses a match, so that instruction cannot be followed and the careful
+persona would Skip everything he was not certain of; landscape leaves 134 px between the bars.
+**Money decisions (9):** nothing says what a part payment does to the remainder; same-amount
+bills cannot be told apart although bill date and truck number are already on the candidate
+object; Confirm names an amount and never the bill while the picked card differs by a 1 px edge;
+"Not a service payment" fires on one tap with no confirm and no note for accounts, and only
+prints a sentence for service; the stale banner is said twice in two vocabularies and the button
+reads "Confirm ₹…" while dead; Skip stays live during "Saving…", the toast lands on it, and the
+next card sits greyed through six sequential fetches; "2 bills" shows neither bill; the name
+line is silent when names differ and says "similar" when they are identical. **Finding the way
+(7):** Match Payments is absent from the service bottom nav and filed under "CREATE NEW"; four
+escapes unexplained and the wait question renders under the wrong button, off-screen at 360;
+the waiting strip inherits 212 px of padding and pushes the payment under the bar; "Everything
+is matched" with one waiting, and "could be its." (`PaymentsPage.jsx:401`); accounts cannot tie
+out (unlabelled totals, no list behind a count, no rupees on done screens, "most likely"); the
+denied hint is a footnote; search starts empty and comes back unselected. **Words:** thirty
+string-level proposals and a 23-term wordlist (bill not *made* yet, *loaded* not imported,
+*name* not payer, *does not agree* not clash). **What every lane praised:** the amount-first
+card and the grey button that only turns blue with the amount on it — nobody confirms by
+accident.
+
+**Lessons.** (1) A static render inside the shell found two layout defects (desktop pill, fold
+marker) that the real component tests and the 2026-10-10 browser run both missed — the first
+because no test renders at 1280 with the sidebar, the second because a closed `<details>` passes
+every markup assertion. (2) Agents given a persona, a task script and a banned-word list stayed
+in character; the one that read code produced the measurements, the six that did not produced
+the reasons. Keep them apart until consolidation. (3) Fixture choices masquerade as findings
+(the M18 "no bill"); every claimed cause must be checked against code before it is written down.
+
+**State.** Branch `redteam4` (local only; the cloud session's GitHub push was refused 403 — the
+owner reconnects, then it pushes to the payments branch). Commits: rig · shooter fix · briefs +
+skeleton · raw lanes L1–L6 · X1 · consolidation + this entry. ⏭️ Owner ranks R4-1…R4-31; a local
+session runs the 13 "needs a live run" items on a device; fixes land on the payments branch,
+each stating what it pushes down the page.
+
+---
+
 ## Session log — 2026-10-12: "Bill not raised yet" — and three holes found by thinking about the next morning
 
 Branch `claude/payments-reconciliation-tool-6eaab4`, staging only, unpushed. The owner: *"You do your
