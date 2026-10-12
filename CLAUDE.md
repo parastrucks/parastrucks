@@ -746,7 +746,11 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
      Search · Q3 measured: `statement_timeout` 8 s (authenticator; prod = staging) · Q4 ask HDFC ·
      **Q5 before go-live: undo list + never re-offer a reversed pair + cash/cheque receipts**
      (all three server paths exist) · Q6 keep Skip, explain it. ✅ **Q5 (2) "never re-offer" BUILT**
-     (`1b9fc87`: matcher `undone`; matcher 66, match-queue 107; read checked on staging). ⏭️ Q5 (1) undo
+     (`1b9fc87`: matcher `undone`; matcher 66, match-queue 107; read checked on staging); ✅ **SEEN on staging 2026-10-13**: owner-approved undo of MEHUL SHAH ₹3,400 → DEMO INDU SPARES
+     ("Wrong customer", through the EF) → it came back offering ONLY DEMO HARSH TYRES ₹3,400, not
+     pre-picked, hint "…not offered again"; INDU found by search said "taken off this bill before on 13 Oct
+     ("Wrong customer")" — the 01:24 IST undo dated in IST; DB: allocated back to 0 both sides, 1 event.
+     **Staging now 9 matches, open: KISAN ₹30 + MEHUL ₹3,400** (left unmatched for the owner to see). ⏭️ Q5 (1) undo
      list + (3) cash/cheque: wait for the cloud's answers to Briefs 1 + 3 (`cloud-session-briefs.md`) — BEFORE item 9.
   8. **Multiple QRs:** when the next QR is added, map `qr_ref` → outlet and give same-outlet bills a
      small RANKING bonus (never a filter — owner rule, 2026-09-11).
