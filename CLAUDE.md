@@ -30,6 +30,35 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ---
 
+## Current state (2026-10-12)
+
+- **🔨 SERVICE PAYMENTS — "BILL NOT RAISED YET" BUILT (staging only, unpushed).** A payment made
+  before its bill can now be marked waiting: it leaves today's list and **comes back by itself when a
+  bill imported SINCE it was marked could be its own** (the plan's "matcher re-offers it on invoice
+  import"). Commits `a9aa45d` → `15e33ed`.
+  - **DB** `20261012_payments_awaiting_invoice.sql` (STAGING): `payments_set_awaiting_invoice`
+    (refuses fully-matched / voided / not-service; moves no money; marking again = "still not
+    raised" → the clock restarts, logged as reconfirmed; unmark twice = no-op) · new
+    `payment_receipts.awaiting_since` · views append `awaiting_since` / `created_at` (all old
+    columns kept, still SECURITY INVOKER + read-only) · event type `awaiting_invoice`.
+    `probe-awaiting-invoice` **30/0**, negative control 7/7 fail; staging prosrc md5 `c306472b…` = file.
+  - **Who:** follows MATCHING, not accounts-only (it moves no money) — UPI: service + accounts;
+    cash/cheque/bank: accounts. `authority.ts` `set_awaiting_invoice`; `selftest-authority`
+    **659/0** (26 × 13); EF `service-payments` **v3 on staging**.
+  - ⭐ **Three design holes caught before shipping, each by thinking through the next morning:**
+    (1) "comes back when it has ANY possible bill" would bounce a ₹1,930 payment straight back past
+    the four ₹1,930 bills the person had just rejected → needs `awaiting_since` vs bill
+    `created_at`; (2) "still not raised" on a returned payment must restart that clock or it
+    returns daily for the same bill; (3) ⭐ **the 3-day match window would NEVER show an advance its
+    bill raised a week later** — `windowDaysFor()` looks from the payment's day to today (≤90),
+    and bills load up to today when anything waits. The demo's 2-day gap hid (3).
+  - **Also:** a bill found by SEARCH now brings its order partner (parts + labour = one confirm).
+  - Tests: match-queue **95** · mobile-render **68** · demo-files **87** (the walkthrough now marks
+    QUICK FREIGHT waiting; report 2 brings its bill and it returns) · build + no-undef clean.
+  - ⏭️ **Not yet seen in the browser** — the pane's session expired; needs the owner to sign in.
+    Ready: `node_modules/payments-demo-files/DEMO QUICK FREIGHT bill.xlsx` (one ₹7,777 bill dated
+    12 Oct, 4 days after the staged payment — also exercises the advance window).
+
 ## Current state (2026-10-10)
 
 - **✅ SERVICE PAYMENTS — FIRST BROWSER WALK-THROUGH ON STAGING: EVERY MONEY RULE PASSED; 9 SCREEN
@@ -616,13 +645,14 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
      state block.
   6. ✅ **Dummy walkthrough RUN 2026-10-10** (in the browser pane; see the 2026-10-10 state block).
      ⏭️ Left: the role checks as `svc.exec@` and `pt.mgr@` (owner signs in).
-  7. **"Bill not raised yet"** needs a write path (RPC + EF action + `authority.ts` gate + tests)
-     before MatchScreen may offer it; `awaiting_invoice` exists but nothing sets it. Also: search
-     picks ONE bill, so a parts+labour pair found only by search is confirmed twice.
+  7. ✅ **"Bill not raised yet" — BUILT 2026-10-12** (staging; see the 2026-10-12 state block), and
+     search now offers a bill's order partner. ⏭️ Browser check once the owner signs in.
   8. **Multiple QRs:** when the next QR is added, map `qr_ref` → outlet and give same-outlet bills a
      small RANKING bonus (never a filter — owner rule, 2026-09-11).
-  9. Then prod: **six** migrations (`20260830`, `20260908`, `20260926_…read_gates…`,
-     `20260926_…views…`, `20260926_…import_rules`, `20261009_payments_hdfc_source`), then
+  9. Then prod: **seven** migrations (`20260830`, `20260908`, `20260926_…read_gates…`,
+     `20260926_…views…`, `20260926_…import_rules`, `20261009_payments_hdfc_source`,
+     `20261012_payments_awaiting_invoice`) — ⚠️ the screen now READS `awaiting_since` and bill
+     `created_at`, so the migrations must land before the frontend ships, then
      `probe-allocation.sql` + `probe-import-parity.sql` (both self-aborting) — ⛔
      `probe-read-gates.sql` is staging-only and REFUSES on prod by design (ERP-sync webhook on
      `users`); on prod, prove the gates by md5 of `pg_get_functiondef` against staging instead.

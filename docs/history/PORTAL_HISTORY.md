@@ -26,6 +26,63 @@
 
 ---
 
+## Session log — 2026-10-12: "Bill not raised yet" — and three holes found by thinking about the next morning
+
+Branch `claude/payments-reconciliation-tool-6eaab4`, staging only, unpushed. The owner: *"You do your
+work right now. I can do my checks later on."*
+
+**The gap.** `payment_receipts.awaiting_invoice` ("the advances flag — excluded from pending, shown
+as an amber chip", plan) existed from the first migration and `payments_allocate` cleared it, but
+nothing could SET it. A customer who paid before the job was billed could only be Skipped, and came
+back every morning as unfinished work.
+
+**Who may mark it** — the ladder has no row, so decided and stated: it moves no money and classifies
+nothing, so it follows MATCHING (UPI: service + accounts; cash/cheque/bank: accounts), not the
+accounts-only verbs. One line in `authority.ts` if the owner wants otherwise.
+
+**Built:** `payments_set_awaiting_invoice` + `awaiting_since` + two view columns + one event type
+(`20261012_payments_awaiting_invoice.sql`); `set_awaiting_invoice` in the Edge Function (v3 on
+staging); the button with a one-line confirm, an amber "Waiting for its bill since 10 Oct" note, a
+queue that waiting payments leave and rejoin, and end screens that say how many are waiting.
+
+⭐ **Three holes, each found before any user did, by asking "what happens the next morning?"**
+1. *"Comes back when it has a possible bill"* — a ₹1,930 payment marked while four ₹1,930 bills were
+   open would bounce straight back past the bills the person had just rejected. Fix: it returns only
+   for a bill **imported after** it was marked (`awaiting_since` vs bill `created_at`).
+2. *"Still not raised"* on a returned payment must **restart** that clock, or it returns daily for the
+   same bill — so marking again is a logged re-confirmation, not a no-op.
+3. ⭐ **The matcher's 3-day window would never offer an advance its bill raised a week later** — and the
+   page did not even load bills that far out. A waiting payment was paid BEFORE its bill by definition.
+   `windowDaysFor()` looks from its own day to today (≤90 days); bills load up to today when anything
+   waits. The demo data (bill 2 days after the payment) could never have shown this.
+
+Also: a bill found by **search** now brings its order partner, so a parts + labour pair the matcher
+missed is one confirm, not two.
+
+**Proof.** `probe-awaiting-invoice` 30/0 on staging (mark, re-confirm, unmark, part-matched allowed,
+fully-matched/voided/not-service/other-entity refused, a match clears it, grants service_role-only,
+view shape + SECURITY INVOKER + read-only preserved), zero residue; **negative control** (a function
+without the refusals swapped in, rolled back) **7/7 fail**; staging `prosrc` md5 `c306472b…` = the
+file. `selftest-authority` 659/0 (a mutation making it accounts-only fails 4). `match-queue` 95/0
+(mutation "any candidate brings it back" fails 2; "only the usual 3 days" proven to never return the
+advance). `mobile-render` 68/0, `demo-files` 87/0 — the walkthrough now marks QUICK FREIGHT waiting
+and report 2 brings its bill back. Build and no-undef clean.
+
+Two of my own slips, caught by tests: a probe that paid off every test bill before asking for an open
+one (27/28 — the probe, not the code), and shell quoting that silently ate a template string (the
+build would have passed; the bundle did not).
+
+⏭️ **Not yet seen in a browser** — the pane's session expired over the weekend; the owner signs in,
+then a one-bill file (QUICK FREIGHT ₹7,777 dated 12 Oct, 4 days after its staged payment) exercises
+mark → leave → return with the advance window. Prod now needs **seven** migrations, and they must
+land before this frontend (it reads `awaiting_since` and bill `created_at`).
+
+⭐ **Lesson.** A flag is not a feature: the column existed for six weeks and "meant" something in the
+plan, but its meaning lived in what happens on the days AFTER it is set. Walk the next morning, and
+the morning after that, before calling a state change done.
+
+---
+
 ## Session log — 2026-10-10: the first browser walk-through — money right, screen wrong in nine places
 
 Branch `claude/payments-reconciliation-tool-6eaab4`, staging only, unpushed. Prod untouched.
