@@ -217,3 +217,47 @@ What I want:
 
 Tag every claim [Read in code] (with file:line), [Measured] or [Inferred]. Say plainly where you are unsure.
 ```
+
+---
+
+## Brief 4 — pre-mortem 2: re-run the month on the fixes, and review them
+
+Written 2026-10-13 at `0bf648a`, after the undo list (`8838dab`), R4-5 (`7230a53`) and the cash &
+cheque tab + migration 8 (`19e49ad`) were built. For the **pre-mortem session** (it knows its own
+rig; its push is dead, so it delivers a bundle). Verify the bundle as before, then triage with the
+owner. **Status at writing: not sent yet.**
+
+```text
+Pre-mortem 2. Same rules as your first mission (no live systems; evidence tags [Reproduced] / [Read in code] / [Inferred]; don't invent SAP/HDFC/Busy behaviour; frozen owner decisions; findings, not fixes). Your push is refused, so deliver a git bundle as before. Answer in chat as well.
+
+Fetch claude/payments-reconciliation-tool-6eaab4 at 0bf648a or later and branch premortem-2 from it. Since your run, the PC built your findings' remedies. The owner's decisions and the build order are in docs/backlog/cloud-answer-briefs-1-3.md; read that file first.
+- 1b9fc87 + 2243129: matchCandidates(…, { undone }). A bill a payment was taken off is never offered to it again. Two canned reasons re-offer it ("Undo by mistake — offer it again", "Match again with a different amount"), and the newest undo of a pair decides (undoneByReceipt in matchQueue.js). After an undo, the remaining same-amount bill says "Only other bill at this amount in 3 days".
+- 8838dab: "Matched today" fold (MatchedFold.jsx, groupMatches). One row per confirm, grouped by client_request_id. Undo reverses each allocation in turn, and the server's reverseAllowed() decides who may. Six tapped reasons; "Bill not raised yet — it was an advance" also marks the payment waiting.
+- 7230a53: R4-5. Cards say "Billed 8 Oct · GJ15AV9044"; the SAP code stays beside the name.
+- 19e49ad: "Cash & cheque" tab (CashPanel.jsx, lib/cashReceipt.js) and migration 8, 20261013_payments_manual_receipt_safe.sql.
+  - payments_manual_receipt gains p_client_request_id: a replay returns the first receipt, a mismatch is refused, under an advisory lock.
+  - New column payment_receipts.client_request_id with a unique index; the 3-argument function is dropped.
+  - A single cash receipt of ₹2,00,000 or more is refused (269ST).
+  - The form does receipt, then allocate, and warns when a payer's cash for the day reaches ₹2 lakh.
+  - Probe: scripts/payments/probe-manual-receipt.sql (24/0 on staging).
+
+Track A — the rollout is now EIGHT migrations. Rehearse all eight on your prod-shaped PGlite (rehearse-db.mjs and run-probes.mjs), and add probe-manual-receipt.sql to the runner. Report per-file statements and failures, and anything specific to prod's shape: the DROP FUNCTION inside the transaction, grants, and the unique index on a table that already has rows.
+
+Track B — live the month again with the remedies in place. Extend simulate-month.mjs; don't fork it:
+- the undo path: the person reverses through payments_reverse_allocation with one of UNDO_REASONS, and the page's undone list is fed to matchCandidates exactly as PaymentsPage does;
+- the non-UPI half of the money: accounts records cash, cheque and bank receipts with payments_manual_receipt (with a client_request_id), then allocates them to their bills.
+Then report F1 (re-offered after reversal), F3 (misplaced and kept, in ₹), F4 and F5 (open bills at day 30; never paid by UPI) next to your first run's numbers, same seeds. Also model at least one lost response with a retried save.
+Say plainly which remedies moved which number, and what got worse or newly broke.
+
+Track C — review the four commits above for defects, money paths first. Places I am least sure of:
+- a half-undone parts + labour confirm;
+- groupMatches when the cash form's allocate uses a different client_request_id from its receipt;
+- an undo of a cash match by a service user;
+- the payer-day cash lookup (ilike escaping, IST day bounds, receipts typed on another day);
+- receivedAtFor for a past day;
+- CashPanel's save id being renewed only after success;
+- the advisory lock and replay semantics in migration 8;
+- whether any new screen string fails the plain-English wordlist in the red team 4 findings.
+
+Deliverables: docs/backlog/service-payments-premortem-2.md (verdict, before/after table, ranked findings with tags, rehearsal gaps, proved safe, owner questions, resume log) and scripts under scripts/payments/premortem/. Write scope as before: no edits to src/, supabase/ or package files. At the end print the bundle's sha256, its head and commit count, git diff --stat against 0bf648a, your top 5 findings, and what you are unsure of.
+```
