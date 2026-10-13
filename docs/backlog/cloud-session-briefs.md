@@ -225,13 +225,21 @@ Tag every claim [Read in code] (with file:line), [Measured] or [Inferred]. Say p
 Written 2026-10-13 at `0bf648a`, after the undo list (`8838dab`), R4-5 (`7230a53`) and the cash &
 cheque tab + migration 8 (`19e49ad`) were built. For the **pre-mortem session** (it knows its own
 rig; its push is dead, so it delivers a bundle). Verify the bundle as before, then triage with the
-owner. **Status at writing: not sent yet.** ➕ Since written: `40e2f3f` (Import clash-row Undo) —
-add it to Track C if the brief has not gone yet, or send the one-line addendum given in chat.
+owner. **Status: FINAL VERSION (updated 2026-10-13 to `cb1c135`), to be sent as the LAST cloud session** —
+the owner's cloud allowance ends with it (owner, 2026-10-13). It now also covers `40e2f3f` and `3f7fedd`.
 
 ```text
 Pre-mortem 2. Same rules as your first mission (no live systems; evidence tags [Reproduced] / [Read in code] / [Inferred]; don't invent SAP/HDFC/Busy behaviour; frozen owner decisions; findings, not fixes). Your push is refused, so deliver a git bundle as before. Answer in chat as well.
 
-Fetch claude/payments-reconciliation-tool-6eaab4 at 0bf648a or later and branch premortem-2 from it. Since your run, the PC built your findings' remedies. The owner's decisions and the build order are in docs/backlog/cloud-answer-briefs-1-3.md; read that file first.
+Fetch claude/payments-reconciliation-tool-6eaab4 at cb1c135 or later and branch premortem-2 from it.
+
+THIS IS THE LAST CLOUD SESSION: the owner's cloud allowance ends with it, and no follow-up question can reach you. So:
+- finish everything in this one run;
+- put every finding in the doc;
+- make every script runnable on the owner's Windows PC (Node 24, Git Bash): no /tmp or container paths, inputs and outputs as arguments, scratch dependencies installed outside the repo with a documented command;
+- write the resume log so that the PC session can re-run your Track A and Track B itself.
+
+Since your run, the PC built your findings' remedies. The owner's decisions and the build order are in docs/backlog/cloud-answer-briefs-1-3.md; read that file first.
 - 1b9fc87 + 2243129: matchCandidates(…, { undone }). A bill a payment was taken off is never offered to it again. Two canned reasons re-offer it ("Undo by mistake — offer it again", "Match again with a different amount"), and the newest undo of a pair decides (undoneByReceipt in matchQueue.js). After an undo, the remaining same-amount bill says "Only other bill at this amount in 3 days".
 - 8838dab: "Matched today" fold (MatchedFold.jsx, groupMatches). One row per confirm, grouped by client_request_id. Undo reverses each allocation in turn, and the server's reverseAllowed() decides who may. Six tapped reasons; "Bill not raised yet — it was an advance" also marks the payment waiting.
 - 7230a53: R4-5. Cards say "Billed 8 Oct · GJ15AV9044"; the SAP code stays beside the name.
@@ -241,6 +249,8 @@ Fetch claude/payments-reconciliation-tool-6eaab4 at 0bf648a or later and branch 
   - A single cash receipt of ₹2,00,000 or more is refused (269ST).
   - The form does receipt, then allocate, and warns when a payer's cash for the day reaches ₹2 lakh.
   - Probe: scripts/payments/probe-manual-receipt.sql (24/0 on staging).
+- 40e2f3f: Import clash-row "Undo this match" (ImportPanel undoClash/recheck, importPlan clashUndoPlan). The clash is in the PREVIEW, so after the undo the preview re-reads the bills and THIS import cancels the bill. Only the allocations on that bill are reversed; the server rule is asked first.
+- 3f7fedd: R4-6 / R4-12. The picked card and the Confirm button say what Confirm does (confirmPlan). One split rule, splitAcross, is shared with allocationTargets.
 
 Track A — the rollout is now EIGHT migrations. Rehearse all eight on your prod-shaped PGlite (rehearse-db.mjs and run-probes.mjs), and add probe-manual-receipt.sql to the runner. Report per-file statements and failures, and anything specific to prod's shape: the DROP FUNCTION inside the transaction, grants, and the unique index on a table that already has rows.
 
@@ -250,7 +260,7 @@ Track B — live the month again with the remedies in place. Extend simulate-mon
 Then report F1 (re-offered after reversal), F3 (misplaced and kept, in ₹), F4 and F5 (open bills at day 30; never paid by UPI) next to your first run's numbers, same seeds. Also model at least one lost response with a retried save.
 Say plainly which remedies moved which number, and what got worse or newly broke.
 
-Track C — review the four commits above for defects, money paths first. Places I am least sure of:
+Track C — review the six commits above for defects, money paths first. Places I am least sure of:
 - a half-undone parts + labour confirm;
 - groupMatches when the cash form's allocate uses a different client_request_id from its receipt;
 - an undo of a cash match by a service user;
@@ -258,7 +268,9 @@ Track C — review the four commits above for defects, money paths first. Places
 - receivedAtFor for a past day;
 - CashPanel's save id being renewed only after success;
 - the advisory lock and replay semantics in migration 8;
+- the clash-row undo's recheck after a partial failure, and that it reverses only the cancelled bill's allocations;
+- confirmPlan's words for every split shape;
 - whether any new screen string fails the plain-English wordlist in the red team 4 findings.
 
-Deliverables: docs/backlog/service-payments-premortem-2.md (verdict, before/after table, ranked findings with tags, rehearsal gaps, proved safe, owner questions, resume log) and scripts under scripts/payments/premortem/. Write scope as before: no edits to src/, supabase/ or package files. At the end print the bundle's sha256, its head and commit count, git diff --stat against 0bf648a, your top 5 findings, and what you are unsure of.
+Deliverables: docs/backlog/service-payments-premortem-2.md (verdict, before/after table, ranked findings with tags, rehearsal gaps, proved safe, owner questions, resume log) and scripts under scripts/payments/premortem/. Write scope as before: no edits to src/, supabase/ or package files. At the end print the bundle's sha256, its head and commit count, git diff --stat against cb1c135, your top 5 findings, and what you are unsure of.
 ```
