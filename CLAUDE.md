@@ -750,7 +750,13 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
      ("Wrong customer", through the EF) → it came back offering ONLY DEMO HARSH TYRES ₹3,400, not
      pre-picked, hint "…not offered again"; INDU found by search said "taken off this bill before on 13 Oct
      ("Wrong customer")" — the 01:24 IST undo dated in IST; DB: allocated back to 0 both sides, 1 event.
-     **Staging now 9 matches, open: KISAN ₹30 + MEHUL ₹3,400** (left unmatched for the owner to see). ⏭️ Q5 (1) undo
+     **Staging now 9 matches, open: KISAN ₹30 + MEHUL ₹3,400** (left unmatched for the owner to see).
+     ✅ **Cloud answered Briefs 1 + 3** (the pre-mortem session; verbatim + PC verification +
+     owner decisions in `docs/backlog/cloud-answer-briefs-1-3.md`). Owner 2026-10-13: two undo reasons
+     re-offer the bill · service sees own matches, accounts all · cash duplicates fixed IN THE DB
+     (`p_client_request_id` on `payments_manual_receipt` = **8th prod migration**) · server refuses one
+     cash receipt ≥ ₹2 L, form warns on the payer-day total. `2243129`: "Only other bill at this
+     amount in 3 days" (seen on staging). ⏭️ **Build in the order recorded there, undo list first.** ⏭️ Q5 (1) undo
      list + (3) cash/cheque: wait for the cloud's answers to Briefs 1 + 3 (`cloud-session-briefs.md`) — BEFORE item 9.
   8. **Multiple QRs:** when the next QR is added, map `qr_ref` → outlet and give same-outlet bills a
      small RANKING bonus (never a filter — owner rule, 2026-09-11).

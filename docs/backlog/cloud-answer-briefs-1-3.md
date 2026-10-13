@@ -103,3 +103,31 @@ Missed by both.
 - When the Busy export arrives, undo of exported rows becomes GM-only. Leave one word of room on the row (`sent to Busy`) now; build nothing.
 
 Unsure: I have not rendered any of this, so every px figure is from the stylesheet, not a screenshot. The "only label migrates" point is read, not reproduced. Whether a mechanic should be shown colleagues' matches is the owner's call, not mine.
+
+---
+
+## Owner decisions on this answer (2026-10-13, PC session) — do not re-ask
+
+1. **Undo exceptions: yes.** Two canned reasons — `Undo by mistake — offer it again` and
+   `Match again with a different amount` — keep the bill on offer; every other reason hides it
+   from that payment's list. Reasons are tapped from a fixed list, never typed.
+2. **Who sees which matches in the "Matched today" list:** service staff see their own; accounts
+   and GMs see everyone's. A screen choice, not a security boundary (RLS already lets service read
+   all allocations in the entity).
+3. **Cash/cheque duplicates: fix it in the database.** `payments_manual_receipt` gains a
+   `p_client_request_id` with the replay-return pattern of `payments_allocate`. This is the
+   **8th prod migration**; it replaces the function (drop the 3-arg signature in the same
+   migration, or Postgres keeps both as overloads and the EF's named-argument call becomes
+   ambiguous). No data touched.
+4. **₹2 lakh cash (Sec 269ST):** the SERVER refuses a single cash receipt of ₹2,00,000 or more;
+   the form WARNS before saving when the same payer's cash for the day would reach ₹2 lakh (payer
+   names are typed by hand, so a hard per-day block could be dodged or wrongly triggered). Goes in
+   the same 8th migration.
+
+**Build order (the cloud's ranking, which the PC agrees with):** undo list (+ exceptions, + offer
+"Bill not raised yet" right after that reason) → R4-5 date + plate on cards → cash & cheque tab
+(+ migration 8) → Import clash-row Undo → R4-12 + R4-6 in the selected card → R4-14 nav tab →
+R4-21 wordlist → R4-24 grey reason line → R4-9 not-service confirm + `Test / top-up` → R4-18.
+Skip's explanation: reword the existing end-screen sentence, zero lines. **Not before go-live:**
+toast Undo, a demoted-card variant, void-receipt screen, on-account / TDS / groups, history older
+than 7 days, R4-29 / R4-31 polish, `confident` doing anything on screen.
