@@ -3386,6 +3386,8 @@ tbody tr:hover td { background: var(--gray-50); }
 .pay-candidate-ref  { font-size: 13px; color: var(--gray-600); }
 /* R4-5: when and which truck — read before the reason, so not faint. */
 .pay-candidate-when { font-size: 14px; color: var(--ink); }
+/* What Confirm will do, on the picked card (R4-6, R4-12). */
+.pay-candidate-plan { font-size: 14px; font-weight: 600; color: var(--ink); overflow-wrap: anywhere; }
 .pay-candidate-code { font-size: 13px; font-weight: 400; color: var(--gray-600); }
 .pay-candidate-why  { font-size: 13px; color: var(--blue-dark); margin-top: 4px; }
 .pay-candidate-all  { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }

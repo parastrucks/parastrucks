@@ -85,6 +85,7 @@ export function buildCandidateIndex(invoices, { asOf = null } = {}) {
       kind: 'invoice',
       id: v.id ?? v.invoice_number,
       invoice_ids: [v.id ?? v.invoice_number],
+      members: [memberOf(v)],
       label: v.invoice_number,
       amount_paise: outstandingOf(v),
       date: v.invoice_date,
@@ -112,6 +113,7 @@ export function buildCandidateIndex(invoices, { asOf = null } = {}) {
       kind: 'job',
       id: `job:${jobRef}`,
       invoice_ids: group.map((v) => v.id ?? v.invoice_number),
+      members: group.map(memberOf),
       label: `${group.length} bills · order ${jobRef}`,
       amount_paise: group.reduce((a, v) => a + outstandingOf(v), 0),
       date: group.map((v) => v.invoice_date).sort()[0],
@@ -145,6 +147,22 @@ export function buildCandidateIndex(invoices, { asOf = null } = {}) {
   }
 
   return { docs, byAmount, docFreq, docCount: docs.length, asOf }
+}
+
+/**
+ * One bill as a candidate carries it: enough to say, before Confirm, what
+ * Confirm will do to it (red team 4, R4-6 / R4-12 — matchQueue confirmPlan).
+ */
+export function memberOf(v) {
+  return {
+    id: v.id ?? v.invoice_number,
+    invoice_number: v.invoice_number,
+    invoice_kind: v.invoice_kind ?? null,
+    payment_terms: v.payment_terms ?? null,
+    invoice_date: v.invoice_date ?? null,
+    total_paise: v.total_paise,
+    allocated_paise: v.allocated_paise ?? 0,
+  }
 }
 
 function outstandingOf(v) {

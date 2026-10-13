@@ -234,7 +234,9 @@ section('a part-matched payment says what is left, and of how much')
     result: { candidates: [candidate()] },
   })
   ok('the headline is what is still to place', /class="pay-receipt-amount">₹4,000\.00</.test(html))
-  ok('and it says of how much', html.includes('left of ₹10,000.00'))
+  // "left of ₹10,000" read as a position (R4-6): say what the big number is.
+  ok('and it says what the big number is, and how much is already matched',
+     html.includes('still to match · ₹6,000.00 of this ₹10,000.00 payment is already matched') && !html.includes('left of'))
 }
 {
   const html = render({ receipt, result: { candidates: [candidate()] } })
@@ -255,6 +257,31 @@ section('everything interactive is a real button')
      buttons.every((b) => b.includes('type="button"')),
      buttons.filter((b) => !b.includes('type="button"')).join(' '))
   ok('selection state is exposed to assistive tech', html.includes('aria-pressed'))
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+section('R4-6 / R4-12 — the picked card says what Confirm does')
+{
+  const noop = () => {}
+  const m = (id, kind, total) => ({ id, invoice_number: id, invoice_kind: kind, payment_terms: 'cash',
+    invoice_date: '2026-10-08', total_paise: total, allocated_paise: 0 })
+  const big = candidate({ id: 'big', label: 'PCR1', invoice_number: 'PCR1', amount_paise: 2500000, members: [m('PCR1', 'service_parts', 2500000)] })
+  const r10k = { ...receipt, amount_paise: 1000000 }
+  let html = render({ receipt: r10k, result: { candidates: [big] }, onSearch: noop })
+  ok('unpicked: no plan line (the list is unchanged)', !html.includes('pay-candidate-plan'))
+  html = render({ receipt: r10k, result: { candidates: [big] }, onSearch: noop, initialSelectedId: 'big' })
+  ok('picked, part paid: "₹15,000.00 stays due, the bill stays open"',
+     html.includes('class="pay-candidate-plan">₹10,000.00 of ₹25,000.00 — ₹15,000.00 stays due, the bill stays open<'))
+  ok('...and the button says it too, not "part-paid"', html.includes('Confirm ₹10,000.00 · ₹15,000.00 still due') && !html.includes('part-paid'))
+  const job = candidate({ id: 'job:J', kind: 'job', member_count: 2, label: '2 bills · order J', invoice_number: 'PCS1 + LCS2',
+    amount_paise: 1165000, members: [m('PCS1', 'service_parts', 615000), m('LCS2', 'service_labour', 550000)] })
+  html = render({ receipt: { ...receipt, amount_paise: 1165000 }, result: { candidates: [job] }, onSearch: noop, initialSelectedId: 'job:J' })
+  ok('picked order: each bill by kind and amount, the sum, "both bills close"',
+     html.includes('Labour ₹5,500.00 + Parts ₹6,150.00 = ₹11,650.00 · both bills close') || html.includes('Parts ₹6,150.00 + Labour ₹5,500.00 = ₹11,650.00 · both bills close'))
+  ok('...button "Confirm ₹11,650.00 · 2 bills"', html.includes('Confirm ₹11,650.00 · 2 bills'))
+  html = render({ receipt: { ...receipt, amount_paise: 193000 }, result: { candidates: [candidate({ members: [m('MPI1', 'counter_sale', 193000)] })] },
+                  onSearch: noop, initialSelectedId: 'c1' })
+  ok('picked, paid exactly: no extra line at all', !html.includes('pay-candidate-plan') && html.includes('Confirm ₹1,930.00<'))
 }
 
 // ════════════════════════════════════════════════════════════════════════════

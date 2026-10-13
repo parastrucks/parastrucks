@@ -14,7 +14,7 @@ import {
   capabilitiesFor, toMatchReceipt, orderQueue, invoiceWindow, attachCustomerCodes,
   memoryForMatcher, allocationTargets, matchSignalOf, feedIsStaleFor, searchCandidates,
   parseSearch, splitWaiting, searchPickCandidates, windowDaysFor, undoneByReceipt, undoneNote,
-  groupMatches, istDayStart,
+  groupMatches, istDayStart, confirmPlan,
 } from '../../src/service-payments/lib/matchQueue.js'
 import { buildCandidateIndex, matchCandidates } from '../../src/service-payments/lib/matchCandidates.js'
 
@@ -164,6 +164,71 @@ section('one confirm, split across a parts + labour pair')
     if (cashIdx.lastIndexOf('cash') > cashIdx.indexOf('credit') && cashIdx.includes('credit')) violations++
   }
   eq('2,000 shapes: never over the receipt, never over a bill, never a credit bill before a cash one', violations, 0)
+
+  // R4-6 / R4-12: the picked card SAYS what Confirm does. The sentence must
+  // describe exactly the split Confirm sends, or it is a lie told at the
+  // moment of deciding. Same 2,000 shapes, both paths, bill by bill.
+  let lies = 0
+  for (let i = 0; i < 2000; i++) {
+    const n = 1 + (i % 4)
+    const set = Array.from({ length: n }, (_, k) => {
+      const total = 1000 + ((i * 7919 + k * 104729) % 500000)
+      return { id: `b${k}`, invoice_number: `N${k}`, payment_terms: (i + k) % 2 ? 'cash' : 'credit',
+               invoice_date: `2026-08-1${k}`, total_paise: total, allocated_paise: (i * k * 31) % Math.floor(total / 2),
+               invoice_kind: k % 2 ? 'service_labour' : 'service_parts' }
+    })
+    const m = new Map(set.map((b) => [b.id, b]))
+    const receipt = 1 + ((i * 15485863) % 900000)
+    const cand = { id: 'j', invoice_ids: set.map((b) => b.id), members: set }
+    const sent = allocationTargets(cand, m, receipt)
+    const plan = confirmPlan(cand, receipt)
+    const sentSum = sent.reduce((a, x) => a + x.amount_paise, 0)
+    const owed = set.reduce((a, b) => a + b.total_paise - b.allocated_paise, 0)
+    if (JSON.stringify(plan.takes) !== JSON.stringify(sent)) lies++
+    if (plan.placing !== sentSum) lies++
+    if (plan.stillDue !== owed - sentSum) lies++
+    if (plan.leftOnPayment !== receipt - sentSum) lies++
+    if (!plan.button.startsWith('Confirm ')) lies++
+  }
+  eq('2,000 shapes: the card\'s split = what Confirm sends, BILL BY BILL; and placed, still due, left over', lies, 0)
+}
+
+section('R4-6 / R4-12 — the words on the picked card and the button')
+{
+  const bill = (id, o = {}) => ({ id, invoice_number: id, invoice_kind: 'counter_sale', payment_terms: 'cash',
+    invoice_date: '2026-10-08', total_paise: 193000, allocated_paise: 0, ...o })
+  const one = (b) => ({ id: b.id, invoice_ids: [b.id], members: [b], amount_paise: b.total_paise - b.allocated_paise })
+  let p = confirmPlan(one(bill('A')), 193000)
+  eq('one bill, paid exactly: no extra line, a plain button', [p.line, p.button], ['', 'Confirm ₹1,930.00'])
+  p = confirmPlan(one(bill('B', { total_paise: 2500000, payment_terms: 'credit' })), 1000000)
+  eq('one bill, part paid: says what stays due and that the bill stays open (R4-6)',
+     [p.line, p.button],
+     ['₹10,000.00 of ₹25,000.00 — ₹15,000.00 stays due, the bill stays open', 'Confirm ₹10,000.00 · ₹15,000.00 still due'])
+  p = confirmPlan(one(bill('C', { total_paise: 100000 })), 150000)
+  eq('one bill, more money than it owes: says the rest stays on the payment',
+     [p.line, p.button], ['Closes the bill · ₹500.00 of the payment stays, to place on another bill', 'Confirm ₹1,000.00'])
+
+  const parts = bill('PCS1', { invoice_kind: 'service_parts', total_paise: 615000, invoice_date: '2026-10-08' })
+  const labour = bill('LCS2', { invoice_kind: 'service_labour', total_paise: 550000, invoice_date: '2026-10-08' })
+  const order = { id: 'job:J', kind: 'job', invoice_ids: ['PCS1', 'LCS2'], members: [labour, parts], amount_paise: 1165000 }
+  p = confirmPlan(order, 1165000)
+  eq('an order paid in full: both bills by name and amount, the sum, "both bills close" (R4-12)',
+     [p.line, p.button], ['Labour ₹5,500.00 + Parts ₹6,150.00 = ₹11,650.00 · both bills close', 'Confirm ₹11,650.00 · 2 bills'])
+  p = confirmPlan(order, 1000000)
+  eq('an order paid short: which closes, which is part paid, what stays due',
+     [p.line, p.button],
+     ['Labour ₹5,500.00 closes · Parts ₹4,500.00 of ₹6,150.00 — ₹1,650.00 stays due', 'Confirm ₹10,000.00 · ₹1,650.00 still due'])
+  p = confirmPlan(order, 300000)
+  eq('an order paid very short: the bill not reached says "not paid"',
+     p.line, 'Labour ₹3,000.00 of ₹5,500.00 · Parts ₹6,150.00 not paid — ₹8,650.00 stays due')
+  p = confirmPlan({ ...order, members: [labour, parts, bill('PCS3', { invoice_kind: 'service_parts', total_paise: 10000 })] }, 1200000)
+  ok('three bills, all paid, money over: "all 3 bills close" and the rest stays on the payment',
+     /all 3 bills close · ₹250\.00 of the payment stays/.test(p.line), p.line)
+  eq('a bill of an unknown kind is named by its number',
+     confirmPlan({ ...order, members: [bill('X1', { invoice_kind: null, total_paise: 100 }), bill('X2', { invoice_kind: null, total_paise: 100 })] }, 200).line,
+     'Bill X1 ₹1.00 + Bill X2 ₹1.00 = ₹2.00 · both bills close')
+  eq('a candidate without its bills says no more than it knows',
+     confirmPlan({ id: 'q', amount_paise: 50000 }, 80000), { line: '', button: 'Confirm ₹500.00', placing: 50000, stillDue: 0, leftOnPayment: 0, takes: null })
 }
 
 // ════════════════════════════════════════════════════════════════════════════

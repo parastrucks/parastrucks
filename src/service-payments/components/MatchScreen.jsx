@@ -14,7 +14,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { formatINR } from '../lib/paise.js'
 import { cardReasons, billLine, BOUNCE_REASONS, NOT_SERVICE_KINDS } from '../lib/signalLabels.js'
-import { REFRESHING } from '../lib/matchQueue.js'
+import { REFRESHING, confirmPlan } from '../lib/matchQueue.js'
 
 /**
  * @param {object}   props
@@ -101,8 +101,8 @@ export default function MatchScreen({
   // What will actually be placed: never more than the payment holds, never more
   // than the bill owes. A button reading "Confirm ₹1,930" that places ₹1,500 is
   // a lie told at the exact moment someone is deciding about money.
-  const placing = selected ? Math.min(selected.amount_paise, receipt.amount_paise) : 0
-  const partPay = selected && receipt.amount_paise < selected.amount_paise
+  // …and what happens to the rest: the same split Confirm sends (R4-6, R4-12).
+  const plan = selected ? confirmPlan(selected, receipt.amount_paise) : null
 
   return (
     <div className="pay-match">
@@ -126,7 +126,10 @@ export default function MatchScreen({
       <section className="pay-receipt" aria-label="Payment received">
         <p className="pay-receipt-amount">{formatINR(receipt.amount_paise)}</p>
         {receipt.partly_matched && receipt.face_paise > receipt.amount_paise && (
-          <p className="pay-receipt-part">left of {formatINR(receipt.face_paise)} — the rest is already matched</p>
+          // "left of" read as a position (R4-6): say what the big number is.
+          <p className="pay-receipt-part">
+            still to match · {formatINR(receipt.face_paise - receipt.amount_paise)} of this {formatINR(receipt.face_paise)} payment is already matched
+          </p>
         )}
         <p className="pay-receipt-payer">{receipt.payer_name || 'No name on the payment'}</p>
         <p className="pay-receipt-meta">
@@ -192,6 +195,8 @@ export default function MatchScreen({
                 <span className="pay-candidate-why">{cardReasons(c).face.join(' · ')}</span>
                 {/* The bill number, once picked — to check against the paper. */}
                 {isSel && <span className="pay-candidate-ref">Bill {c.invoice_number || c.label}</span>}
+                {/* What Confirm will do — the picked card only (R4-6, R4-12). */}
+                {isSel && plan?.line && <span className="pay-candidate-plan">{plan.line}</span>}
                 {isSel && cardReasons(c).more.length > 0 && (
                   <span className="pay-candidate-all">
                     {cardReasons(c).more.map((label) => (
@@ -228,7 +233,7 @@ export default function MatchScreen({
             : feedIsStale
               ? 'Confirm is off — bills not loaded yet'
               : selected
-                ? `Confirm ${formatINR(placing)}${partPay ? ' · part-paid' : ''}`
+                ? plan.button
                 : candidates.length ? 'Pick a bill above' : 'Nothing to confirm'}
         </button>
         <button type="button" className="pay-skip" onClick={onSkip} disabled={busy}>
