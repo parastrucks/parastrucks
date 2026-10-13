@@ -29,7 +29,8 @@ Raw lane outputs: `docs/backlog/redteam4-lanes/` (L1–L6, X1). Rig: `scripts/pa
 | R4-18 tie-out | ◐ batch 2 | "18 owed by customers, ₹…" labels the rupees; tie-out box has a Total line and says overlapping days are included; done screen shows rupees (only when the server matched the preview); the duplicate-file message gives the stored time instead of "most likely". Lists behind counts, naming the odd row: owner |
 | R4-23 keyboard | ✅ batch 2 | Confirm is next in Tab/reading order after the bills (bar is fixed, nothing moves on screen); Enter on the picked card focuses Confirm — seen in the pane |
 | R4-30 "billed yesterday" | ✅ batch 2 | "Billed the day before the payment" / "N days after the payment" |
-| R4-3 undo, R4-5 date + plate on cards, R4-6 part-pay remainder, R4-9 not-service confirm, R4-12 "2 bills" breakdown, R4-14 nav, R4-21 wordlist, R4-24 link-blue reasons + the + button, R4-29/31 | ⏭️ owner | design choices — see the chat; R4-3 needs no server work (`reverse_allocation` exists: reason required, maker/accounts pre-export, GM after) |
+| R4-3 undo | ✅ `8838dab` | "Matched today" fold: one row per confirm, Undo where the server allows it, six tapped reasons (two re-offer the bill); toast Undo dropped in its favour (cloud review). Seen on staging |
+| R4-5 date + plate on cards, R4-6 part-pay remainder, R4-9 not-service confirm, R4-12 "2 bills" breakdown, R4-14 nav, R4-21 wordlist, R4-24 link-blue reasons + the + button, R4-29/31 | ⏭️ owner | design choices — see the chat; R4-3 needs no server work (`reverse_allocation` exists: reason required, maker/accounts pre-export, GM after) |
 
 ## Why this round
 

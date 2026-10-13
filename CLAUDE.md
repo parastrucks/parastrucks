@@ -756,7 +756,10 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
      re-offer the bill · service sees own matches, accounts all · cash duplicates fixed IN THE DB
      (`p_client_request_id` on `payments_manual_receipt` = **8th prod migration**) · server refuses one
      cash receipt ≥ ₹2 L, form warns on the payer-day total. `2243129`: "Only other bill at this
-     amount in 3 days" (seen on staging). ⏭️ **Build in the order recorded there, undo list first.** ⏭️ Q5 (1) undo
+     amount in 3 days" (seen on staging). ✅ **Undo list BUILT `8838dab`** ("Matched today" fold, one row
+     per confirm, server-rule Undo, six tapped reasons; seen on staging: undo "by mistake" re-offered
+     INDU, data put back; 360 px reasons end 438 < bar 455; match-queue 128, mobile-render 109).
+     ⏭️ **Next in that order: R4-5 date + plate on cards, then cash & cheque (+ migration 8).** ⏭️ Q5 (1) undo
      list + (3) cash/cheque: wait for the cloud's answers to Briefs 1 + 3 (`cloud-session-briefs.md`) — BEFORE item 9.
   8. **Multiple QRs:** when the next QR is added, map `qr_ref` → outlet and give same-outlet bills a
      small RANKING bonus (never a filter — owner rule, 2026-09-11).

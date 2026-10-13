@@ -124,7 +124,7 @@ Unsure: I have not rendered any of this, so every px figure is from the styleshe
    names are typed by hand, so a hard per-day block could be dodged or wrongly triggered). Goes in
    the same 8th migration.
 
-**Build order (the cloud's ranking, which the PC agrees with):** undo list (+ exceptions, + offer
+**Build order (the cloud's ranking, which the PC agrees with):** ✅ undo list — `8838dab`, seen on staging (+ exceptions, + offer
 "Bill not raised yet" right after that reason) → R4-5 date + plate on cards → cash & cheque tab
 (+ migration 8) → Import clash-row Undo → R4-12 + R4-6 in the selected card → R4-14 nav tab →
 R4-21 wordlist → R4-24 grey reason line → R4-9 not-service confirm + `Test / top-up` → R4-18.
