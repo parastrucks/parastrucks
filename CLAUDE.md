@@ -759,7 +759,9 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
      amount in 3 days" (seen on staging). ✅ **Undo list BUILT `8838dab`** ("Matched today" fold, one row
      per confirm, server-rule Undo, six tapped reasons; seen on staging: undo "by mistake" re-offered
      INDU, data put back; 360 px reasons end 438 < bar 455; match-queue 128, mobile-render 109).
-     ⏭️ **Next in that order: R4-5 date + plate on cards, then cash & cheque (+ migration 8).** ⏭️ Q5 (1) undo
+     ✅ **R4-5 BUILT `7230a53`**: card line 3 = "Billed 8 Oct · GJ15AV9044"; the SAP code stays beside the
+     name (plan v4: "shown beside every name" — the cloud had moved it off); bill number once picked.
+     ⏭️ **Next: cash & cheque tab + migration 8.** ⏭️ Q5 (1) undo
      list + (3) cash/cheque: wait for the cloud's answers to Briefs 1 + 3 (`cloud-session-briefs.md`) — BEFORE item 9.
   8. **Multiple QRs:** when the next QR is added, map `qr_ref` → outlet and give same-outlet bills a
      small RANKING bonus (never a filter — owner rule, 2026-09-11).

@@ -125,7 +125,7 @@ Unsure: I have not rendered any of this, so every px figure is from the styleshe
    the same 8th migration.
 
 **Build order (the cloud's ranking, which the PC agrees with):** ✅ undo list — `8838dab`, seen on staging (+ exceptions, + offer
-"Bill not raised yet" right after that reason) → R4-5 date + plate on cards → cash & cheque tab
+"Bill not raised yet" right after that reason) → ✅ R4-5 date + plate on cards (`7230a53`; SAP code kept beside the name — owner rule) → cash & cheque tab
 (+ migration 8) → Import clash-row Undo → R4-12 + R4-6 in the selected card → R4-14 nav tab →
 R4-21 wordlist → R4-24 grey reason line → R4-9 not-service confirm + `Test / top-up` → R4-18.
 Skip's explanation: reword the existing end-screen sentence, zero lines. **Not before go-live:**
