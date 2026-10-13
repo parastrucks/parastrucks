@@ -258,6 +258,37 @@ section('everything interactive is a real button')
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+section('R4-5 — same-amount bills told apart by date and truck')
+{
+  const noop = () => {}
+  const two = [
+    candidate({ id: 'a', label: 'MPI1', invoice_number: 'MPI1', customer_name: 'DEMO HARSH TYRES', sap_customer_code: '0099000010',
+                date: '2026-10-06', vehicle_reg_no: 'GJ15AV9044' }),
+    candidate({ id: 'b', label: 'MPI2', invoice_number: 'MPI2', customer_name: 'DEMO INDU SPARES', sap_customer_code: '0099000011',
+                date: '2026-10-08', vehicle_reg_no: null }),
+  ]
+  let html = render({ receipt, result: { candidates: two }, onSearch: noop })
+  ok('every card says when it was billed, and the truck when there is one',
+     html.includes('class="pay-candidate-when">Billed 6 Oct · GJ15AV9044<') && html.includes('class="pay-candidate-when">Billed 8 Oct<'))
+  ok('the SAP customer code stays beside the name (owner: shown beside every name)',
+     /DEMO HARSH TYRES<span class="pay-candidate-code"> · 0099000010<\/span>/.test(html))
+  ok('the bill number is not on an unpicked card (it told nobody anything at a counter)', !/MPI[12]\b/.test(html))
+  html = render({ receipt, result: { candidates: two }, onSearch: noop, initialSelectedId: 'a' })
+  ok('...and appears once the card is picked, to check against the paper', html.includes('Bill MPI1') && !html.includes('Bill MPI2'))
+  const job = candidate({ id: 'job:J', kind: 'job', label: '2 bills · order J', invoice_number: 'PCS1 + LCS2', member_count: 2,
+                          date: '2026-10-08', vehicle_reg_no: 'GJ05XX1234' })
+  html = render({ receipt, result: { candidates: [job] }, onSearch: noop, initialSelectedId: 'job:J' })
+  ok('an order card names both bills when picked', html.includes('Bill PCS1 + LCS2'))
+  ok('no date and no plate: no empty line', !render({ receipt, result: { candidates: [candidate({ date: null, vehicle_reg_no: null })] } }).includes('pay-candidate-when'))
+  ok('no line was added: the date line took the codes line\'s place',
+     // The card's LINES (the code is inside the name line, the amount inside
+     // the top line): top · name · billed · why — four, as before (top · name
+     // · codes · why).
+     (render({ receipt, result: { candidates: [two[0]] } })
+       .match(/<span class="pay-candidate-(top|name|when|why|ref)"/g) || []).length === 4)
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 section('"Matched today" — the fold a wrong match is undone from')
 {
   const g = (o = {}) => ({ key: 'k1', allocation_ids: ['a1'], amount_paise: 340000, payer_name: 'MEHUL SHAH',
@@ -328,7 +359,7 @@ section('red team 4 — order, announcements and dates')
      signalLabel({ signal: 'date', detail: '-1d' }) === 'Billed the day after the payment' &&
      signalLabel({ signal: 'date', detail: '0d' }) === 'Billed the same day')
   ok('a bill found by search shows the same date style (10 Oct, not 2026-10-10)',
-     signalLabel({ signal: 'search', detail: '2026-10-10' }) === 'Found by search · billed 10 Oct')
+     signalLabel({ signal: 'search', detail: '2026-10-10' }) === 'Found by search')
 }
 
 // ════════════════════════════════════════════════════════════════════════════

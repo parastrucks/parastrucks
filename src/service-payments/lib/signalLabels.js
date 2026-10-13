@@ -56,14 +56,15 @@ export function signalLabel(s) {
       return dayLabel(d)
     case 'search':
       // Said plainly: the tool did NOT suggest this bill, a person found it.
-      return d ? `Found by search · billed ${shortDay(d)}` : 'Found by search'
+      // Its date is on the card's own "Billed …" line now (R4-5), not here.
+      return 'Found by search'
     default:
       return s?.signal ?? ''
   }
 }
 
 /** "2026-10-10" -> "10 Oct", the one date style on these screens (R4-20). */
-function shortDay(isoDay) {
+export function shortDay(isoDay) {
   const t = new Date(`${isoDay}T00:00:00Z`)
   if (Number.isNaN(t.getTime())) return String(isoDay)
   return new Intl.DateTimeFormat('en-IN', { timeZone: 'UTC', day: 'numeric', month: 'short' }).format(t)
@@ -123,6 +124,18 @@ export function cardReasons(candidate) {
   const evidence = all.filter((l) => !dates.has(l))
   const face = evidence.length ? evidence.slice(0, 2) : all.slice(0, 1)
   return { face, more: all.filter((l) => !face.includes(l)) }
+}
+
+/**
+ * The line that tells same-amount bills apart (red team 4, R4-5): when it was
+ * billed and which truck — a mechanic knows a job by its plate, not its bill
+ * number. "Billed 8 Oct · GJ15AV9044", or just the date when no plate.
+ */
+export function billLine(candidate) {
+  const parts = []
+  if (candidate?.date) parts.push(`Billed ${shortDay(candidate.date)}`)
+  if (candidate?.vehicle_reg_no) parts.push(candidate.vehicle_reg_no)
+  return parts.join(' · ')
 }
 
 /** Canned tap-reasons. Typing on a phone at a counter is the enemy. */

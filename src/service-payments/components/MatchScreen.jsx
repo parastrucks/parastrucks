@@ -13,7 +13,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { formatINR } from '../lib/paise.js'
-import { cardReasons, BOUNCE_REASONS, NOT_SERVICE_KINDS } from '../lib/signalLabels.js'
+import { cardReasons, billLine, BOUNCE_REASONS, NOT_SERVICE_KINDS } from '../lib/signalLabels.js'
 import { REFRESHING } from '../lib/matchQueue.js'
 
 /**
@@ -180,12 +180,18 @@ export default function MatchScreen({
                     <span className="pay-chip pay-chip-job">{c.member_count} bills</span>
                   )}
                 </span>
-                <span className="pay-candidate-name">{c.customer_name || 'No name on the bill'}</span>
-                <span className="pay-candidate-ref">
-                  {c.label}
-                  {c.sap_customer_code ? ` · ${c.sap_customer_code}` : ''}
+                {/* The SAP customer code stays beside the name — two customers
+                    with one name are told apart by it (owner, plan v4). */}
+                <span className="pay-candidate-name">
+                  {c.customer_name || 'No name on the bill'}
+                  {c.sap_customer_code && <span className="pay-candidate-code"> · {c.sap_customer_code}</span>}
                 </span>
+                {/* Date and truck, where the bill number was: what tells five
+                    ₹1,930 bills apart at a counter (R4-5). */}
+                {billLine(c) && <span className="pay-candidate-when">{billLine(c)}</span>}
                 <span className="pay-candidate-why">{cardReasons(c).face.join(' · ')}</span>
+                {/* The bill number, once picked — to check against the paper. */}
+                {isSel && <span className="pay-candidate-ref">Bill {c.invoice_number || c.label}</span>}
                 {isSel && cardReasons(c).more.length > 0 && (
                   <span className="pay-candidate-all">
                     {cardReasons(c).more.map((label) => (

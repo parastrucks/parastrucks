@@ -3374,9 +3374,12 @@ tbody tr:hover td { background: var(--gray-50); }
   font-size: 19px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums;
 }
 .pay-candidate-name { font-size: 14px; font-weight: 600; color: var(--ink); }
-/* The only thing that tells five identical cards apart — so not the faintest
-   (12px at 2.81:1 before; R4-22). */
+/* The bill number, shown once a card is picked — to check against the paper.
+   Not the faintest (12px at 2.81:1 before; R4-22). */
 .pay-candidate-ref  { font-size: 13px; color: var(--gray-600); }
+/* R4-5: when and which truck — read before the reason, so not faint. */
+.pay-candidate-when { font-size: 14px; color: var(--ink); }
+.pay-candidate-code { font-size: 13px; font-weight: 400; color: var(--gray-600); }
 .pay-candidate-why  { font-size: 13px; color: var(--blue-dark); margin-top: 4px; }
 .pay-candidate-all  { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
 
