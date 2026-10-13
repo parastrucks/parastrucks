@@ -3583,6 +3583,22 @@ tbody tr:hover td { background: var(--gray-50); }
 /* Import. Desktop-friendly (accounts at a PC) but never broken on a phone:
    one column, no table wider than the screen, the same 44px targets. */
 .pay-import { max-width: 720px; margin: 0 auto; padding: 4px 12px 24px; }
+
+/* Cash & cheque (accounts, usually at a PC; never broken on a phone). */
+.pay-cash { max-width: 560px; margin: 0 auto; padding: 4px 12px 24px; }
+.pay-cash .pay-ask { margin-bottom: 16px; }
+.pay-cash-mode .seg-btn { min-height: 44px; }
+.pay-cash-bill {
+  padding: 10px 12px;
+  background: var(--white);
+  border: 1px solid var(--border-default);
+  border-left: 4px solid var(--blue);
+  border-radius: var(--radius-sm);
+}
+.pay-cash-bill-what { margin: 0; font-size: 14px; color: var(--ink); overflow-wrap: anywhere; }
+.pay-cash-bill-actions, .pay-cash-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.pay-cash-save { width: 100%; margin-top: 8px; }
+.pay-cash-actions .pay-confirm { flex: 1 1 200px; }
 .pay-import-input {
   display: block;
   width: 100%;

@@ -297,8 +297,11 @@ Deno.serve(async (req: Request) => {
         if (!Number.isSafeInteger(amount) || amount <= 0) {
           return json({ error: "amount_paise must be a positive whole number of paise" }, 400)
         }
+        // The save id makes a retried "Save" return the first receipt and its
+        // number instead of keying the same cash twice (20261013 migration).
         return await rpc("payments_manual_receipt", {
           p_entity_id: entityId, p_row: row, p_actor: caller.id,
+          p_client_request_id: str(payload.client_request_id),
         })
       }
 

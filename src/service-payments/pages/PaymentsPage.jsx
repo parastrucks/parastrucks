@@ -17,6 +17,7 @@ import MatchScreen from '../components/MatchScreen.jsx'
 import SearchPanel from '../components/SearchPanel.jsx'
 import ImportPanel from '../components/ImportPanel.jsx'
 import MatchedFold from '../components/MatchedFold.jsx'
+import CashPanel from '../components/CashPanel.jsx'
 import { buildCandidateIndex, matchCandidates, DEFAULT_WINDOW_DAYS } from '../lib/matchCandidates.js'
 import {
   capabilitiesFor, toMatchReceipt, orderQueue, splitWaiting, invoiceWindow, attachCustomerCodes,
@@ -65,7 +66,7 @@ export default function PaymentsPage() {
   const [pendingId, setPendingId] = useState(null)
   const [override, setOverride] = useState(null)  // { receiptId, result } from search
   const [searching, setSearching] = useState(false)
-  const [tab, setTab] = useState('match')          // match | import (import: accounts/admin)
+  const [tab, setTab] = useState('match')          // match | import | cash (import, cash: accounts/admin)
   const [showWaiting, setShowWaiting] = useState(false) // looking at "bill not raised yet" payments
 
   // One idempotency key per (receipt, candidate, amount). A retry after a
@@ -391,17 +392,26 @@ export default function PaymentsPage() {
       </div>
       {/* Import is accounts' (and the admin's during the pilot). Service staff
           never see the tab, so the Match screen stays the whole page for them. */}
-      {caps?.canImport && phase === 'ready' && (
+      {(caps?.canImport || caps?.canRecordCash) && phase === 'ready' && (
         <div className="seg pay-tabs" role="tablist" aria-label="Payments">
           <button type="button" role="tab" aria-selected={tab === 'match'}
                   className={`seg-btn ${tab === 'match' ? 'active' : ''}`} onClick={() => setTab('match')}>
             {/* Waiting payments are not unfinished work, so they are not counted. */}
             Match{queue.length ? ` (${queue.length})` : ''}
           </button>
-          <button type="button" role="tab" aria-selected={tab === 'import'}
-                  className={`seg-btn ${tab === 'import' ? 'active' : ''}`} onClick={() => setTab('import')}>
-            Import
-          </button>
+          {caps?.canImport && (
+            <button type="button" role="tab" aria-selected={tab === 'import'}
+                    className={`seg-btn ${tab === 'import' ? 'active' : ''}`} onClick={() => setTab('import')}>
+              Import
+            </button>
+          )}
+          {/* Money that did not come through the HDFC report (pre-mortem F5). */}
+          {caps?.canRecordCash && (
+            <button type="button" role="tab" aria-selected={tab === 'cash'}
+                    className={`seg-btn ${tab === 'cash' ? 'active' : ''}`} onClick={() => setTab('cash')}>
+              Cash &amp; cheque
+            </button>
+          )}
         </div>
       )}
     </>
@@ -453,6 +463,20 @@ export default function PaymentsPage() {
             setShowWaiting(false)
             setTab('match')
           }}
+        />
+      </div>
+    )
+  }
+
+  if (tab === 'cash' && caps?.canRecordCash) {
+    return (
+      <div className="page">{header}
+        <CashPanel
+          entityId={entityId}
+          search={search}
+          plainError={plainError}
+          onSaved={() => load({ quiet: true })}
+          onGoMatch={() => { setOverride(null); setShowWaiting(false); setTab('match') }}
         />
       </div>
     )

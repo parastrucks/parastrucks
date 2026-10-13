@@ -40,6 +40,9 @@ export function capabilitiesFor(profile, departmentCode) {
     canClassify: ROLE_GATES.classify_receipt(caller),
     // Bills and payments are imported by accounts (admin during the pilot).
     canImport: ROLE_GATES.import_invoices(caller) && ROLE_GATES.import_receipts(caller),
+    // Cash, cheque and bank receipts are keyed by accounts (the same rule the
+    // server holds for manual_receipt).
+    canRecordCash: ROLE_GATES.manual_receipt(caller),
     canMatchMode: (mode) => allocateModeAllowed(caller, mode),
     // "Bill not raised yet" follows matching: the server checks the same pair.
     canMarkWaiting: (mode) => ROLE_GATES.set_awaiting_invoice(caller) && allocateModeAllowed(caller, mode),

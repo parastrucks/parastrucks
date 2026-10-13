@@ -115,6 +115,31 @@ export function fetchMatchesSince(entityId, sinceIso, { makerId = null } = {}) {
   })
 }
 
+/**
+ * A payer's other CASH already entered for one India day, in paise — for the
+ * ₹2 lakh-a-day warning (section 269ST). The name is matched whole, ignoring
+ * case; `%` and `_` are escaped so a name cannot act as a wildcard. Hand-typed
+ * names drift ("Ramesh" / "Ramesh Patel"), which is why this warns, never
+ * blocks.
+ */
+export async function fetchPayerCashOnDay(entityId, payerName, day) {
+  const name = String(payerName ?? '').trim()
+  if (!name || !/^\d{4}-\d{2}-\d{2}$/.test(day ?? '')) return 0
+  const from = new Date(`${day}T00:00:00+05:30`).toISOString()
+  const to = new Date(Date.parse(from) + 86400000).toISOString()
+  const { data, error } = await supabase
+    .from('payment_receipts')
+    .select('amount_paise')
+    .eq('entity_id', entityId)
+    .eq('mode', 'cash')
+    .eq('status', 'active')
+    .ilike('payer_name', name.replace(/[\\%_]/g, (c) => `\\${c}`))
+    .gte('received_at', from)
+    .lt('received_at', to)
+  if (error) throw error
+  return (data || []).reduce((a, r) => a + (r.amount_paise ?? 0), 0)
+}
+
 /** When the bill feed last landed. Null when nothing has ever been imported. */
 export async function fetchInvoiceFeed(entityId) {
   const { data, error } = await supabase
