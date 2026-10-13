@@ -761,15 +761,23 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
      INDU, data put back; 360 px reasons end 438 < bar 455; match-queue 128, mobile-render 109).
      ✅ **R4-5 BUILT `7230a53`**: card line 3 = "Billed 8 Oct · GJ15AV9044"; the SAP code stays beside the
      name (plan v4: "shown beside every name" — the cloud had moved it off); bill number once picked.
-     ⏭️ **Next: cash & cheque tab + migration 8.** ⏭️ Q5 (1) undo
-     list + (3) cash/cheque: wait for the cloud's answers to Briefs 1 + 3 (`cloud-session-briefs.md`) — BEFORE item 9.
+     ✅ **Cash & cheque tab + MIGRATION 8 BUILT `19e49ad`** (staging): `20261013_payments_manual_receipt_safe.sql`
+     — `payments_manual_receipt` gains `p_client_request_id` (repeat = first receipt; different money =
+     refused; advisory lock; new `payment_receipts.client_request_id` + unique index; 3-arg version
+     DROPPED) + refuses one cash receipt ≥ ₹2 L (269ST) + RRN wording. `probe-manual-receipt` **24/0**,
+     0 residue; old function made 00001+00002 for one save and took ₹5 L cash. EF passes the id
+     (staging). Tab (accounts/admin): type, amount, day, who, cheque no., outlet, note, optional bill
+     → receipt then match; day-total ₹2 L warns ("Save anyway"); no UPI. Seen: CR-PTB-2026-00001 ₹845
+     DEMO MANAN AUTO → MPI5756260009011 paid; repeat via EF returned 00001. `selftest-cash-receipt` 40.
+     ⏭️ **Next in the recorded order: Import clash-row Undo, then R4-12 + R4-6.** — all BEFORE item 9.
   8. **Multiple QRs:** when the next QR is added, map `qr_ref` → outlet and give same-outlet bills a
      small RANKING bonus (never a filter — owner rule, 2026-09-11).
-  9. Then prod: **seven** migrations (`20260830`, `20260908`, `20260926_…read_gates…`,
+  9. Then prod: **eight** migrations (`20260830`, `20260908`, `20260926_…read_gates…`,
      `20260926_…views…`, `20260926_…import_rules`, `20261009_payments_hdfc_source`,
-     `20261012_payments_awaiting_invoice`) — ⚠️ the screen now READS `awaiting_since` and bill
-     `created_at`, so the migrations must land before the frontend ships, then
-     `probe-allocation.sql` + `probe-import-parity.sql` (both self-aborting) — ⛔
+     `20261012_payments_awaiting_invoice`, `20261013_payments_manual_receipt_safe`) — ⚠️ the screen
+     now READS `awaiting_since` and bill `created_at` and calls the 4-argument manual receipt, so the
+     migrations must land before the frontend ships, then
+     `probe-allocation.sql` + `probe-import-parity.sql` + `probe-manual-receipt.sql` (all self-aborting) — ⛔
      `probe-read-gates.sql` is staging-only and REFUSES on prod by design (ERP-sync webhook on
      `users`); on prod, prove the gates by md5 of `pg_get_functiondef` against staging instead.
      Then deploy the EF. Owner-approved, separate step. (Staging shows the import-rules migration
