@@ -31,7 +31,8 @@ Raw lane outputs: `docs/backlog/redteam4-lanes/` (L1–L6, X1). Rig: `scripts/pa
 | R4-30 "billed yesterday" | ✅ batch 2 | "Billed the day before the payment" / "N days after the payment" |
 | R4-3 undo | ✅ `8838dab` | "Matched today" fold: one row per confirm, Undo where the server allows it, six tapped reasons (two re-offer the bill); toast Undo dropped in its favour (cloud review). Seen on staging |
 | R4-5 date + plate | ✅ `7230a53` | "Billed 8 Oct · GJ15AV9044" where the codes line was; SAP code stays beside the name (owner rule), bill number once picked. Amber "N bills at this amount" line NOT built (adds a line; owner's call) |
-| R4-6 part-pay remainder, R4-6 part-pay remainder, R4-9 not-service confirm, R4-12 "2 bills" breakdown, R4-14 nav, R4-21 wordlist, R4-24 link-blue reasons + the + button, R4-29/31 | ⏭️ owner | design choices — see the chat; R4-3 needs no server work (`reverse_allocation` exists: reason required, maker/accounts pre-export, GM after) |
+| R4-6 part-pay remainder + R4-12 "2 bills" | ✅ `3f7fedd` | One line on the PICKED card + the Confirm words ("₹15,000 stays due, the bill stays open" / "Labour ₹5,500 + Parts ₹6,150 = ₹11,650 · both bills close"); payment card "still to match · ₹X of this ₹Y payment is already matched". Same split as Confirm, tested bill by bill |
+| R4-9 not-service confirm, R4-14 nav, R4-21 wordlist, R4-24 link-blue reasons + the + button, R4-29/31 | ⏭️ | in the recorded build order (`docs/backlog/cloud-answer-briefs-1-3.md`); R4-29/31 polish not before go-live |
 
 ## Why this round
 
