@@ -9,11 +9,12 @@
 
 import { extractNoteNumbers, extractRegNos, normalizePayerName } from './parseUpi.js'
 import { istDateOf } from './dates.js'
+import { REOFFER_REASONS } from './signalLabels.js'
 // The SAME rules the Edge Function enforces — imported, not restated, so the
 // screen can never offer a button the server will refuse (or hide one it
 // would allow). Checked for every department × rank by selftest-authority.
 import {
-  ROLE_GATES, allocateModeAllowed,
+  ROLE_GATES, allocateModeAllowed, reverseAllowed, isAccounts, isGmPlus,
 } from '../../../supabase/functions/service-payments/authority.ts'
 
 /** What this person may do on the Match screen. */
@@ -42,6 +43,12 @@ export function capabilitiesFor(profile, departmentCode) {
     canMatchMode: (mode) => allocateModeAllowed(caller, mode),
     // "Bill not raised yet" follows matching: the server checks the same pair.
     canMarkWaiting: (mode) => ROLE_GATES.set_awaiting_invoice(caller) && allocateModeAllowed(caller, mode),
+    // The "Matched today" list: service staff see their own matches, accounts
+    // and GMs everyone's (owner, 2026-10-13). A screen choice — RLS already
+    // lets service read every match in the company.
+    seesAllMatches: isAccounts(caller) || isGmPlus(caller),
+    // The server's own undo rule, so the list never offers a refused Undo.
+    undoRefusal: (m) => reverseAllowed(caller, { isMaker: m.maker_id === caller.id, exported: m.exported }),
   }
 }
 
@@ -184,14 +191,77 @@ export function undoneByReceipt(rows) {
   const sorted = [...(rows ?? [])]
     .filter((r) => r.receipt_id && r.invoice_id && r.reversed_at)
     .sort((a, b) => String(b.reversed_at).localeCompare(String(a.reversed_at)))
+  const seen = new Set()
   for (const r of sorted) {
+    // The NEWEST undo of a (payment, bill) pair decides. Undone "by mistake"
+    // or "to match again with a different amount" means the bill was not
+    // wrong, so it stays on offer (owner, 2026-10-13) — and no warning.
+    const pair = `${r.receipt_id}|${r.invoice_id}`
+    if (seen.has(pair)) continue
+    seen.add(pair)
+    if (REOFFER_REASONS.has(r.reverse_reason)) continue
     if (!out.has(r.receipt_id)) out.set(r.receipt_id, [])
-    const list = out.get(r.receipt_id)
-    if (!list.some((x) => x.invoice_id === r.invoice_id)) {
-      list.push({ invoice_id: r.invoice_id, reversed_at: r.reversed_at, reverse_reason: r.reverse_reason ?? '' })
-    }
+    out.get(r.receipt_id).push({ invoice_id: r.invoice_id, reversed_at: r.reversed_at, reverse_reason: r.reverse_reason ?? '' })
   }
   return out
+}
+
+/** The instant the IST day began, `daysBack` days ago — the "Matched today" span. */
+export function istDayStart(now, daysBack = 0) {
+  const day = istDateOf(now)
+  const t = Date.parse(`${day}T00:00:00+05:30`) - daysBack * 86400000
+  return new Date(t).toISOString()
+}
+
+/**
+ * Matches for the "Matched today" list, one entry per CONFIRM.
+ *
+ * A parts + labour order paid by one transfer is one confirm and two
+ * allocation rows sharing a client_request_id; it is shown, and undone, as one
+ * thing — undoing half of it would leave the order half paid by accident.
+ *
+ * @param rows   payment_allocations rows (not reversed) with embedded
+ *               receipt {payer_name, mode}, invoice {invoice_number,
+ *               customer_name}, maker {full_name}
+ * @param caps   capabilitiesFor() — who is looking, and the server's undo rule
+ * @returns newest first: {key, allocation_ids, amount_paise, payer_name,
+ *          customer_name, invoice_numbers, bill_count, at, maker_id,
+ *          maker_name, mine, exported, receipt_id, mode, refusal}
+ */
+export function groupMatches(rows, caps) {
+  const byKey = new Map()
+  for (const r of rows ?? []) {
+    if (r.reversed_at) continue
+    const key = r.client_request_id ?? r.id
+    if (!byKey.has(key)) {
+      byKey.set(key, {
+        key, allocation_ids: [], amount_paise: 0, invoice_numbers: [], customer_names: [],
+        payer_name: r.receipt?.payer_name ?? '', mode: r.receipt?.mode ?? null, receipt_id: r.receipt_id,
+        at: r.allocated_at, maker_id: r.allocated_by ?? null, maker_name: r.maker?.full_name ?? '',
+        exported: false,
+      })
+    }
+    const g = byKey.get(key)
+    g.allocation_ids.push(r.id)
+    g.amount_paise += r.amount_paise ?? 0
+    if (r.invoice?.invoice_number) g.invoice_numbers.push(r.invoice.invoice_number)
+    if (r.invoice?.customer_name && !g.customer_names.includes(r.invoice.customer_name)) {
+      g.customer_names.push(r.invoice.customer_name)
+    }
+    if (r.export_batch_id) g.exported = true
+    if (String(r.allocated_at) > String(g.at)) g.at = r.allocated_at
+  }
+  const viewer = caps?.caller?.id ?? null
+  return [...byKey.values()]
+    .map(({ customer_names, ...g }) => ({
+      ...g,
+      customer_name: customer_names.join(' + '),
+      bill_count: g.allocation_ids.length,
+      mine: Boolean(viewer) && g.maker_id === viewer,
+      refusal: caps?.undoRefusal ? caps.undoRefusal(g) : 'Not allowed',
+    }))
+    .filter((g) => caps?.seesAllMatches || g.mine)
+    .sort((a, b) => String(b.at).localeCompare(String(a.at)))
 }
 
 /**

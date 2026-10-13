@@ -14,6 +14,7 @@ import {
   capabilitiesFor, toMatchReceipt, orderQueue, invoiceWindow, attachCustomerCodes,
   memoryForMatcher, allocationTargets, matchSignalOf, feedIsStaleFor, searchCandidates,
   parseSearch, splitWaiting, searchPickCandidates, windowDaysFor, undoneByReceipt, undoneNote,
+  groupMatches, istDayStart,
 } from '../../src/service-payments/lib/matchQueue.js'
 import { buildCandidateIndex, matchCandidates } from '../../src/service-payments/lib/matchCandidates.js'
 
@@ -350,6 +351,70 @@ section('undone matches — remembered per payment (pre-mortem F1)')
     windowDays: windowDaysFor(x, today, 3), undone: und }).candidates, byId)
   ok('control: a new bill at its amount brings a waiting payment back', withUndo([]).queue.length === 1)
   ok('...but not the bill it was taken off', withUndo(['N']).queue.length === 0 && withUndo(['N']).waiting.length === 1)
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+section('undo — a slip or a re-split keeps the bill on offer (owner, 2026-10-13)')
+{
+  const row = (reason, at, inv = 'A') => ({ receipt_id: 'r', invoice_id: inv, reversed_at: at, reverse_reason: reason })
+  let m = undoneByReceipt([row('Undo by mistake — offer it again', '2026-10-12T05:00:00Z')])
+  ok('"Undo by mistake" does not hide the bill', !m.has('r'))
+  m = undoneByReceipt([row('Match again with a different amount', '2026-10-12T05:00:00Z')])
+  ok('"Match again with a different amount" does not hide the bill', !m.has('r'))
+  m = undoneByReceipt([row('Wrong customer', '2026-10-12T05:00:00Z')])
+  ok('"Wrong customer" hides it', m.get('r')?.[0]?.invoice_id === 'A')
+  m = undoneByReceipt([row('Wrong customer', '2026-10-10T05:00:00Z'), row('Undo by mistake — offer it again', '2026-10-12T05:00:00Z')])
+  ok('the NEWEST undo of a bill decides: a later slip puts it back on offer', !m.has('r'))
+  m = undoneByReceipt([row('Undo by mistake — offer it again', '2026-10-10T05:00:00Z'), row('Wrong customer', '2026-10-12T05:00:00Z')])
+  ok('...and a later "wrong" hides it again', m.get('r')?.length === 1)
+  m = undoneByReceipt([row('Undo by mistake — offer it again', '2026-10-12T05:00:00Z'), row('Wrong bill — same amount', '2026-10-12T05:00:00Z', 'B')])
+  eq('a slip on one bill does not unhide another', m.get('r').map((u) => u.invoice_id), ['B'])
+  eq('a typed reason nobody listed hides it (the safe side)',
+     undoneByReceipt([row('something else', '2026-10-12T05:00:00Z')]).get('r').length, 1)
+}
+
+section('"Matched today" — one row per confirm, whose, and who may undo')
+{
+  const who = (id, level, dept) => capabilitiesFor({ id, permission_level: level, is_active: true }, dept)
+  const svc = who('u-svc', 'executive', 'service')
+  const svc2 = who('u-svc2', 'executive', 'service')
+  const acc = who('u-acc', 'executive', 'accounts')
+  const gm = who('u-gm', 'gm', 'service')
+  const a = (o) => ({ id: o.id, client_request_id: o.req ?? null, receipt_id: o.rcpt ?? 'r1', invoice_id: o.inv ?? 'i1',
+    amount_paise: o.amt ?? 100000, allocated_at: o.at ?? '2026-10-13T04:00:00.000Z', allocated_by: o.by ?? 'u-svc',
+    export_batch_id: o.exp ?? null, reversed_at: o.rev ?? null,
+    receipt: { payer_name: o.payer ?? 'SURESH DESAI', mode: o.mode ?? 'upi' },
+    invoice: { invoice_number: o.no ?? 'PCS1', customer_name: o.cust ?? 'DEMO FLEET CARRIERS' },
+    maker: { full_name: o.maker ?? 'Ramesh' } })
+  const rows = [
+    a({ id: 'p', req: 'Q', amt: 845000, no: 'PCS1', at: '2026-10-13T04:00:00.000Z' }),
+    a({ id: 'l', req: 'Q', amt: 320000, no: 'LCS2', at: '2026-10-13T04:00:00.000Z' }),
+    a({ id: 'x', req: 'Z', amt: 193000, no: 'MPI9', cust: 'DEMO ASHA', by: 'u-svc2', maker: 'Mahesh', at: '2026-10-13T06:00:00.000Z' }),
+    a({ id: 'g', req: 'G', amt: 50000, rev: '2026-10-13T07:00:00.000Z' }),
+  ]
+  const all = groupMatches(rows, acc)
+  eq('accounts sees every confirm, newest first; an undone one is gone', all.map((g) => g.key), ['Z', 'Q'])
+  const pair = all.find((g) => g.key === 'Q')
+  eq('a parts + labour confirm is ONE row: both allocations, the sum, both bill numbers',
+     [pair.allocation_ids, pair.amount_paise, pair.invoice_numbers, pair.bill_count], [['p', 'l'], 1165000, ['PCS1', 'LCS2'], 2])
+  eq('a service executive sees only their own', groupMatches(rows, svc).map((g) => g.key), ['Q'])
+  ok('...and may undo it (the maker, before export)', groupMatches(rows, svc)[0].refusal === null && groupMatches(rows, svc)[0].mine)
+  eq('a GM sees everyone\'s', groupMatches(rows, gm).map((g) => g.key), ['Z', 'Q'])
+  ok('accounts may undo anyone\'s before export', all.every((g) => g.refusal === null))
+  ok('a colleague\'s match is not "mine", and names its maker', !all.find((g) => g.key === 'Z').mine || false)
+  // The server's rule, not a copy of it: a non-maker service executive is refused.
+  ok('the server rule refuses a colleague\'s match to a service executive',
+     /Only the person who matched this/.test(svc2.undoRefusal({ maker_id: 'u-svc', exported: false }) ?? ''))
+  const sent = groupMatches([a({ id: 'e', req: 'E', exp: 'batch-1' })], acc)[0]
+  ok('once sent to Busy, accounts is refused and told a GM can', /already gone to Busy/.test(sent.refusal ?? ''))
+  ok('...and a GM may', groupMatches([a({ id: 'e', req: 'E', exp: 'batch-1' })], gm)[0].refusal === null)
+  eq('a row with no request id stands alone', groupMatches([a({ id: 'solo' }), a({ id: 'solo2' })], acc).length, 2)
+  eq('nothing in, nothing out', groupMatches(undefined, acc), [])
+
+  // 20:00 UTC on the 12th is 01:30 on the 13th in India: "today" began at
+  // 18:30 UTC on the 12th, not at UTC midnight.
+  eq('"today" starts at midnight India time', istDayStart('2026-10-12T20:00:00.000Z'), '2026-10-12T18:30:00.000Z')
+  eq('"the last 7 days" = today and the six before', istDayStart('2026-10-12T20:00:00.000Z', 6), '2026-10-06T18:30:00.000Z')
 }
 
 console.log(`\n${'═'.repeat(64)}`)

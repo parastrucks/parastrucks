@@ -16,16 +16,17 @@ import { callEdge } from '../../lib/api'
 import MatchScreen from '../components/MatchScreen.jsx'
 import SearchPanel from '../components/SearchPanel.jsx'
 import ImportPanel from '../components/ImportPanel.jsx'
+import MatchedFold from '../components/MatchedFold.jsx'
 import { buildCandidateIndex, matchCandidates, DEFAULT_WINDOW_DAYS } from '../lib/matchCandidates.js'
 import {
   capabilitiesFor, toMatchReceipt, orderQueue, splitWaiting, invoiceWindow, attachCustomerCodes,
   memoryForMatcher, allocationTargets, matchSignalOf, feedIsStaleFor, searchPickCandidates, REFRESHING, windowDaysFor,
-  undoneByReceipt, undoneNote,
+  undoneByReceipt, undoneNote, groupMatches, istDayStart,
 } from '../lib/matchQueue.js'
 import {
   fetchPaymentsEntityId, fetchDepartmentCode, fetchOpenReceipts, fetchOpenInvoices,
   fetchCustomerCodes, fetchPayerMemory, fetchInvoiceFeed, searchOpenInvoices, fetchOpenJobBills,
-  fetchUndoneMatches,
+  fetchUndoneMatches, fetchMatchesSince,
 } from '../lib/paymentsData.js'
 import { formatINR } from '../lib/paise.js'
 import { istDateOf } from '../lib/dates.js'
@@ -54,6 +55,10 @@ export default function PaymentsPage() {
   const [found, setFound] = useState([])          // bills picked through search
   const [memory, setMemory] = useState([])
   const [undone, setUndone] = useState(() => new Map())   // receipt id -> bills it was taken off
+  const [matches, setMatches] = useState([])      // still-standing matches, for "Matched today"
+  const [matchSpan, setMatchSpan] = useState('today')   // today | week
+  const spanRef = useRef('today')
+  const [undoingKey, setUndoingKey] = useState(null)
   const [feed, setFeed] = useState(null)
   const [skipped, setSkipped] = useState([])
   const [doneToday, setDoneToday] = useState(0)
@@ -93,10 +98,11 @@ export default function PaymentsPage() {
       const workable = rows.filter((r) => c.canMatchMode(r.mode)).map(toMatchReceipt)
 
       const win = invoiceWindow(workable, DEFAULT_WINDOW_DAYS, { today: istDateOf(new Date().toISOString()) })
-      const [inv, mem, und] = await Promise.all([
+      const [inv, mem, und, mt] = await Promise.all([
         win ? fetchOpenInvoices(ent, win) : [],
         fetchPayerMemory(ent, workable.map((r) => r.normalized_payer_name)),
         fetchUndoneMatches(ent, workable.map((r) => r.id)),
+        matchesFor(ent, c, profile, spanRef.current),
       ])
       const customers = await fetchCustomerCodes([
         ...inv.map((v) => v.customer_id), ...mem.map((m) => m.customer_id),
@@ -106,6 +112,7 @@ export default function PaymentsPage() {
       setInvoices(attachCustomerCodes(inv, customers))
       setMemory(memoryForMatcher(mem, customers))
       setUndone(undoneByReceipt(und))
+      setMatches(mt)
       setFeed(feedRow)
       setPhase('ready')
     } catch (e) {
@@ -115,6 +122,21 @@ export default function PaymentsPage() {
   }, [profile])
 
   useEffect(() => { load() }, [load])
+
+  // "Show the last 7 days" re-reads only the matches, not the whole page.
+  useEffect(() => {
+    if (spanRef.current === matchSpan) return
+    spanRef.current = matchSpan
+    const f = fixed.current
+    if (!f) return
+    let alive = true
+    matchesFor(f.ent, f.caps, profile, matchSpan)
+      .then((rows) => { if (alive) setMatches(rows) })
+      .catch((e) => toast.error(plainError(e, 'Could not load the matches.')))
+    return () => { alive = false }
+  }, [matchSpan, profile, toast])
+
+  const groups = useMemo(() => groupMatches(matches, caps), [matches, caps])
 
   const index = useMemo(() => buildCandidateIndex(invoices), [invoices])
   const invoicesById = useMemo(
@@ -303,6 +325,61 @@ export default function PaymentsPage() {
     setSearching(false)
   }
 
+  // Undo one CONFIRM: every allocation row it made (a parts + labour pair is
+  // two), one after another. A row already reversed — a retry after a lost
+  // answer — counts as done. A reason that says the bill was not raised yet
+  // also marks the payment waiting, in the same step (cloud review, 2026-10-13).
+  const handleUndo = async (group, reason) => {
+    setUndoingKey(group.key)
+    let done = 0
+    let failed = null
+    for (const id of group.allocation_ids) {
+      try {
+        await callEdge('service-payments', 'reverse_allocation', { allocation_id: id, reason: reason.label })
+        done++
+      } catch (e) {
+        if (/already reversed/i.test(e?.message || '')) { done++; continue }
+        failed = e
+        break
+      }
+    }
+    if (failed) {
+      toast.error(done
+        ? `Half undone: ${plainError(failed, 'it stopped part way')}. Tap Undo again to finish.`
+        : plainError(failed, 'Could not undo that.'))
+    } else {
+      let after = ' The payment is back in the list.'
+      if (reason.waits && caps?.canMarkWaiting(group.mode)) {
+        try {
+          await callEdge('service-payments', 'set_awaiting_invoice', {
+            entity_id: entityId, receipt_id: group.receipt_id, awaiting: true,
+          })
+          after = ' It now waits for its bill.'
+        } catch {
+          after = ' It is back in the list — mark it “Bill not raised yet” there.'
+        }
+      }
+      toast.success(`Undone: ${formatINR(group.amount_paise)} taken off ${group.customer_name || 'the bill'}.${after}`)
+    }
+    setOverride(null)
+    try { await load({ quiet: true }) } finally { setUndoingKey(null) }
+  }
+
+  // The "Matched today" fold: closed under a payment being matched, open on
+  // the end screens. Only for people who match at all.
+  const matchedFold = (open) => (caps?.canMatch ? (
+    <MatchedFold
+      groups={groups}
+      span={matchSpan}
+      onSpan={setMatchSpan}
+      defaultOpen={open}
+      undoingKey={undoingKey}
+      onUndo={handleUndo}
+      isAccounts={Boolean(caps?.canClassify)}
+      seesAll={Boolean(caps?.seesAllMatches)}
+    />
+  ) : null)
+
   const header = (
     <>
       <div className="page-head pay-page-head">
@@ -405,6 +482,7 @@ export default function PaymentsPage() {
             could be theirs.
           </p>
           {backToToday}
+          {matchedFold(true)}
         </div>
       </div>
     )
@@ -425,6 +503,7 @@ export default function PaymentsPage() {
             Go through the skipped ones again
           </button>
           {waiting.length > 0 && lookAtWaiting}
+          {matchedFold(true)}
         </div>
       </div>
     )
@@ -446,6 +525,7 @@ export default function PaymentsPage() {
             a newly imported bill could be {waiting.length === 1 ? 'its own' : 'theirs'}.
           </p>
           {lookAtWaiting}
+          {matchedFold(true)}
         </div>
       </div>
     )
@@ -490,9 +570,17 @@ export default function PaymentsPage() {
         onSearch={() => setSearching(true)}
         onHoldAdvance={current && caps?.canMarkWaiting(current.mode) ? handleWaiting : undefined}
         initialSelectedId={override?.receiptId === current?.id ? override.selectedId ?? null : null}
+        footer={matchedFold(!current)}
       />
     </div>
   )
+}
+
+/** The matches the fold lists: since the start of today (IST) or of 7 days ago. */
+function matchesFor(ent, caps, profile, span) {
+  return fetchMatchesSince(ent, istDayStart(new Date(), span === 'week' ? 6 : 0), {
+    makerId: caps?.seesAllMatches ? null : profile?.id ?? null,
+  })
 }
 
 function feedLabel(feed) {

@@ -3410,9 +3410,9 @@ tbody tr:hover td { background: var(--gray-50); }
 .pay-reasons { list-style: none; display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
 /* What opens under the ways out is scrolled into view; this keeps it clear of
    the confirm bar (and the nav, on phones) instead of under them (R4-15). */
-.pay-reasons, .pay-wait, .pay-denied-note { scroll-margin-bottom: 140px; }
+.pay-reasons, .pay-wait, .pay-denied-note, .pay-matched-ask { scroll-margin-bottom: 140px; }
 @media (max-width: 759px) {
-  .pay-reasons, .pay-wait, .pay-denied-note {
+  .pay-reasons, .pay-wait, .pay-denied-note, .pay-matched-ask {
     scroll-margin-bottom: calc(140px + var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px));
   }
 }
@@ -3632,6 +3632,40 @@ tbody tr:hover td { background: var(--gray-50); }
 .pay-import-fold summary::-webkit-details-marker { display: none; }
 .pay-import-fold summary::before { content: '▸'; color: var(--blue); width: 1em; }
 .pay-import-fold[open] > summary::before { content: '▾'; }
+
+/* "Matched today" — one 44px line at the very bottom until opened, so the
+   payment being matched keeps the page (pre-mortem F3, R4-3). */
+.pay-matched-fold { margin: 20px 0 0; }
+.pay-matched-list { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.pay-matched-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 10px 12px;
+  background: var(--white);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+}
+.pay-matched-main { flex: 1 1 200px; min-width: 0; }
+.pay-matched-what { margin: 0; font-size: 14px; color: var(--ink); overflow-wrap: anywhere; }
+.pay-matched-meta { margin: 2px 0 0; font-size: 13px; color: var(--gray-600); overflow-wrap: anywhere; }
+.pay-matched-undo { flex: 0 0 auto; }
+.pay-matched-no { flex: 1 1 100%; margin: 0; font-size: 13px; color: var(--gray-600); }
+.pay-matched-ask { flex: 1 1 100%; }
+.pay-reason-cancel { color: var(--gray-600); }
+.pay-matched-span {
+  min-height: 44px;
+  padding: 0;
+  background: none;
+  border: 0;
+  font: inherit;
+  font-size: 13px;
+  color: var(--blue);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.pay-matched-span:disabled { opacity: .55; cursor: default; }
 .pay-import-actions { display: flex; flex-direction: column; gap: 6px; margin-top: 16px; }
 .pay-import-done { text-align: center; padding-top: 24px; }
 .pay-import-settle {

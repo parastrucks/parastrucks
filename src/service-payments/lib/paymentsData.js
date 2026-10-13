@@ -93,6 +93,28 @@ export async function fetchUndoneMatches(entityId, receiptIds) {
   return out
 }
 
+/**
+ * Matches made since `sinceIso` that still stand — the "Matched today" list.
+ * `makerId` narrows it to one person's own (service staff); the screen groups
+ * the rows per confirm (groupMatches). Paged: a busy week can pass 1,000.
+ */
+export function fetchMatchesSince(entityId, sinceIso, { makerId = null } = {}) {
+  return fetchAllRows(() => {
+    let q = supabase
+      .from('payment_allocations')
+      .select('id, client_request_id, receipt_id, invoice_id, amount_paise, allocated_at, allocated_by, ' +
+        'export_batch_id, reversed_at, receipt:payment_receipts(payer_name, mode), ' +
+        'invoice:service_invoices(invoice_number, customer_name), ' +
+        'maker:users!payment_allocations_allocated_by_fkey(full_name)')
+      .eq('entity_id', entityId)
+      .eq('alloc_type', 'payment')
+      .is('reversed_at', null)
+      .gte('allocated_at', sinceIso)
+    if (makerId) q = q.eq('allocated_by', makerId)
+    return q.order('allocated_at', { ascending: false }).order('id')
+  })
+}
+
 /** When the bill feed last landed. Null when nothing has ever been imported. */
 export async function fetchInvoiceFeed(entityId) {
   const { data, error } = await supabase

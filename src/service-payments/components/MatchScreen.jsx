@@ -35,6 +35,9 @@ import { REFRESHING } from '../lib/matchQueue.js'
  * @param {()=>void} [props.onSearch]       absent = hidden
  * @param {string|null} [props.initialSelectedId]  a bill the person already
  *        chose (in search) arrives picked; Confirm is still their tap
+ * @param {import('react').ReactNode} [props.footer]  rendered last, inside the
+ *        screen — so it keeps the room the confirm bar leaves (the "Matched
+ *        today" fold)
  *
  * An action is offered only when its callback is supplied, so the container —
  * which knows who is signed in and what the server will accept — decides. A
@@ -55,6 +58,7 @@ export default function MatchScreen({
   onHoldAdvance,
   onSearch,
   initialSelectedId = null,
+  footer = null,
 }) {
   const [selectedId, setSelectedId] = useState(initialSelectedId)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -77,6 +81,7 @@ export default function MatchScreen({
             ? `${doneToday} payment${doneToday === 1 ? '' : 's'} matched. New payments appear here when the day's file is imported.`
             : 'New payments appear here when the day’s file is imported.'}
         </p>
+        {footer}
       </div>
     )
   }
@@ -304,6 +309,7 @@ export default function MatchScreen({
         </ul>
       )}
 
+      {footer}
     </div>
   )
 }

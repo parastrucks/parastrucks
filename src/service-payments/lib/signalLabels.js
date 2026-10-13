@@ -133,6 +133,29 @@ export const BOUNCE_REASONS = [
   'Already matched elsewhere',
 ]
 
+/**
+ * Why a match is undone — tapped, never typed. The reason is saved with the
+ * undo and shown verbatim to the next person who finds that bill by search,
+ * so it must be words anyone may read.
+ *
+ * `reoffer`: the bill was not wrong (a slip, or a re-split), so it stays on
+ *   offer to that payment. Every other reason means "not this bill", and the
+ *   matcher never offers it to that payment again (owner, 2026-10-13).
+ * `waits`: the payment came before its bill, so after the undo it is marked
+ *   "Bill not raised yet" in the same step.
+ * `accountsOnly`: only accounts sees the clash that this reason answers.
+ */
+export const UNDO_REASONS = [
+  { label: 'Wrong bill — same amount' },
+  { label: 'Wrong customer' },
+  { label: 'Bill not raised yet — it was an advance', waits: true },
+  { label: 'Bill cancelled in SAP', accountsOnly: true },
+  { label: 'Undo by mistake — offer it again', reoffer: true },
+  { label: 'Match again with a different amount', reoffer: true },
+]
+
+export const REOFFER_REASONS = new Set(UNDO_REASONS.filter((r) => r.reoffer).map((r) => r.label))
+
 export const NOT_SERVICE_KINDS = [
   { value: 'vehicle_booking', label: 'Vehicle booking advance' },
   { value: 'sister_unit', label: 'Sister business' },

@@ -25,7 +25,8 @@ import path from 'node:path'
 import { createElement as h } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server.browser'
 import MatchScreen from '../../src/service-payments/components/MatchScreen.jsx'
-import { signalLabel } from '../../src/service-payments/lib/signalLabels.js'
+import { signalLabel, UNDO_REASONS, REOFFER_REASONS } from '../../src/service-payments/lib/signalLabels.js'
+import MatchedFold from '../../src/service-payments/components/MatchedFold.jsx'
 
 let pass = 0, fail = 0
 const ok = (label, cond, detail = '') => {
@@ -257,6 +258,54 @@ section('everything interactive is a real button')
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+section('"Matched today" — the fold a wrong match is undone from')
+{
+  const g = (o = {}) => ({ key: 'k1', allocation_ids: ['a1'], amount_paise: 340000, payer_name: 'MEHUL SHAH',
+    customer_name: 'DEMO INDU SPARES', invoice_numbers: ['MPI6370260009006'], bill_count: 1,
+    at: '2026-10-13T04:11:00.000Z', maker_id: 'u1', maker_name: 'Ramesh', mine: true, exported: false,
+    receipt_id: 'r1', mode: 'upi', refusal: null, ...o })
+  const fold = (props) => renderToStaticMarkup(h(MatchedFold, props))
+  let html = fold({ groups: [g()] })
+  ok('closed by default under a payment (one line, below everything)', /<details class="pay-import-fold pay-matched-fold">/.test(html))
+  ok('a service person reads "You matched today: 1"', html.includes('You matched today: 1'))
+  ok('the row says money, payer and bill — and when, on India\'s clock',
+     html.includes('₹3,400.00') && html.includes('MEHUL SHAH → DEMO INDU SPARES') && html.includes('MPI6370260009006') && /9:41\s?am/i.test(html))
+  ok('their own row has an Undo button', />Undo</.test(html))
+  ok('no reasons until Undo is tapped (nothing is undone by one stray tap)', !html.includes('Why undo it?'))
+  html = fold({ groups: [g()], defaultOpen: true, seesAll: true })
+  ok('open on the end screens; accounts reads "Matched today"', /<details class="pay-import-fold pay-matched-fold" open="">/.test(html) && html.includes('Matched today: 1'))
+  html = fold({ groups: [g({ key: 'k2', mine: false, bill_count: 2, invoice_numbers: ['PCS1', 'LCS2'], amount_paise: 1165000 })], seesAll: true })
+  ok('a parts + labour confirm is one row: "2 bills", both numbers', html.includes('2 bills · PCS1 + LCS2'))
+  ok('a colleague\'s match names who made it', html.includes('by Ramesh'))
+  html = fold({ groups: [g({ refusal: 'This entry has already gone to Busy. A GM can reverse it; it will travel as a correcting entry.' })], seesAll: true })
+  ok('when the server would refuse, there is NO Undo button — it says why', !/>Undo</.test(html) && html.includes('already gone to Busy'))
+  html = fold({ groups: [g({ mine: false, refusal: 'Only the person who matched this, or accounts, can undo it.' })], seesAll: true })
+  ok('...naming the maker where it helps', html.includes('Only Ramesh or accounts can undo this.'))
+  html = fold({ groups: [] })
+  ok('nothing matched yet: says "none", and the week is one tap away', html.includes('You matched today: none') && html.includes('Show the last 7 days'))
+  html = fold({ groups: [g()], span: 'week' })
+  ok('across the week the day is shown too', html.includes('in the last 7 days') && /13 Oct/.test(html) && html.includes('Show only today'))
+  html = fold({ groups: [g()], undoingKey: 'k1' })
+  ok('while undoing, the button says so and nothing else can be started', html.includes('Undoing…') && /class="pay-matched-span" disabled="">Show the last 7 days/.test(html))
+  ok('six canned reasons; exactly two keep the bill on offer',
+     UNDO_REASONS.length === 6 && REOFFER_REASONS.size === 2 &&
+     REOFFER_REASONS.has('Undo by mistake — offer it again') && REOFFER_REASONS.has('Match again with a different amount'))
+  ok('"Bill cancelled in SAP" is accounts\' alone; "Bill not raised yet" also marks it waiting',
+     UNDO_REASONS.find((r) => r.label === 'Bill cancelled in SAP')?.accountsOnly === true &&
+     UNDO_REASONS.find((r) => /^Bill not raised yet/.test(r.label))?.waits === true)
+
+  // The fold rides INSIDE the Match screen, so it keeps the room the fixed
+  // confirm bar leaves; placed after it, its last line sat under the bar.
+  const noop = () => {}
+  const screen = render({ receipt, result: { candidates: [candidate()] }, onSearch: noop, onSkip: noop,
+    footer: h('div', { className: 'probe-footer' }) })
+  ok('the footer renders inside the screen, after the ways out',
+     screen.indexOf('probe-footer') > screen.indexOf('Search all bills') && screen.lastIndexOf('</div>') > screen.indexOf('probe-footer'))
+  const done = render({ receipt: null, footer: h('div', { className: 'probe-footer' }) })
+  ok('...and on "Nothing left to match"', done.includes('Nothing left to match') && done.includes('probe-footer'))
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 section('red team 4 — order, announcements and dates')
 {
   const noop = () => {}
@@ -360,6 +409,11 @@ section('the CSS contract — a phone claim that HTML cannot prove')
   // R4-7: the page head cost 117px on phones and repeated its sub-title.
   ok('phones: the payments page head drops the crumb and the repeated sub-title',
      /\.pay-page-head \.page-head-sub \{\s*display:\s*none/.test(css))
+  // The undo reasons open at the very bottom: they must scroll clear of the bar.
+  ok('the undo reasons scroll clear of the confirm bar (and the nav, on phones)',
+     /\.pay-reasons, \.pay-wait, \.pay-denied-note, \.pay-matched-ask \{ scroll-margin-bottom: 140px; \}/.test(css) &&
+     /@media \(max-width: 759px\) \{\s*\.pay-reasons, \.pay-wait, \.pay-denied-note, \.pay-matched-ask \{\s*scroll-margin-bottom: calc\(140px \+ var\(--bottom-nav-h\)/.test(css))
+  ok('the "Show the last 7 days" link is a full tap target', /\.pay-matched-span \{[^}]*min-height: 44px/.test(css))
   // R4-22: the disabled button still carries words.
   ok('disabled Confirm is readable (no white text on light grey)',
      /color:\s*var\(--gray-600\)/.test((css.match(/\.pay-confirm:disabled\s*\{([^}]*)\}/) || [])[1] || ''))
