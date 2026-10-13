@@ -769,7 +769,13 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
      (staging). Tab (accounts/admin): type, amount, day, who, cheque no., outlet, note, optional bill
      → receipt then match; day-total ₹2 L warns ("Save anyway"); no UPI. Seen: CR-PTB-2026-00001 ₹845
      DEMO MANAN AUTO → MPI5756260009011 paid; repeat via EF returned 00001. `selftest-cash-receipt` 40.
-     ⏭️ **Next in the recorded order: Import clash-row Undo, then R4-12 + R4-6.** — all BEFORE item 9.
+     ✅ **Import clash-row Undo BUILT `40e2f3f`**: the clash is in the PREVIEW, so after the undo the
+     preview re-reads the bills and THIS import cancels the bill ("tomorrow" only if the file is
+     blocked); only the money on that bill is reversed (a parts+labour partner keeps its own); the
+     server rule is asked first (Busy = GM). Seen on staging with a re-saved copy of demo report 2,
+     backed out, ASHA re-confirmed. import-plan 74.
+     ⏭️ **Next in the recorded order: R4-12 + R4-6 (selected card: parts/labour split + remainder).**
+     Brief 4 (pre-mortem 2) written for the cloud — all BEFORE item 9.
   8. **Multiple QRs:** when the next QR is added, map `qr_ref` → outlet and give same-outlet bills a
      small RANKING bonus (never a filter — owner rule, 2026-09-11).
   9. Then prod: **eight** migrations (`20260830`, `20260908`, `20260926_…read_gates…`,

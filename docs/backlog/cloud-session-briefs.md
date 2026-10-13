@@ -225,7 +225,8 @@ Tag every claim [Read in code] (with file:line), [Measured] or [Inferred]. Say p
 Written 2026-10-13 at `0bf648a`, after the undo list (`8838dab`), R4-5 (`7230a53`) and the cash &
 cheque tab + migration 8 (`19e49ad`) were built. For the **pre-mortem session** (it knows its own
 rig; its push is dead, so it delivers a bundle). Verify the bundle as before, then triage with the
-owner. **Status at writing: not sent yet.**
+owner. **Status at writing: not sent yet.** ➕ Since written: `40e2f3f` (Import clash-row Undo) —
+add it to Track C if the brief has not gone yet, or send the one-line addendum given in chat.
 
 ```text
 Pre-mortem 2. Same rules as your first mission (no live systems; evidence tags [Reproduced] / [Read in code] / [Inferred]; don't invent SAP/HDFC/Busy behaviour; frozen owner decisions; findings, not fixes). Your push is refused, so deliver a git bundle as before. Answer in chat as well.
