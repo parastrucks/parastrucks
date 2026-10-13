@@ -140,6 +140,18 @@ export async function fetchPayerCashOnDay(entityId, payerName, day) {
   return (data || []).reduce((a, r) => a + (r.amount_paise ?? 0), 0)
 }
 
+/** The standing allocations on one bill — what "Undo this match" on an Import clash reverses. */
+export async function fetchAllocationsOnInvoice(entityId, invoiceId) {
+  const { data, error } = await supabase
+    .from('payment_allocations')
+    .select('id, amount_paise, export_batch_id, allocated_by, reversed_at')
+    .eq('entity_id', entityId)
+    .eq('invoice_id', invoiceId)
+    .is('reversed_at', null)
+  if (error) throw error
+  return data || []
+}
+
 /** When the bill feed last landed. Null when nothing has ever been imported. */
 export async function fetchInvoiceFeed(entityId) {
   const { data, error } = await supabase
@@ -253,7 +265,7 @@ export async function fetchExistingInvoices(entityId, invoiceNumbers) {
   for (let i = 0; i < unique.length; i += 150) {
     const { data, error } = await supabase
       .from('service_invoices')
-      .select('invoice_number, customer_name, total_paise, allocated_paise, status, cancelled_flag, customer:customers(sap_customer_code)')
+      .select('id, invoice_number, customer_name, total_paise, allocated_paise, status, cancelled_flag, customer:customers(sap_customer_code)')
       .eq('entity_id', entityId)
       .in('invoice_number', unique.slice(i, i + 150))
     if (error) throw error

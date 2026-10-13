@@ -3295,6 +3295,13 @@ tbody tr:hover td { background: var(--gray-50); }
   border: 1px solid var(--amber);
   color: var(--amber-dark);
 }
+/* Something was done and it worked (an undone clash). Ink text: the green is
+   the edge and the ground, so contrast never rests on a mid green. */
+.pay-banner-ok {
+  background: var(--green-light);
+  border: 1px solid var(--green);
+  color: var(--ink);
+}
 
 .pay-daystatus {
   font-size: 13px;
@@ -3686,6 +3693,10 @@ tbody tr:hover td { background: var(--gray-50); }
 }
 .pay-matched-span:disabled { opacity: .55; cursor: default; }
 .pay-import-actions { display: flex; flex-direction: column; gap: 6px; margin-top: 16px; }
+/* "Undo this match" under a cancelled bill's clash (pre-mortem F2). */
+.pay-clash-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 4px; }
+.pay-clash-actions .pay-secondary { flex: 0 1 auto; }
+.pay-clash-ask { margin-top: 6px; }
 .pay-import-done { text-align: center; padding-top: 24px; }
 .pay-import-settle {
   background: var(--surface-sunken);

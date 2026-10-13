@@ -18,30 +18,36 @@ import { parseHdfcSmartHub } from '../lib/parseHdfc.js'
 import {
   KIND_LABEL, parseImportFile, existingInvoiceFromRow, diffInvoices, diffReceipts,
   importGates, rowsToCommit, expectedCounts, reconcile, billCoverage, notImported,
-  newBillsSummary, importActionLabel,
+  newBillsSummary, importActionLabel, clashUndoPlan,
 } from '../lib/importPlan.js'
 import {
   fetchOutlets, findPriorBatch, fetchExistingInvoices,
-  fetchExistingReceiptsByTxn, fetchExistingReceiptsByUtr,
+  fetchExistingReceiptsByTxn, fetchExistingReceiptsByUtr, fetchAllocationsOnInvoice,
 } from '../lib/paymentsData.js'
+import { UNDO_REASONS } from '../lib/signalLabels.js'
+
+// The reason a clash-row undo is saved with — tapped for the clerk, since the
+// clash itself says why (cloud review, 2026-10-13).
+const CANCELLED_REASON = UNDO_REASONS.find((r) => r.accountsOnly)?.label ?? 'Bill cancelled in SAP'
 
 const LIST_CAP = 50
 
-export default function ImportPanel({ entityId, onImported, onGoMatch }) {
+export default function ImportPanel({ entityId, onImported, onGoMatch, undoRefusal, onMatchesChanged }) {
   const [stage, setStage] = useState('idle')      // idle | reading | preview | committing | done | error
   const [error, setError] = useState('')
   const [plan, setPlan] = useState(null)
   const [done, setDone] = useState(null)
+  const [notice, setNotice] = useState('')        // what an undone clash did
   const inputRef = useRef(null)
 
   const reset = () => {
-    setStage('idle'); setError(''); setPlan(null); setDone(null)
+    setStage('idle'); setError(''); setPlan(null); setDone(null); setNotice('')
     if (inputRef.current) inputRef.current.value = ''
   }
 
   async function handleFile(file) {
     if (!file) return
-    setStage('reading'); setError(''); setPlan(null); setDone(null)
+    setStage('reading'); setError(''); setPlan(null); setDone(null); setNotice('')
     try {
       const buffer = await file.arrayBuffer()
       const outlets = await fetchOutlets(entityId)
@@ -71,7 +77,7 @@ export default function ImportPanel({ entityId, onImported, onGoMatch }) {
 
       setPlan({
         file: { name: file.name, lastModified: file.lastModified },
-        kind, hash, parsed, diff,
+        kind, hash, parsed, diff, priorBatch,
         gates: importGates({ kind, parsed, diff, priorBatch }),
         coverage: kind === 'billing_report' ? billCoverage(parsed.invoices, file.lastModified) : null,
         expected: expectedCounts(kind, diff),
@@ -81,6 +87,46 @@ export default function ImportPanel({ entityId, onImported, onGoMatch }) {
       setError(e?.message || String(e))
       setStage('error')
     }
+  }
+
+  // "Undo this match" on a bill SAP has cancelled. Reverses only the money on
+  // THIS bill, then reads the stored bills again so the preview — and the
+  // commit — are the server's terms once more: the bill moves from Clashes to
+  // "Changed", and this import cancels it. Resolves to an error message, or ''.
+  async function undoClash(c) {
+    let allocs
+    try { allocs = await fetchAllocationsOnInvoice(entityId, c.invoice_id) } catch (e) { return e?.message || 'Could not read the match.' }
+    const { ids, refusal } = clashUndoPlan(allocs, undoRefusal)
+    if (refusal) return refusal
+    let undone = 0
+    for (const id of ids) {
+      try {
+        await callEdge('service-payments', 'reverse_allocation', { allocation_id: id, reason: CANCELLED_REASON })
+        undone++
+      } catch (e) {
+        if (/already reversed/i.test(e?.message || '')) { undone++; continue }
+        onMatchesChanged?.()
+        await recheck()
+        return `Half undone: ${e?.message || 'it stopped part way'}. Tap Undo it again to finish.`
+      }
+    }
+    onMatchesChanged?.()
+    const blocked = await recheck()
+    setNotice(`Undone: ${formatINR(c.matched_paise)} taken off ${c.row.invoice_number}; the payment is back in the Match list. ` +
+      (blocked ? 'Tomorrow’s Billing Report will cancel the bill.' : 'This import now cancels the bill.'))
+    return ''
+  }
+
+  // Read the stored bills again and re-plan the same file. Returns whether the
+  // file still cannot be imported (e.g. it was imported before), which decides
+  // whether the cancellation lands now or with tomorrow's report.
+  async function recheck() {
+    if (!plan || plan.kind !== 'billing_report') return true
+    const rows = await fetchExistingInvoices(entityId, plan.parsed.invoices.map((v) => v.invoice_number))
+    const diff = diffInvoices(plan.parsed.invoices, rows.map(existingInvoiceFromRow))
+    const gates = importGates({ kind: plan.kind, parsed: plan.parsed, diff, priorBatch: plan.priorBatch })
+    setPlan((p) => ({ ...p, diff, gates, expected: expectedCounts(p.kind, diff) }))
+    return !gates.ok
   }
 
   async function handleCommit() {
@@ -154,7 +200,8 @@ export default function ImportPanel({ entityId, onImported, onGoMatch }) {
       {stage === 'reading' && <p className="pay-hint" role="status">Reading the file and checking it against what is stored…</p>}
 
       {(stage === 'preview' || stage === 'committing') && plan && (
-        <Preview plan={plan} committing={stage === 'committing'} onCommit={handleCommit} onCancel={reset} />
+        <Preview plan={plan} committing={stage === 'committing'} onCommit={handleCommit} onCancel={reset}
+                 notice={notice} onUndoClash={undoRefusal ? undoClash : undefined} />
       )}
 
       {stage === 'done' && done && plan && (
@@ -164,7 +211,7 @@ export default function ImportPanel({ entityId, onImported, onGoMatch }) {
   )
 }
 
-function Preview({ plan, committing, onCommit, onCancel }) {
+function Preview({ plan, committing, onCommit, onCancel, notice = '', onUndoClash }) {
   const { kind, parsed, diff, gates, coverage, file } = plan
   const bills = kind === 'billing_report'
   const { failedAttempts, unreadable } = notImported(kind, parsed)
@@ -190,6 +237,8 @@ function Preview({ plan, committing, onCommit, onCancel }) {
       <p className="pay-import-file">
         <strong>{KIND_LABEL[kind]}</strong> · {file.name}
       </p>
+
+      {notice && <p className="pay-banner pay-banner-ok" role="status">{notice}</p>}
 
       {gates.blocking.length > 0 && (
         <div className="pay-banner pay-banner-warn" role="alert">
@@ -260,7 +309,8 @@ function Preview({ plan, committing, onCommit, onCancel }) {
       )}
 
       <Fold title="Held back" items={diff.held} render={(h) => `${label(h.row)} — ${h.reason}`} />
-      {bills && <Fold title="Clashes" open items={diff.conflict} render={(c) => `${c.row.invoice_number} — ${c.reason}`} />}
+      {bills && <Fold title="Clashes" open items={diff.conflict}
+            render={(c) => <ClashRow c={c} onUndo={onUndoClash} disabled={committing} />} />}
       <Fold title="Failed attempts — not money" items={failedAttempts}
             render={(r) => `Row ${r.row} — ${r.amount_paise != null ? formatINR(r.amount_paise) : 'amount unreadable'}` +
               `${r.payer_name ? ` from ${r.payer_name}` : ''}${r.when ? `, ${r.when}` : ''} — not imported; the payer usually tried again`} />
@@ -328,6 +378,52 @@ function Count({ label, n, sub = null, strong = false, warn = false }) {
       <dt>{label}</dt>
       <dd><strong>{n}</strong>{sub ? <span> · {sub}</span> : null}</dd>
     </div>
+  )
+}
+
+/**
+ * One clash. A bill SAP cancelled with money still on it carries "Undo this
+ * match": one tap to ask, one to do it — money moves, so never a single tap.
+ * Every other clash (a reused bill number, a total below what is paid) is a
+ * question for SAP, not something to undo here, and stays words only.
+ */
+function ClashRow({ c, onUndo, disabled = false }) {
+  const [step, setStep] = useState('idle')        // idle | ask | busy
+  const [err, setErr] = useState('')
+  const text = `${c.row.invoice_number} — ${c.reason}`
+  if (c.kind !== 'cancelled_under_money' || !c.invoice_id || !onUndo) return text
+  const go = async () => {
+    setStep('busy'); setErr('')
+    const msg = await onUndo(c)
+    if (msg) { setErr(msg); setStep('ask') }
+  }
+  return (
+    <>
+      {text}
+      {step === 'idle' ? (
+        <div className="pay-clash-actions">
+          <button type="button" className="pay-secondary" disabled={disabled} onClick={() => setStep('ask')}>
+            Undo this match
+          </button>
+        </div>
+      ) : (
+        <div className="pay-clash-ask">
+          <p className="pay-hint">
+            Take {formatINR(c.matched_paise)} off {c.row.invoice_number}? The payment goes back to the Match
+            list to be placed on its right bill.
+          </p>
+          <div className="pay-clash-actions">
+            <button type="button" className="pay-secondary pay-clash-yes" disabled={step === 'busy' || disabled} onClick={go}>
+              {step === 'busy' ? 'Undoing…' : 'Undo it'}
+            </button>
+            <button type="button" className="pay-secondary" disabled={step === 'busy'} onClick={() => { setStep('idle'); setErr('') }}>
+              Keep it
+            </button>
+          </div>
+          {err && <p className="form-error" role="alert">{err}</p>}
+        </div>
+      )}
+    </>
   )
 }
 

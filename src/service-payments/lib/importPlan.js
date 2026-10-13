@@ -95,6 +95,7 @@ export function outletIdByPlant(outlets) {
 export function existingInvoiceFromRow(row) {
   const c = Array.isArray(row.customer) ? row.customer[0] : row.customer
   return {
+    id: row.id ?? null,                                      // for undoing a match on it
     invoice_number: row.invoice_number,
     sap_customer_code: c?.sap_customer_code ?? undefined,   // undefined = could not read
     customer_name: row.customer_name ?? null,
@@ -141,12 +142,41 @@ export function diffInvoices(parsed, existing) {
     if ((e.cancelled_flag ?? null) !== (v.cancelled_flag ?? null)) changed.push('cancelled')
     if (!changed.length) { out.unchanged.push(v); continue }
     if (status !== 'active' && e.status === 'active' && e.allocated_paise > 0) {
-      out.conflict.push({ row: v, reason: `SAP now marks it ${status}, but ₹${(e.allocated_paise / 100).toLocaleString('en-IN')} is already matched to it — reverse that match first` })
+      // The one clash a person can clear from here: undo the match, and the
+      // cancellation goes through (ImportPanel "Undo this match").
+      out.conflict.push({
+        row: v,
+        reason: `SAP now marks it ${status}, but ₹${(e.allocated_paise / 100).toLocaleString('en-IN')} is already matched to it — reverse that match first`,
+        kind: 'cancelled_under_money',
+        invoice_id: e.id ?? null,
+        matched_paise: e.allocated_paise,
+      })
       continue
     }
     out.amended.push({ row: v, was: e, changed })
   }
   return out
+}
+
+/**
+ * Undoing the match under a bill SAP has cancelled: which allocations to
+ * reverse, or why not. Only the allocations ON THIS BILL — a parts + labour
+ * confirm also paid the partner bill, which SAP did not cancel, and that money
+ * stays where it is. Anything already sent to Busy needs a GM; the server's
+ * own rule decides (reverseAllowed), so the screen never tries what it refuses.
+ *
+ * @param allocs       this bill's standing allocations {id, export_batch_id, allocated_by}
+ * @param undoRefusal  capabilitiesFor().undoRefusal
+ * @returns {{ids: string[], refusal: string|null}}
+ */
+export function clashUndoPlan(allocs, undoRefusal) {
+  const standing = (allocs ?? []).filter((a) => a && a.id && !a.reversed_at)
+  if (!standing.length) return { ids: [], refusal: 'Nothing is matched to this bill any more — check the file again.' }
+  for (const a of standing) {
+    const refusal = undoRefusal ? undoRefusal({ maker_id: a.allocated_by ?? null, exported: Boolean(a.export_batch_id) }) : 'Not allowed'
+    if (refusal) return { ids: [], refusal }
+  }
+  return { ids: standing.map((a) => a.id), refusal: null }
 }
 
 // ── Receipts ─────────────────────────────────────────────────────────────

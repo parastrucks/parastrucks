@@ -454,6 +454,10 @@ export default function PaymentsPage() {
         <ImportPanel
           entityId={entityId}
           onImported={() => load({ quiet: true })}
+          // "Undo this match" on a clash: the server's own undo rule, and the
+          // Match list refreshed so the freed payment is there.
+          undoRefusal={caps?.undoRefusal}
+          onMatchesChanged={() => load({ quiet: true })}
           onGoMatch={(kind) => {
             // New BILLS may be what a skipped payment was waiting for, so those
             // come back for another look. New PAYMENTS change nothing about the

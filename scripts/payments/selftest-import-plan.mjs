@@ -14,8 +14,9 @@ import * as XLSX from 'xlsx'
 import {
   detectFileKind, billCoverage, outletIdByPlant, existingInvoiceFromRow, diffInvoices,
   diffReceipts, importGates, rowsToCommit, expectedCounts, reconcile, parseImportFile,
-  sha256Hex, MAX_ROWS_PER_IMPORT,
+  sha256Hex, MAX_ROWS_PER_IMPORT, clashUndoPlan,
 } from '../../src/service-payments/lib/importPlan.js'
+import { capabilitiesFor } from '../../src/service-payments/lib/matchQueue.js'
 import { parseBillingReport } from '../../src/service-payments/lib/parseBillingReport.js'
 import { parseBharatPe, parseGpay } from '../../src/service-payments/lib/parseUpi.js'
 import { parseHdfcSmartHub } from '../../src/service-payments/lib/parseHdfc.js'
@@ -137,6 +138,34 @@ section('bills: the server\'s rules, row by row')
      (d.conflict.find((c) => c.row.invoice_number === 'CUST+SHRINK')?.reason ?? '').includes('customer changed'))
   eq('the amendment says what changed', d.amended.find((a) => a.row.invoice_number === 'TOTAL').changed, ['total'])
   eq('nothing held when every stored customer was readable', d.held.length, 0)
+
+  // "Undo this match" (pre-mortem F2): only the cancelled-under-money clash
+  // can be cleared from Import, and it carries what the undo needs.
+  const cp = diffInvoices([row('CANCEL-PAID', { status: 'cancelled', cancelled_flag: 'X' })],
+    [{ ...stored('CANCEL-PAID', { allocated_paise: 700 }), id: 'inv-77' }]).conflict[0]
+  eq('a cancellation under money is marked undoable, with its bill and the money on it',
+     [cp.kind, cp.invoice_id, cp.matched_paise], ['cancelled_under_money', 'inv-77', 700])
+  ok('a reused bill number or a shrunk total is NOT undoable here (a question for SAP)',
+     d.conflict.filter((c) => c.row.invoice_number !== 'CANCEL-PAID').every((c) => !c.kind))
+  eq('the stored bill\'s id is read', existingInvoiceFromRow({ id: 'inv-9', invoice_number: 'X', customer: { sap_customer_code: 'C' } }).id, 'inv-9')
+}
+
+section('"Undo this match" on a clash — what it reverses, and who may')
+{
+  const who = (id, level, dept) => capabilitiesFor({ id, permission_level: level, is_active: true }, dept)
+  const acc = who('u-acc', 'executive', 'accounts')
+  const gm = who('u-gm', 'gm', 'accounts')
+  const a = (id, o = {}) => ({ id, export_batch_id: null, allocated_by: 'u-svc', reversed_at: null, ...o })
+  eq('accounts undoes every standing match on the bill (a service person made them — accounts may)',
+     clashUndoPlan([a('x1'), a('x2')], acc.undoRefusal), { ids: ['x1', 'x2'], refusal: null })
+  eq('an already-reversed row is not reversed again', clashUndoPlan([a('x1'), a('x2', { reversed_at: '2026-10-13' })], acc.undoRefusal).ids, ['x1'])
+  ok('sent to Busy: accounts is refused in the server\'s words, and NOTHING is reversed',
+     (() => { const p = clashUndoPlan([a('x1'), a('x2', { export_batch_id: 'b1' })], acc.undoRefusal)
+              return p.ids.length === 0 && /already gone to Busy/.test(p.refusal ?? '') })())
+  eq('...a GM may', clashUndoPlan([a('x1', { export_batch_id: 'b1' })], gm.undoRefusal), { ids: ['x1'], refusal: null })
+  ok('nothing matched any more (someone undid it meanwhile): says so, reverses nothing',
+     /Nothing is matched/.test(clashUndoPlan([], acc.undoRefusal).refusal ?? ''))
+  ok('no rule supplied: refused, never assumed allowed', clashUndoPlan([a('x1')], undefined).refusal === 'Not allowed')
 }
 
 // ════════════════════════════════════════════════════════════════════════════
