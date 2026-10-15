@@ -57,3 +57,23 @@ The owner questions, with leans, are Q1 to Q5 in `docs/backlog/service-payments-
 - **G2, G3:** behaviour, not a code defect — they need owner decisions (G3 challenges the owner's
   2026-10-13 "server refuses one cash receipt ≥ ₹2 lakh").
 - **Proved safe** above is the cloud's claim; the PC has not re-run it.
+
+---
+
+## Owner decisions (2026-10-15, PC session) — do not re-ask
+
+The cloud's own Q1–Q5 were in the lost document; these were put to the owner from its findings,
+each with a lean and the counter-case.
+
+- **G3 → record ₹2 lakh+ cash, flagged for the GM.** Supersedes the 2026-10-13 "server refuses".
+  The form states the 269ST rule and offers "Record anyway" with a reason; the receipt is marked
+  as a 269ST case (shown to the GM). Books must match the drawer: refusing to record does not undo
+  receiving. The per-payer-day warning stays.
+- **G1 → the cash form offers the whole order.** A picked bill with an open partner on the same
+  job is offered as one choice ("the whole order, 2 bills"), as Search does on Match, with the same
+  split rule as Confirm.
+- **G2 → leave the freed payment in the Match list.** No automatic "Bill not raised yet" after a
+  cancelled-bill undo.
+- **G6 → leave old bills open.** No go-live date on the first import.
+- **G4 → fixed as a defect (no question):** a repeated save must agree on every field the clerk
+  typed, and the done screen shows what the server saved.
