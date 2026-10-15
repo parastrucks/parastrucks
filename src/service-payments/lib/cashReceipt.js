@@ -11,6 +11,7 @@
 // stop. UPI comes from the HDFC report.
 
 import { rupeeStringToPaise, formatINR } from './paise.js'
+import { splitAcross } from './confirmPlan.js'
 
 export const CASH_MODES = [
   { value: 'cash', label: 'Cash' },
@@ -21,15 +22,22 @@ export const CASH_MODES = [
 /**
  * Section 269ST: ₹2,00,000 or more in cash from one person — in one receipt,
  * in a day, or for one event — is penalised at the whole amount, on the
- * dealership. The server refuses one cash receipt at or over this; the form
- * also WARNS when the same payer's cash for the day would reach it (owner,
- * 2026-10-13: names are typed by hand, so a hard daily block would be both
+ * dealership. Owner, 2026-10-15 (revising "refuse"): cash already in the
+ * drawer must still reach the books, so one receipt at or over this needs a
+ * REASON and is marked as a 269ST case for the GM; the server refuses it
+ * without one. The form also WARNS when the same payer's cash for the day
+ * would reach it (names are typed by hand, so a daily block would be both
  * dodgeable and wrongly triggered).
  */
 export const CASH_LIMIT_PAISE = 2_00_000 * 100
 
 export const CASH_LIMIT_MESSAGE =
-  'Cash of ₹2,00,000 or more cannot be taken in one receipt (section 269ST: the penalty is the whole amount). Ask for a cheque or a bank transfer.'
+  'Cash of ₹2,00,000 or more from one person breaks section 269ST of the Income Tax Act (the penalty is the whole amount). Ask for a cheque or a bank transfer. Record it here only if the cash has already been taken — say why, and it is flagged for the GM.'
+
+/** One cash receipt at or over the 269ST line. */
+export function overCashLimit(mode, amountPaise) {
+  return mode === 'cash' && Number.isFinite(amountPaise) && amountPaise >= CASH_LIMIT_PAISE
+}
 
 /** What the second reference box is called, by payment type. */
 export function refLabel(mode) {
@@ -59,7 +67,7 @@ export function istDay(instant) {
  * Check the form. Returns the errors to show, by field, and — when there are
  * none — the row the server takes.
  *
- * @param form  {mode, amount, day, payer, ref, outletId, note}
+ * @param form  {mode, amount, day, payer, ref, outletId, note, limitReason}
  * @param opts  {now, outletRequired}
  * @returns {{errors: Record<string,string>, row: object|null}}
  */
@@ -74,7 +82,10 @@ export function checkCashForm(form, { now = new Date(), outletRequired = false }
   else {
     try { amount = rupeeStringToPaise(raw) } catch { errors.amount = 'Enter the amount in rupees, like 1930 or 1930.50.' }
     if (amount !== null && amount <= 0) errors.amount = 'The amount must be more than zero.'
-    else if (amount !== null && mode === 'cash' && amount >= CASH_LIMIT_PAISE) errors.amount = CASH_LIMIT_MESSAGE
+  }
+  const limitReason = String(form?.limitReason ?? '').trim()
+  if (amount !== null && amount > 0 && overCashLimit(mode, amount) && !limitReason) {
+    errors.limitReason = 'Say why the cash was taken — it goes to the GM.'
   }
 
   const today = istDay(now)
@@ -101,6 +112,7 @@ export function checkCashForm(form, { now = new Date(), outletRequired = false }
       instrument_ref: mode === 'cash' ? null : (ref || null),
       outlet_id: form?.outletId || null,
       notes: String(form?.note ?? '').trim() || null,
+      cash_limit_reason: overCashLimit(mode, amount) ? limitReason : null,
     },
   }
 }
@@ -121,15 +133,19 @@ export function dayCashWarning(mode, amountPaise, alreadyPaise, payer, day) {
 }
 
 /**
- * What to place on the picked bill: never more than the receipt holds, never
- * more than the bill still owes. Anything left stays on the receipt, which
- * then waits in accounts' Match list.
+ * What to place on the picked bill — or the picked whole ORDER (parts +
+ * labour), whose bills a candidate carries as `members` (pre-mortem 2, G1: a
+ * cheque for a pair used to leave the second bill to the amount matcher).
+ * The SAME split rule as Confirm on the Match screen (splitAcross): never
+ * more than the receipt holds, never more than a bill still owes; anything
+ * left stays on the receipt, in accounts' Match list.
  */
-export function cashTargets(bill, amountPaise) {
-  const owed = (bill?.total_paise ?? 0) - (bill?.allocated_paise ?? 0)
-  const place = Math.min(owed, amountPaise)
-  if (!bill?.id || place <= 0) return []
-  return [{ invoice_id: bill.id, amount_paise: place }]
+export function cashTargets(choice, amountPaise) {
+  if (!choice) return []
+  const bills = (choice.members?.length ? choice.members : [choice]).filter((b) => b?.id)
+  return splitAcross(bills, amountPaise)
+    .filter((s) => s.take > 0)
+    .map((s) => ({ invoice_id: s.bill.id, amount_paise: s.take }))
 }
 
 function dayLabel(day) {

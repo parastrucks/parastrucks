@@ -3597,6 +3597,9 @@ tbody tr:hover td { background: var(--gray-50); }
 .pay-cash { max-width: 560px; margin: 0 auto; padding: 4px 12px 24px; }
 .pay-cash .pay-ask { margin-bottom: 16px; }
 .pay-cash-mode .seg-btn { min-height: 44px; }
+/* This bill only / the whole order (pre-mortem 2, G1). */
+.pay-cash-choice { margin-bottom: 8px; }
+.pay-cash-choice .seg-btn { min-height: 44px; }
 .pay-cash-bill {
   padding: 10px 12px;
   background: var(--white);

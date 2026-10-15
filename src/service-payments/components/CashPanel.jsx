@@ -9,7 +9,12 @@
 // The first call carries a save id. If the answer is lost and Save is pressed
 // again, the server returns the FIRST receipt and its number instead of keying
 // the same cash twice (migration 20261013). The id is renewed only after a
-// save succeeds — never on a retry.
+// save succeeds — never on a retry. A retry with DIFFERENT details is refused
+// by the server, naming the first receipt (pre-mortem 2, G4), and the done
+// screen shows what the SERVER saved, not what the form holds.
+//
+// A bill picked here brings its order partner, as Search does on Match: a
+// cheque for parts + labour pays both in one save (pre-mortem 2, G1).
 
 import { useEffect, useRef, useState } from 'react'
 import { callEdge } from '../../lib/api'
@@ -17,13 +22,15 @@ import { useDebounce } from '../../lib/useDebounce'
 import SearchPanel from './SearchPanel.jsx'
 import { formatINR, rupeeStringToPaise } from '../lib/paise.js'
 import { shortDay } from '../lib/signalLabels.js'
+import { searchPickCandidates } from '../lib/matchQueue.js'
+import { confirmPlan } from '../lib/confirmPlan.js'
 import {
-  CASH_MODES, refLabel, checkCashForm, dayCashWarning, cashTargets, istDay,
+  CASH_MODES, CASH_LIMIT_MESSAGE, refLabel, checkCashForm, dayCashWarning, cashTargets, istDay, overCashLimit,
 } from '../lib/cashReceipt.js'
-import { fetchOutlets, fetchPayerCashOnDay } from '../lib/paymentsData.js'
+import { fetchOutlets, fetchPayerCashOnDay, fetchOpenJobBills } from '../lib/paymentsData.js'
 
 const newId = () => globalThis.crypto?.randomUUID?.() ?? null
-const blank = () => ({ mode: 'cash', amount: '', day: istDay(new Date()), payer: '', ref: '', outletId: '', note: '' })
+const blank = () => ({ mode: 'cash', amount: '', day: istDay(new Date()), payer: '', ref: '', outletId: '', note: '', limitReason: '' })
 
 /**
  * @param {object} props
@@ -36,7 +43,8 @@ const blank = () => ({ mode: 'cash', amount: '', day: istDay(new Date()), payer:
 export default function CashPanel({ entityId, search, onSaved, onGoMatch, plainError = (e, f) => e?.message || f }) {
   const [form, setForm] = useState(blank)
   const [tried, setTried] = useState(false)       // errors show after the first Save
-  const [bill, setBill] = useState(null)
+  const [choices, setChoices] = useState([])      // the picked bill, and its whole order when it has one
+  const [choiceIdx, setChoiceIdx] = useState(0)
   const [picking, setPicking] = useState(false)
   const [outlets, setOutlets] = useState([])
   const [already, setAlready] = useState(0)       // the payer's other cash that day
@@ -70,7 +78,23 @@ export default function CashPanel({ entityId, search, onSaved, onGoMatch, plainE
   const shown = tried ? errors : {}
   let amountPaise = null
   try { amountPaise = rupeeStringToPaise(form.amount) } catch { amountPaise = null }
-  const warning = dayCashWarning(form.mode, amountPaise, already, form.payer.trim(), form.day)
+  const overLimit = overCashLimit(form.mode, amountPaise)
+  // The day total is warned only below the single-receipt line; at or over it
+  // the 269ST box below says more.
+  const warning = overLimit ? '' : dayCashWarning(form.mode, amountPaise, already, form.payer.trim(), form.day)
+  const choice = choices[choiceIdx] ?? null
+
+  // A bill picked from search, with its order partner offered as one choice.
+  // If that read fails, the bill alone is still offered — it was found.
+  const pick = async (invoice) => {
+    setPicking(false)
+    let orderBills = []
+    if (invoice.job_ref) {
+      try { orderBills = await fetchOpenJobBills(entityId, invoice.job_ref) } catch { orderBills = [] }
+    }
+    setChoices(searchPickCandidates(invoice, orderBills, amountPaise ?? 0))
+    setChoiceIdx(0)
+  }
 
   const save = async () => {
     setTried(true)
@@ -88,45 +112,59 @@ export default function CashPanel({ entityId, search, onSaved, onGoMatch, plainE
       setSaving(false)
       return
     }
+    // What the server saved is the truth from here on (a repeat returns the
+    // FIRST save's amount, not the form's).
+    const amount = saved.amount_paise ?? row.amount_paise
     let placed = 0
     let matchError = ''
-    const targets = bill ? cashTargets(bill, row.amount_paise) : []
+    const targets = cashTargets(choice, amount)
     if (targets.length) {
       try {
         await callEdge('service-payments', 'allocate', {
           entity_id: entityId, receipt_id: saved.receipt_id, targets,
           client_request_id: newId(), match_signal: 'manual',
         })
-        placed = targets[0].amount_paise
+        placed = targets.reduce((a, t) => a + t.amount_paise, 0)
       } catch (e) {
         matchError = plainError(e, 'the bill could not be matched')
       }
     }
     saveId.current = newId()
-    setDone({ serial: saved.receipt_serial, row, bill, placed, matchError })
+    setDone({
+      serial: saved.receipt_serial,
+      replay: Boolean(saved.idempotent_replay),
+      sec269st: Boolean(saved.sec_269st),
+      amount,
+      mode: saved.mode ?? row.mode,
+      payer: saved.payer_name ?? row.payer_name,
+      choice, placed, matchError,
+      plan: choice && placed ? confirmPlan(choice, amount) : null,
+    })
     setSaving(false)
     onSaved?.()
   }
 
   const again = () => {
-    setForm(blank()); setBill(null); setTried(false); setError(''); setDone(null); setAlready(0)
+    setForm(blank()); setChoices([]); setChoiceIdx(0); setTried(false); setError(''); setDone(null); setAlready(0)
   }
 
   if (done) {
-    const { serial, row: r, bill: b, placed, matchError } = done
-    const mode = CASH_MODES.find((m) => m.value === r.mode)?.label.toLowerCase() ?? r.mode
+    const { serial, replay, sec269st, amount, mode: m, payer, choice: c, placed, matchError, plan } = done
+    const mode = CASH_MODES.find((x) => x.value === m)?.label.toLowerCase() ?? m
     let rest = ' It is in your Match list — place it on its bill there.'
-    if (b && matchError) rest = ` It is in your Match list — place it on the bill there (${matchError}).`
-    else if (b && placed) rest = r.amount_paise > placed
-      ? ` ${formatINR(r.amount_paise - placed)} is left on it, in your Match list.` : ''
+    if (c && matchError) rest = ` It is in your Match list — place it on the bill there (${matchError}).`
+    else if (c && placed) rest = amount > placed
+      ? ` ${formatINR(amount - placed)} is left on it, in your Match list.` : ''
     return (
       <div className="pay-cash pay-match-empty" role="status">
         <p className="pay-empty-tick" aria-hidden="true">✓</p>
-        <h2 className="pay-empty-title">Saved as {serial}</h2>
+        <h2 className="pay-empty-title">{replay ? `Already saved as ${serial}` : `Saved as ${serial}`}</h2>
         <p className="pay-empty-sub">
-          {formatINR(r.amount_paise)} {mode} from {r.payer_name}.
-          {placed ? ` ${formatINR(placed)} placed on bill ${b.invoice_number} (${b.customer_name || 'no name'}).` : ''}
+          {replay ? 'Your first try went through — nothing was saved twice. ' : ''}
+          {formatINR(amount)} {mode} from {payer || 'no name'}.
+          {placed ? ` ${plan?.line || `${formatINR(placed)} placed on bill ${c.invoice_number}.`}` : ''}
           {rest}
+          {sec269st ? ' Flagged for the GM: cash of ₹2 lakh or more.' : ''}
         </p>
         <div className="pay-cash-actions">
           <button type="button" className="pay-confirm" onClick={again}>Record another</button>
@@ -142,14 +180,14 @@ export default function CashPanel({ entityId, search, onSaved, onGoMatch, plainE
         receipt={{ amount_paise: amountPaise, payer_name: form.payer.trim() }}
         search={search}
         initialQuery={form.amount.trim()}
-        onPick={(inv) => { setBill(inv); setPicking(false) }}
+        onPick={pick}
         onCancel={() => setPicking(false)}
       />
     )
   }
 
   const ref = refLabel(form.mode)
-  const owed = bill ? bill.total_paise - (bill.allocated_paise ?? 0) : 0
+  const plan = choice && amountPaise ? confirmPlan(choice, amountPaise) : null
   return (
     <form className="pay-cash" noValidate onSubmit={(e) => { e.preventDefault(); save() }}>
       <h2 className="pay-ask">Record a cash or cheque payment</h2>
@@ -173,6 +211,18 @@ export default function CashPanel({ entityId, search, onSaved, onGoMatch, plainE
                autoComplete="off" value={form.amount} onChange={set('amount')} placeholder="1930" />
         {shown.amount && <p className="form-error">{shown.amount}</p>}
       </div>
+
+      {/* Section 269ST (owner, 2026-10-15): cash already taken must reach the
+          books, so it is recorded WITH a reason and flagged for the GM. */}
+      {overLimit && (
+        <div className="form-group">
+          <p className="pay-banner pay-banner-warn" role="status">{CASH_LIMIT_MESSAGE}</p>
+          <label className="form-label" htmlFor="pay-cash-limit">Why was the cash taken?</label>
+          <input id="pay-cash-limit" className={`form-input${shown.limitReason ? ' error' : ''}`} autoComplete="off"
+                 value={form.limitReason} onChange={set('limitReason')} />
+          {shown.limitReason && <p className="form-error">{shown.limitReason}</p>}
+        </div>
+      )}
 
       <div className="form-group">
         <label className="form-label" htmlFor="pay-cash-day">Received on</label>
@@ -216,19 +266,32 @@ export default function CashPanel({ entityId, search, onSaved, onGoMatch, plainE
 
       {/* The bill is optional: without it the payment waits in Match. */}
       <div className="form-group">
-        <span className="form-label">Which bill? (optional)</span>
-        {bill ? (
+        <span className="form-label" id="pay-cash-bill-label">Which bill? (optional)</span>
+        {choice ? (
           <div className="pay-cash-bill">
+            {/* A bill with an open partner on the same job: this bill, or the
+                whole order — closer to the money first (pre-mortem 2, G1). */}
+            {choices.length > 1 && (
+              <div className="seg pay-cash-choice" role="radiogroup" aria-labelledby="pay-cash-bill-label">
+                {choices.map((c, i) => (
+                  <button key={c.id} type="button" role="radio" aria-checked={i === choiceIdx}
+                          className={`seg-btn ${i === choiceIdx ? 'active' : ''}`} onClick={() => setChoiceIdx(i)}>
+                    {c.kind === 'job' ? `The whole order (${c.member_count} bills)` : 'This bill only'}
+                  </button>
+                ))}
+              </div>
+            )}
             <p className="pay-cash-bill-what">
-              <strong>{formatINR(owed)}</strong> owed · {bill.customer_name || 'No name on the bill'}
+              <strong>{formatINR(choice.amount_paise)}</strong> owed · {choice.customer_name || 'No name on the bill'}
             </p>
             <p className="pay-candidate-ref">
-              Bill {bill.invoice_number}{bill.invoice_date ? ` · billed ${shortDay(bill.invoice_date)}` : ''}
-              {bill.vehicle_reg_no ? ` · ${bill.vehicle_reg_no}` : ''}
+              Bill {choice.invoice_number}{choice.date ? ` · billed ${shortDay(choice.date)}` : ''}
+              {choice.vehicle_reg_no ? ` · ${choice.vehicle_reg_no}` : ''}
             </p>
+            {plan?.line && <p className="pay-candidate-plan">{plan.line}</p>}
             <div className="pay-cash-bill-actions">
               <button type="button" className="pay-secondary" onClick={() => setPicking(true)} disabled={!amountPaise}>Change</button>
-              <button type="button" className="pay-secondary" onClick={() => setBill(null)}>Remove</button>
+              <button type="button" className="pay-secondary" onClick={() => { setChoices([]); setChoiceIdx(0) }}>Remove</button>
             </div>
           </div>
         ) : (
@@ -245,7 +308,7 @@ export default function CashPanel({ entityId, search, onSaved, onGoMatch, plainE
       {error && <p className="pay-banner pay-banner-warn" role="alert">{error}</p>}
 
       <button type="submit" className="pay-confirm pay-cash-save" disabled={saving}>
-        {saving ? 'Saving…' : warning ? 'Save anyway' : 'Save'}
+        {saving ? 'Saving…' : overLimit ? 'Record anyway' : warning ? 'Save anyway' : 'Save'}
       </button>
     </form>
   )

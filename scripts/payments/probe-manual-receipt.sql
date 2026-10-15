@@ -69,11 +69,34 @@ BEGIN
   PERFORM pg_temp.zz_refused('2 same save, different amount: refused',
     format('SELECT public.payments_manual_receipt(%L, %L::jsonb, %L, %L)', v_e,
       '{"mode":"cash","amount_paise":100100,"payer_name":"ZZPROBE CASH"}', v_a, v_id1),
-    'already used for a different receipt');
+    'already went through as');
   PERFORM pg_temp.zz_refused('2 same save, different mode: refused',
     format('SELECT public.payments_manual_receipt(%L, %L::jsonb, %L, %L)', v_e,
-      '{"mode":"cheque","amount_paise":100000,"payer_name":"ZZPROBE CASH"}', v_a, v_id1),
-    'already used for a different receipt');
+      '{"mode":"cheque","amount_paise":100000,"payer_name":"ZZPROBE CASH","received_at":"2026-10-13T06:00:00Z"}', v_a, v_id1),
+    'already went through as');
+  -- Pre-mortem 2, G4: a save retried after a lost answer with a CORRECTED
+  -- name or day used to get the first receipt back, silently.
+  PERFORM pg_temp.zz_refused('2 same save, corrected payer name: refused, naming the first receipt',
+    format('SELECT public.payments_manual_receipt(%L, %L::jsonb, %L, %L)', v_e,
+      '{"mode":"cash","amount_paise":100000,"payer_name":"ZZPROBE CASH LTD","received_at":"2026-10-13T06:00:00Z"}', v_a, v_id1),
+    'already went through as CR-');
+  PERFORM pg_temp.zz_refused('2 same save, a different day: refused',
+    format('SELECT public.payments_manual_receipt(%L, %L::jsonb, %L, %L)', v_e,
+      '{"mode":"cash","amount_paise":100000,"payer_name":"ZZPROBE CASH","received_at":"2026-10-12T06:00:00Z"}', v_a, v_id1),
+    'already went through as');
+  PERFORM pg_temp.zz_refused('2 same save, a cheque number added: refused',
+    format('SELECT public.payments_manual_receipt(%L, %L::jsonb, %L, %L)', v_e,
+      '{"mode":"cash","amount_paise":100000,"payer_name":"ZZPROBE CASH","received_at":"2026-10-13T06:00:00Z","instrument_ref":"77"}', v_a, v_id1),
+    'already went through as');
+  -- "Today" is stamped with the moment of each attempt: a later minute of the
+  -- same India day is the same receipt.
+  PERFORM pg_temp.zz_check('2 same save later the same India day: still the first receipt',
+    (public.payments_manual_receipt(v_e,
+      '{"mode":"cash","amount_paise":100000,"payer_name":" ZZPROBE CASH ","received_at":"2026-10-13T12:00:00Z"}'::jsonb,
+      v_a, v_id1))->>'receipt_id' = v_r1->>'receipt_id');
+  PERFORM pg_temp.zz_check('2 the answer carries what was SAVED (for the done screen)',
+    v_r1b->>'payer_name' = 'ZZPROBE CASH' AND (v_r1b->>'amount_paise')::bigint = 100000 AND v_r1b->>'mode' = 'cash'
+    AND v_r1->>'payer_name' = 'ZZPROBE CASH', v_r1b::text);
 
   -- 3. A new save takes the NEXT number: the repeat used none up.
   v_r2 := public.payments_manual_receipt(v_e, v_row::jsonb, v_a, v_id2);
@@ -86,12 +109,13 @@ BEGIN
   v_r3 := public.payments_manual_receipt(v_e, v_row::jsonb, v_a);
   PERFORM pg_temp.zz_check('4 no save id still saves (three-argument call)', v_r3->>'receipt_id' IS NOT NULL, v_r3::text);
 
-  -- 5. Section 269ST: cash of ₹2,00,000 or more in one receipt.
-  PERFORM pg_temp.zz_refused('5 cash ₹2,00,000.00 exactly: refused',
+  -- 5. Section 269ST: cash of ₹2,00,000 or more in one receipt — refused
+  --    WITHOUT a reason; recorded and flagged WITH one (owner, 2026-10-15).
+  PERFORM pg_temp.zz_refused('5 cash ₹2,00,000.00 exactly, no reason: refused',
     format('SELECT public.payments_manual_receipt(%L, %L::jsonb, %L, %L)', v_e,
       '{"mode":"cash","amount_paise":20000000,"payer_name":"ZZPROBE BIG"}', v_a, gen_random_uuid()),
     '269ST');
-  PERFORM pg_temp.zz_refused('5 cash ₹5,00,000: refused',
+  PERFORM pg_temp.zz_refused('5 cash ₹5,00,000, no reason: refused',
     format('SELECT public.payments_manual_receipt(%L, %L::jsonb, %L, %L)', v_e,
       '{"mode":"cash","amount_paise":50000000,"payer_name":"ZZPROBE BIG"}', v_a, gen_random_uuid()),
     '269ST');
@@ -104,6 +128,18 @@ BEGIN
   PERFORM pg_temp.zz_check('5 a ₹2,50,000 cheque is not cash: accepted',
     (public.payments_manual_receipt(v_e, '{"mode":"cheque","amount_paise":25000000,"payer_name":"ZZPROBE BIG","instrument_ref":"000123"}'::jsonb,
       v_a, gen_random_uuid()))->>'receipt_id' IS NOT NULL);
+  v_r4 := public.payments_manual_receipt(v_e,
+    '{"mode":"cash","amount_paise":21000000,"payer_name":"ZZPROBE BIG","cash_limit_reason":"Taken at the counter before anyone checked"}'::jsonb,
+    v_a, gen_random_uuid());
+  PERFORM pg_temp.zz_check('5 cash ₹2,10,000 WITH a reason: recorded (the drawer and the books agree)',
+    v_r4->>'receipt_id' IS NOT NULL AND (v_r4->>'sec_269st')::boolean, v_r4::text);
+  SELECT count(*) INTO v_n FROM public.payment_events
+   WHERE receipt_id = (v_r4->>'receipt_id')::uuid AND event_type = 'manual_receipt'
+     AND (detail->>'sec_269st')::boolean AND detail->>'cash_limit_reason' = 'Taken at the counter before anyone checked';
+  PERFORM pg_temp.zz_check('5 ...and marked as a 269ST case, with its reason, for the GM', v_n = 1, v_n::text);
+  SELECT count(*) INTO v_n FROM public.payment_events
+   WHERE receipt_id = (v_r2->>'receipt_id')::uuid AND detail ? 'sec_269st';
+  PERFORM pg_temp.zz_check('5 an ordinary receipt carries no 269ST mark', v_n = 0, v_n::text);
   PERFORM pg_temp.zz_check('5 a ₹5,00,000 bank transfer: accepted',
     (public.payments_manual_receipt(v_e, '{"mode":"netbanking","amount_paise":50000000,"payer_name":"ZZPROBE BIG"}'::jsonb,
       v_a, gen_random_uuid()))->>'receipt_id' IS NOT NULL);

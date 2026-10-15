@@ -10,8 +10,9 @@
 
 import {
   CASH_MODES, CASH_LIMIT_PAISE, CASH_LIMIT_MESSAGE, refLabel, receivedAtFor, istDay,
-  checkCashForm, dayCashWarning, cashTargets,
+  checkCashForm, dayCashWarning, cashTargets, overCashLimit,
 } from '../../src/service-payments/lib/cashReceipt.js'
+import { confirmPlan } from '../../src/service-payments/lib/confirmPlan.js'
 
 let pass = 0, fail = 0
 const ok = (name, cond, detail = '') => {
@@ -41,7 +42,7 @@ section('a good entry becomes exactly the row the server takes')
   eq('no errors', errors, {})
   eq('the row', row, {
     mode: 'cash', amount_paise: 84500, received_at: NOW.toISOString(), payer_name: 'Manan Shah',
-    instrument_ref: null, outlet_id: 'o1', notes: 'job 4412',
+    instrument_ref: null, outlet_id: 'o1', notes: 'job 4412', cash_limit_reason: null,
   })
   eq('a cheque keeps its number', check({ mode: 'cheque', ref: ' 000123 ' }).row.instrument_ref, '000123')
   eq('cash never carries a reference, even one typed before switching to cash', check({ mode: 'cash', ref: '999' }).row.instrument_ref, null)
@@ -64,8 +65,17 @@ eq('errors mean no row is sent', check({ payer: '' }).row, null)
 
 section('section 269ST — ₹2 lakh in cash')
 eq('the limit is ₹2,00,000', CASH_LIMIT_PAISE, 20000000)
-ok('cash of exactly ₹2,00,000: refused on the form, in the server\'s words',
-   check({ amount: '200000' }).errors.amount === CASH_LIMIT_MESSAGE && /269ST/.test(CASH_LIMIT_MESSAGE))
+// Owner, 2026-10-15 (pre-mortem 2, G3): cash already in the drawer must reach
+// the books. At or over the line it needs a reason, never a refusal of the record.
+ok('the 269ST line is cash of ₹2,00,000 or more, never a cheque or transfer',
+   overCashLimit('cash', 20000000) && !overCashLimit('cash', 19999999) && !overCashLimit('cheque', 50000000) && !overCashLimit('netbanking', 50000000))
+ok('cash of exactly ₹2,00,000 with no reason: the form asks why (it is not refused as an amount)',
+   /Say why/.test(check({ amount: '200000' }).errors.limitReason ?? '') && !check({ amount: '200000' }).errors.amount)
+ok('...and the message on the form says the rule and what to do', /269ST/.test(CASH_LIMIT_MESSAGE) && /cheque or a bank transfer/.test(CASH_LIMIT_MESSAGE) && /flagged for the GM/.test(CASH_LIMIT_MESSAGE))
+eq('with a reason: recorded, the reason sent to the server',
+   check({ amount: '210000', limitReason: '  Taken at the counter  ' }).row?.cash_limit_reason, 'Taken at the counter')
+eq('below the line, a typed reason is not sent (nothing to flag)',
+   check({ amount: '1000', limitReason: 'x' }).row?.cash_limit_reason, null)
 ok('cash of ₹1,99,999.99: accepted', check({ amount: '199999.99' }).row?.amount_paise === 19999999)
 ok('a ₹2,50,000 cheque: accepted (not cash)', check({ mode: 'cheque', ref: '1', amount: '250000' }).row?.amount_paise === 25000000)
 ok('a ₹5,00,000 bank transfer: accepted', check({ mode: 'netbanking', amount: '500000' }).row?.amount_paise === 50000000)
@@ -85,6 +95,25 @@ eq('an earlier day: noon that day in India', receivedAtFor('2026-10-10', NOW), '
 eq('no day: now', receivedAtFor('', NOW), NOW.toISOString())
 eq('the India day of 20:00 UTC on the 12th is the 13th', istDay('2026-10-12T20:00:00.000Z'), '2026-10-13')
 eq('...and of 18:00 UTC on the 12th, still the 12th', istDay('2026-10-12T18:00:00.000Z'), '2026-10-12')
+
+section('what is placed on a picked ORDER (pre-mortem 2, G1)')
+{
+  const m = (id, kind, total, terms = 'cash', allocated = 0) => ({ id, invoice_number: id, invoice_kind: kind,
+    payment_terms: terms, invoice_date: '2026-10-08', total_paise: total, allocated_paise: allocated })
+  const order = { id: 'job:J', kind: 'job', members: [m('PCS1', 'service_parts', 615000), m('LCS2', 'service_labour', 550000)] }
+  eq('a cheque for the whole order pays both bills', cashTargets(order, 1165000),
+     [{ invoice_id: 'LCS2', amount_paise: 550000 }, { invoice_id: 'PCS1', amount_paise: 615000 }])
+  eq('short: the same order of filling as Confirm on the Match screen', cashTargets(order, 1000000),
+     [{ invoice_id: 'LCS2', amount_paise: 550000 }, { invoice_id: 'PCS1', amount_paise: 450000 }])
+  let diff = 0
+  for (let i = 0; i < 500; i++) {
+    const a = 1000 + ((i * 7919) % 400000), b = 1000 + ((i * 104729) % 400000)
+    const o = { members: [m('A', 'service_parts', a, i % 2 ? 'cash' : 'credit', (i * 13) % 900), m('B', 'service_labour', b, i % 3 ? 'credit' : 'cash')] }
+    const amt = 1 + ((i * 15485863) % 900000)
+    if (JSON.stringify(cashTargets(o, amt)) !== JSON.stringify(confirmPlan(o, amt).takes)) diff++
+  }
+  eq('500 orders: what the cash form sends = what the Match screen says Confirm sends', diff, 0)
+}
 
 section('what is placed on the picked bill')
 const bill = { id: 'b1', total_paise: 84500, allocated_paise: 0 }
