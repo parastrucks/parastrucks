@@ -778,8 +778,18 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
      ₹25,000 — ₹15,000 stays due", "Labour ₹5,500 + Parts ₹6,150 = ₹11,650 · both bills close"); ONE
      split rule `splitAcross` shared by allocationTargets and confirmPlan, compared bill by bill over
      2,000 orders (planted order bug: 858 fails). Part payment seen at 360 px; order wording not live.
+     ✅ **Pre-mortem 2 (cloud, Brief 4, the LAST cloud session) RAN — its bundle never reached the PC**
+     (the download was pre-mortem 1 again; the allowance ended). Its final report is kept verbatim in
+     `docs/backlog/service-payments-premortem-2-summary.md` with the owner's decisions: **G3 record ₹2 L
+     cash WITH a reason, flagged 269ST** (revises 13 Oct "refuse") · **G1 cash form offers the whole
+     order** · G2 leave the freed payment in Match · G6 leave old bills open · G4 fixed as a defect.
+     ✅ **Built `5ce2aa6`** (migration 8 FILE revised — not on prod; staging re-applied, body md5
+     `6994bca3…` = file **with LF line endings** — apply the LF text on prod): a repeat must match every
+     typed field; ₹2 L cash needs a reason (`payment_events.detail.sec_269st`); split rule moved to
+     `lib/confirmPlan.js`. probe-manual-receipt **32/0** (old function 4/4 fail). ⏭️ Screen check of the
+     ₹2 L box + G4 needs the owner to sign in to the pane (signed out after 2 days).
      ⏭️ **Next in the recorded order: R4-14 nav tab → R4-21 wordlist → R4-24 → R4-9 → R4-18.**
-     Brief 4 (pre-mortem 2) written for the cloud — all BEFORE item 9.
+     No more cloud sessions (owner, 2026-10-13) — all BEFORE item 9.
   8. **Multiple QRs:** when the next QR is added, map `qr_ref` → outlet and give same-outlet bills a
      small RANKING bonus (never a filter — owner rule, 2026-09-11).
   9. Then prod: **eight** migrations (`20260830`, `20260908`, `20260926_…read_gates…`,
