@@ -126,7 +126,7 @@ Unsure: I have not rendered any of this, so every px figure is from the styleshe
 
 **Build order (the cloud's ranking, which the PC agrees with):** ✅ undo list — `8838dab`, seen on staging (+ exceptions, + offer
 "Bill not raised yet" right after that reason) → ✅ R4-5 date + plate on cards (`7230a53`; SAP code kept beside the name — owner rule) → ✅ cash & cheque tab
-(+ migration 8) — `19e49ad`, seen on staging → ✅ Import clash-row Undo (`40e2f3f`; the clash is in the preview, so the cancellation lands TODAY) → ✅ R4-12 + R4-6 in the selected card (`3f7fedd`) → R4-14 nav tab →
+(+ migration 8) — `19e49ad`, seen on staging → ✅ Import clash-row Undo (`40e2f3f`; the clash is in the preview, so the cancellation lands TODAY) → ✅ R4-12 + R4-6 in the selected card (`3f7fedd`) → ✅ R4-14 nav tab (`eb970d7`) →
 R4-21 wordlist → R4-24 grey reason line → R4-9 not-service confirm + `Test / top-up` → R4-18.
 Skip's explanation: reword the existing end-screen sentence, zero lines. **Not before go-live:**
 toast Undo, a demoted-card variant, void-receipt screen, on-account / TDS / groups, history older

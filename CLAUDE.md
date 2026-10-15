@@ -792,7 +792,9 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
      details later that day → CR-00001 replayed with the saved values; corrected name / other day → refused
      naming CR-00001. Nothing created (1 manual receipt, counter 1). Whole-order choice not seen live (no
      open pair on staging).
-     ⏭️ **Next in the recorded order: R4-14 nav tab → R4-21 wordlist → R4-24 → R4-9 → R4-18.**
+     ✅ **R4-14 BUILT `eb970d7`**: service + accounts phone bar = Home · Payments (₹, gated by access rules) ·
+     + · Jobs · Profile; the + sheet is "Quick actions" (all depts); layout in `navConfig.bottomNavLayout`,
+     `selftest-bottom-nav` 13/0; seen at 360 px as tester@. ⏭️ **Next: R4-21 wordlist → R4-24 → R4-9 → R4-18.**
      No more cloud sessions (owner, 2026-10-13) — all BEFORE item 9.
   8. **Multiple QRs:** when the next QR is added, map `qr_ref` → outlet and give same-outlet bills a
      small RANKING bonus (never a filter — owner rule, 2026-09-11).
