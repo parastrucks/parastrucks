@@ -786,8 +786,12 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
      ✅ **Built `5ce2aa6`** (migration 8 FILE revised — not on prod; staging re-applied, body md5
      `6994bca3…` = file **with LF line endings** — apply the LF text on prod): a repeat must match every
      typed field; ₹2 L cash needs a reason (`payment_events.detail.sec_269st`); split rule moved to
-     `lib/confirmPlan.js`. probe-manual-receipt **32/0** (old function 4/4 fail). ⏭️ Screen check of the
-     ₹2 L box + G4 needs the owner to sign in to the pane (signed out after 2 days).
+     `lib/confirmPlan.js`. probe-manual-receipt **32/0** (old function 4/4 fail). ✅ **Seen 2026-10-15** (owner
+     signed in): ₹2,10,000 cash → amber 269ST text + "Why was the cash taken?" + "Record anyway"; Save without
+     a reason stopped on the form; Cheque hides it. Via the deployed EF with CR-00001's own save id: same
+     details later that day → CR-00001 replayed with the saved values; corrected name / other day → refused
+     naming CR-00001. Nothing created (1 manual receipt, counter 1). Whole-order choice not seen live (no
+     open pair on staging).
      ⏭️ **Next in the recorded order: R4-14 nav tab → R4-21 wordlist → R4-24 → R4-9 → R4-18.**
      No more cloud sessions (owner, 2026-10-13) — all BEFORE item 9.
   8. **Multiple QRs:** when the next QR is added, map `qr_ref` → outlet and give same-outlet bills a
