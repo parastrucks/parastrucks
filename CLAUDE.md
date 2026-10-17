@@ -43,10 +43,11 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
     **bundle never reached the PC** — the report is kept in
     `docs/backlog/service-payments-premortem-2-summary.md` with the owner's G-decisions. Get the
     independent view locally now (memory `feedback_second_opinion_cloud.md`).
-  - **⏸️ R4-21 (simpler-English wordlist) STARTED, NOTHING BUILT — waiting on three owner answers**
-    (the question dialog was dismissed): "Bill not raised yet" → "Bill not made yet"? · drop ".00"
-    when there are no paise? · sub-title → "Which bill is this payment for?" (or drop)? The rest of
-    the L5 list (`docs/backlog/redteam4-lanes/L5.md`) is same-length swaps. ⚠️ **The wordlist's
+  - **✅ R4-21 (simpler-English wordlist) BUILT `b0ed009` and seen on staging 2026-10-17.** The owner
+    said "start" without answering the three questions, so the lane's picks were used (each a
+    one-line revert): "Bill not made yet" · no ".00" when there are no paise · sub-title "Which bill
+    is this payment for?". ⚠️ **The two re-offer undo reasons must keep their exact words** — the
+    re-offer rule matches the SAVED text (a test guards it). Next: R4-24 → R4-9 → R4-18. ⚠️ **The wordlist's
     "bill number = the 10-digit number" row is WRONG** — that number is the SAP customer code.
   - ⚠️ **Prod: migration 8 must be applied with LF line endings** (staging body md5 `6994bca3…`), and
     the prod rollout is now **eight** migrations + `probe-manual-receipt.sql` (item 9).
@@ -820,7 +821,7 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
      open pair on staging).
      ✅ **R4-14 BUILT `eb970d7`**: service + accounts phone bar = Home · Payments (₹, gated by access rules) ·
      + · Jobs · Profile; the + sheet is "Quick actions" (all depts); layout in `navConfig.bottomNavLayout`,
-     `selftest-bottom-nav` 13/0; seen at 360 px as tester@. ⏸️ **R4-21 paused on three owner questions (see the 2026-10-17 state block); then R4-24 → R4-9 → R4-18.**
+     `selftest-bottom-nav` 13/0; seen at 360 px as tester@. ✅ **R4-21 BUILT `b0ed009`** (seen on staging); next **R4-24 → R4-9 → R4-18**.
      No more cloud sessions (owner, 2026-10-13) — all BEFORE item 9.
   8. **Multiple QRs:** when the next QR is added, map `qr_ref` → outlet and give same-outlet bills a
      small RANKING bonus (never a filter — owner rule, 2026-09-11).
