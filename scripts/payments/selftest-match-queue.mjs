@@ -14,7 +14,7 @@ import {
   capabilitiesFor, toMatchReceipt, orderQueue, invoiceWindow, attachCustomerCodes,
   memoryForMatcher, allocationTargets, matchSignalOf, feedIsStaleFor, searchCandidates,
   parseSearch, splitWaiting, searchPickCandidates, windowDaysFor, undoneByReceipt, undoneNote,
-  groupMatches, istDayStart, confirmPlan,
+  groupMatches, istDayStart, confirmPlan, searchPickApplies,
 } from '../../src/service-payments/lib/matchQueue.js'
 import { buildCandidateIndex, matchCandidates } from '../../src/service-payments/lib/matchCandidates.js'
 
@@ -240,6 +240,13 @@ section('the stale-bills brake fails CLOSED')
   ok('bills last landed before the payment: stale', feedIsStaleFor(r, { covered_until: '2026-08-10T09:59:00Z' }))
   ok('an unreadable coverage time: stale', feedIsStaleFor(r, { covered_until: 'soon' }))
   ok('an unreadable payment time: stale', feedIsStaleFor({ received_at: null }, { covered_until: '2026-08-11T00:00:00Z' }))
+  // Seen on staging 2026-10-17: the last payment set aside, nothing left, the
+  // page crashed reading a search pick off null (undefined === undefined).
+  ok('a search pick: nothing on screen and no pick = no pick (the crash)', searchPickApplies(null, null) === false)
+  ok('...no pick for a payment = no pick', searchPickApplies(null, { id: 'r1' }) === false)
+  ok('...a pick with no payment on screen = no pick', searchPickApplies({ receiptId: 'r1', selectedId: 'v' }, null) === false)
+  ok('...a pick for THIS payment applies', searchPickApplies({ receiptId: 'r1', selectedId: 'v' }, { id: 'r1' }) === true)
+  ok('...a pick for another payment does not', searchPickApplies({ receiptId: 'r1', selectedId: 'v' }, { id: 'r2' }) === false)
 }
 
 // ════════════════════════════════════════════════════════════════════════════

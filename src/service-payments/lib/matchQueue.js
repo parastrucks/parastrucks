@@ -329,6 +329,16 @@ export function matchSignalOf(candidate) {
  * Stale when no bill import exists at all, or when the payment arrived after
  * the last import's coverage. Fails CLOSED: an unreadable feed status is stale.
  */
+/**
+ * Whether a bill picked in search belongs to the payment on screen. Both sides
+ * must exist: once the last payment is matched both are null, and
+ * `override?.receiptId === current?.id` was `undefined === undefined` — the page
+ * then read `override.selectedId` off null and crashed (staging, 2026-10-17).
+ */
+export function searchPickApplies(override, current) {
+  return Boolean(override && current && override.receiptId === current.id)
+}
+
 export function feedIsStaleFor(receipt, invoiceFeed) {
   const covered = Date.parse(invoiceFeed?.covered_until ?? '')
   const paid = Date.parse(receipt?.received_at ?? '')

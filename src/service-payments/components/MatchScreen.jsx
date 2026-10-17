@@ -13,7 +13,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { formatINR } from '../lib/paise.js'
-import { cardReasons, billLine, BOUNCE_REASONS, NOT_SERVICE_KINDS } from '../lib/signalLabels.js'
+import { cardReasons, billLine, BOUNCE_REASONS, notServiceKindsFor } from '../lib/signalLabels.js'
 import { REFRESHING, confirmPlan } from '../lib/matchQueue.js'
 
 /**
@@ -63,6 +63,9 @@ export default function MatchScreen({
   const [selectedId, setSelectedId] = useState(initialSelectedId)
   const [menuOpen, setMenuOpen] = useState(false)
   const [waitOpen, setWaitOpen] = useState(false)
+  // A not-service reason is PICKED, like a bill, and acted on from the bar —
+  // one tap on a reason used to set the money aside at once (R4-9).
+  const [asideKind, setAsideKind] = useState(null)
   // What a way-out opens renders below all three buttons — at 360px that is
   // under the confirm bar, and the tap looked like it did nothing (R4-15).
   const openedRef = useRef(null)
@@ -103,6 +106,9 @@ export default function MatchScreen({
   // a lie told at the exact moment someone is deciding about money.
   // …and what happens to the rest: the same split Confirm sends (R4-6, R4-12).
   const plan = selected ? confirmPlan(selected, receipt.amount_paise) : null
+  const kinds = notServiceKindsFor(receipt.amount_paise)
+  const aside = onNotService ? kinds.find((k) => k.value === asideKind) ?? null : null
+  const closeReasons = () => { setMenuOpen(false); setAsideKind(null) }
 
   return (
     <div className="pay-match">
@@ -170,7 +176,7 @@ export default function MatchScreen({
                 className={`pay-candidate${isSel ? ' is-selected' : ''}`}
                 aria-pressed={isSel}
                 disabled={busy}
-                onClick={() => setSelectedId(isSel ? null : c.id)}
+                onClick={() => { setSelectedId(isSel ? null : c.id); closeReasons() }}
                 // At a PC, Enter on the picked card goes to Confirm instead of
                 // un-picking it (red team 4, R4-23). Taps are unchanged.
                 onKeyDown={(e) => {
@@ -223,18 +229,17 @@ export default function MatchScreen({
           type="button"
           className="pay-confirm"
           ref={confirmRef}
-          disabled={!selected || busy || feedIsStale}
-          onClick={() => selected && onConfirm?.(selected)}
+          // Setting money aside needs no bills, so stale bills do not stop it.
+          disabled={busy || (aside ? false : (!selected || feedIsStale))}
+          onClick={() => {
+            if (aside) { const kind = aside.value; closeReasons(); onNotService(kind) }
+            else if (selected) onConfirm?.(selected)
+          }}
         >
-          {/* Stale wins over a pick: "Confirm ₹1,930" on a dead button reads as
-              broken (R4-10). */}
-          {busy
-            ? (pendingId === REFRESHING ? 'Updating the list…' : 'Saving…')
-            : feedIsStale
-              ? 'Confirm is off — bills not loaded yet'
-              : selected
-                ? plan.button
-                : candidates.length ? 'Pick a bill above' : 'Nothing to confirm'}
+          {confirmBarLabel({
+            busy, refreshing: pendingId === REFRESHING, feedIsStale, aside,
+            amountPaise: receipt.amount_paise, button: plan?.button ?? null, hasCandidates: candidates.length > 0,
+          })}
         </button>
         <button type="button" className="pay-skip" onClick={onSkip} disabled={busy}>
           Skip for now
@@ -250,7 +255,7 @@ export default function MatchScreen({
         )}
         {onHoldAdvance && (
           <button type="button" className="pay-secondary" aria-expanded={waitOpen}
-                  onClick={() => { setMenuOpen(false); setWaitOpen((v) => !v) }} disabled={busy}>
+                  onClick={() => { closeReasons(); setWaitOpen((v) => !v) }} disabled={busy}>
             {receipt.awaiting_invoice ? 'Bill still not made' : 'Bill not made yet'}
           </button>
         )}
@@ -258,7 +263,7 @@ export default function MatchScreen({
           type="button"
           className="pay-secondary"
           aria-expanded={menuOpen}
-          onClick={() => { setWaitOpen(false); setMenuOpen((v) => !v) }}
+          onClick={() => { setWaitOpen(false); setAsideKind(null); setMenuOpen((v) => !v) }}
           disabled={busy}
         >
           Not a service payment
@@ -304,13 +309,15 @@ export default function MatchScreen({
 
       {menuOpen && onNotService && (
         <ul className="pay-reasons" aria-label="What kind of payment is this?" ref={openedRef}>
-          {NOT_SERVICE_KINDS.map((k) => (
+          {kinds.map((k) => (
             <li key={k.value}>
               <button
                 type="button"
-                className="pay-reason"
+                className={`pay-reason${k.value === asideKind ? ' is-picked' : ''}`}
+                aria-pressed={k.value === asideKind}
                 disabled={busy}
-                onClick={() => { setMenuOpen(false); onNotService(k.value) }}
+                // Picks; the bar does it. A picked bill is let go — one action at a time.
+                onClick={() => { setSelectedId(null); setAsideKind(k.value === asideKind ? null : k.value) }}
               >
                 {k.label}
               </button>
@@ -322,6 +329,20 @@ export default function MatchScreen({
       {footer}
     </div>
   )
+}
+
+/**
+ * What the confirm bar's button says. Exported so the words can be checked
+ * without a browser. Stale bills win over a picked bill — "Confirm ₹1,930" on
+ * a dead button reads as broken (R4-10) — but not over a picked not-service
+ * reason, which needs no bills.
+ */
+export function confirmBarLabel({ busy, refreshing, feedIsStale, aside, amountPaise, button, hasCandidates }) {
+  if (busy) return refreshing ? 'Updating the list…' : 'Saving…'
+  if (aside) return `Set aside ${formatINR(amountPaise)} — not service`
+  if (feedIsStale) return 'Confirm is off — bills not loaded yet'
+  if (button) return button
+  return hasCandidates ? 'Pick a bill above' : 'Nothing to confirm'
 }
 
 function sourceLabel(source) {

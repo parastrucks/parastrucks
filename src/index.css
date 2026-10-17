@@ -3443,6 +3443,14 @@ tbody tr:hover td { background: var(--gray-50); }
   cursor: pointer;
 }
 .pay-reason:hover { background: var(--gray-50); }
+/* A picked not-service reason looks like a picked bill: the bar acts on it (R4-9). */
+.pay-reason.is-picked {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 2px var(--accent-ring);
+  background: var(--blue-lighter);
+  font-weight: 600;
+}
+.pay-reason.is-picked::before { content: '✓ '; color: var(--blue); font-weight: 700; }
 
 /* The thumb zone. Sticky at the bottom on every width — on a phone because it
    is the only place a thumb reaches without regripping, and on desktop because

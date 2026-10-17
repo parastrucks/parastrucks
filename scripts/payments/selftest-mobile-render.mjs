@@ -24,8 +24,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { createElement as h } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server.browser'
-import MatchScreen from '../../src/service-payments/components/MatchScreen.jsx'
-import { signalLabel, UNDO_REASONS, REOFFER_REASONS } from '../../src/service-payments/lib/signalLabels.js'
+import MatchScreen, { confirmBarLabel } from '../../src/service-payments/components/MatchScreen.jsx'
+import { signalLabel, UNDO_REASONS, REOFFER_REASONS, notServiceKindsFor } from '../../src/service-payments/lib/signalLabels.js'
 import MatchedFold from '../../src/service-payments/components/MatchedFold.jsx'
 
 let pass = 0, fail = 0
@@ -403,6 +403,30 @@ section('red team 4 — order, announcements and dates')
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+section('R4-9 — "Not a service payment" is picked, then set aside from the bar')
+{
+  const eq = (label, got, want) => ok(label, got === want, `expected ${JSON.stringify(want)}, got ${JSON.stringify(got)}`)
+  const bar = (o) => confirmBarLabel({ busy: false, refreshing: false, feedIsStale: false, aside: null,
+    amountPaise: 3000, button: null, hasCandidates: false, ...o })
+  const kind = { value: 'sister_unit', label: 'Sister concern / group company' }
+  eq('a picked reason turns the bar into the action', bar({ aside: kind }), 'Set aside ₹30 — not service')
+  eq('...even while bills are out of date (setting money aside needs no bill)', bar({ aside: kind, feedIsStale: true }), 'Set aside ₹30 — not service')
+  eq('...and "Saving…" still wins while it is written', bar({ aside: kind, busy: true }), 'Saving…')
+  eq('with nothing picked the bar is unchanged', bar({ hasCandidates: true }), 'Pick a bill above')
+  eq('stale bills still stop a picked BILL', bar({ feedIsStale: true, button: 'Confirm ₹1,930' }), 'Confirm is off — bills not loaded yet')
+  const has = (paise) => notServiceKindsFor(paise).some((k) => k.value === 'test_topup')
+  ok('"Test or top-up" is offered for ₹30', has(3000))
+  ok('...and for exactly ₹50 (the Import preview\'s line)', has(5000))
+  ok('...but not for ₹50.01 — "test" must not make real money disappear', !has(5001))
+  ok('every other reason is offered at any amount', notServiceKindsFor(10000000).length === notServiceKindsFor(0).length - 1)
+  // A tap on a reason used to set the money aside at once. Now it only picks.
+  const src = fs.readFileSync(path.join(process.cwd(), 'src/service-payments/components/MatchScreen.jsx'), 'utf8')
+  const reasonsBlock = src.slice(src.indexOf('className="pay-reasons"'), src.indexOf('{footer}', src.indexOf('className="pay-reasons"')))
+  ok('tapping a reason never calls the server by itself', reasonsBlock.length > 0 && !reasonsBlock.includes('onNotService('))
+  ok('...a picked reason says so to a screen reader', reasonsBlock.includes('aria-pressed'))
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 section('the empty state is an ending, not a blank page')
 {
   const html = render({ receipt: null, doneToday: 18 })
@@ -489,6 +513,7 @@ section('the CSS contract — a phone claim that HTML cannot prove')
   ok('disabled Confirm is readable (no white text on light grey)',
      /color:\s*var\(--gray-600\)/.test((css.match(/\.pay-confirm:disabled\s*\{([^}]*)\}/) || [])[1] || ''))
 
+  ok('a picked not-service reason looks picked', /\.pay-reason\.is-picked \{[^}]*background: var\(--blue-lighter\)/.test(css))
   // R4-24: a blue reason line read as a link and was tapped first.
   {
     const why = block('.pay-candidate-why')

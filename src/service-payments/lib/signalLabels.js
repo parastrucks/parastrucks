@@ -7,6 +7,8 @@
 // person disagree with it — a reason you cannot read is a reason you cannot
 // check, which turns a shortlist back into a guess.
 
+import { SMALL_AMOUNT_PAISE } from './parseUpi.js'
+
 /** A name overlap scoring below this (out of 25) shares only common words. */
 export const NAME_SIMILAR_FLOOR = 5
 
@@ -169,10 +171,20 @@ export const UNDO_REASONS = [
 
 export const REOFFER_REASONS = new Set(UNDO_REASONS.filter((r) => r.reoffer).map((r) => r.label))
 
+// `maxPaise`: offered only up to this amount. A ₹1 test scan sat in the queue
+// for 27 days in the pre-mortem's simulation with no reason that fitted it;
+// on a ₹5,000 payment "test" would be a way to make money disappear.
 export const NOT_SERVICE_KINDS = [
   { value: 'vehicle_booking', label: 'Vehicle booking advance' },
   { value: 'sister_unit', label: 'Sister concern / group company' },
   { value: 'refund_return', label: 'Refund returned to us' },
+  // The same ₹50 line the Import preview flags as "a test or a top-up".
+  { value: 'test_topup', label: 'Test or top-up (₹50 or less)', maxPaise: SMALL_AMOUNT_PAISE },
   { value: 'personal', label: 'Not a customer payment' },
   { value: 'other', label: 'Something else' },
 ]
+
+/** The not-service reasons that fit a payment of this amount. */
+export function notServiceKindsFor(amountPaise) {
+  return NOT_SERVICE_KINDS.filter((k) => k.maxPaise == null || amountPaise <= k.maxPaise)
+}

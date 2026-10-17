@@ -22,7 +22,7 @@ import { buildCandidateIndex, matchCandidates, DEFAULT_WINDOW_DAYS } from '../li
 import {
   capabilitiesFor, toMatchReceipt, orderQueue, splitWaiting, invoiceWindow, attachCustomerCodes,
   memoryForMatcher, allocationTargets, matchSignalOf, feedIsStaleFor, searchPickCandidates, REFRESHING, windowDaysFor,
-  undoneByReceipt, undoneNote, groupMatches, istDayStart,
+  undoneByReceipt, undoneNote, groupMatches, istDayStart, searchPickApplies,
 } from '../lib/matchQueue.js'
 import {
   fetchPaymentsEntityId, fetchDepartmentCode, fetchOpenReceipts, fetchOpenInvoices,
@@ -571,6 +571,9 @@ export default function PaymentsPage() {
     )
   }
 
+  // Null-safe: the last payment matched used to crash this line (matchQueue.js).
+  const searchPicked = searchPickApplies(override, current)
+
   return (
     <div className="page">
       {header}
@@ -583,7 +586,7 @@ export default function PaymentsPage() {
       <MatchScreen
         // A new receipt, or a new list for the same one, starts with nothing
         // picked — a selection must never carry over to a different bill.
-        key={`${current?.id ?? 'none'}:${current?.amount_paise ?? 0}:${override?.receiptId === current?.id ? 'search' : 'shortlist'}`}
+        key={`${current?.id ?? 'none'}:${current?.amount_paise ?? 0}:${searchPicked ? 'search' : 'shortlist'}`}
         receipt={current}
         result={result}
         remaining={pool.length}
@@ -596,7 +599,7 @@ export default function PaymentsPage() {
         onNotService={caps?.canClassify ? handleNotService : undefined}
         onSearch={() => setSearching(true)}
         onHoldAdvance={current && caps?.canMarkWaiting(current.mode) ? handleWaiting : undefined}
-        initialSelectedId={override?.receiptId === current?.id ? override.selectedId ?? null : null}
+        initialSelectedId={searchPicked ? override.selectedId ?? null : null}
         footer={matchedFold(!current)}
       />
     </div>
