@@ -146,7 +146,7 @@ export function diffInvoices(parsed, existing) {
       // cancellation goes through (ImportPanel "Undo this match").
       out.conflict.push({
         row: v,
-        reason: `SAP now marks it ${status}, but ₹${(e.allocated_paise / 100).toLocaleString('en-IN')} is already matched to it — reverse that match first`,
+        reason: `SAP now marks it ${status}, but ₹${(e.allocated_paise / 100).toLocaleString('en-IN')} is already matched to it — undo that match first`,
         kind: 'cancelled_under_money',
         invoice_id: e.id ?? null,
         matched_paise: e.allocated_paise,
@@ -249,8 +249,8 @@ export function importGates({ kind, parsed, diff, priorBatch, entityPlants = Obj
   const warnings = []
 
   if (priorBatch) {
-    blocking.push(`This exact file was already imported${priorBatch.uploaded_at ? ` on ${istStamp(priorBatch.uploaded_at)}` : ''}` +
-      `${priorBatch.file_name ? ` as “${priorBatch.file_name}”` : ''}. Nothing in it is new.`)
+    blocking.push(`This file was already imported${priorBatch.uploaded_at ? ` on ${istStamp(priorBatch.uploaded_at)}` : ''}` +
+      `${priorBatch.file_name ? ` as “${priorBatch.file_name}”` : ''}. Choose a newer file.`)
   }
 
   if (kind === 'billing_report') {
@@ -267,8 +267,8 @@ export function importGates({ kind, parsed, diff, priorBatch, entityPlants = Obj
     if (diff?.conflict.length) {
       const one = diff.conflict.length === 1
       warnings.push(one
-        ? '1 bill clashes with what is stored and will be left as it is (listed below).'
-        : `${diff.conflict.length} bills clash with what is stored and will be left as they are (listed below).`)
+        ? '1 bill does not agree with the saved one and will not be changed (listed below).'
+        : `${diff.conflict.length} bills do not agree with the saved ones and will not be changed (listed below).`)
     }
     if (diff?.held.length) {
       const one = diff.held.length === 1

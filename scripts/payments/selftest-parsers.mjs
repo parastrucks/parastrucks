@@ -87,8 +87,16 @@ throws('NaN is refused',          () => rupeeStringToPaise(NaN), 'not finite')
 eq('back to a string',   paiseToRupeeString(926387), '9263.87')
 eq('pads the paise',     paiseToRupeeString(193000), '1930.00')
 eq('negative round-trip', paiseToRupeeString(-5025), '-50.25')
-eq('Indian grouping',    formatINR(1930000000), '₹1,93,00,000.00')
-eq('small amount',       formatINR(3000), '₹30.00')
+// No ".00" when there are no paise (red team 4, L5-18) — but paise that are
+// there are never dropped, and a wanted ".00" is still available.
+eq('Indian grouping',    formatINR(1930000000), '₹1,93,00,000')
+eq('small amount',       formatINR(3000), '₹30')
+eq('paise are shown when there are some', formatINR(1234567), '₹12,345.67')
+eq('...one paisa too',   formatINR(193001), '₹1,930.01')
+eq('...and ten',         formatINR(193010), '₹1,930.10')
+eq('negative with paise', formatINR(-5025), '-₹50.25')
+eq('{ paise: true } keeps .00', formatINR(193000, { paise: true }), '₹1,930.00')
+eq('zero',               formatINR(0), '₹0')
 throws('a float is not paise', () => assertPaise(19.3), 'integer number of paise')
 
 // ════════════════════════════════════════════════════════════════════════════

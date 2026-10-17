@@ -68,8 +68,13 @@ export function paiseToRupeeString(paise) {
   return `${neg ? '-' : ''}${Math.floor(abs / 100)}.${String(abs % 100).padStart(2, '0')}`
 }
 
-/** Integer paise -> "₹1,930.00", Indian digit grouping, for the screen. */
-export function formatINR(paise, { symbol = true } = {}) {
+/**
+ * Integer paise -> "₹1,930" or "₹12,345.67", Indian digit grouping, for the
+ * screen. Paise are shown only when there are some: ".00" eleven times on one
+ * screen is noise, and a bill is said aloud as "nineteen thirty" (red team 4,
+ * L5-18). `paise: true` always shows them.
+ */
+export function formatINR(paise, { symbol = true, paise: always = false } = {}) {
   assertPaise(paise)
   const neg = paise < 0
   const abs = Math.abs(paise)
@@ -82,7 +87,7 @@ export function formatINR(paise, { symbol = true } = {}) {
   const tail = r.length > 3 ? r.slice(-3) : r
   const grouped = head ? `${head.replace(/\B(?=(\d{2})+(?!\d))/g, ',')},${tail}` : tail
 
-  return `${neg ? '-' : ''}${symbol ? '₹' : ''}${grouped}.${frac}`
+  return `${neg ? '-' : ''}${symbol ? '₹' : ''}${grouped}${always || frac !== '00' ? `.${frac}` : ''}`
 }
 
 /** Throws unless `v` is a safe integer — the guard every RPC boundary uses. */

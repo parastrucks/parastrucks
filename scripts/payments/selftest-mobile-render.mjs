@@ -54,8 +54,8 @@ const render = (props) => renderToStaticMarkup(h(MatchScreen, props))
 section('the receipt leads, and the amount is the biggest thing on it')
 {
   const html = render({ receipt, result: { candidates: [candidate()], reason: '' }, remaining: 12 })
-  ok('the amount is rendered', html.includes('₹1,930.00'))
-  ok('as the receipt headline', /class="pay-receipt-amount">₹1,930\.00</.test(html))
+  ok('the amount is rendered', html.includes('₹1,930'))
+  ok('as the receipt headline', /class="pay-receipt-amount">₹1,930</.test(html))
   ok('the payer is named', html.includes('NARENDER YADAV'))
   ok('the source is in words, not a code', html.includes('Google Pay') && !html.includes('>gpay<'))
   ok('the note the customer typed is shown verbatim', html.includes('9044 bill'))
@@ -85,7 +85,7 @@ section('every candidate says WHY, in words a person can disagree with')
   // used to expect "3 other" — it had copied the code's off-by-one, found on
   // the first browser run (a pair read "same amount as 2 other bills").
   ok('an ambiguous amount says how many OTHERS (3 at the amount = 2 others)', html.includes('Same amount as 2 other bills'))
-  ok('payer memory is explained in plain words', html.includes('has paid for them before'))
+  ok('payer memory is explained in plain words', html.includes('Has paid this customer’s bills before'))
   // The internal signal names are for the audit log, never the counter.
   for (const jargon of ['amount_unique', 'amount_ambiguous', 'reg_last4', 'payer_memory', 'name_overlap']) {
     ok(`the internal name "${jargon}" never reaches the screen`, !html.includes(jargon))
@@ -98,7 +98,7 @@ section('every candidate says WHY, in words a person can disagree with')
     candidate({ signals: [{ signal: 'amount_ambiguous', detail: '5 bills at this amount' },
                           { signal: 'name_overlap', detail: '4/25 same' }] }),
   ] } })
-  ok('the SAME name says it matches, whatever its rarity score', html.includes('Payer name matches the customer') && !html.includes('similar'))
+  ok('the SAME name says it matches, whatever its rarity score', html.includes('Name matches the bill') && !html.includes('close to'))
 }
 {
   const html = render({
@@ -150,7 +150,7 @@ section('money is never confirmed by accident')
   ok('and confirm is disabled outright', /class="pay-confirm"[^>]*disabled/.test(html))
 }
 {
-  // R4-10: a pick used to turn the dead button into "Confirm ₹1,930.00".
+  // R4-10: a pick used to turn the dead button into "Confirm ₹1,930".
   const html = render({ receipt, result: { candidates: [candidate()] }, feedIsStale: true, initialSelectedId: 'c1' })
   ok('while stale, even a picked bill shows "Confirm is off", not an amount',
      html.includes('Confirm is off') && !/class="pay-confirm"[^>]*>Confirm ₹/.test(html))
@@ -159,7 +159,7 @@ section('money is never confirmed by accident')
   // R4-20: a bill found by search comes back picked; Confirm stays a tap.
   const html = render({ receipt, result: { candidates: [candidate()] }, initialSelectedId: 'c1' })
   ok('a bill already chosen in search arrives selected', html.includes('is-selected') && html.includes('aria-pressed="true"'))
-  ok('...and Confirm names the amount, still waiting for the tap', html.includes('Confirm ₹1,930.00'))
+  ok('...and Confirm names the amount, still waiting for the tap', html.includes('Confirm ₹1,930'))
 }
 {
   const html = render({ receipt, result: { candidates: [candidate()] }, pendingId: 'c1' })
@@ -176,8 +176,15 @@ section('the ways out stay on screen')
     onSearch: noop, onHoldAdvance: noop, onNotService: noop, onSkip: noop })
   // Someone who cannot find "this is not a service payment" will pick a bill
   // instead — and that is a wrong entry on a real customer's ledger.
-  ok('search all bills', html.includes('Search all bills'))
-  ok('hold it as an advance', html.includes('Bill not raised yet'))
+  ok('search bills', html.includes('Search bills'))
+  ok('hold it as an advance', html.includes('Bill not made yet'))
+  // The L5 wordlist: none of the old words is left on a working screen.
+  // (Only words this screen showed before — each of these fails on the old code.)
+  for (const old of ['raised', 'exact amount', '.00<']) {
+    ok(`no "${old}" on the Match screen`, !html.includes(old))
+  }
+  const hdfc = render({ receipt: { ...receipt, source: 'hdfc' }, onSkip: noop })
+  ok('an HDFC payment says "Paid by QR", not the bank', hdfc.includes('Paid by QR') && !hdfc.includes('HDFC QR'))
   ok('mark it not-service', html.includes('Not a service payment'))
   ok('and skip', html.includes('Skip for now'))
 }
@@ -190,26 +197,26 @@ section('"bill not raised yet" — offered only when allowed, and a waiting paym
   let html = render({ ...base, receipt })
   ok('hidden when the container does not allow it (e.g. a service executive on cash)', !html.includes('Bill not raised yet'))
   html = render({ ...base, receipt, onHoldAdvance: noop })
-  ok('shown when allowed', html.includes('Bill not raised yet') && !html.includes('Still not raised'))
+  ok('shown when allowed', html.includes('Bill not made yet') && !html.includes('Bill still not made'))
   ok('an ordinary payment carries no waiting note', !html.includes('pay-receipt-waiting'))
 
   html = render({ ...base, onHoldAdvance: noop,
     receipt: { ...receipt, awaiting_invoice: true, awaiting_since: '2026-10-10T06:00:00.000Z' } })
   ok('a waiting payment shows the amber note, with the day it started waiting',
      html.includes('pay-receipt-waiting') && html.includes('Waiting for its bill since 10 Oct'))
-  ok('...and the button becomes "Still not raised"', html.includes('Still not raised') && !html.includes('Bill not raised yet'))
+  ok('...and the button becomes "Bill still not made"', html.includes('Bill still not made') && !html.includes('Bill not made yet'))
 
   html = render({ ...base, onHoldAdvance: noop,
     receipt: { ...receipt, awaiting_invoice: true, awaiting_since: '2026-10-10T06:00:00.000Z', back_for_new_bill: true } })
   ok('one that came back says WHY it is in today\'s list again',
-     html.includes('a bill imported since could be it'))
+     html.includes('A new bill may be its bill'))
 
   // A waiting payment looks up to today, so "within 3 days" is untrue for it.
   html = render({ onSkip: noop, onHoldAdvance: noop,
     result: { candidates: [], reason: 'No open bill within 3 days at this amount. Search by name or amount, or skip it for now.' },
     receipt: { ...receipt, awaiting_invoice: true, awaiting_since: '2026-10-10T06:00:00.000Z' } })
   ok('a waiting payment with no bill yet is told the truth, not "within 3 days"',
-     html.includes('No bill for it yet') && !html.includes('within 3 days'))
+     html.includes('No bill yet. It stays waiting') && !html.includes('within 3 days'))
   html = render({ onSkip: noop, result: { candidates: [], reason: 'No open bill within 3 days at this amount.' }, receipt })
   ok('...an ordinary payment keeps the matcher\'s wording', html.includes('within 3 days'))
 }
@@ -233,10 +240,10 @@ section('a part-matched payment says what is left, and of how much')
     receipt: { ...receipt, amount_paise: 400000, face_paise: 1000000, partly_matched: true },
     result: { candidates: [candidate()] },
   })
-  ok('the headline is what is still to place', /class="pay-receipt-amount">₹4,000\.00</.test(html))
+  ok('the headline is what is still to place', /class="pay-receipt-amount">₹4,000</.test(html))
   // "left of ₹10,000" read as a position (R4-6): say what the big number is.
   ok('and it says what the big number is, and how much is already matched',
-     html.includes('still to match · ₹6,000.00 of this ₹10,000.00 payment is already matched') && !html.includes('left of'))
+     html.includes('still to match. ₹6,000 of this ₹10,000 payment is already matched.') && !html.includes('left of'))
 }
 {
   const html = render({ receipt, result: { candidates: [candidate()] } })
@@ -270,18 +277,18 @@ section('R4-6 / R4-12 — the picked card says what Confirm does')
   let html = render({ receipt: r10k, result: { candidates: [big] }, onSearch: noop })
   ok('unpicked: no plan line (the list is unchanged)', !html.includes('pay-candidate-plan'))
   html = render({ receipt: r10k, result: { candidates: [big] }, onSearch: noop, initialSelectedId: 'big' })
-  ok('picked, part paid: "₹15,000.00 stays due, the bill stays open"',
-     html.includes('class="pay-candidate-plan">₹10,000.00 of ₹25,000.00 — ₹15,000.00 stays due, the bill stays open<'))
-  ok('...and the button says it too, not "part-paid"', html.includes('Confirm ₹10,000.00 · ₹15,000.00 still due') && !html.includes('part-paid'))
+  ok('picked, part paid: "₹15,000 stays due, the bill stays open"',
+     html.includes('class="pay-candidate-plan">₹10,000 of ₹25,000 — ₹15,000 stays due, the bill stays open<'))
+  ok('...and the button says it too, not "part-paid"', html.includes('Confirm ₹10,000 · ₹15,000 still due') && !html.includes('part-paid'))
   const job = candidate({ id: 'job:J', kind: 'job', member_count: 2, label: '2 bills · order J', invoice_number: 'PCS1 + LCS2',
     amount_paise: 1165000, members: [m('PCS1', 'service_parts', 615000), m('LCS2', 'service_labour', 550000)] })
   html = render({ receipt: { ...receipt, amount_paise: 1165000 }, result: { candidates: [job] }, onSearch: noop, initialSelectedId: 'job:J' })
   ok('picked order: each bill by kind and amount, the sum, "both bills close"',
-     html.includes('Labour ₹5,500.00 + Parts ₹6,150.00 = ₹11,650.00 · both bills close') || html.includes('Parts ₹6,150.00 + Labour ₹5,500.00 = ₹11,650.00 · both bills close'))
-  ok('...button "Confirm ₹11,650.00 · 2 bills"', html.includes('Confirm ₹11,650.00 · 2 bills'))
+     html.includes('Labour ₹5,500 + Parts ₹6,150 = ₹11,650 · both bills close') || html.includes('Parts ₹6,150 + Labour ₹5,500 = ₹11,650 · both bills close'))
+  ok('...button "Confirm ₹11,650 · 2 bills"', html.includes('Confirm ₹11,650 · 2 bills'))
   html = render({ receipt: { ...receipt, amount_paise: 193000 }, result: { candidates: [candidate({ members: [m('MPI1', 'counter_sale', 193000)] })] },
                   onSearch: noop, initialSelectedId: 'c1' })
-  ok('picked, paid exactly: no extra line at all', !html.includes('pay-candidate-plan') && html.includes('Confirm ₹1,930.00<'))
+  ok('picked, paid exactly: no extra line at all', !html.includes('pay-candidate-plan') && html.includes('Confirm ₹1,930<'))
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -327,7 +334,7 @@ section('"Matched today" — the fold a wrong match is undone from')
   ok('closed by default under a payment (one line, below everything)', /<details class="pay-import-fold pay-matched-fold">/.test(html))
   ok('a service person reads "You matched today: 1"', html.includes('You matched today: 1'))
   ok('the row says money, payer and bill — and when, on India\'s clock',
-     html.includes('₹3,400.00') && html.includes('MEHUL SHAH → DEMO INDU SPARES') && html.includes('MPI6370260009006') && /9:41\s?am/i.test(html))
+     html.includes('₹3,400') && html.includes('MEHUL SHAH → DEMO INDU SPARES') && html.includes('MPI6370260009006') && /9:41\s?am/i.test(html))
   ok('their own row has an Undo button', />Undo</.test(html))
   ok('no reasons until Undo is tapped (nothing is undone by one stray tap)', !html.includes('Why undo it?'))
   html = fold({ groups: [g()], defaultOpen: true, seesAll: true })
@@ -350,7 +357,13 @@ section('"Matched today" — the fold a wrong match is undone from')
      REOFFER_REASONS.has('Undo by mistake — offer it again') && REOFFER_REASONS.has('Match again with a different amount'))
   ok('"Bill cancelled in SAP" is accounts\' alone; "Bill not raised yet" also marks it waiting',
      UNDO_REASONS.find((r) => r.label === 'Bill cancelled in SAP')?.accountsOnly === true &&
-     UNDO_REASONS.find((r) => /^Bill not raised yet/.test(r.label))?.waits === true)
+     UNDO_REASONS.find((r) => /^Bill not made yet/.test(r.label))?.waits === true)
+  // The re-offer rule finds these two by their SAVED text (matchQueue
+  // undoneByReceipt): reword one and every earlier undo with it stops being
+  // re-offered. They must stay word for word (R4-21).
+  ok('the two re-offer reasons keep their saved wording',
+     JSON.stringify(UNDO_REASONS.filter((r) => r.reoffer).map((r) => r.label)) ===
+     JSON.stringify(['Undo by mistake — offer it again', 'Match again with a different amount']))
 
   // The fold rides INSIDE the Match screen, so it keeps the room the fixed
   // confirm bar leaves; placed after it, its last line sat under the bar.
@@ -373,13 +386,13 @@ section('red team 4 — order, announcements and dates')
   // so its place in the markup is only the keyboard / screen-reader order.
   ok('Confirm comes right after the bills in reading and Tab order',
      html.indexOf('class="pay-confirm"') > html.indexOf('pay-candidates') &&
-     html.indexOf('class="pay-confirm"') < html.indexOf('Search all bills'))
+     html.indexOf('class="pay-confirm"') < html.indexOf('Search bills'))
   // R4-26: "Saving…" was announced by nothing.
   ok('the confirm bar announces its changes politely', /class="pay-confirmbar" aria-live="polite"/.test(html))
   // R4-30: "Billed yesterday" — from today, or from the payment?
-  ok('after a bill was left out, the next one says "Only other bill at this amount in 3 days"',
-     signalLabel({ signal: 'amount_unique', detail: 'only other bill at this amount' }) === 'Only other bill at this amount in 3 days' &&
-     signalLabel({ signal: 'amount_unique', detail: 'only bill at this amount' }) === 'Only bill at this exact amount')
+  ok('after a bill was left out, the next one says "Only other bill of this amount in 3 days"',
+     signalLabel({ signal: 'amount_unique', detail: 'only other bill at this amount' }) === 'Only other bill of this amount in 3 days' &&
+     signalLabel({ signal: 'amount_unique', detail: 'only bill at this amount' }) === 'Only bill of this amount')
   ok('a date reason says it is counted from the payment',
      signalLabel({ signal: 'date', detail: '1d' }) === 'Billed the day before the payment' &&
      signalLabel({ signal: 'date', detail: '3d' }) === 'Billed 3 days before the payment' &&
@@ -395,7 +408,7 @@ section('the empty state is an ending, not a blank page')
   const html = render({ receipt: null, doneToday: 18 })
   ok('it says the work is finished', html.includes('Nothing left to match'))
   ok('it credits what was done', html.includes('18 payments matched'))
-  ok('and says what brings more', html.includes('imported'))
+  ok('and says what brings more', html.includes('after accounts loads them'))
 }
 {
   const html = render({ receipt: null, doneToday: 1 })

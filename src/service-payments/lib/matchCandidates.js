@@ -344,10 +344,10 @@ export function matchCandidates(receipt, index, {
   const refuse = Boolean(tied && !hasStrong)
 
   let reason = ''
-  if (feedIsStale) reason = 'The invoice feed is out of date — confirm is disabled until fresh bills land.'
+  if (feedIsStale) reason = 'Confirm is off until today’s bills are loaded.'
   else if (!top.length) reason = hidden
-    ? 'No other open bill within 3 days at this amount — the bill it was taken off is not offered again. Search by name or amount, or skip it for now.'
-    : 'No open bill within 3 days at this amount. Search by name or amount, or skip it for now.'
+    ? 'No other unpaid bill of this amount within 3 days of the payment — the bill it was taken off is not offered again. Search by name or amount, or skip.'
+    : 'No unpaid bill of this amount within 3 days of the payment. Search by name or amount, or skip.'
   else if (refuse) reason = `${top.length} bills look equally likely. Pick the one you recognise — they are not ranked.` +
     (hidden ? ' The bill this payment was taken off before is not offered again.' : '')
   else if (hidden) reason = 'The bill this payment was taken off before is not offered again.'

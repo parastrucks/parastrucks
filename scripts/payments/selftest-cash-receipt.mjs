@@ -82,7 +82,7 @@ ok('a ₹5,00,000 bank transfer: accepted', check({ mode: 'netbanking', amount: 
 {
   const w = dayCashWarning('cash', 6000000, 15000000, 'Manan Shah', '2026-10-13')
   ok('₹1,50,000 already + ₹60,000 now: warned, with the day\'s total',
-     /Manan Shah's cash on 13 Oct comes to ₹2,10,000\.00/.test(w) && /₹1,50,000\.00 already entered/.test(w) && /269ST/.test(w), w)
+     /Manan Shah's cash on 13 Oct comes to ₹2,10,000 /.test(w) && /₹1,50,000 already entered/.test(w) && /269ST/.test(w), w)
   eq('₹1,00,000 already + ₹50,000 now: no warning', dayCashWarning('cash', 5000000, 10000000, 'X', '2026-10-13'), '')
   eq('...landing exactly on ₹2,00,000 IS warned', Boolean(dayCashWarning('cash', 5000000, 15000000, 'X', '2026-10-13')), true)
   eq('a cheque is never warned', dayCashWarning('cheque', 6000000, 15000000, 'X', '2026-10-13'), '')

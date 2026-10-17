@@ -57,7 +57,7 @@ section('a bill must EARN its place on the list')
   ])
   const res = matchCandidates(receipt({ amount_paise: 123400 }), idx)
   eq('same-day bills at other amounts are NOT candidates', res.candidates.length, 0)
-  ok('and the screen says so', res.reason.includes('No open bill'))
+  ok('and the screen says so', res.reason.includes('No unpaid bill'))
 }
 {
   const idx = buildCandidateIndex([invoice({ total_paise: 193000 })])
@@ -236,7 +236,7 @@ section('the date window, and the stale-feed brake')
   const idx = buildCandidateIndex([invoice({ total_paise: 193000 })])
   const res = matchCandidates(receipt({ amount_paise: 193000 }), idx, { feedIsStale: true })
   ok('a stale feed refuses confidence', !res.confident)
-  ok('and says why', res.reason.includes('out of date'))
+  ok('and says why', res.reason.includes('today’s bills are loaded'))
   eq('but candidates are still shown', res.candidates.length, 1)
 }
 

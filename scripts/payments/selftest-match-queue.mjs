@@ -199,36 +199,36 @@ section('R4-6 / R4-12 — the words on the picked card and the button')
     invoice_date: '2026-10-08', total_paise: 193000, allocated_paise: 0, ...o })
   const one = (b) => ({ id: b.id, invoice_ids: [b.id], members: [b], amount_paise: b.total_paise - b.allocated_paise })
   let p = confirmPlan(one(bill('A')), 193000)
-  eq('one bill, paid exactly: no extra line, a plain button', [p.line, p.button], ['', 'Confirm ₹1,930.00'])
+  eq('one bill, paid exactly: no extra line, a plain button', [p.line, p.button], ['', 'Confirm ₹1,930'])
   p = confirmPlan(one(bill('B', { total_paise: 2500000, payment_terms: 'credit' })), 1000000)
   eq('one bill, part paid: says what stays due and that the bill stays open (R4-6)',
      [p.line, p.button],
-     ['₹10,000.00 of ₹25,000.00 — ₹15,000.00 stays due, the bill stays open', 'Confirm ₹10,000.00 · ₹15,000.00 still due'])
+     ['₹10,000 of ₹25,000 — ₹15,000 stays due, the bill stays open', 'Confirm ₹10,000 · ₹15,000 still due'])
   p = confirmPlan(one(bill('C', { total_paise: 100000 })), 150000)
   eq('one bill, more money than it owes: says the rest stays on the payment',
-     [p.line, p.button], ['Closes the bill · ₹500.00 of the payment stays, to place on another bill', 'Confirm ₹1,000.00'])
+     [p.line, p.button], ['Closes the bill · ₹500 of the payment stays, to place on another bill', 'Confirm ₹1,000'])
 
   const parts = bill('PCS1', { invoice_kind: 'service_parts', total_paise: 615000, invoice_date: '2026-10-08' })
   const labour = bill('LCS2', { invoice_kind: 'service_labour', total_paise: 550000, invoice_date: '2026-10-08' })
   const order = { id: 'job:J', kind: 'job', invoice_ids: ['PCS1', 'LCS2'], members: [labour, parts], amount_paise: 1165000 }
   p = confirmPlan(order, 1165000)
   eq('an order paid in full: both bills by name and amount, the sum, "both bills close" (R4-12)',
-     [p.line, p.button], ['Labour ₹5,500.00 + Parts ₹6,150.00 = ₹11,650.00 · both bills close', 'Confirm ₹11,650.00 · 2 bills'])
+     [p.line, p.button], ['Labour ₹5,500 + Parts ₹6,150 = ₹11,650 · both bills close', 'Confirm ₹11,650 · 2 bills'])
   p = confirmPlan(order, 1000000)
   eq('an order paid short: which closes, which is part paid, what stays due',
      [p.line, p.button],
-     ['Labour ₹5,500.00 closes · Parts ₹4,500.00 of ₹6,150.00 — ₹1,650.00 stays due', 'Confirm ₹10,000.00 · ₹1,650.00 still due'])
+     ['Labour ₹5,500 closes · Parts ₹4,500 of ₹6,150 — ₹1,650 stays due', 'Confirm ₹10,000 · ₹1,650 still due'])
   p = confirmPlan(order, 300000)
   eq('an order paid very short: the bill not reached says "not paid"',
-     p.line, 'Labour ₹3,000.00 of ₹5,500.00 · Parts ₹6,150.00 not paid — ₹8,650.00 stays due')
+     p.line, 'Labour ₹3,000 of ₹5,500 · Parts ₹6,150 not paid — ₹8,650 stays due')
   p = confirmPlan({ ...order, members: [labour, parts, bill('PCS3', { invoice_kind: 'service_parts', total_paise: 10000 })] }, 1200000)
   ok('three bills, all paid, money over: "all 3 bills close" and the rest stays on the payment',
-     /all 3 bills close · ₹250\.00 of the payment stays/.test(p.line), p.line)
+     /all 3 bills close · ₹250 of the payment stays/.test(p.line), p.line)
   eq('a bill of an unknown kind is named by its number',
      confirmPlan({ ...order, members: [bill('X1', { invoice_kind: null, total_paise: 100 }), bill('X2', { invoice_kind: null, total_paise: 100 })] }, 200).line,
-     'Bill X1 ₹1.00 + Bill X2 ₹1.00 = ₹2.00 · both bills close')
+     'Bill X1 ₹1 + Bill X2 ₹1 = ₹2 · both bills close')
   eq('a candidate without its bills says no more than it knows',
-     confirmPlan({ id: 'q', amount_paise: 50000 }, 80000), { line: '', button: 'Confirm ₹500.00', placing: 50000, stillDue: 0, leftOnPayment: 0, takes: null })
+     confirmPlan({ id: 'q', amount_paise: 50000 }, 80000), { line: '', button: 'Confirm ₹500', placing: 50000, stillDue: 0, leftOnPayment: 0, takes: null })
 }
 
 // ════════════════════════════════════════════════════════════════════════════

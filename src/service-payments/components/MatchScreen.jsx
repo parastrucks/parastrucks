@@ -29,8 +29,8 @@ import { REFRESHING, confirmPlan } from '../lib/matchQueue.js'
  * @param {()=>void} props.onSkip
  * @param {(kind:string)=>void} [props.onNotService]  absent = this person may not
  *        classify (accounts decides); the exit still shows and says who does
- * @param {(awaiting:boolean)=>void} [props.onHoldAdvance]  "Bill not raised yet":
- *        true = wait for the bill (again = "still not raised"), false = back to
+ * @param {(awaiting:boolean)=>void} [props.onHoldAdvance]  "Bill not made yet":
+ *        true = wait for the bill (again = "bill still not made"), false = back to
  *        today's list. Absent = hidden (this person may not, for this mode).
  * @param {()=>void} [props.onSearch]       absent = hidden
  * @param {string|null} [props.initialSelectedId]  a bill the person already
@@ -78,8 +78,8 @@ export default function MatchScreen({
         <h2 className="pay-empty-title">Nothing left to match</h2>
         <p className="pay-empty-sub">
           {doneToday > 0
-            ? `${doneToday} payment${doneToday === 1 ? '' : 's'} matched. New payments appear here when the day's file is imported.`
-            : 'New payments appear here when the day’s file is imported.'}
+            ? `${doneToday} payment${doneToday === 1 ? '' : 's'} matched. New payments show here after accounts loads them.`
+            : 'New payments show here after accounts loads them.'}
         </p>
         {footer}
       </div>
@@ -94,7 +94,7 @@ export default function MatchScreen({
   const reason = feedIsStale
     ? ''
     : receipt.awaiting_invoice && candidates.length === 0
-      ? 'No bill for it yet. It stays waiting and comes back by itself when one is imported.'
+      ? 'No bill yet. It stays waiting until a new bill that may be its bill is loaded.'
       : result.reason
   const selected = candidates.find((c) => c.id === selectedId) || null
   const busy = pendingId !== null
@@ -128,7 +128,7 @@ export default function MatchScreen({
         {receipt.partly_matched && receipt.face_paise > receipt.amount_paise && (
           // "left of" read as a position (R4-6): say what the big number is.
           <p className="pay-receipt-part">
-            still to match · {formatINR(receipt.face_paise - receipt.amount_paise)} of this {formatINR(receipt.face_paise)} payment is already matched
+            still to match. {formatINR(receipt.face_paise - receipt.amount_paise)} of this {formatINR(receipt.face_paise)} payment is already matched.
           </p>
         )}
         <p className="pay-receipt-payer">{receipt.payer_name || 'No name on the payment'}</p>
@@ -138,7 +138,7 @@ export default function MatchScreen({
         {receipt.awaiting_invoice && (
           <p className="pay-receipt-waiting">
             {receipt.back_for_new_bill
-              ? 'Was waiting for its bill — a bill imported since could be it'
+              ? 'Was waiting. A new bill may be its bill — check below.'
               : `Waiting for its bill${receipt.awaiting_since ? ` since ${dayLabel(receipt.awaiting_since)}` : ''}`}
           </p>
         )}
@@ -180,7 +180,7 @@ export default function MatchScreen({
                 <span className="pay-candidate-top">
                   <span className="pay-candidate-amount">{formatINR(c.amount_paise)}</span>
                   {c.kind === 'job' && (
-                    <span className="pay-chip pay-chip-job">{c.member_count} bills</span>
+                    <span className="pay-chip pay-chip-job">{c.member_count} bills, one job</span>
                   )}
                 </span>
                 {/* The SAP customer code stays beside the name — two customers
@@ -192,7 +192,7 @@ export default function MatchScreen({
                 {/* Date and truck, where the bill number was: what tells five
                     ₹1,930 bills apart at a counter (R4-5). */}
                 {billLine(c) && <span className="pay-candidate-when">{billLine(c)}</span>}
-                <span className="pay-candidate-why">{cardReasons(c).face.join(' · ')}</span>
+                <span className="pay-candidate-why">{cardReasons(c).face.join('. ')}</span>
                 {/* The bill number, once picked — to check against the paper. */}
                 {isSel && <span className="pay-candidate-ref">Bill {c.invoice_number || c.label}</span>}
                 {/* What Confirm will do — the picked card only (R4-6, R4-12). */}
@@ -245,13 +245,13 @@ export default function MatchScreen({
       <div className="pay-escapes">
         {onSearch && (
           <button type="button" className="pay-secondary" onClick={onSearch} disabled={busy}>
-            Search all bills
+            Search bills
           </button>
         )}
         {onHoldAdvance && (
           <button type="button" className="pay-secondary" aria-expanded={waitOpen}
                   onClick={() => { setMenuOpen(false); setWaitOpen((v) => !v) }} disabled={busy}>
-            {receipt.awaiting_invoice ? 'Still not raised' : 'Bill not raised yet'}
+            {receipt.awaiting_invoice ? 'Bill still not made' : 'Bill not made yet'}
           </button>
         )}
         <button
@@ -271,18 +271,18 @@ export default function MatchScreen({
         <div className="pay-wait" role="group" aria-label="Wait for its bill" ref={openedRef}>
           <p className="pay-hint">
             {receipt.awaiting_invoice
-              ? 'Still not raised? It goes back to waiting, and returns only for a bill imported after now.'
-              : 'Wait for its bill? It leaves today’s list and comes back by itself when a newly imported bill could be its own.'}
+              ? 'Keep waiting? It comes back only when a new bill is loaded.'
+              : 'Wait for the bill? This payment leaves today’s list. It comes back when a new bill that may be its bill is loaded.'}
           </p>
           <div className="pay-escapes">
             <button type="button" className="pay-secondary" disabled={busy}
                     onClick={() => { setWaitOpen(false); onHoldAdvance(true) }}>
-              {receipt.awaiting_invoice ? 'Yes, keep waiting' : 'Yes, wait for the bill'}
+              {receipt.awaiting_invoice ? 'Yes, keep waiting' : 'Yes, wait'}
             </button>
             {receipt.awaiting_invoice ? (
               <button type="button" className="pay-secondary" disabled={busy}
                       onClick={() => { setWaitOpen(false); onHoldAdvance(false) }}>
-                Not waiting — keep it in today’s list
+                Stop waiting, put it back in today’s list
               </button>
             ) : (
               <button type="button" className="pay-secondary" onClick={() => setWaitOpen(false)}>
@@ -298,8 +298,7 @@ export default function MatchScreen({
           entry on a real customer's ledger. They are told who decides. */}
       {menuOpen && !onNotService && (
         <p className="pay-hint pay-denied-note" role="status" ref={openedRef}>
-          Accounts decides what is not a service payment. Skip it for now — it
-          stays in the queue for them.
+          Only accounts can mark this. Tap Skip — accounts will see it.
         </p>
       )}
 
@@ -326,7 +325,7 @@ export default function MatchScreen({
 }
 
 function sourceLabel(source) {
-  return { hdfc: 'HDFC QR', gpay: 'Google Pay', bharatpe: 'BharatPe', manual: 'Entered by hand',
+  return { hdfc: 'Paid by QR', gpay: 'Google Pay', bharatpe: 'BharatPe', manual: 'Entered by hand',
            bank_statement: 'Bank statement', opening_balance: 'Opening balance' }[source] || source
 }
 

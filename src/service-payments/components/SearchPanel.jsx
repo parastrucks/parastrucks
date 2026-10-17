@@ -1,4 +1,4 @@
-// "Search all bills" — for the payments no shortlist catches. Measured: a
+// "Search bills" — for the payments no shortlist catches. Measured: a
 // quarter of August's UPI receipts had no open bill at their amount within
 // three days, so this is not an edge case, it is one payment in four.
 //
@@ -63,12 +63,12 @@ export default function SearchPanel({ receipt, search, onPick, onCancel, initial
       />
 
       <p className="pay-hint" role="status">
-        {state.status === 'idle' && 'Type at least two characters. Only bills still open are searched.'}
+        {state.status === 'idle' && 'Type 2 or more letters or numbers. Only unpaid bills are searched.'}
         {state.status === 'loading' && 'Searching…'}
         {state.status === 'error' && `Search failed: ${state.error}`}
         {state.status === 'done' && (state.rows.length
-          ? `${state.rows.length} open bill${state.rows.length === 1 ? '' : 's'}${state.rows.length >= 20 ? ' — the newest 20; type more to narrow' : ''}`
-          : 'No open bill matches that.')}
+          ? `${state.rows.length} unpaid bill${state.rows.length === 1 ? '' : 's'}${state.rows.length >= 20 ? ' — the newest 20; type more to narrow' : ''}`
+          : 'No unpaid bill matches that.')}
       </p>
 
       <ul className="pay-candidates">
@@ -86,8 +86,10 @@ export default function SearchPanel({ receipt, search, onPick, onCancel, initial
               <span className="pay-candidate-why">
                 {/* "10 Oct", the date style used everywhere else (R4-20) */}
                 Billed {shortDay(v.invoice_date)}{v.vehicle_reg_no ? ` · ${v.vehicle_reg_no}` : ''}
-                {v.allocated_paise > 0 ? ` · ${formatINR(v.allocated_paise)} already paid` : ''}
               </span>
+              {v.allocated_paise > 0 && (
+                <span className="pay-candidate-why">{formatINR(v.allocated_paise)} already paid</span>
+              )}
             </button>
           </li>
         ))}
@@ -95,7 +97,7 @@ export default function SearchPanel({ receipt, search, onPick, onCancel, initial
 
       <div className="pay-confirmbar">
         <button type="button" className="pay-skip" onClick={onCancel}>
-          Back to the suggestions
+          Back
         </button>
       </div>
     </div>

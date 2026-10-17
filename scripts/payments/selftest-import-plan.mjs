@@ -132,8 +132,8 @@ section('bills: the server\'s rules, row by row')
   eq('unchanged — including a bill that was already cancelled', names(d.unchanged), ['SAME', 'STILL-CANCELLED'])
   eq('amended — a total change, and a cancellation with no money on it', names(d.amended), ['CANCEL-UNPAID', 'TOTAL'])
   eq('conflicts', names(d.conflict), ['CANCEL-PAID', 'CUST', 'CUST+SHRINK', 'SHRINK'])
-  ok('a cancellation under matched money says to reverse the match first',
-     (d.conflict.find((c) => c.row.invoice_number === 'CANCEL-PAID')?.reason ?? '').includes('reverse that match first'))
+  ok('a cancellation under matched money says to undo the match first',
+     (d.conflict.find((c) => c.row.invoice_number === 'CANCEL-PAID')?.reason ?? '').includes('undo that match first'))
   ok('a changed customer is reported as that, before any amount rule',
      (d.conflict.find((c) => c.row.invoice_number === 'CUST+SHRINK')?.reason ?? '').includes('customer changed'))
   eq('the amendment says what changed', d.amended.find((a) => a.row.invoice_number === 'TOTAL').changed, ['total'])

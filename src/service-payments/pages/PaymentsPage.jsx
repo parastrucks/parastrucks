@@ -67,7 +67,7 @@ export default function PaymentsPage() {
   const [override, setOverride] = useState(null)  // { receiptId, result } from search
   const [searching, setSearching] = useState(false)
   const [tab, setTab] = useState('match')          // match | import | cash (import, cash: accounts/admin)
-  const [showWaiting, setShowWaiting] = useState(false) // looking at "bill not raised yet" payments
+  const [showWaiting, setShowWaiting] = useState(false) // looking at "bill not made yet" payments
 
   // One idempotency key per (receipt, candidate, amount). A retry after a
   // dropped connection reuses it, so the server answers "already done" instead
@@ -318,7 +318,7 @@ export default function PaymentsPage() {
         refuse_to_rank: false,
         confident: false,
         reason: before || (candidates.length > 1
-          ? `You found this bill by searching, and it is picked. Its order has ${candidates.find((c) => c.kind === 'job').member_count} open bills — pick the whole order instead if the payment covers them all.`
+          ? `You found this bill by searching, and it is picked. Its order has ${candidates.find((c) => c.kind === 'job').member_count} unpaid bills — pick the whole order instead if the payment covers them all.`
           : 'You found this bill by searching, and it is picked. Check the name and amount, then confirm.'),
         searched: 1,
       },
@@ -357,7 +357,7 @@ export default function PaymentsPage() {
           })
           after = ' It now waits for its bill.'
         } catch {
-          after = ' It is back in the list — mark it “Bill not raised yet” there.'
+          after = ' It is back in the list — mark it “Bill not made yet” there.'
         }
       }
       toast.success(`Undone: ${formatINR(group.amount_paise)} taken off ${group.customer_name || 'the bill'}.${after}`)
@@ -387,7 +387,7 @@ export default function PaymentsPage() {
         <div>
           <div className="page-head-crumb">Service Tools</div>
           <h1 className="page-head-title">Match Payments<span className="period-accent">.</span></h1>
-          <div className="page-head-sub">Which bill did each UPI payment pay?</div>
+          <div className="page-head-sub">Which bill is this payment for?</div>
         </div>
       </div>
       {/* Import is accounts' (and the admin's during the pilot). Service staff
@@ -506,8 +506,7 @@ export default function PaymentsPage() {
         <div className="pay-match pay-match-empty">
           <h2 className="pay-empty-title">That’s all the waiting ones</h2>
           <p className="pay-empty-sub">
-            They stay out of today’s list and come back by themselves when a newly imported bill
-            could be theirs.
+            They come back when a new bill that may be theirs is loaded.
           </p>
           {backToToday}
           {matchedFold(true)}
@@ -549,8 +548,8 @@ export default function PaymentsPage() {
             All matched except {waiting.length} waiting for {waiting.length === 1 ? 'its bill' : 'their bills'}
           </h2>
           <p className="pay-empty-sub">
-            {waiting.length === 1 ? 'It comes' : 'They come'} back by {waiting.length === 1 ? 'itself' : 'themselves'} when
-            a newly imported bill could be {waiting.length === 1 ? 'its own' : 'theirs'}.
+            {waiting.length === 1 ? 'It comes' : 'They come'} back when a new bill that may
+            be {waiting.length === 1 ? 'its bill' : 'theirs'} is loaded.
           </p>
           {lookAtWaiting}
           {matchedFold(true)}

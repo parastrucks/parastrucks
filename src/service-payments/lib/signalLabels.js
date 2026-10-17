@@ -24,7 +24,7 @@ export function signalLabel(s) {
       return `Truck ${d.split(' of ').pop()} — the note says ${d.split(' of ')[0].replace(/^…/, '')}`
     case 'amount_unique':
       // "other" when the bill this payment was taken off shares the amount.
-      return /other/.test(d) ? 'Only other bill at this amount in 3 days' : 'Only bill at this exact amount'
+      return /other/.test(d) ? 'Only other bill of this amount in 3 days' : 'Only bill of this amount'
     case 'amount_ambiguous': {
       // detail arrives as "5 bills at this amount" — a count that INCLUDES this
       // bill, so the others are one fewer (the first browser run read "same
@@ -36,21 +36,21 @@ export function signalLabel(s) {
     case 'note_bill_number':
       return `Bill number ${d} in the note`
     case 'payer_memory':
-      return `This payer has paid for them before (${d.replace('paid for this customer ', '').replace('x', ' times')})`
+      return `Has paid this customer’s bills before (${d.replace('paid for this customer ', '').replace('x', ' times')})`
     case 'payer_memory_weak':
-      return 'This payer paid for them once before'
+      return 'Paid this customer’s bill once before'
     case 'name_overlap_strong':
-      return 'Payer name matches the customer'
+      return 'Name matches the bill'
     case 'name_overlap': {
       // detail arrives as "score/25", plus " same" when the names are the same
       // words — identical names are said to match whatever their rarity.
-      if (/\bsame$/.test(d)) return 'Payer name matches the customer'
+      if (/\bsame$/.test(d)) return 'Name matches the bill'
       // A faint echo — only a common word shared,
       // like "MOTORS", or "DEMO" on every demo customer — is not "similar"; it
       // put that label on all five ₹1,930 cards and explained nothing. Below
       // the floor it says nothing (one rare word scores ~17 on real data).
       const score = parseFloat(d)
-      return Number.isFinite(score) && score < NAME_SIMILAR_FLOOR ? '' : 'Payer name is similar'
+      return Number.isFinite(score) && score < NAME_SIMILAR_FLOOR ? '' : 'Name is close to the bill'
     }
     case 'date':
       return dayLabel(d)
@@ -155,13 +155,13 @@ export const BOUNCE_REASONS = [
  *   offer to that payment. Every other reason means "not this bill", and the
  *   matcher never offers it to that payment again (owner, 2026-10-13).
  * `waits`: the payment came before its bill, so after the undo it is marked
- *   "Bill not raised yet" in the same step.
+ *   "Bill not made yet" in the same step.
  * `accountsOnly`: only accounts sees the clash that this reason answers.
  */
 export const UNDO_REASONS = [
   { label: 'Wrong bill — same amount' },
   { label: 'Wrong customer' },
-  { label: 'Bill not raised yet — it was an advance', waits: true },
+  { label: 'Bill not made yet — it was an advance', waits: true },
   { label: 'Bill cancelled in SAP', accountsOnly: true },
   { label: 'Undo by mistake — offer it again', reoffer: true },
   { label: 'Match again with a different amount', reoffer: true },
@@ -171,8 +171,8 @@ export const REOFFER_REASONS = new Set(UNDO_REASONS.filter((r) => r.reoffer).map
 
 export const NOT_SERVICE_KINDS = [
   { value: 'vehicle_booking', label: 'Vehicle booking advance' },
-  { value: 'sister_unit', label: 'Sister business' },
-  { value: 'refund_return', label: 'Refund coming back' },
+  { value: 'sister_unit', label: 'Sister concern / group company' },
+  { value: 'refund_return', label: 'Refund returned to us' },
   { value: 'personal', label: 'Not a customer payment' },
   { value: 'other', label: 'Something else' },
 ]

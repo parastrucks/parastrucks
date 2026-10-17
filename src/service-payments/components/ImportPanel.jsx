@@ -31,6 +31,12 @@ import { UNDO_REASONS } from '../lib/signalLabels.js'
 const CANCELLED_REASON = UNDO_REASONS.find((r) => r.accountsOnly)?.label ?? 'Bill cancelled in SAP'
 
 const LIST_CAP = 50
+// The server's count names, said as words: "It said 10 new, the import did 9"
+// — "new: expected 10, got 9" was a log line (red team 4, L5-27).
+const COUNT_WORD = {
+  new: 'new', amended: 'changed', unchanged: 'unchanged', conflicts: 'not agreeing',
+  already_present: 'already there', already_present_manual: 'linked to hand entries', held: 'held back',
+}
 
 export default function ImportPanel({ entityId, onImported, onGoMatch, undoRefusal, onMatchesChanged }) {
   const [stage, setStage] = useState('idle')      // idle | reading | preview | committing | done | error
@@ -162,7 +168,7 @@ export default function ImportPanel({ entityId, onImported, onGoMatch, undoRefus
           const prior = await findPriorBatch(entityId, kind === 'billing_report' ? 'invoices' : 'receipts', hash)
           if (prior?.uploaded_at) when = ` at ${stamp(prior.uploaded_at)}`
         } catch { /* the plain sentence still stands */ }
-        setError(`This file was already imported${when}. If you just tried, that attempt went through and only its answer was lost. Nothing was imported twice.`)
+        setError(`This file was already imported${when}. If you just tried, it most likely worked, but the reply did not reach this screen. Nothing was imported twice.`)
       } else {
         setError(msg)
       }
@@ -178,10 +184,9 @@ export default function ImportPanel({ entityId, onImported, onGoMatch, undoRefus
             Choose a file to import
           </label>
           <p className="pay-hint">
-            The SAP <strong>Billing Report</strong>, or the day’s <strong>HDFC SmartHub
-            transaction report</strong> (both .xlsx). Nothing is saved until you have seen what
-            it will change. Uploading a report that overlaps an earlier one is fine — payments
-            already imported are recognised and skipped.
+            Pick the SAP <strong>Billing Report</strong> or the day’s <strong>HDFC SmartHub
+            report</strong> (.xlsx). You will see what it will change before anything is saved.
+            A report that repeats earlier days is fine — nothing is imported twice.
           </p>
           <input
             id="pay-import-file"
@@ -227,7 +232,7 @@ function Preview({ plan, committing, onCommit, onCancel, notice = '', onUndoClas
       : formatINR(newValue)
   const notOwed = !bills ? [] : [
     owed.freeOfCost.n && `${owed.freeOfCost.n} free of cost (${formatINR(owed.freeOfCost.paise)})`,
-    owed.onHold.n && `${owed.onHold.n} parts return${owed.onHold.n === 1 ? '' : 's'}, on hold until accounts decide (${formatINR(owed.onHold.paise)})`,
+    owed.onHold.n && `${owed.onHold.n} parts return${owed.onHold.n === 1 ? '' : 's'}, waiting for accounts (${formatINR(owed.onHold.paise)})`,
     owed.cancelled.n && `${owed.cancelled.n} already cancelled in SAP (${formatINR(owed.cancelled.paise)})`,
   ].filter(Boolean)
   const actionLabel = committing ? 'Importing…' : importActionLabel(kind, diff)
@@ -252,8 +257,8 @@ function Preview({ plan, committing, onCommit, onCancel, notice = '', onUndoClas
         {bills ? (
           <>
             <Count label="Changed since last import" n={diff.amended.length} />
-            <Count label="Already stored, unchanged" n={diff.unchanged.length} />
-            <Count label="Clash with what is stored" n={diff.conflict.length} warn />
+            <Count label="Already saved, no change" n={diff.unchanged.length} />
+            <Count label="Does not agree with the saved bill" n={diff.conflict.length} warn />
           </>
         ) : (
           <>
@@ -264,7 +269,7 @@ function Preview({ plan, committing, onCommit, onCancel, notice = '', onUndoClas
         <Count label="Held back" n={diff.held.length} warn />
         {/* A failed attempt is not an unreadable row: the payer retried, and
             the retry is in this file as a payment. Shown, never imported. */}
-        <Count label="Failed attempts — not money" n={failedAttempts.length} />
+        <Count label="Failed payments (no money came)" n={failedAttempts.length} />
         <Count label="Could not be read" n={unreadable.length} warn />
       </dl>
 
@@ -274,8 +279,8 @@ function Preview({ plan, committing, onCommit, onCancel, notice = '', onUndoClas
 
       {bills && coverage && (
         <p className="pay-hint">
-          Bills are complete up to <strong>{stamp(coverage)}</strong>. Payments after that will show
-          “bills out of date” on the Match screen until the next Billing Report.
+          Bills are complete up to <strong>{stamp(coverage)}</strong>. Payments after that cannot be
+          confirmed until the next Billing Report is imported.
         </p>
       )}
 
@@ -285,14 +290,14 @@ function Preview({ plan, committing, onCommit, onCancel, notice = '', onUndoClas
       {kind === 'hdfc' && settles.length > 0 && (
         <div className="pay-import-settle">
           <p className="pay-hint">
-            Each day below should equal the <strong>UPI SETTLEMENT</strong> credit HDFC pays into
-            the account the next morning{qrs.length ? ` (QR ${qrs.join(', ')})` : ''}:
+            Check: each day’s total below should match the <strong>UPI SETTLEMENT</strong> amount
+            HDFC puts in the bank the next morning{qrs.length ? ` (QR ${qrs.join(', ')})` : ''}.
           </p>
           <ul className="pay-import-list">
-            {settles.map(([day, paise]) => <li key={day}>{dayLabel(day)} — <strong>{formatINR(paise)}</strong></li>)}
+            {settles.map(([day, paise]) => <li key={day}>{dayLabel(day)}: <strong>{formatINR(paise)}</strong></li>)}
             {/* The clerk added these up by hand (R4-18). */}
             {settles.length > 1 && (
-              <li>Total — <strong>{formatINR(settles.reduce((a, [, p]) => a + p, 0))}</strong></li>
+              <li>Total: <strong>{formatINR(settles.reduce((a, [, p]) => a + p, 0))}</strong></li>
             )}
           </ul>
           {diff.already.length > 0 && (
@@ -309,11 +314,11 @@ function Preview({ plan, committing, onCommit, onCancel, notice = '', onUndoClas
       )}
 
       <Fold title="Held back" items={diff.held} render={(h) => `${label(h.row)} — ${h.reason}`} />
-      {bills && <Fold title="Clashes" open items={diff.conflict}
+      {bills && <Fold title="Does not agree" open items={diff.conflict}
             render={(c) => <ClashRow c={c} onUndo={onUndoClash} disabled={committing} />} />}
-      <Fold title="Failed attempts — not money" items={failedAttempts}
+      <Fold title="Failed payments (no money came)" items={failedAttempts}
             render={(r) => `Row ${r.row} — ${r.amount_paise != null ? formatINR(r.amount_paise) : 'amount unreadable'}` +
-              `${r.payer_name ? ` from ${r.payer_name}` : ''}${r.when ? `, ${r.when}` : ''} — not imported; the payer usually tried again`} />
+              `${r.payer_name ? ` from ${r.payer_name}` : ''}${r.when ? `, ${r.when}` : ''}. Not imported. The customer most likely paid again.`} />
       <Fold title="Could not be read" items={unreadable}
             render={(r) => `Row ${r.row}${r.invoice_number || r.txnId ? ` (${r.invoice_number || r.txnId})` : ''} — ${r.reason}`} />
       {bills && <Fold title="Changed since last import" items={diff.amended}
@@ -356,9 +361,9 @@ function Done({ plan, done, onAnother, onGoMatch }) {
       {mismatches.length > 0 && (
         <p className="pay-banner pay-banner-warn" role="alert">
           <strong>This is not what the preview showed.</strong>{' '}
-          {mismatches.map((m) => `${m.key}: expected ${m.expected}, got ${m.got}`).join(' · ')}.
-          Someone may have imported or matched in the meantime. Nothing was lost — check the Match
-          screen, and import the file again to see the current picture.
+          {mismatches.map((m) => `It said ${m.expected} ${COUNT_WORD[m.key] ?? m.key}, the import did ${m.got}`).join('. ')}.
+          Someone else may have imported or matched at the same time. Nothing is lost. Open Match
+          to check, or import the file again.
         </p>
       )}
       <div className="pay-import-actions">

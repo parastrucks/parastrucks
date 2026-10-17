@@ -224,7 +224,7 @@ const sig = (c) => (c?.signals ?? []).map((s) => s.signal)
   ok('NIRAV ₹1,930 → the five bills UNRANKED, with the honest banner', res.refuse_to_rank && res.candidates.length === 5, res.reason)
 
   ;({ res, stale } = look('DEMO BHAVIN TRADING', 1930))
-  ok(`the payment made TODAY (${DAYS.today}) → "bills out of date", confirm off`, stale && res.reason.includes('out of date'))
+  ok(`the payment made TODAY (${DAYS.today}) → "bills out of date", confirm off`, stale && res.reason.includes('Confirm is off until today’s bills are loaded'))
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -241,11 +241,11 @@ const br2 = await read('DEMO Billing Report 2.xlsx')
   d = diffInvoices(br2.parsed.invoices, stored(193000))
   eq('ASHA already matched: her cancellation becomes a CLASH — reverse the match first',
      [d.amended.length, d.conflict.length, d.conflict[0]?.row.invoice_number], [1, 1, 'MPI5756260009101'])
-  ok('...and the clash says so', (d.conflict[0]?.reason ?? '').includes('reverse that match first'))
+  ok('...and the clash says so', (d.conflict[0]?.reason ?? '').includes('undo that match first'))
   {
     const g = importGates({ kind: 'billing_report', parsed: br2.parsed, diff: d, priorBatch: null })
-    ok('...in plain singular English ("1 bill clashes … as it is")',
-       g.warnings.includes('1 bill clashes with what is stored and will be left as it is (listed below).'), g.warnings.join(' / '))
+    ok('...in plain singular English ("1 bill does not agree … will not be changed")',
+       g.warnings.includes('1 bill does not agree with the saved one and will not be changed (listed below).'), g.warnings.join(' / '))
     eq('...and the button names the change it will also apply', importActionLabel('billing_report', d), 'Import 2 new bills and 1 change')
   }
 
@@ -309,7 +309,7 @@ section('The walkthrough IN ORDER, as the Match tab will show it')
   s = step(2)
   eq('3 · KISAN ₹30 → nothing to match (his bill is paid) → Skip', s.res.candidates.length, 0)
   ok('    ...and the screen offers nothing it cannot do (no "hold it as an advance" — there is no such button yet)',
-     s.res.reason.includes('skip it for now') && !s.res.reason.includes('advance'), s.res.reason)
+     s.res.reason.includes('or skip.') && !s.res.reason.includes('advance'), s.res.reason)
   s = step(3)
   ok('4 · GANGA ₹10,000 → GANGA\'s ₹25,000 bill first, by name, after two bills have closed',
      s.res.candidates[0]?.label === 'PCR6370260009401' && sig(s.res.candidates[0]).includes('name_overlap_strong'),
@@ -349,7 +349,7 @@ section('The walkthrough IN ORDER, as the Match tab will show it')
     // bills", so nothing said why ASHA's was first; selecting it then printed
     // that same line twice.
     const top = cardReasons(s.res.candidates[0])
-    eq('    ASHA\'s card says WHY it is first, without a tap', top.face, ['Same amount as 4 other bills', 'Payer name matches the customer'])
+    eq('    ASHA\'s card says WHY it is first, without a tap', top.face, ['Same amount as 4 other bills', 'Name matches the bill'])
     // Red team 4 (R4-13): payer and customer are the SAME name here; the rarity
     // score is weak in a small demo, and the card used to say only "similar".
     ok('    ...the others say only the amount', s.res.candidates.slice(1).every((c) => cardReasons(c).face.length === 1))
