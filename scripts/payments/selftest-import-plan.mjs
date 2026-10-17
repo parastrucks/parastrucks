@@ -15,6 +15,7 @@ import {
   detectFileKind, billCoverage, outletIdByPlant, existingInvoiceFromRow, diffInvoices,
   diffReceipts, importGates, rowsToCommit, expectedCounts, reconcile, parseImportFile,
   sha256Hex, MAX_ROWS_PER_IMPORT, clashUndoPlan,
+  billRowText, paymentRowText, sortBills, sortPayments,
 } from '../../src/service-payments/lib/importPlan.js'
 import { capabilitiesFor } from '../../src/service-payments/lib/matchQueue.js'
 import { parseBillingReport } from '../../src/service-payments/lib/parseBillingReport.js'
@@ -312,6 +313,32 @@ section('a whole file, end to end, as the browser reads it')
 
   eq('the hash helper agrees with Node', await sha256Hex(textBuffer('abc')),
      'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad')
+}
+
+section('R4-18 — the rows behind a count, one line each, in tick-off order')
+{
+  const bill = (o) => ({ invoice_number: 'MPI1', customer_name: 'DEMO ASHA', total_paise: 193000, invoice_date: '2026-10-09', status: 'active', ...o })
+  eq('a bill: number · name · amount · day', billRowText(bill()), 'MPI1 · DEMO ASHA · ₹1,930 · 9 Oct')
+  eq('...paise kept when there are some', billRowText(bill({ total_paise: 555555 })), 'MPI1 · DEMO ASHA · ₹5,555.55 · 9 Oct')
+  eq('a bill nobody owes says why', billRowText(bill({ status: 'not_payable' })), 'MPI1 · DEMO ASHA · ₹1,930 · 9 Oct · free of cost')
+  eq('...a parts return', billRowText(bill({ status: 'parked' })), 'MPI1 · DEMO ASHA · ₹1,930 · 9 Oct · parts return, waiting for accounts')
+  eq('...a cancelled bill', billRowText(bill({ status: 'cancelled' })), 'MPI1 · DEMO ASHA · ₹1,930 · 9 Oct · cancelled in SAP')
+  eq('a bill with no name says so', billRowText(bill({ customer_name: null })), 'MPI1 · No name on the bill · ₹1,930 · 9 Oct')
+  const pay = (o) => ({ received_at: '2026-10-08T04:35:00.000Z', payer_name: 'RAMESH SHARMA', amount_paise: 215000, ...o })
+  ok('a payment: India time · name · amount', /^8 Oct, 10:05\s?am · RAMESH SHARMA · ₹2,150$/i.test(paymentRowText(pay())), paymentRowText(pay()))
+  // 19:00 UTC on the 8th is 00:30 on the 9th in India — the day HDFC settles it under.
+  ok('...a payment just after midnight India time is on the India day', /^9 Oct, 12:30\s?am/i.test(paymentRowText(pay({ received_at: '2026-10-08T19:00:00.000Z' }))),
+     paymentRowText(pay({ received_at: '2026-10-08T19:00:00.000Z' })))
+  ok('...no name says so', paymentRowText(pay({ payer_name: '' })).includes('No name on the payment'))
+  eq('bills sort by day, then number',
+     sortBills([bill({ invoice_number: 'B', invoice_date: '2026-10-09' }), bill({ invoice_number: 'C', invoice_date: '2026-10-08' }), bill({ invoice_number: 'A', invoice_date: '2026-10-09' })]).map((v) => v.invoice_number),
+     ['C', 'A', 'B'])
+  eq('payments sort by time',
+     sortPayments([pay({ payer_name: 'late', received_at: '2026-10-09T01:00:00Z' }), pay({ payer_name: 'early', received_at: '2026-10-08T01:00:00Z' })]).map((r) => r.payer_name),
+     ['early', 'late'])
+  const input = [pay({ payer_name: 'b', received_at: '2026-10-09T01:00:00Z' }), pay({ payer_name: 'a', received_at: '2026-10-08T01:00:00Z' })]
+  sortPayments(input)
+  eq('...without reordering the preview\'s own list (it is what gets committed)', input.map((r) => r.payer_name), ['b', 'a'])
 }
 
 console.log(`\n${'═'.repeat(64)}`)

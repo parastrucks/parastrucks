@@ -17,6 +17,7 @@
 
 import { PLANT_CITY } from './parseBillingReport.js'
 import { looksLikeHdfc } from './parseHdfc.js'
+import { formatINR } from './paise.js'
 
 /** The EF refuses more than this in one call (service-payments/index.ts). */
 export const MAX_ROWS_PER_IMPORT = 5000
@@ -328,6 +329,54 @@ export function newBillsSummary(diff) {
     onHold: sum(rows.filter((r) => r.status === 'parked')),
     cancelled: sum(rows.filter((r) => r.status === 'cancelled')),
   }
+}
+
+// ── The rows behind a count (red team 4, R4-18) ──────────────────────────
+// The clerk could not see the 20 bills or the 9 payments behind a number, so
+// kept a parallel sheet to tie out. One line per row, in the order she ticks:
+// bills by day then number, payments by time (so they fall into the same days
+// as HDFC's settlement credits).
+
+const BILL_STATUS_NOTE = {
+  not_payable: 'free of cost', parked: 'parts return, waiting for accounts', cancelled: 'cancelled in SAP',
+}
+
+/** "MPI5756… · DEMO ASHA ENTERPRISE · ₹1,930 · 9 Oct" (+ why it is not owed). */
+export function billRowText(v) {
+  const parts = [v.invoice_number, v.customer_name || 'No name on the bill', formatINR(v.total_paise ?? 0)]
+  if (v.invoice_date) parts.push(dayMonth(`${v.invoice_date}T00:00:00Z`, 'UTC'))
+  if (BILL_STATUS_NOTE[v.status]) parts.push(BILL_STATUS_NOTE[v.status])
+  return parts.join(' · ')
+}
+
+/** "8 Oct, 10:05 am · RAMESH SHARMA · ₹2,150" */
+export function paymentRowText(r) {
+  return [timeStamp(r.received_at), r.payer_name || 'No name on the payment', formatINR(r.amount_paise ?? 0)]
+    .filter(Boolean).join(' · ')
+}
+
+export function sortBills(rows) {
+  return [...(rows ?? [])].sort((a, b) =>
+    String(a.invoice_date ?? '').localeCompare(String(b.invoice_date ?? '')) ||
+    String(a.invoice_number ?? '').localeCompare(String(b.invoice_number ?? '')))
+}
+
+export function sortPayments(rows) {
+  return [...(rows ?? [])].sort((a, b) => (Date.parse(a.received_at) || 0) - (Date.parse(b.received_at) || 0))
+}
+
+function dayMonth(iso, timeZone) {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  return new Intl.DateTimeFormat('en-IN', { timeZone, day: 'numeric', month: 'short' }).format(d)
+}
+
+function timeStamp(iso) {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  return new Intl.DateTimeFormat('en-IN', {
+    timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true,
+  }).format(d)
 }
 
 /** The commit button says everything it will do, not just the new rows. */

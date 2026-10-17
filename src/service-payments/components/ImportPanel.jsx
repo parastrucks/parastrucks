@@ -19,6 +19,7 @@ import {
   KIND_LABEL, parseImportFile, existingInvoiceFromRow, diffInvoices, diffReceipts,
   importGates, rowsToCommit, expectedCounts, reconcile, billCoverage, notImported,
   newBillsSummary, importActionLabel, clashUndoPlan,
+  billRowText, paymentRowText, sortBills, sortPayments,
 } from '../lib/importPlan.js'
 import {
   fetchOutlets, findPriorBatch, fetchExistingInvoices,
@@ -323,6 +324,15 @@ function Preview({ plan, committing, onCommit, onCancel, notice = '', onUndoClas
             render={(r) => `Row ${r.row}${r.invoice_number || r.txnId ? ` (${r.invoice_number || r.txnId})` : ''} — ${r.reason}`} />
       {bills && <Fold title="Changed since last import" items={diff.amended}
             render={(a) => `${a.row.invoice_number} — ${a.changed.join(', ')}: ${formatINR(a.was.total_paise)} → ${formatINR(a.row.total_paise)}${a.row.status !== a.was.status ? `, ${a.was.status} → ${a.row.status}` : ''}`} />}
+
+      {/* The rows behind the counts, closed — to tick against the file and the
+          bank without keeping a second sheet (R4-18). */}
+      {bills
+        ? <Fold title="New bills" items={sortBills(diff.new)} render={billRowText} />
+        : <>
+            <Fold title="New payments" items={sortPayments(diff.new)} render={paymentRowText} />
+            <Fold title="Already imported" items={sortPayments(diff.already)} render={paymentRowText} />
+          </>}
 
       <div className="pay-import-actions">
         <button type="button" className="pay-confirm" onClick={onCommit} disabled={!gates.ok || committing}>
