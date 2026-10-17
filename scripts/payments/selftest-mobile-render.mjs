@@ -489,6 +489,12 @@ section('the CSS contract — a phone claim that HTML cannot prove')
   ok('disabled Confirm is readable (no white text on light grey)',
      /color:\s*var\(--gray-600\)/.test((css.match(/\.pay-confirm:disabled\s*\{([^}]*)\}/) || [])[1] || ''))
 
+  // R4-24: a blue reason line read as a link and was tapped first.
+  {
+    const why = block('.pay-candidate-why')
+    ok('the reason under a bill is grey, not link-blue', /color:\s*var\(--gray-600\)/.test(why) && !/blue/.test(why), why)
+  }
+
   // Found only when the screen went inside the app: the portal's bottom nav is
   // fixed at bottom: 0 with a HIGHER z-index below 760px, so a bar at bottom: 0
   // put the confirm button behind it on every phone.

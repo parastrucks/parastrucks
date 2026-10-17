@@ -3389,7 +3389,9 @@ tbody tr:hover td { background: var(--gray-50); }
 /* What Confirm will do, on the picked card (R4-6, R4-12). */
 .pay-candidate-plan { font-size: 14px; font-weight: 600; color: var(--ink); overflow-wrap: anywhere; }
 .pay-candidate-code { font-size: 13px; font-weight: 400; color: var(--gray-600); }
-.pay-candidate-why  { font-size: 13px; color: var(--blue-dark); margin-top: 4px; }
+/* Grey, not link-blue: two personas tapped "Only bill of this amount" as if it
+   were a link (red team 4, R4-24). Blue on a card means "picked" — nothing else. */
+.pay-candidate-why  { font-size: 13px; color: var(--gray-600); margin-top: 4px; }
 .pay-candidate-all  { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
 
 .pay-chip {
