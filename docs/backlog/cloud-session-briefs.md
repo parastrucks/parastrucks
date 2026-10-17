@@ -13,7 +13,7 @@ reconnect (403 on every push) — so either start a FRESH cloud session for work
 bring commits over as a verified git bundle (never the GitHub-API route, which rewrites SHAs).
 Method: memory `reference_cloud_session_handoff.md`, PORTAL_HISTORY 2026-10-12 (red team 4 entry).
 
-Briefs 1 and 2 were written 2026-10-12, Brief 3 on 2026-10-13. **Status (2026-10-13):** Brief 1 —
+Briefs 1 and 2 were written 2026-10-12, Brief 3 on 2026-10-13. **⛔ The cloud allowance ended after Brief 4 (owner, 2026-10-13) — write no new briefs.** **Status (2026-10-13):** Brief 1 —
 answer not back yet · Brief 2 — ✅ done, merged `6809c5e` (`docs/backlog/service-payments-premortem-1.md`),
 owner answered its Q1–Q6 · Brief 3 — written, to be sent to the Brief 1 session.
 
@@ -225,7 +225,7 @@ Tag every claim [Read in code] (with file:line), [Measured] or [Inferred]. Say p
 Written 2026-10-13 at `0bf648a`, after the undo list (`8838dab`), R4-5 (`7230a53`) and the cash &
 cheque tab + migration 8 (`19e49ad`) were built. For the **pre-mortem session** (it knows its own
 rig; its push is dead, so it delivers a bundle). Verify the bundle as before, then triage with the
-owner. **Status: FINAL VERSION (updated 2026-10-13 to `cb1c135`), to be sent as the LAST cloud session** —
+owner. **Status: SENT AND RUN as the LAST cloud session (2026-10-15). Its bundle never reached the PC** (the file downloaded was pre-mortem 1's again; nothing could be re-sent) — its report and the owner's decisions are in `docs/backlog/service-payments-premortem-2-summary.md`. Final version (updated 2026-10-13 to `cb1c135`) —
 the owner's cloud allowance ends with it (owner, 2026-10-13). It now also covers `40e2f3f` and `3f7fedd`.
 
 ```text
