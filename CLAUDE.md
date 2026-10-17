@@ -30,6 +30,32 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ---
 
+## Current state (2026-10-17)
+
+- **🔨 SERVICE PAYMENTS — the correction screens are built (staging only; prod untouched).** Branch
+  `claude/payments-reconciliation-tool-6eaab4` at `138e749`+docs, pushed, **97 ahead of `portal`**.
+  ⭐ **Full record: `PORTAL_HISTORY.md` → "Session log — 2026-10-13 → 10-17".** Since 13 Oct:
+  never re-offer an undone bill (`1b9fc87`) · "Matched today" undo list (`8838dab`) · date + truck
+  on cards (`7230a53`) · Cash & cheque tab + **migration 8** (`19e49ad`, revised `5ce2aa6`) · Import
+  clash-row Undo (`40e2f3f`) · picked card says what Confirm does (`3f7fedd`) · Payments tab in the
+  phone bar (`eb970d7`). Every one seen on staging; dummy data put back where written.
+  - **⛔ No more cloud sessions** (owner, 2026-10-13). Pre-mortem 2 (Brief 4, the last) ran but its
+    **bundle never reached the PC** — the report is kept in
+    `docs/backlog/service-payments-premortem-2-summary.md` with the owner's G-decisions. Get the
+    independent view locally now (memory `feedback_second_opinion_cloud.md`).
+  - **⏸️ R4-21 (simpler-English wordlist) STARTED, NOTHING BUILT — waiting on three owner answers**
+    (the question dialog was dismissed): "Bill not raised yet" → "Bill not made yet"? · drop ".00"
+    when there are no paise? · sub-title → "Which bill is this payment for?" (or drop)? The rest of
+    the L5 list (`docs/backlog/redteam4-lanes/L5.md`) is same-length swaps. ⚠️ **The wordlist's
+    "bill number = the 10-digit number" row is WRONG** — that number is the SAP customer code.
+  - ⚠️ **Prod: migration 8 must be applied with LF line endings** (staging body md5 `6994bca3…`), and
+    the prod rollout is now **eight** migrations + `probe-manual-receipt.sql` (item 9).
+  - **Not seen live (staging has no open parts + labour pair):** the whole-order choice on the cash
+    form and the order wording on the picked card. **Not yet built anywhere:** the GM's weekly
+    exceptions digest, so a 269ST-flagged cash receipt is recorded but shown to nobody yet.
+  - **Staging now:** 22 bills, 12 standing matches, one hand-entered receipt (CR-PTB-2026-00001),
+    only KISAN ₹30 open. Browser pane signed in as tester@ (accounts manager).
+
 ## Current state (2026-10-12)
 
 - **🧪 SERVICE PAYMENTS — PRE-MORTEM 1 ("30 days after go-live") DONE on branch `premortem-1`**
@@ -794,7 +820,7 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
      open pair on staging).
      ✅ **R4-14 BUILT `eb970d7`**: service + accounts phone bar = Home · Payments (₹, gated by access rules) ·
      + · Jobs · Profile; the + sheet is "Quick actions" (all depts); layout in `navConfig.bottomNavLayout`,
-     `selftest-bottom-nav` 13/0; seen at 360 px as tester@. ⏭️ **Next: R4-21 wordlist → R4-24 → R4-9 → R4-18.**
+     `selftest-bottom-nav` 13/0; seen at 360 px as tester@. ⏸️ **R4-21 paused on three owner questions (see the 2026-10-17 state block); then R4-24 → R4-9 → R4-18.**
      No more cloud sessions (owner, 2026-10-13) — all BEFORE item 9.
   8. **Multiple QRs:** when the next QR is added, map `qr_ref` → outlet and give same-outlet bills a
      small RANKING bonus (never a filter — owner rule, 2026-09-11).

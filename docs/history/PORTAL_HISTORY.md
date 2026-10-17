@@ -26,6 +26,115 @@
 
 ---
 
+## Session log — 2026-10-13 → 10-17 (PC): two pre-mortems, the correction screens, and the end of the cloud
+
+All on the payments branch `claude/payments-reconciliation-tool-6eaab4` (97 ahead of `portal`,
+pushed, 0/0), **staging only — prod untouched**. Dummy data on staging (owner's choice).
+
+**Pre-mortem 1 brought in (`6809c5e`).** The cloud's "30 days after go-live" run arrived as a git
+bundle (its push was refused 403): sha256 `c75e141d…` matched, `git bundle verify` ok, head
+`4553305`, 8 commits by us, +1,389 / −0, nothing in `src/`/`supabase/`/package, no hosts/keys/process
+calls. Base `32d3484` was two behind, so a MERGE (CLAUDE.md + history conflicts = two independent
+entries, both kept). F1, F6, F7, F8 re-read in our code — all hold. Owner answered Q1–Q6
+(`docs/backlog/service-payments-premortem-1.md` → "Owner decisions"): SAP export **month to date** ·
+keep the ±3-day window + Search · **Q3 measured, not asked**: the EF calls RPCs as `service_role`
+(no `rolconfig`) so `authenticator`'s **`statement_timeout=8s`** applies, identical prod/staging ·
+Q4 to HDFC (is a Mintoak id ever re-issued?) · **Q5 before go-live: undo list + never re-offer a
+reversed pair + cash/cheque receipts** · Q6 keep Skip, explain it.
+
+**Never re-offer (`1b9fc87`, `2243129`).** `matchCandidates(…, { undone })`: a bill a payment was
+taken off is left out of that payment's list (an order card too), does not count towards "the only
+one", and after any undo "only" no longer makes a card confident. A waiting payment does not come
+back for it; found by search it says "taken off this bill before on 13 Oct (reason)". Owner-approved
+staging undo of MEHUL SHAH ₹3,400 → INDU SPARES showed it live; the undo at 01:24 IST was dated in
+IST. The cloud's review then showed `confident` is **never read by the screen** (the switch only
+turns a near-tie unranked) and that "only" carried over to the next bill in yesterday's words —
+fixed to **"Only other bill at this amount in 3 days"**, seen live.
+
+**The cloud's answer to Briefs 1 + 3** came from the pre-mortem session (Brief 1 had never reached
+the red-team session). Kept verbatim + PC verification in `docs/backlog/cloud-answer-briefs-1-3.md`.
+Every code claim held; two corrected the PC — `confident` is dead on screen, and **`payments_manual_receipt`
+had no idempotency key** (Brief 3 had said every write carried one).
+Owner: two undo reasons re-offer the bill · service sees own matches, accounts all · cash
+duplicates fixed in the DB · ₹2 lakh rule (later revised, below).
+
+**Built, each seen on staging (dummy data put back where written):**
+- **"Matched today" undo list (`8838dab`, R4-3 / Q5 (1)).** Fold at the bottom of Match (open on end
+  screens), one row per confirm (a parts + labour pair = one row, one Undo reversing both, "half
+  undone — tap again" if it stops), Undo only where the server's `reverseAllowed()` allows, six
+  tapped reasons (two re-offer; "Bill not raised yet — it was an advance" also marks it waiting;
+  "Bill cancelled in SAP" accounts-only). Seen: undo "by mistake" re-offered INDU; 360 px reasons end
+  438 < bar 455. The closed fold is 44 px, not the cloud's estimated 28.
+- **R4-5 (`7230a53`).** Card line 3 = "Billed 8 Oct · GJ15AV9044". **The SAP code stays beside the
+  name** — plan v4 owner rule "shown beside every name"; the cloud had moved it off. Bill number once
+  picked. ⚠️ The red team's wordlist defines "bill number" as the 10-digit number — in our data that
+  is the **customer code**; never apply that row.
+- **Cash & cheque tab + migration 8 (`19e49ad`).** `20261013_payments_manual_receipt_safe.sql`:
+  `p_client_request_id` (replay = first receipt; advisory lock; new
+  `payment_receipts.client_request_id` + unique index; the 3-arg function DROPPED in the same
+  transaction so no overload), the ₹2 lakh rule, RRN wording (BharatPe/GPay gone). Old function on
+  staging made **CR-00001 + 00002 for one save** and took ₹5 lakh cash (rolled back).
+  `probe-manual-receipt` 24/0. Seen: CR-PTB-2026-00001 ₹845 DEMO MANAN AUTO → MPI5756260009011.
+- **Import clash-row Undo (`40e2f3f`).** ⭐ The clash is in the PREVIEW, not after the import as the
+  cloud assumed — so after "Undo this match" the preview re-reads the bills and **this import cancels
+  the bill, today** ("tomorrow" only when the file is blocked). Only the money on THAT bill is
+  reversed (a parts + labour partner keeps its own); the server rule is asked first. Seen with a
+  re-saved copy of demo report 2, backed out without importing, ASHA re-confirmed.
+- **R4-6 + R4-12 (`3f7fedd`).** The picked card + Confirm say what Confirm does ("₹10,000 of ₹25,000 —
+  ₹15,000 stays due, the bill stays open", "Labour ₹5,500 + Parts ₹6,150 = ₹11,650 · both bills
+  close"). ONE split rule `splitAcross` shared by allocationTargets and confirmPlan, compared bill by
+  bill over 2,000 orders — ⭐ the first version compared only totals, which an ORDER bug would pass;
+  the planted order bug then failed 858×.
+
+**Brief 4 = the last cloud session.** Owner, 2026-10-13: the cloud allowance ends. Brief 4
+(pre-mortem 2) was rewritten to finish in one run and leave PC-runnable scripts. It ran and reported
+(G1–G6, eight migrations 230/230, F1 re-offers 4/10 → 0, F2 clashes 9 → 0, 27 retried saves 0
+duplicates) — but **its bundle never reached the PC**: the file downloaded was pre-mortem 1's again,
+and nothing could be re-sent. Its final report is kept verbatim in
+`docs/backlog/service-payments-premortem-2-summary.md`; its findings doc, Q1–Q5 and extended scripts
+are lost. G1, G4, G6 re-read in code — hold. Owner: **G3 record ₹2 lakh+ cash WITH a reason,
+flagged 269ST** (revising 13 Oct "refuse": refusing to record cash already in the drawer only hides
+it) · **G1 cash form offers the whole order** · G2 leave the freed payment in Match · G6 leave old
+bills open · G4 fixed as a defect.
+
+**`5ce2aa6`.** Migration 8's FILE revised (not on prod; staging re-applied by CREATE OR REPLACE):
+a repeat must match every typed field (day compared as the India day) and the answer carries what was
+saved; ₹2 lakh+ cash needs `cash_limit_reason` → `payment_events.detail.sec_269st`. Split rule moved
+to `lib/confirmPlan.js` (no authority.ts import, so the cash form's node test can use it). Cash form:
+269ST box + "Why was the cash taken?" + "Record anyway"; whole-order choice; done screen shows the
+server's values / "Already saved as …". `probe-manual-receipt` **32/0**; the old function failed the
+new checks 4/4 (a corrected name and another day both silently returned CR-00001). Staging body md5
+`6994bca3…` = the file **with LF endings** — apply LF on prod. Seen 2026-10-15 after the owner signed
+in: the ₹2 lakh box; via the deployed EF with CR-00001's own save id, a same-day repeat replayed and a
+corrected name / other day were refused naming CR-00001; nothing created.
+
+**R4-14 (`eb970d7`).** Service + accounts phone bar = Home · Payments (₹, gated by the access rules)
+· + · Jobs · Profile; the + sheet is "Quick actions" (all departments). Layout moved to
+`navConfig.bottomNavLayout`; `selftest-bottom-nav` 13/0. Seen at 360 px as tester@: + centred at
+180 px, Payments opens /payments.
+
+**R4-21 wordlist — STARTED, paused on three owner questions.** Read the L5 lane (30 proposals) and
+the wordlist. Already done elsewhere: L5-4/5 (part payment words), L5-8 (stale banner), L5-16
+(dates), L5-21 ("No connection"); L5-6 is wrong (the "bill number" row). Proposed same-length swaps
+("loaded" not "imported", "unpaid bill" not "open bill", "Name matches the bill", "Paid by QR",
+"Does not agree" not "Clash", "Sister concern / group company", "Refund returned to us", the Import
+tab sentences). **Three owner questions were put and the question dialog was dismissed — not
+answered:** "Bill not raised yet" → "Bill not made yet"? · drop ".00" when there are no paise? ·
+page sub-title → "Which bill is this payment for?" (or drop)? Nothing of R4-21 is built.
+
+**Tests at `138e749`:** matcher 67 · match-queue 138 · mobile-render 122 · demo-files 87 ·
+import-plan 74 · cash-receipt 47 · bottom-nav 13 · authority 659; build + no-undef (all of `src`)
+clean. Staging: 22 bills, 12 standing matches (11 + the ₹845 cash one), one hand-entered receipt
+(CR-00001), only KISAN ₹30 open; two undo rows kept as history.
+
+**Lessons.** (1) A check whose name claims more than it tests is worse than none — three were
+caught this week (totals-only split comparison, a "disabled" regex that matched anyway, "Bill MPI1"
+when the old card had no "Bill"); every new check now runs against old or planted-broken code.
+(2) The cloud's designs assumed things about the screen that reading the code disproved (the clash
+is in the preview; `confident` is unread; the 28 px fold) — verify a reviewer's premise before
+building on it. (3) A downloaded artifact must be fingerprinted before believing its name: the
+"new" bundle was the old one. (4) Refusing to record a fact is not the same as preventing it (G3).
+
 ## Session log — 2026-10-12/13 (PC): the cloud red team checked, brought in, and 22 of 31 fixed
 
 **"Did the cloud red team damage anything?"** (owner). Answered by measurement, not by its report:

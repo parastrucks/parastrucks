@@ -33,7 +33,8 @@ Raw lane outputs: `docs/backlog/redteam4-lanes/` (L1–L6, X1). Rig: `scripts/pa
 | R4-5 date + plate | ✅ `7230a53` | "Billed 8 Oct · GJ15AV9044" where the codes line was; SAP code stays beside the name (owner rule), bill number once picked. Amber "N bills at this amount" line NOT built (adds a line; owner's call) |
 | R4-6 part-pay remainder + R4-12 "2 bills" | ✅ `3f7fedd` | One line on the PICKED card + the Confirm words ("₹15,000 stays due, the bill stays open" / "Labour ₹5,500 + Parts ₹6,150 = ₹11,650 · both bills close"); payment card "still to match · ₹X of this ₹Y payment is already matched". Same split as Confirm, tested bill by bill |
 | R4-14 nav | ✅ `eb970d7` | Payments tab (₹) in the service + accounts phone bar, gated by the access rules; Profile back; + sheet titled "Quick actions" |
-| R4-9 not-service confirm, R4-21 wordlist, R4-24 link-blue reasons + the + button, R4-29/31 | ⏭️ | in the recorded build order (`docs/backlog/cloud-answer-briefs-1-3.md`); R4-29/31 polish not before go-live |
+| R4-21 wordlist | ⏸️ started 2026-10-15, nothing built | Waiting on three owner answers: "Bill not raised yet" → "Bill not made yet"? · drop ".00" when no paise? · sub-title → "Which bill is this payment for?" (or drop)? Already done elsewhere: L5-4/5/8/16/21. ⚠️ the wordlist's "bill number" row is wrong (see below) |
+| R4-9 not-service confirm, R4-24 link-blue reasons + the + button, R4-29/31 | ⏭️ | in the recorded build order (`docs/backlog/cloud-answer-briefs-1-3.md`); R4-29/31 polish not before go-live |
 
 ## Why this round
 
@@ -428,7 +429,7 @@ MatchScreen genuinely prevents a selection surviving into the next receipt.
 |---|---|---|
 | payment | money that came by QR/UPI (one row in the bank file) | receipt, transaction, credit |
 | bill | what the workshop charged the customer (SAP invoice) | invoice, document, feed |
-| bill number | the 10-digit number, e.g. 0099000412 | the long MPI/PCR/LCS code (call it "SAP code" if shown) |
+| bill number | ⚠️ **CORRECTED 2026-10-15 (PC): the long MPI/PCR/LCS code, e.g. MPI6370260009006** — the cards show it as "Bill MPI…" once picked (R4-5) | ~~the 10-digit number~~ — that number (e.g. 0099000412) is the **SAP customer code**, shown beside the customer name (owner rule) |
 | job | one job card that has 2 bills (parts + labour) | — |
 | match / matched | tie a payment to a bill | allocate, settle, link |
 | confirm | the button that saves your match | OK, submit, apply |
