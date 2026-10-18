@@ -25,7 +25,7 @@ import path from 'node:path'
 import { createElement as h } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server.browser'
 import MatchScreen, { confirmBarLabel } from '../../src/service-payments/components/MatchScreen.jsx'
-import { signalLabel, UNDO_REASONS, REOFFER_REASONS, notServiceKindsFor } from '../../src/service-payments/lib/signalLabels.js'
+import { signalLabel, UNDO_REASONS, REOFFER_REASONS, notServiceKindsFor, NOT_SERVICE_KINDS, NOT_SERVICE_NOTE_MAX } from '../../src/service-payments/lib/signalLabels.js'
 import MatchedFold from '../../src/service-payments/components/MatchedFold.jsx'
 
 let pass = 0, fail = 0
@@ -424,6 +424,23 @@ section('R4-9 — "Not a service payment" is picked, then set aside from the bar
   const reasonsBlock = src.slice(src.indexOf('className="pay-reasons"'), src.indexOf('{footer}', src.indexOf('className="pay-reasons"')))
   ok('tapping a reason never calls the server by itself', reasonsBlock.length > 0 && !reasonsBlock.includes('onNotService('))
   ok('...a picked reason says so to a screen reader', reasonsBlock.includes('aria-pressed'))
+
+  // "Something else" needs a note (owner, 2026-10-18; the server refuses it without).
+  const other = NOT_SERVICE_KINDS.find((k) => k.value === 'other')
+  ok('"Something else" is the one reason that needs a note', other?.needsNote === true &&
+     NOT_SERVICE_KINDS.filter((k) => k.needsNote).length === 1)
+  eq('...until it is typed the bar says so, and is off', bar({ aside: other, noteMissing: true }), 'Say what it is first')
+  eq('...once typed, the bar sets it aside', bar({ aside: other, noteMissing: false }), 'Set aside ₹30 — not service')
+  eq('..."Saving…" still wins', bar({ aside: other, noteMissing: true, busy: true }), 'Saving…')
+  ok('the note box sits under the picked reason, with the server\'s length limit',
+     reasonsBlock.includes('id="pay-aside-note"') && reasonsBlock.includes('maxLength={NOT_SERVICE_NOTE_MAX}'))
+  ok('the bar is off while a needed note is missing', /disabled=\{busy \|\| \(aside \? noteMissing/.test(src))
+  ok('...and the note is what the bar sends', src.includes('onNotService(kind, note || null)'))
+  // One number in two places: the screen's maxLength and the database's refusal.
+  const mig = fs.readFileSync(path.join(process.cwd(), 'supabase/migrations/20261018_payments_classify_note.sql'), 'utf8')
+  ok(`the screen's limit (${NOT_SERVICE_NOTE_MAX}) is the database's`,
+     mig.includes(`length(v_note) > ${NOT_SERVICE_NOTE_MAX}`) && mig.includes(`keep it to ${NOT_SERVICE_NOTE_MAX}`))
+  ok('...and the database refuses "other" without one', /p_kind = 'other' AND v_note IS NULL/.test(mig))
 }
 
 // ════════════════════════════════════════════════════════════════════════════

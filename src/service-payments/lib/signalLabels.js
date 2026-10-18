@@ -181,8 +181,13 @@ export const NOT_SERVICE_KINDS = [
   // The same ₹50 line the Import preview flags as "a test or a top-up".
   { value: 'test_topup', label: 'Test or top-up (₹50 or less)', maxPaise: SMALL_AMOUNT_PAISE },
   { value: 'personal', label: 'Not a customer payment' },
-  { value: 'other', label: 'Something else' },
+  // `needsNote`: says nothing by itself, so a note is required — by the server
+  // too (payments_classify_receipt, 20261018).
+  { value: 'other', label: 'Something else', needsNote: true },
 ]
+
+/** The longest note the server keeps. */
+export const NOT_SERVICE_NOTE_MAX = 300
 
 /** The not-service reasons that fit a payment of this amount. */
 export function notServiceKindsFor(amountPaise) {

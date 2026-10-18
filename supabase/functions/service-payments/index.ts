@@ -239,6 +239,8 @@ Deno.serve(async (req: Request) => {
           p_classification: classification,
           p_kind: str(payload.not_service_kind),
           p_actor: caller.id,
+          // "Something else" needs one; the database refuses it without (20261018).
+          p_note: str(payload.note),
         })
       }
 

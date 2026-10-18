@@ -226,7 +226,7 @@ export default function PaymentsPage() {
     }
   }
 
-  const handleNotService = async (kind) => {
+  const handleNotService = async (kind, note = null) => {
     if (!current) return
     setPendingId('not-service')
     try {
@@ -235,6 +235,7 @@ export default function PaymentsPage() {
         receipt_id: current.id,
         classification: 'not_service',
         not_service_kind: kind,
+        note,
       })
       toast.success('Set aside as not a service payment')
       setOverride(null)

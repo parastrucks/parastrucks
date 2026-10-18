@@ -3451,6 +3451,9 @@ tbody tr:hover td { background: var(--gray-50); }
   font-weight: 600;
 }
 .pay-reason.is-picked::before { content: '✓ '; color: var(--blue); font-weight: 700; }
+/* "Something else": what was it? Right under the picked reason (20261018). */
+.pay-reason-note { margin-top: 6px; display: flex; flex-direction: column; gap: 4px; }
+.pay-reason-note .form-input { font-size: 16px; } /* 16px: iOS does not zoom the page on focus */
 
 /* The thumb zone. Sticky at the bottom on every width — on a phone because it
    is the only place a thumb reaches without regripping, and on desktop because

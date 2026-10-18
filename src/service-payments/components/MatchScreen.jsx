@@ -13,7 +13,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { formatINR } from '../lib/paise.js'
-import { cardReasons, billLine, BOUNCE_REASONS, notServiceKindsFor } from '../lib/signalLabels.js'
+import { cardReasons, billLine, BOUNCE_REASONS, notServiceKindsFor, NOT_SERVICE_NOTE_MAX } from '../lib/signalLabels.js'
 import { REFRESHING, confirmPlan } from '../lib/matchQueue.js'
 
 /**
@@ -27,7 +27,7 @@ import { REFRESHING, confirmPlan } from '../lib/matchQueue.js'
  * @param {string|null} props.pendingId      candidate id currently being written
  * @param {(c:object)=>void} props.onConfirm
  * @param {()=>void} props.onSkip
- * @param {(kind:string)=>void} [props.onNotService]  absent = this person may not
+ * @param {(kind:string, note:string|null)=>void} [props.onNotService]  absent = this person may not
  *        classify (accounts decides); the exit still shows and says who does
  * @param {(awaiting:boolean)=>void} [props.onHoldAdvance]  "Bill not made yet":
  *        true = wait for the bill (again = "bill still not made"), false = back to
@@ -66,6 +66,7 @@ export default function MatchScreen({
   // A not-service reason is PICKED, like a bill, and acted on from the bar —
   // one tap on a reason used to set the money aside at once (R4-9).
   const [asideKind, setAsideKind] = useState(null)
+  const [asideNote, setAsideNote] = useState('')
   // What a way-out opens renders below all three buttons — at 360px that is
   // under the confirm bar, and the tap looked like it did nothing (R4-15).
   const openedRef = useRef(null)
@@ -108,7 +109,9 @@ export default function MatchScreen({
   const plan = selected ? confirmPlan(selected, receipt.amount_paise) : null
   const kinds = notServiceKindsFor(receipt.amount_paise)
   const aside = onNotService ? kinds.find((k) => k.value === asideKind) ?? null : null
-  const closeReasons = () => { setMenuOpen(false); setAsideKind(null) }
+  const closeReasons = () => { setMenuOpen(false); setAsideKind(null); setAsideNote('') }
+  const note = asideNote.trim()
+  const noteMissing = Boolean(aside?.needsNote && !note)
 
   return (
     <div className="pay-match">
@@ -230,14 +233,14 @@ export default function MatchScreen({
           className="pay-confirm"
           ref={confirmRef}
           // Setting money aside needs no bills, so stale bills do not stop it.
-          disabled={busy || (aside ? false : (!selected || feedIsStale))}
+          disabled={busy || (aside ? noteMissing : (!selected || feedIsStale))}
           onClick={() => {
-            if (aside) { const kind = aside.value; closeReasons(); onNotService(kind) }
+            if (aside && !noteMissing) { const kind = aside.value; closeReasons(); onNotService(kind, note || null) }
             else if (selected) onConfirm?.(selected)
           }}
         >
           {confirmBarLabel({
-            busy, refreshing: pendingId === REFRESHING, feedIsStale, aside,
+            busy, refreshing: pendingId === REFRESHING, feedIsStale, aside, noteMissing,
             amountPaise: receipt.amount_paise, button: plan?.button ?? null, hasCandidates: candidates.length > 0,
           })}
         </button>
@@ -263,7 +266,7 @@ export default function MatchScreen({
           type="button"
           className="pay-secondary"
           aria-expanded={menuOpen}
-          onClick={() => { setWaitOpen(false); setAsideKind(null); setMenuOpen((v) => !v) }}
+          onClick={() => { setWaitOpen(false); setAsideKind(null); setAsideNote(''); setMenuOpen((v) => !v) }}
           disabled={busy}
         >
           Not a service payment
@@ -321,6 +324,17 @@ export default function MatchScreen({
               >
                 {k.label}
               </button>
+              {/* "Something else" says nothing by itself: what was it? The
+                  server refuses it without a note (20261018). */}
+              {k.needsNote && k.value === asideKind && (
+                <div className="pay-reason-note">
+                  <label className="form-label" htmlFor="pay-aside-note">What is this money for?</label>
+                  <input id="pay-aside-note" className="form-input" type="text" autoComplete="off"
+                         maxLength={NOT_SERVICE_NOTE_MAX} value={asideNote} disabled={busy} autoFocus
+                         placeholder="e.g. deposit for a body-building job"
+                         onChange={(e) => setAsideNote(e.target.value)} />
+                </div>
+              )}
             </li>
           ))}
         </ul>
@@ -337,8 +351,9 @@ export default function MatchScreen({
  * a dead button reads as broken (R4-10) — but not over a picked not-service
  * reason, which needs no bills.
  */
-export function confirmBarLabel({ busy, refreshing, feedIsStale, aside, amountPaise, button, hasCandidates }) {
+export function confirmBarLabel({ busy, refreshing, feedIsStale, aside, noteMissing = false, amountPaise, button, hasCandidates }) {
   if (busy) return refreshing ? 'Updating the list…' : 'Saving…'
+  if (aside && noteMissing) return 'Say what it is first'
   if (aside) return `Set aside ${formatINR(amountPaise)} — not service`
   if (feedIsStale) return 'Confirm is off — bills not loaded yet'
   if (button) return button
