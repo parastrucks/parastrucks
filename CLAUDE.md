@@ -67,7 +67,9 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
     release needed); `scripts/selftest-log-error.mjs` 14/0 (old reader fails 7); **staging deployed — first two
     rows ever** (logError + a real uncaught error). ✅ **LIVE ON PROD 2026-10-18:** PR **#130** → `6561628` (squash; + `source-map-js` 1.2.2 lockfile bump for a new HIGH
     audit advisory, proven inert: 43 dist files, 0 byte-different); `log-error` deployed to prod from that commit
-    (5 assets; downloaded back = repo; unauthenticated → 401). ⏭️ One signed-in test report on prod.
+    (5 assets; downloaded back = repo; unauthenticated → 401); post-merge CI + 3 Vercel deploys green. Owner skipped a
+    live prod test — ⚠️ **the browser pane cannot load prod** (`ERR_BLOCKED_BY_CLIENT` on every asset). The first real
+    error from a staff browser is the proof.
   - **Not seen live (staging has no open parts + labour pair):** the whole-order choice on the cash
     form and the order wording on the picked card. **Not yet built anywhere:** the GM's weekly
     exceptions digest, so a 269ST-flagged cash receipt is recorded but shown to nobody yet.
