@@ -61,8 +61,11 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
     Live save seen + put back. ✅ **Confirm is GREEN** (`31b0764`, owner's idea) so it no longer pairs
     with the blue + (R4-24) — the + itself left as is. ⭐ **The MCP refuses staging since 10-17: run SQL
     with `npx supabase@2.109.1 db query --linked --workdir <scratch>/sb -f <file>`** (linked once from a
-    scratch workdir, nothing in the repo). ⚠️ **Staging `error_log` is EMPTY** — the 10-17 crash was never
-    recorded (three 400s); crash reporting may be broken on prod too. ⏭️ Investigate next.
+    scratch workdir, nothing in the repo). ⭐⭐ **CRASH REPORTING HAS NEVER WORKED — cause found** (`ce85ab7`): callEdge sends
+    `{ action, payload }`, `log-error` read `body.message` → 400 "message required", swallowed. Confirmed on prod
+    from its served chunk + `functions download`. Fixed in the function (`report.ts`, both shapes, no frontend
+    release needed); `scripts/selftest-log-error.mjs` 14/0 (old reader fails 7); **staging deployed — first two
+    rows ever** (logError + a real uncaught error). ⏭️ **Prod deploy of `log-error` awaits owner approval.**
   - **Not seen live (staging has no open parts + labour pair):** the whole-order choice on the cash
     form and the order wording on the picked card. **Not yet built anywhere:** the GM's weekly
     exceptions digest, so a 269ST-flagged cash receipt is recorded but shown to nobody yet.
