@@ -29,6 +29,20 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ---
 
+## Current state (2026-10-18)
+
+- **⭐⭐ CLIENT CRASH REPORTING HAD NEVER WORKED — FIXED in `log-error`.** The browser's logger
+  (`src/lib/errorLog.js`) sends through `callEdge`, which wraps every call as `{ action, payload }`;
+  `log-error` read `body.message` at the top level and answered 400 "message required", which the
+  logger swallows by design. So `error_log` never received a row — before PR #124 (2026-09-19) the
+  module never loaded, and after it every report was refused. Found when a real crash on staging
+  left three 400s and zero rows; confirmed on prod from the served `errorLog-*.js` chunk and the
+  downloaded prod function. **Fix in the function** (`supabase/functions/log-error/report.ts` reads
+  the envelope or a flat body), so every browser already running the portal reports as soon as it
+  is deployed — no frontend release. `scripts/selftest-log-error.mjs` 14/0 (reads the client's own
+  source for the shape; the old reader fails 7). Staging: a `logError()` call and a real uncaught
+  error both recorded. ⚠️ **An empty Error Log tab was never evidence of health** — now it can be.
+
 ## Current state (2026-10-05)
 
 - **✅ AL October 2026 pricelist is on prod** (WEF 1-Oct-26, data-only, no deploy). The owner
