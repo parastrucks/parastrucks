@@ -74,6 +74,12 @@ export default function MatchScreen({
   useEffect(() => {
     if (menuOpen || waitOpen) openedRef.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' })
   }, [menuOpen, waitOpen])
+  // The note box opens under the LAST reason, where the bar covers it at 360px
+  // (seen on staging, 2026-10-18): bring it clear of the bar.
+  const noteRef = useRef(null)
+  useEffect(() => {
+    if (asideKind) noteRef.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' })
+  }, [asideKind])
 
   if (!receipt) {
     return (
@@ -327,7 +333,7 @@ export default function MatchScreen({
               {/* "Something else" says nothing by itself: what was it? The
                   server refuses it without a note (20261018). */}
               {k.needsNote && k.value === asideKind && (
-                <div className="pay-reason-note">
+                <div className="pay-reason-note" ref={noteRef}>
                   <label className="form-label" htmlFor="pay-aside-note">What is this money for?</label>
                   <input id="pay-aside-note" className="form-input" type="text" autoComplete="off"
                          maxLength={NOT_SERVICE_NOTE_MAX} value={asideNote} disabled={busy} autoFocus

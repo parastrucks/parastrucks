@@ -523,8 +523,11 @@ section('the CSS contract — a phone claim that HTML cannot prove')
      /\.pay-page-head \.page-head-sub \{\s*display:\s*none/.test(css))
   // The undo reasons open at the very bottom: they must scroll clear of the bar.
   ok('the undo reasons scroll clear of the confirm bar (and the nav, on phones)',
-     /\.pay-reasons, \.pay-wait, \.pay-denied-note, \.pay-matched-ask \{ scroll-margin-bottom: 140px; \}/.test(css) &&
-     /@media \(max-width: 759px\) \{\s*\.pay-reasons, \.pay-wait, \.pay-denied-note, \.pay-matched-ask \{\s*scroll-margin-bottom: calc\(140px \+ var\(--bottom-nav-h\)/.test(css))
+     /\.pay-reasons, \.pay-wait, \.pay-denied-note, \.pay-matched-ask, \.pay-reason-note \{ scroll-margin-bottom: 140px; \}/.test(css) &&
+     /@media \(max-width: 759px\) \{\s*\.pay-reasons, \.pay-wait, \.pay-denied-note, \.pay-matched-ask, \.pay-reason-note \{\s*scroll-margin-bottom: calc\(140px \+ var\(--bottom-nav-h\)/.test(css))
+  // The "Something else" note box opened under the bar at 360px (staging, 2026-10-18).
+  ok('the note box scrolls clear of the bar when it opens',
+     /noteRef\.current\?\.scrollIntoView/.test(fs.readFileSync(path.join(process.cwd(), 'src/service-payments/components/MatchScreen.jsx'), 'utf8')))
   ok('the "Show the last 7 days" link is a full tap target', /\.pay-matched-span \{[^}]*min-height: 44px/.test(css))
   // R4-22: the disabled button still carries words.
   ok('disabled Confirm is readable (no white text on light grey)',

@@ -3424,9 +3424,9 @@ tbody tr:hover td { background: var(--gray-50); }
 .pay-reasons { list-style: none; display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
 /* What opens under the ways out is scrolled into view; this keeps it clear of
    the confirm bar (and the nav, on phones) instead of under them (R4-15). */
-.pay-reasons, .pay-wait, .pay-denied-note, .pay-matched-ask { scroll-margin-bottom: 140px; }
+.pay-reasons, .pay-wait, .pay-denied-note, .pay-matched-ask, .pay-reason-note { scroll-margin-bottom: 140px; }
 @media (max-width: 759px) {
-  .pay-reasons, .pay-wait, .pay-denied-note, .pay-matched-ask {
+  .pay-reasons, .pay-wait, .pay-denied-note, .pay-matched-ask, .pay-reason-note {
     scroll-margin-bottom: calc(140px + var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px));
   }
 }
