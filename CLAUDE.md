@@ -50,7 +50,19 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
     re-offer rule matches the SAVED text (a test guards it). R4-24 grey reason line ✅ `5a9b86f`. R4-9 ✅ `8423adb` (pick, then "Set aside ₹30 — not service"; + "Test or top-up ≤ ₹50"; no note box — needs a migration, owner call) — and ⭐ it found that **finishing the LAST payment crashed the page** since `e49ea7b` (12 Oct; staging always had one left) — fixed. R4-18 lists behind the Import counts ✅ `c706422`. **The recorded red-team build order is now complete**; left: R4-29/31 polish (not before go-live) and the owner-side items below. ⚠️ **The wordlist's
     "bill number = the 10-digit number" row is WRONG** — that number is the SAP customer code.
   - ⚠️ **Prod: migration 8 must be applied with LF line endings** (staging body md5 `6994bca3…`), and
-    the prod rollout is now **eight** migrations + `probe-manual-receipt.sql` (item 9).
+    the prod rollout is now **NINE** migrations + `probe-manual-receipt.sql` + `probe-classify-note.sql`
+    (item 9). **Migration 9 also LF** (staging body md5 `2ace6c1d…`).
+  - **2026-10-18:** ✅ **"Something else" needs a note — migration 9** `20261018_payments_classify_note.sql`
+    (`9947cd7`, owner said "do it"): `payment_receipts.not_service_note`; `payments_classify_receipt` gains
+    `p_note` (DEFAULT NULL — the old 5-arg EF call still resolves) and REFUSES kind `other` without one;
+    300 max; cleared when classified back; every note kept in the event. probe **19/0**, 0 residue; old
+    function stops at the first call. EF deployed to staging. Screen: note box under "Something else",
+    bar "Say what it is first"; ⭐ it opened BEHIND the bar at 360 px — fixed `d59b696` (scrolls clear).
+    Live save seen + put back. ✅ **Confirm is GREEN** (`31b0764`, owner's idea) so it no longer pairs
+    with the blue + (R4-24) — the + itself left as is. ⭐ **The MCP refuses staging since 10-17: run SQL
+    with `npx supabase@2.109.1 db query --linked --workdir <scratch>/sb -f <file>`** (linked once from a
+    scratch workdir, nothing in the repo). ⚠️ **Staging `error_log` is EMPTY** — the 10-17 crash was never
+    recorded (three 400s); crash reporting may be broken on prod too. ⏭️ Investigate next.
   - **Not seen live (staging has no open parts + labour pair):** the whole-order choice on the cash
     form and the order wording on the picked card. **Not yet built anywhere:** the GM's weekly
     exceptions digest, so a 269ST-flagged cash receipt is recorded but shown to nobody yet.
@@ -825,12 +837,13 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
      No more cloud sessions (owner, 2026-10-13) — all BEFORE item 9.
   8. **Multiple QRs:** when the next QR is added, map `qr_ref` → outlet and give same-outlet bills a
      small RANKING bonus (never a filter — owner rule, 2026-09-11).
-  9. Then prod: **eight** migrations (`20260830`, `20260908`, `20260926_…read_gates…`,
+  9. Then prod: **nine** migrations (`20260830`, `20260908`, `20260926_…read_gates…`,
      `20260926_…views…`, `20260926_…import_rules`, `20261009_payments_hdfc_source`,
-     `20261012_payments_awaiting_invoice`, `20261013_payments_manual_receipt_safe`) — ⚠️ the screen
+     `20261012_payments_awaiting_invoice`, `20261013_payments_manual_receipt_safe` (LF),
+     `20261018_payments_classify_note` (LF)) — ⚠️ the screen
      now READS `awaiting_since` and bill `created_at` and calls the 4-argument manual receipt, so the
      migrations must land before the frontend ships, then
-     `probe-allocation.sql` + `probe-import-parity.sql` + `probe-manual-receipt.sql` (all self-aborting) — ⛔
+     `probe-allocation.sql` + `probe-import-parity.sql` + `probe-manual-receipt.sql` + `probe-classify-note.sql` (all self-aborting) — ⛔
      `probe-read-gates.sql` is staging-only and REFUSES on prod by design (ERP-sync webhook on
      `users`); on prod, prove the gates by md5 of `pg_get_functiondef` against staging instead.
      Then deploy the EF. Owner-approved, separate step. (Staging shows the import-rules migration
