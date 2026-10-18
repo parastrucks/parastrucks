@@ -19,13 +19,9 @@ import { createClient } from "npm:@supabase/supabase-js@2.100.1"
 import { secretKey, publishableKey } from "../_shared/keys.ts"
 import { rateLimit } from "../_shared/rateLimit.ts"
 import { jsonResponse, preflight } from "../_shared/cors.ts"
-
-// Truncate long strings to prevent payload-bomb DoS.
-const trunc = (v: unknown, max: number): string | null => {
-  if (v == null) return null
-  const s = typeof v === "string" ? v : String(v)
-  return s.length > max ? s.slice(0, max) : s
-}
+// The report is read from callEdge's { action, payload } envelope (or a flat
+// body) — reading only the top level refused every report ever sent (report.ts).
+import { readReport } from "./report.ts"
 
 Deno.serve(async (req: Request) => {
   const json = (b: unknown, status = 200) => jsonResponse(req, b, status)
@@ -67,21 +63,15 @@ Deno.serve(async (req: Request) => {
     return json({ error: "Invalid JSON" }, 400)
   }
 
-  const message = trunc(body.message, 2000)
-  const stack = trunc(body.stack, 8000)
-  const pageUrl = trunc(body.url, 500)
-  const context = body.context && typeof body.context === "object"
-    ? body.context
-    : null
-
-  if (!message) return json({ error: "message required" }, 400)
+  const report = readReport(body)
+  if (!report) return json({ error: "message required" }, 400)
 
   const { error } = await admin.from("error_log").insert({
     user_id: u.user.id,
-    url: pageUrl,
-    message,
-    stack,
-    context,
+    url: report.url,
+    message: report.message,
+    stack: report.stack,
+    context: report.context,
   })
   if (error) return json({ error: error.message }, 500)
   return json({ ok: true })
