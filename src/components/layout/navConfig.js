@@ -138,7 +138,7 @@ export const CREATE_ACTIONS = [
   { to: '/vendor-jobs',      icon: 'wrench',   label: 'New Vendor Job',  desc: 'Outside-workshop / ancillary repair job', openNew: true },
   // Matching is done on staff phones (owner: the cornerstone), so it must be
   // one tap from the mobile Create sheet, not three menus deep.
-  { to: '/payments',         icon: 'rupee',    label: 'Match Payments',  desc: 'Which bill did each UPI payment pay?' },
+  { to: '/payments',         icon: 'rupee',    label: 'Match Payments',  desc: 'Which bill is this payment for?' },
 ]
 
 /* Is a nav item reachable for this user? Groups need ≥1 accessible child.
