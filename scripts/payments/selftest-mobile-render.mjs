@@ -534,6 +534,13 @@ section('the CSS contract — a phone claim that HTML cannot prove')
      /color:\s*var\(--gray-600\)/.test((css.match(/\.pay-confirm:disabled\s*\{([^}]*)\}/) || [])[1] || ''))
 
   ok('a picked not-service reason looks picked', /\.pay-reason\.is-picked \{[^}]*background: var\(--blue-lighter\)/.test(css))
+  // R4-24: Confirm and the phone bar's + were the same blue, one above the other.
+  {
+    const confirmBg = (block('.pay-confirm').match(/background:\s*([^;]+);/) || [])[1]
+    const plusBg = (block('.bottom-nav-create').match(/background:\s*([^;]+);/) || [])[1]
+    ok('Confirm is not the colour of the phone bar\'s + button', !!confirmBg && !!plusBg && confirmBg.trim() !== plusBg.trim() &&
+       !/blue|accent/.test(confirmBg), `confirm ${confirmBg}, + ${plusBg}`)
+  }
   // R4-24: a blue reason line read as a link and was tapped first.
   {
     const why = block('.pay-candidate-why')

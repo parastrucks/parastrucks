@@ -3505,9 +3505,13 @@ tbody tr:hover td { background: var(--gray-50); }
 @media (min-width: 760px) {
   .pay-confirmbar { left: var(--sidebar-w); }
 }
+/* Green, not the portal's blue: the blue + of the phone bar sits right under
+   it, and two blue buttons read as one pair — a mechanic took the + for "a new
+   money entry" (red team 4, R4-24). Green is "go / done" across the portal
+   (toasts, the ✓). White on --green 5.02:1; hover #166534 7.13:1 (owner, 2026-10-18). */
 .pay-confirm {
   min-height: 52px;
-  background: var(--blue);
+  background: var(--green);
   color: var(--white);
   border: 0;
   border-radius: var(--radius-sm);
@@ -3516,7 +3520,7 @@ tbody tr:hover td { background: var(--gray-50); }
   font-weight: 700;
   cursor: pointer;
 }
-.pay-confirm:hover:not(:disabled) { background: var(--blue-dark); }
+.pay-confirm:hover:not(:disabled) { background: #166534; }
 /* Disabled still carries words ("Pick a bill above", "Saving…"): white on
    gray-300 was 1.84:1. Grey on light grey with an edge is 6.21:1 (R4-22). */
 .pay-confirm:disabled {
