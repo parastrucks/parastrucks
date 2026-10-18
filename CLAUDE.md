@@ -30,6 +30,30 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ---
 
+## Current state (2026-10-18)
+
+- **✅ PROD: client crash reporting fixed — it had NEVER worked.** PR **#130** → `6561628`: `callEdge`
+  sends `{ action, payload }`, `log-error` read `body.message` → 400 "message required", swallowed.
+  `log-error/report.ts` reads both shapes; deployed to prod from `6561628` (downloaded back = repo; 401
+  unauthenticated); post-merge CI + Vercel green. Rode along: `source-map-js` 1.2.2 lockfile bump (new HIGH
+  advisory; proven inert). Live prod test skipped (owner) — **the first real staff error is the proof**
+  (Access Rules → Error Log). ⚠️ **The browser pane cannot load prod** (every `/assets/*` →
+  `ERR_BLOCKED_BY_CLIENT`) — use the owner's Chrome (Claude in Chrome) for prod checks.
+- **⛔ Owner, 2026-10-18: Match Payments will NOT go live now; other changes may be pushed.**
+- **🔨 Payments (staging only), since 10-17:** red-team build order complete (R4-21 `b0ed009`, R4-24
+  `5a9b86f`, R4-9 `8423adb` + end-of-list crash fix, R4-18 `c706422`) · **migration 9** "Something else"
+  needs a note (`9947cd7`, + scroll fix `d59b696`) · **green Confirm** (`31b0764`, owner's idea; the + left
+  as is) · quick-actions wording (`c011aec`). **Prod rollout = NINE migrations, 8 and 9 in LF.**
+  ⭐ Full record: `PORTAL_HISTORY.md` → "Session log — 2026-10-17 → 10-18".
+- ⭐ **The Supabase MCP refuses staging AND prod since 10-17.** Staging SQL:
+  `npx --yes supabase@2.109.1 db query --linked --workdir <scratch>/sb "<sql>"` (or `-f`), after a one-time
+  `supabase link --project-ref klpnhpnlotcbbovwswmq --workdir <scratch>/sb` (memory
+  `reference_portal_sql_workflow.md`).
+- ⚠️ `gh pr merge` can be refused by the permission classifier ("Merge Without Review") even when asked;
+  it went through when the owner said "you do it" directly. Check GitHub before trusting "merged".
+- **Staging now:** 22 bills, 12 receipts, 12 standing matches, KISAN ₹30 the only open payment, `error_log`
+  0 rows (the two ZZPROBE rows deleted with approval). Browser pane signed in as tester@ on localhost.
+
 ## Current state (2026-10-17)
 
 - **🔨 SERVICE PAYMENTS — the correction screens are built (staging only; prod untouched).** Branch
@@ -47,29 +71,12 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
     said "start" without answering the three questions, so the lane's picks were used (each a
     one-line revert): "Bill not made yet" · no ".00" when there are no paise · sub-title "Which bill
     is this payment for?". ⚠️ **The two re-offer undo reasons must keep their exact words** — the
-    re-offer rule matches the SAVED text (a test guards it). R4-24 grey reason line ✅ `5a9b86f`. R4-9 ✅ `8423adb` (pick, then "Set aside ₹30 — not service"; + "Test or top-up ≤ ₹50"; no note box — needs a migration, owner call) — and ⭐ it found that **finishing the LAST payment crashed the page** since `e49ea7b` (12 Oct; staging always had one left) — fixed. R4-18 lists behind the Import counts ✅ `c706422`. **The recorded red-team build order is now complete**; left: R4-29/31 polish (not before go-live) and the owner-side items below. ⚠️ **The wordlist's
+    re-offer rule matches the SAVED text (a test guards it). R4-24 grey reason line ✅ `5a9b86f`. R4-9 ✅ `8423adb` (pick, then "Set aside ₹30 — not service"; + "Test or top-up ≤ ₹50"; note box built 10-18 as migration 9) — and ⭐ it found that **finishing the LAST payment crashed the page** since `e49ea7b` (12 Oct; staging always had one left) — fixed. R4-18 lists behind the Import counts ✅ `c706422`. **The recorded red-team build order is now complete**; left: R4-29/31 polish (not before go-live) and the owner-side items below. ⚠️ **The wordlist's
     "bill number = the 10-digit number" row is WRONG** — that number is the SAP customer code.
   - ⚠️ **Prod: migration 8 must be applied with LF line endings** (staging body md5 `6994bca3…`), and
     the prod rollout is now **NINE** migrations + `probe-manual-receipt.sql` + `probe-classify-note.sql`
     (item 9). **Migration 9 also LF** (staging body md5 `2ace6c1d…`).
-  - **2026-10-18:** ✅ **"Something else" needs a note — migration 9** `20261018_payments_classify_note.sql`
-    (`9947cd7`, owner said "do it"): `payment_receipts.not_service_note`; `payments_classify_receipt` gains
-    `p_note` (DEFAULT NULL — the old 5-arg EF call still resolves) and REFUSES kind `other` without one;
-    300 max; cleared when classified back; every note kept in the event. probe **19/0**, 0 residue; old
-    function stops at the first call. EF deployed to staging. Screen: note box under "Something else",
-    bar "Say what it is first"; ⭐ it opened BEHIND the bar at 360 px — fixed `d59b696` (scrolls clear).
-    Live save seen + put back. ✅ **Confirm is GREEN** (`31b0764`, owner's idea) so it no longer pairs
-    with the blue + (R4-24) — the + itself left as is. ⭐ **The MCP refuses staging since 10-17: run SQL
-    with `npx supabase@2.109.1 db query --linked --workdir <scratch>/sb -f <file>`** (linked once from a
-    scratch workdir, nothing in the repo). ⭐⭐ **CRASH REPORTING HAS NEVER WORKED — cause found** (`ce85ab7`): callEdge sends
-    `{ action, payload }`, `log-error` read `body.message` → 400 "message required", swallowed. Confirmed on prod
-    from its served chunk + `functions download`. Fixed in the function (`report.ts`, both shapes, no frontend
-    release needed); `scripts/selftest-log-error.mjs` 14/0 (old reader fails 7); **staging deployed — first two
-    rows ever** (logError + a real uncaught error). ✅ **LIVE ON PROD 2026-10-18:** PR **#130** → `6561628` (squash; + `source-map-js` 1.2.2 lockfile bump for a new HIGH
-    audit advisory, proven inert: 43 dist files, 0 byte-different); `log-error` deployed to prod from that commit
-    (5 assets; downloaded back = repo; unauthenticated → 401); post-merge CI + 3 Vercel deploys green. Owner skipped a
-    live prod test — ⚠️ **the browser pane cannot load prod** (`ERR_BLOCKED_BY_CLIENT` on every asset). The first real
-    error from a staff browser is the proof.
+  - **2026-10-18 →** migration 9, green Confirm, crash reporting fixed on prod: see the 2026-10-18 block.
   - **Not seen live (staging has no open parts + labour pair):** the whole-order choice on the cash
     form and the order wording on the picked card. **Not yet built anywhere:** the GM's weekly
     exceptions digest, so a 269ST-flagged cash receipt is recorded but shown to nobody yet.
@@ -840,7 +847,7 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
      open pair on staging).
      ✅ **R4-14 BUILT `eb970d7`**: service + accounts phone bar = Home · Payments (₹, gated by access rules) ·
      + · Jobs · Profile; the + sheet is "Quick actions" (all depts); layout in `navConfig.bottomNavLayout`,
-     `selftest-bottom-nav` 13/0; seen at 360 px as tester@. ✅ **R4-21 `b0ed009`**, ✅ **R4-24 `5a9b86f`**, ✅ **R4-9 `8423adb`** + end-of-list crash fix, ✅ **R4-18 `c706422`** (all seen on staging) — the build order is done; open owner calls: the + button, a note box for "Something else" (9th migration).
+     `selftest-bottom-nav` 13/0; seen at 360 px as tester@. ✅ **R4-21 `b0ed009`**, ✅ **R4-24 `5a9b86f`**, ✅ **R4-9 `8423adb`** + end-of-list crash fix, ✅ **R4-18 `c706422`** (all seen on staging) — the build order is done; 10-18: migration 9 note box ✅ `9947cd7`, green Confirm ✅ `31b0764` (the + left as is).
      No more cloud sessions (owner, 2026-10-13) — all BEFORE item 9.
   8. **Multiple QRs:** when the next QR is added, map `qr_ref` → outlet and give same-outlet bills a
      small RANKING bonus (never a filter — owner rule, 2026-09-11).
