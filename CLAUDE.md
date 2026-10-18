@@ -65,7 +65,9 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
     `{ action, payload }`, `log-error` read `body.message` → 400 "message required", swallowed. Confirmed on prod
     from its served chunk + `functions download`. Fixed in the function (`report.ts`, both shapes, no frontend
     release needed); `scripts/selftest-log-error.mjs` 14/0 (old reader fails 7); **staging deployed — first two
-    rows ever** (logError + a real uncaught error). ⏭️ **Prod deploy of `log-error` awaits owner approval.**
+    rows ever** (logError + a real uncaught error). ✅ **LIVE ON PROD 2026-10-18:** PR **#130** → `6561628` (squash; + `source-map-js` 1.2.2 lockfile bump for a new HIGH
+    audit advisory, proven inert: 43 dist files, 0 byte-different); `log-error` deployed to prod from that commit
+    (5 assets; downloaded back = repo; unauthenticated → 401). ⏭️ One signed-in test report on prod.
   - **Not seen live (staging has no open parts + labour pair):** the whole-order choice on the cash
     form and the order wording on the picked card. **Not yet built anywhere:** the GM's weekly
     exceptions digest, so a 269ST-flagged cash receipt is recorded but shown to nobody yet.
