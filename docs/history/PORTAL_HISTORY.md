@@ -26,6 +26,29 @@
 
 ---
 
+## Session log — 2026-10-21 (PC, later): Phase 10 Stage 1 — the column map and the schema, on staging
+
+Owner: *"yes start stage 1"*. Branch `10b-foundation` from `portal` `f914e62`. Staging only; prod
+untouched. ⭐ Full record: `docs/backlog/phase10-execution-plan.md` → "STAGE 1".
+- **Column map from the real headers** (`scripts/phase10/columns.cjs`, shapes only, no values) →
+  `docs/backlog/phase10-column-map.md`: 88 stored + 3 screen columns. Found the "gross to AL" formula
+  round 2 could not (Payment Amount = (CTD + AMC) × Qty); answered two questions from the data instead
+  of asking (CBN = V-part 265/266; Other deductions is its own figure, 0/167).
+- **Owner's answers:** GST 28% before 22 Sep 2025 else 18% (data agrees); road tax = basic × 6% (0 for
+  staff buses / no lifetime tax), on the bill value until the RTO switched to MRP — **dated from the
+  data to 1 Aug 2025**; CRETEM is the HSRP/CRTM constant; RET-INT T–V and Subvention Status dropped;
+  cancel/rebill columns kept; AL Balance Sheet stays its own ledger (a generated-ledger proposal is
+  pending — the owner asked what it meant, explained). ❓ Open: were tippers always 18% (63 rows were
+  before the change)?
+- **Migration `20261021_phase10_tracker_foundation.sql` on STAGING** (`cca8904`): the book, the
+  compute trigger, incentives/notes/formats/views/audit/request/import tables, and one write procedure
+  (all-or-nothing, before-value conflicts, idempotent, field audit). ⭐ Stricter than the plan: no API
+  grants at all — RLS cannot hide incentive columns, so every access goes through the Edge Function.
+- **Proof:** `probe-foundation.sql` 42/0 on staging (0 rows left) and on local PGlite 18.6; three
+  planted bugs (TCS on CTC, GST date a day late, no road-tax switch) each caught at their own check.
+  PGlite 0.3.4 crashes on exception blocks — use 0.5.x.
+- Next: step 3, the `admin-vehicle-units` Edge Function and the per-user access switch.
+
 ## Session log — 2026-10-21 (PC): Phase 10 resumed — four free grids compared side by side
 
 Owner: *"run a full survey and bring this session up to speed"*, then *"I will need to try both
