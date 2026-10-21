@@ -362,13 +362,16 @@ Run it: `preview_start {name:"portal"}` (or `npm run dev`) → **`http://localho
 
 | | Glide 6.0.3 (MIT, canvas) | ReactGrid 4.1.17 (MIT, DOM) | Univer 1.1.0 (Apache-2.0, canvas, free presets) | FortuneSheet 1.0.4 (MIT, canvas) |
 |---|---|---|---|---|
-| One action, whole book 180k cells | **3–7 ms** | **970 ms** (~80 ms + ~12 µs per cell — reprocesses every cell on each change) | **17–18 ms** edit/bold · 83 ms undo · 92 ms 20×8 block | ⏭️ not run |
+| One action, whole book 180k cells | **3–7 ms** | **970 ms** (~80 ms + ~12 µs per cell — reprocesses every cell on each change) | **17–18 ms** edit/bold · 83 ms undo · 92 ms 20×8 block | **85 ms** edit · 93 bold · 104 undo · 98 20×8 block · 92 block undo |
 | One action, month × 25 cols | — | 85 ms | — | — |
-| Load | 10–13 ms first paint | — | 270 ms | ⏭️ |
+| Load | 10–13 ms first paint | — | 180–290 ms | 760–1,010 ms |
 | Undo/redo, toolbar, formatting | ours to build (built on ReactGrid tab) | ours to build (built) | **built in** | built in |
 | Filter, find, comments, dropdowns | ours | ours (browser Ctrl+F works — DOM) | **built in** (free presets) | built in |
 | Pivot | ours (~7 d) | ours | **Pro only (paid)** → ours | none → ours |
-| Every edit reaches us? | yes (our code) | yes (our code) | typed ✅ undo ✅ · paste / fill-drag ⏭️ | ⏭️ |
+| Every edit reaches us? (real UI) | yes (our code) | yes (our code) | typed ✅ paste ✅ fill-drag ✅ undo ✅ redo ✅ | typed ✅ paste ✅ fill-drag ✅ undo ✅ redo ✅ |
+| A paste = one undo step | ours (built) | ours (built) | ✅ | ✅ |
+| Lock on computed money | ours | `nonEditable` cells | typing refused (`BeforeSheetEditStart`) · paste/fill caught by our put-back | typing refused · overlapping paste refused whole · ⚠️ **fill goes past the hook** → our put-back restores it (300 ms, once) |
+| Data-quality catches | — | — | ⚠️ paste leaves a **trailing space** (see rules) · ⚠️ fill sends **blank-then-value** | clean paste · source label is a guess (one-cell fill shows "typed") |
 
 ### Rules learned (do not re-learn them)
 
@@ -377,8 +380,30 @@ Run it: `preview_start {name:"portal"}` (or `npm run dev`) → **`http://localho
   locked-cell put-back loop forever (1,673 → 1,790 put-backs). Fixed + guarded (`reverting` flag).
 - Univer undo/redo emit mutations with **no COMMAND around them** — clear the "last command" on
   `CommandExecuted`, treat a no-command change as undo/redo, and use the key pressed to say which.
+- ⚠️ **Univer takes Ctrl+Z before the grid's element sees it, and undoes inside its own window
+  listener.** To know undo from redo, listen on the window (capture phase) and register BEFORE
+  `createUniver`, or each change carries the PREVIOUS key's label (measured). A hint expires in 1 s.
+- ⚠️ **Univer paste from a plain-text clipboard with Windows line endings leaves a trailing space**
+  (char 32) on the last cell of every row but the final one ("ENG1 "). FortuneSheet stored it clean.
+  A real Excel copy also carries HTML, which may avoid it — **unchecked**. Trim on save regardless:
+  a trailing space in a chassis or engine number breaks every lookup.
+- ⚠️ **Univer fill-drag blanks each target first, then writes**: 3 real changes arrived as 10 events.
+  The audit must collapse one command's events to before-vs-final, or it fills with fake blanks.
 - FortuneSheet names no commands: the source of an edit is inferred (paste hook / undo keys / cell count)
-  and is labelled "inferred" on screen.
+  and is labelled "inferred" on screen. A one-cell fill shows as "typed".
+- ⚠️ **FortuneSheet: its fill skips `beforeUpdateCell`** — a fill into a locked column wrote 0 there;
+  the put-back (diff against our copy) restored it. With Fortune the put-back is part of the lock.
+- **FortuneSheet's API is asynchronous** (it queues into React state): a synchronous timer reads 0 ms.
+  Time to the moment the change is visible, yielding via `MessageChannel` (not throttled like frames).
+  And its ref object is **rebuilt** as state changes — read `ref.current` each time, never a saved copy
+  (the copy saved at mount answered "sheet not found").
+- FortuneSheet paste only runs after its own Ctrl+V keydown (`isPasteAction`), so a synthetic paste
+  event is ignored. Test paste with a real Ctrl+V; PowerShell `Set-Clipboard` sets the contents.
+- Once, early on, a FortuneSheet cell went blank straight after Enter. It followed calls through the
+  stale API copy and did not recur in two clean tries on the user path. Not explained; watch for it.
+- **Take click coordinates from a screenshot of the CURRENT layout.** The page above the grid changes
+  height (tab row wrapping, capture bar), so an older screenshot's y lands rows off — it looked like
+  a FortuneSheet bug until a zoom showed the pointer on the selected cell.
 - **Never trust a frame-timed number in a hidden pane or throttled window** — rAF ran at ~1/s, so a
   do-nothing double-frame wait measured ~2,000 ms and made Univer look like 2 s per action. Time the
   work itself, and always measure a do-nothing baseline.
@@ -389,17 +414,22 @@ Run it: `preview_start {name:"portal"}` (or `npm run dev`) → **`http://localho
 
 ### ⏭️ Next on resume
 
-1. **FortuneSheet**: load on React 18, timings at the full book (`setCellFormat` bold, `setCellValue`,
-   `handleUndo`, a block write — via `window.__fortune`, no frame waits), capture of typed / undo
-   via `onOp`, and the lock.
-2. **Univer through the real UI**: paste from Excel, fill-drag, double-click on a locked column
-   (`BeforeSheetEditStart`), and what `getRangePermission().protect()` does for the owner.
-3. Put the four side by side for the owner to try by hand; **the owner chooses**. Then record the
-   decision here + `PORTAL_HISTORY.md` + `phase_status`, and delete `src/spike/` in the real build.
+✅ Done 2026-10-21 (`0858dc1`): FortuneSheet loaded, timed and checked; Univer paste, fill-drag and
+lock through the real UI. `getRangePermission().protect()` was not tried — the lock already works
+without it (edit-start refusal + put-back), so it is not needed for the choice.
 
-Leaning, unconfirmed: an engine (Univer) gives undo, formatting, filter, find, comments and
-dropdowns for free and is fast at full size — but every edit must still be proven to reach the
-database, and pivot stays ours to build in all four.
+1. **The owner tries all four by hand** at `http://localhost:3000/grid-spike?strict=0` and chooses.
+   Worth trying on each: type, paste a block copied from a real Excel file, drag-fill, Ctrl+Z, bold,
+   fill colour, filter, find, right-click.
+2. One check left for an engine pick: **paste from a real Excel copy into Univer** — does the
+   trailing space appear when the clipboard also carries HTML?
+3. Then record the decision here + `PORTAL_HISTORY.md` + `phase_status`, and delete `src/spike/` in
+   the real build.
+
+Leaning, unconfirmed: **Univer** — fastest engine at full size (about 5× FortuneSheet), with undo,
+formatting, filter, find, comments and dropdowns free. Its two catches (trailing space, blank-then-value
+fill) are fixed in our save layer: trim, and collapse each command to before-vs-final. Pivot stays ours
+to build in all four. ReactGrid needs small views; Glide is fast but has none of the spreadsheet features.
 
 ## ⏸️ PARKED — 2026-08-20 (owner: "put this on the back burner again")
 

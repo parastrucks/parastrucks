@@ -43,7 +43,15 @@ no schema, no deploy. ⭐ Full table and rules: `docs/backlog/phase10-execution-
 - ⭐⭐ Univer's `getValue(s)` returns formatted text → commas would have reached money fields, and the
   lock's put-back looped forever. `getRawValues()` + a guard. Univer measured at full size: edit 17 ms,
   undo 83 ms, load 270 ms (an earlier "2 s" was a throttled-frame artefact, caught by a do-nothing baseline).
-- Left: FortuneSheet not run; Univer paste / fill-drag / real-UI lock not seen. Owner decides after trying.
+- Then (`0858dc1`) FortuneSheet run in the owner's Chrome: React 18 fine, 85–105 ms per action at the
+  full book (~5× Univer), mount ~0.8–1 s. Typed / paste / fill / undo / redo all reach the capture on
+  both engines, a paste is one undo, and both locks hold — FortuneSheet's fill skips its own edit
+  hook, so our put-back did the job there. Found: Univer leaves a trailing space after a plain-text
+  paste with Windows line endings; its fill sends blank-then-value; and its undo/redo label had
+  never worked (it handles Ctrl+Z in its own window listener first — fixed by listening earlier).
+  FortuneSheet's API is async and its handle is rebuilt as state changes, so 0 ms and "sheet not
+  found" were measuring mistakes, not results.
+- Left: the owner tries all four and chooses; one check (a real Excel copy into Univer) for an engine pick.
 
 ## Session log — 2026-10-21 (PC): Service Payments parked, waiting on HDFC
 
