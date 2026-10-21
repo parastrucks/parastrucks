@@ -373,6 +373,30 @@ Run it: `preview_start {name:"portal"}` (or `npm run dev`) → **`http://localho
 | Lock on computed money | ours | `nonEditable` cells | typing refused (`BeforeSheetEditStart`) · paste/fill caught by our put-back | typing refused · overlapping paste refused whole · ⚠️ **fill goes past the hook** → our put-back restores it (300 ms, once) |
 | Data-quality catches | — | — | ⚠️ paste leaves a **trailing space** (see rules) · ⚠️ fill sends **blank-then-value** | clean paste · source label is a guess (one-cell fill shows "typed") |
 
+### Univer vs FortuneSheet — evaluation (2026-10-21, owner: "both look quite good")
+
+Checked, not recalled: npm registry, GitHub API, the lockfile's licence for every package each pulls
+in, an esbuild size estimate, and the live page's network log.
+
+| | Univer 1.1.0 | FortuneSheet 1.0.4 |
+|---|---|---|
+| Speed per action, full book | 17–92 ms | 85–105 ms (both under the ~100 ms "feels instant" line) |
+| Opening the tab | 0.2–0.3 s | 0.8–1.0 s |
+| Download added (gzip, estimate) | **~2.9 MB** (12 MB raw) | ~0.6 MB (3.6 MB raw) — cached after the first open |
+| Free features | undo, formatting, filter, sort, find, notes, dropdowns, conditional formatting, formulas; also drawing, hyperlinks, tables presets | the same everyday set |
+| Paid / missing | pivot, charts, print, **xlsx import/export**, live collaboration = Pro | pivot none; xlsx via a community add-on (`@corbe30/fortune-excel`, MIT, untested) |
+| Every edit reaches us | ✅, labelled exactly from its command names | ✅, labels guessed |
+| Catches | formatted `getValue` · trailing space on paste · blank-then-value fill | fill skips its lock hook · async API, rebuilt handle · one unexplained blank |
+| React 19 | declared supported | `>= 18.2`, open-ended, untested |
+| Licence | Apache-2.0; 137 packages, all permissive, **0 Pro packages**; "telemetry" is an empty interface; no outside calls seen | MIT; 14 packages, all permissive (`jstat` MIT) |
+| Upkeep | **39 releases in 12 months, last 2026-10-17**; 22.7k stars, 79 contributors, company-backed (DreamNum); 0.10 → 1.1 this year = breaking changes | **last release and commit 2025-11-06 (~11.5 months)**; 3.7k stars, 25 contributors, 96 open issues |
+| Supply-chain surface | 137 packages → more `npm-audit` hits likely | 14 packages |
+
+Excel export does not depend on the engine: the tracker's data lives in our database and the portal
+already ships SheetJS (`xlsx` 0.20.3). **Recommendation: Univer**, pinned to exact versions and
+upgraded on purpose, with trim + before-vs-final collapse in the save layer. FortuneSheet would be the
+pick only if download size or package count mattered more than active upkeep.
+
 ### Rules learned (do not re-learn them)
 
 - ⚠️⚠️ **Univer: read values with `range.getRawValues()`, NEVER `getValue(s)`** — those return the
