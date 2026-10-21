@@ -53,6 +53,13 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 - **Staging is shared by both lines of work.** Payments migrations 1–9 sit on staging and nothing on
   `portal` reads them; `log-error` is identical on both. Deploying another EF to staging from a
   `portal` branch is fine — just never deploy `service-payments` from one (it does not exist there).
+- **CI: `npm-audit` went red on EVERY PR on 2026-10-20** — new HIGH GHSA-587h-7wmj-h5pm: `launch-editor`
+  inside vite ≤ 8.1.5 (the dev server's open-in-editor; never in the built site). PR **#132** → vite
+  **8.1.6**. ⚠️ **Not byte-inert:** it brings rolldown 1.1.5, which gives `Icon`, `api` and a `typeof`
+  helper their own chunks (43 → 46 files, +1.3 KB). Checked by serving a clean build with `vite preview`
+  and importing all 32 chunks (0 errors); a signed-in page render was not checked. ⭐ **A dependency bump
+  that changes the bundler must be A/B'd, not assumed inert** — the source-map-js one was; this was not.
+  Once it lands, merge `origin/portal` into the payments branch (its lockfile still says 8.1.0).
 
 ## Current state (2026-10-18)
 

@@ -41,6 +41,17 @@ from hdfc?"* Nothing built or deployed; the work tidied so the next feature star
 - Found on the way: the main checkout's `docs/` holds real customer files untracked and, on its branch,
   unignored (names listed only, nothing opened). The ignore rules on `portal` cover every branch made
   from it from now on.
+- #131's `npm-audit` failed on a HIGH advisory published the day before (GHSA-587h-7wmj-h5pm +
+  two mediums: `launch-editor` ≤ 2.14.1 bundled in vite ≤ 8.1.5 — dev server only). PR **#132**: vite
+  `^8.1.0` → `^8.1.6` (released 2026-10-06). Unlike the source-map-js bump it is **not byte-inert** —
+  rolldown 1.1.3 → 1.1.5 splits `Icon`, `api` and a `typeof` helper into their own chunks (43 → 46 dist
+  files, +1.3 KB, two new modulepreloads). Two clean `npm ci` builds compared (every old file present,
+  hashes masked); the new one served by `vite preview` against staging loaded `/login` and **all 32
+  non-entry chunks imported with 0 errors**, console clean; audit gate exit 0 (moderates left:
+  dompurify + react-router by decision, a new fflate one). Not checked: a signed-in render (session
+  expired). All #132 checks green, incl. Vercel building `portal`. The merge was refused by the
+  permission classifier ("Merge Without Review") → the owner merges. This checkout reinstalled to
+  8.1.6 (the demo files in `node_modules/payments-demo-files/` backed up and restored, checksums 6/6).
 
 ## Session log — 2026-10-17 → 10-18 (PC): the red-team build order finished, migration 9, and crash reporting fixed on prod
 
