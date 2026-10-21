@@ -474,12 +474,90 @@ conditional formatting are its, not ours. New: the adapter above (rough guess ~5
 formatting store. Pivot (group-by panel) and column formulas stay ours. **Re-estimate at build start**
 — the net is roughly even with ~12 weeks, not obviously shorter.
 
-### ⏭️ Next — Stage 0 → Stage 1 of the build
+## 🔨 STAGE 1 — FOUNDATION, STARTED 2026-10-21 (owner: "yes start stage 1")
 
-- Delete `src/spike/` and the three other grid libraries when the real build starts; the spike branch
-  `10-pre-grid-compare` stays as the record (never merged).
-- Staging is ACTIVE again (payments used it in October), so Stage 1 (schema + RLS + permissions) has
-  somewhere to rehearse. Start from the build order in §2.5 with Univer in place of the grid line.
+Branch **`10b-foundation`**, cut from `portal` `f914e62` (the spike branch is not built on; its
+`src/spike/` and grid libraries never reach this branch). **Staging only — prod untouched.**
+
+### Step 1 ✅ — the column map, from the real headers (`5ac9646` → `a88365e`)
+
+⭐ **`docs/backlog/phase10-column-map.md`** — 88 stored business columns + 3 screen-only, each with
+type, role, source headers and the workbook's own formula. Built by `scripts/phase10/columns.cjs`
+(read-only, prints shapes, never values). The spike's 88 columns were synthetic and are NOT the list.
+
+Found while building it:
+- The "gross to AL" formula round 2 could not locate is INVOICE TRACKER's **Payment Amount =
+  (CTD + AMC) × Qty** (2,050/2,050).
+- Checked against the data instead of asked: the retention files' **CBN = V-part** (265/266);
+  **Other deductions is its own figure** (equals AMC + DSA + Ad Blue on 0 of 167 rows).
+
+Owner decisions 2026-10-21 (do not re-ask):
+| Topic | Decision |
+|---|---|
+| GST | **28% if the PTB invoice is before 22 Sep 2025, else 18%; unsold stock 18%.** Every GST step on the row uses it (CTC and CTD alike). Data agrees: last 28% row 20 Sep, none after. Override column for the odd row |
+| Road tax | **basic × rate**, rate default 6% (**0** for staff buses / where we do not pay lifetime tax; 8% seen on 3 rows). The RTO moved from invoice value to MRP — **the data dates it: bill value to 31 Jul 2025, MRP from 1 Aug 2025** (5 rows break it → overrides). Visible override column |
+| HSRP / CRTM constant | is the **CRETEM** column (added in Total Receivable) |
+| RET-INT columns T, U, V | lookups from other tables → **dropped** |
+| Subvention Status | **dropped** |
+| Cancel/rebill | **keep** vehicle location + delivery columns; old→new chassis = superseded rows |
+| AL Balance Sheet | **its own ledger, outside the tracker.** Proposed (owner asked "what is this?" — explained in plain words; answer pending): per-truck credit lines generated from the tracker (measured: every credit = CTD × 0.999, some split 95/5), payments typed, running balance, monthly tie-out with AL. **Stage 6, not Stage 1** |
+
+Still open with the owner:
+1. ❓ **Tippers and GST** — 63 TIPPER rows (+1 tractor) were billed at 18% before 22 Sep 2025. Were
+   tippers always 18%? Until answered: date rule + per-row override.
+2. ❓ The AL ledger proposal above — yes or no (not blocking).
+3. ❓ Stray cells — the owner was given exact addresses to look at (see the column map, last section):
+   2025-26 `AL`/`AM`, PTB RETAIL `AN92/125/143/144`, DEALERS `J`–`L`.
+
+### Step 2 ✅ — the schema, on STAGING and proved (`cca8904`)
+
+`supabase/migrations/20261021_phase10_tracker_foundation.sql`:
+- `vehicle_units` (102 columns = 88 business + system); unique chassis among non-superseded rows;
+  last-6-digit indexes on chassis and gatepass.
+- One BEFORE trigger computes every derived column (formulas and switch dates as above);
+  `recompute = false` lets the importer write history as-is, and the next edit recomputes (R2-25).
+- Side tables: `vehicle_unit_incentives` (separate on purpose), `unit_cell_notes`,
+  `unit_cell_formats` (Univer's formatting store), `tracker_views`, `tracker_audit` (field-level, input
+  columns only; one `*` row per insert, so an import does not write 180k audit rows),
+  `tracker_requests` (idempotency), `tracker_import_batches`.
+- **`tracker_apply_changes(actor, batch, changes, request_id, source)`** — the only cell write path:
+  one transaction per paste/fill; editable-column allowlist; **before-value check** (a stale value is a
+  conflict, never an overwrite — compared as text, because Univer's undo can turn `"1"` into `1`); a bad
+  type aborts the whole batch; a repeated request id replays the first result; audit carries the
+  source (typed/paste/fill/undo/redo/delete/revert). Two changes to the same cell in one batch would
+  conflict — the save adapter collapses each command first (adapter duty 3). `tracker_create_unit()`
+  for quick entry.
+- ⭐ **DEVIATION FROM §2.1/§2.2 — stricter, on purpose:** no grant to `anon`/`authenticated` on ANY
+  tracker table or function; RLS on with no policy. RLS hides rows, not columns — a direct read grant
+  for back-office would have exposed the incentive columns to every tracker user. **Every read and
+  write goes through the Edge Function** (service role), which checks `tracker_access` per call.
+- Not yet: settlements (`customer_settlements` + items, counter, maker-checker, immutability) — their
+  own migration with the settlement UI. Text-money parsing (`5K-DSA` → amount + kind) deferred until
+  owner-reviewed patterns exist; the text is stored as-is.
+
+`scripts/phase10/probe-foundation.sql` — self-aborting, expected values worked out by hand: **42 checks**
+(every formula on both sides of both switch dates, overrides, write path, identity, import mode,
+grants + RLS).
+- Local PGlite (Postgres 18.6): 42/0. **Three planted bugs each caught at their own check** (TCS on CTC
+  → 3 fail; GST switch a day late → 1; road-tax switch removed → 3).
+- **STAGING (Postgres 17.6): 42/0, 0 rows left.** Staging had no name clashes beforehand.
+  `vehicle_units_compute` md5 `eac05427…`, `tracker_apply_changes` md5 `0b693345…` (LF text).
+- ⚠️ PGlite 0.3.4 crashed in its WASM runtime on the probe's exception blocks ("setTempRet0"); 0.5.11
+  runs it. Not a SQL bug — do not chase it.
+- ⚠️ Apply the **LF** text on prod (git may check the file out as CRLF; the md5s above are LF).
+- How it ran: `supabase link` + `db query --linked -f` from a scratch workdir (memory
+  `reference_portal_sql_workflow`); PGlite rig = `run.mjs` creating the three roles, then migration,
+  then probe.
+
+### ⏭️ Step 3 — next: the Edge Function `admin-vehicle-units` + the access switch
+
+- Actions: `list` (paginated, the view's columns only; incentives only for admin + HR), `applyChanges`
+  (→ `tracker_apply_changes`, cap 500/call, `client_request_id`), `createUnit`, notes, formats,
+  views, `supersedeUnit`. Fresh `getUser()` each call; `app_metadata.tracker_access` (+ `tracker_export`).
+- `admin-users` gains `setTrackerAccess` (writes `app_metadata`, then revokes sessions via
+  `admin_revoke_user_sessions`). `canAccess` per-user branch for `/tracker` (blast radius §2.7 (1)).
+- Deploy to staging with `--no-verify-jwt`; offline authority self-test + a live probe as real logins
+  (the payments pattern). Then Stage 2: the Univer grid + the save adapter (its 8 duties above).
 - Still owner-side: **the date Excel goes read-only**.
 
 ## ⏸️ PARKED — 2026-08-20 (owner: "put this on the back burner again")

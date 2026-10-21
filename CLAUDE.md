@@ -30,6 +30,16 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ---
 
+## Current state (2026-10-21, latest) — Phase 10 Stage 1 under way
+
+- **🔨 Phase 10 Stage 1 on branch `10b-foundation` (from `portal`), STAGING ONLY.** Step 1 ✅ column map
+  `docs/backlog/phase10-column-map.md` (88 stored + 3 screen columns from the real headers; owner's
+  GST/road-tax rules). Step 2 ✅ `cca8904` migration `20261021_phase10_tracker_foundation.sql` on
+  staging, `scripts/phase10/probe-foundation.sql` **42/0** (+3 planted bugs caught), 0 residue.
+  ⭐ **No API-role grants on any tracker table** — all access via the Edge Function (RLS cannot hide the
+  incentive columns). ⚠️ Apply the LF text on prod. ⏭️ Step 3 = Edge Function `admin-vehicle-units` +
+  `setTrackerAccess`. ❓ Owner: tippers always 18% GST? · the AL-ledger proposal. Record: plan → "STAGE 1".
+
 ## Current state (2026-10-21, later) — Phase 10 grid comparison
 
 - **🔬 Phase 10 Vehicle Tracker RESUMED as a spike: four free grids side by side** on branch
