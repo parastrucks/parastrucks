@@ -51,8 +51,9 @@ text (`5K-DSA`), stored as text + a parsed amount and kind · **HID** = hidden f
 | 29 | `supplier_invoice_date` | date | IN | `Supplier Invoice Date` | |
 | 30 | `supplier_invoice_amount` | numeric | IN | `Supplier Invoice Amount` | |
 | 31 | `diff_amount` | numeric | DB | `Difference - Amount` | `IF(sup=0 OR payment=0, 0, payment_amount − sup)` |
-| 32 | `diff_base` | numeric | DB | `Difference - Base Value` | `… / 1.28` ❓Q1 GST rate |
-| 33 | `diff_gst` | numeric | DB | `Difference - GST` | `… × 0.28 / 1.28` ❓Q1 |
+| 32 | `diff_base` | numeric | DB | `Difference - Base Value` | `diff_amount / (1 + gst_rate)` (sheet: `/1.28` on every row) |
+| 33 | `diff_gst` | numeric | DB | `Difference - GST` | `diff_amount × gst_rate / (1 + gst_rate)` |
+| 33a | `gst_rate` | numeric | DB | — (new) | ✅ owner 2026-10-21: **28% if `ptb_invoice_date` is before the GST change, else 18%** — unsold stock (no invoice date) is 18%. Applies to every GST step on the row (CTC and CTD alike). ❓ confirm the change date = **22 Sep 2025** |
 | 34 | `diff_tds` | numeric | DB | `Difference - TDS` | `… × 0.001` |
 | 35 | `total_difference` | numeric | DB | `Total Difference` | `IF(sup=0, 0, diff_base + diff_gst + diff_tds)` |
 | 36 | `parts_pkg` | text | TXT$ | IT `Parts Pkg` | 58/58 text |
@@ -78,7 +79,9 @@ text (`5K-DSA`), stored as text + a parsed amount and kind · **HID** = hidden f
 | 51 | `total_recd` | numeric | DB | `TOTAL RECD` | `margin_money + finance_recd + subvention` |
 | 52 | `insurance` | numeric | IN | `INSURANCE` | |
 | 53 | `cretem` | numeric | IN | `CRETEM` | raw (11+ values) |
-| 54 | `full_tax` | numeric | IN ❓Q2 | `FULL TAX` | sheet: `MRP / 1.18 × 6%` on 240/266 + 1,630/2,015 rows, typed on the rest |
+| 54a | `road_tax_pct` | numeric, default 6 | IN | — (new) | ✅ owner: usually 6%; **0** for staff buses and where we do not pay lifetime tax (322 typed zeros in 2025-26); the sheets also show 8% on 3 rows |
+| 54 | `full_tax` | numeric | DB + override | `FULL TAX` | `basic × road_tax_pct`, basic = `mrp / (1 + gst_rate)` — the sheets already divide by 1.18 or 1.28. ❓ basic from **MRP** (≈2/3 of rows) or the **customer bill** (≈1/3)? |
+| 54b | `full_tax_override` | numeric, nullable | IN | — (new) | the ~40 typed values that match no formula; shown as overridden |
 | 55 | `total_receivable` | numeric | DB | `TOTAL RECEIVABLE` | `total + insurance + cretem + full_tax` |
 | 56 | `net_refund` | numeric | DB | `NET REFUND` | `total_recd − total_receivable` |
 | 57 | `refund_status` | text | IN | `Refund Status` | 11 spellings → normalised list on import |
@@ -86,7 +89,7 @@ text (`5K-DSA`), stored as text + a parsed amount and kind · **HID** = hidden f
 | 59 | `payment_status` | text | DB | `Payment Status` | `IF(delivery_status='Stock','Stock', IF(no finance_paymt_recd_date,'Pending','Payment Recd'))` |
 | 60 | `ad_blu_given` | text | TXT$ | `AD-BLU` | carries DSA/URIYA deals too |
 | 61 | `endhan` | text | TXT$ | `ENDHAN` | 84 numeric rows in FY |
-| — | ~~`subvention_status`~~ | | dropped | `Subvention Status` | blank (0 RETAIL, 4 FY) — ❓Q6 the 4 FY values |
+| — | ~~`subvention_status`~~ | | dropped | `Subvention Status` | ✅ owner: drop |
 
 ## D · Retention and incentives (RETENTION TRACKER internal + AL)
 
@@ -109,17 +112,19 @@ text (`5K-DSA`), stored as text + a parsed amount and kind · **HID** = hidden f
 | 75 | `dse_incentive_override` | numeric | IN, HID | — | SRS rows are zeroed by hand (60 rows); shown as overridden |
 | 76 | `dsm_incentive` | numeric | IN, HID | RET-INT `DSM INCENTIVE` | |
 | 77 | `gm_incentive` | numeric | IN, HID | RET-INT `GM INCENTIVE` | |
-| ❓ | three unnamed columns | ? | ❓Q4 | RET-INT columns **T, U, V** — filled on all 268 rows | numbers on most rows; the text ones are shaped like `35K-DSA`, `10K-URIYA & 5` (deal notes, like AD-BLU). Equal to no known column. **What are they?** |
+| — | ~~RET-INT T, U, V~~ | | dropped | unnamed, filled on all 268 rows | ✅ owner: lookups from other tables — the tracker holds the source columns, so nothing to store |
 
 ## E · Inter-dealer and cancel/rebill
 
 | # | Column | Type | Role | Source | Notes / formula |
 |---|---|---|---|---|---|
 | 78 | `sold_to_dealer` | text | IN | DEALERS `NAME OF DEALER` | chassis sits under the "Model" header there (R2-5) |
-| 79 | `dealer_basic_value` | numeric | DB | DEALERS `BASIC VALUE` | `ctd / 1.28` ❓Q1 |
+| 79 | `dealer_basic_value` | numeric | DB | DEALERS `BASIC VALUE` | `ctd / (1 + gst_rate)` (sheet: `/1.28`) |
 | 80 | `dealer_tds` | numeric | DB | DEALERS `TDS( 0.1%)` | `dealer_basic_value × 0.1%` |
 | 81 | `dealer_net_payable` | numeric | DB | DEALERS `NET PAYABLE` | `ctd − dealer_tds` |
-| 82 | `vehicle_location` | text | IN | canc rebill `Vehicle Location` | ❓Q7 keep the cancel/rebill columns? |
+| 82 | `vehicle_location` | text | IN | canc rebill `Vehicle Location` | ✅ owner: keep |
+| 82a | `actual_delivery` | text | IN | canc rebill `ACUAL DELIVERY` | ✅ owner: keep |
+| 82b | `rebill_delivery_date` | date | IN | canc rebill `Dely Date` | ✅ owner: keep |
 | — | cancel/rebill link | | system | canc rebill `NEW CHASSIS NO` | becomes `superseded_by_id` (decision: superseded rows) |
 
 ## F · System columns (not typed by anyone)
@@ -131,24 +136,37 @@ Side tables: `unit_cell_notes` (the 124 Excel comments + new ones) · `unit_cell
 highlights; the Univer formatting store) · `tracker_audit` · `tracker_views` · `customer_settlements` +
 `settlement_items`.
 
-**Count:** 82 stored business columns + 3 screen-only + system columns. The `AL Balance Sheet` is a
-ledger (dated debit/credit lines), not one row per chassis — ❓Q8.
+**Count:** 87 stored business columns (82 + `gst_rate`, `road_tax_pct`, `full_tax_override` and two
+cancel/rebill columns) + 3 screen-only + system columns.
 
-## ❓ Questions for the owner (the schema waits on these)
+## G · The AL Balance Sheet — its own ledger, fed by the tracker (owner: "any better way?")
 
-1. **GST rate in the formulas.** INVOICE TRACKER's difference columns and the DEALERS sheet divide by
-   **1.28** (28% GST) on every row; the retail road-tax formula divides by **1.18** (18%). Trucks and
-   buses moved from 28% to 18% in September 2025. Should the rate follow each row's invoice date
-   (28% before the change, 18% after), or is 1.28 deliberate there?
-2. **Road tax (`FULL TAX`).** Calculated as MRP ÷ 1.18 × 6% on most rows, typed on some. Calculate it
-   with a visible override (like the DSE incentive), or keep it typed?
-3. ~~Other deductions~~ — ✅ answered by the data: a separate figure (0 of 167 rows equal AMC + DSA + Ad Blue).
-4. **Retention tracker (internal), columns T, U, V** have no header but are filled on every row —
-   mostly numbers, the rest deal notes like `35K-DSA`. What are they?
-5. ~~CBN = V-part?~~ — ✅ answered by the data: yes, 265 of 266.
-6. **Subvention Status** is blank except 4 rows in 2025-26 — drop it?
-7. **Cancel/rebill sheet** — keep its location/delivery columns, or only link the old and new chassis?
-8. **AL Balance Sheet** — leave it as its own ledger (out of the tracker), or bring in per-chassis
-   fields (its `Offtake Mode`)?
-9. Unlabelled columns elsewhere: 2025-26 `AL`, `AM`; PTB RETAIL `AN`; DEALERS `J`–`L` (a few values
-   each) — notes, or real data?
+It is the running account between PTB and Ashok Leyland: **credits** are what PTB owes per truck and
+**debits** are payments. Measured: every credit line is the truck's `CTD × 0.999` (CTD less the 0.1%
+TDS) — 224 whole, 15 at 95% and a few at 5% (split payments). So the better way is:
+- a small `al_ledger` table (date, details, debit, credit, optional chassis link, `offtake_mode`);
+- **the per-truck credit lines are created from the tracker** when a truck is invoiced (no retyping —
+  today they are typed and concatenated by hand), splits allowed;
+- payments and credit notes are typed or imported; the running balance is computed;
+- a monthly tie-out against AL's own statement.
+`offtake_mode` (`Cash Invoiced` / `IBND`) also lands on the truck as `al_payment_status` (#25).
+**Not Stage 1** — it belongs with the other remaining features (Stage 6). ❓ OK with this?
+
+## ❓ Questions for the owner
+
+Answered 2026-10-21: GST by invoice date · road tax 6% of basic, 0 for staff buses / no lifetime
+tax · RET-INT T–V are lookups (dropped) · subvention status dropped · cancel/rebill location and
+delivery kept · AL Balance Sheet stays its own ledger. From the data: CBN = V-part; other
+deductions is its own figure.
+
+Still open (small):
+1. **The GST change date** — 22 September 2025?
+2. **Road tax basic value** — from MRP or from the customer bill? (the sheets use MRP on ~2/3 of rows)
+3. **The constant for HSRP, CRTM and other charges** — is that the **CRETEM** column (7,000 / 6,600 /
+   9,000 …, added in Total Receivable)? No constant appears inside the road-tax formula itself.
+4. **The AL ledger plan** in section G — OK?
+5. **Stray cells — where to look** (open the file, go to the cell with Ctrl+G):
+   - `2025-26.xlsx` → `Sheet1`: column **AL** (61 cells, from AL142 down) and **AM** (AM742, AM946,
+     AM1065 — a formula, AM1929, AM1962, AM1980, AM1981)
+   - `INVOICE LIST - MAR 26.xlsx` → `PTB RETAIL`: **AN92, AN125, AN143, AN144**
+   - same file → `DEALERS`: **J426–J444** (11 cells), **K437–K439**, **L2–L15** and on (15 cells)
