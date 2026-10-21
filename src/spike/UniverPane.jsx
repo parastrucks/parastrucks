@@ -68,6 +68,18 @@ export default function UniverPane({ rows, syncValues, note }) {
 
   useEffect(() => {
     const t0 = performance.now()
+    // Ctrl+Z / Ctrl+Y says which of undo or redo the next no-command change is. Listened for on the
+    // WINDOW in the capture phase, and registered BEFORE Univer is created: Univer takes these keys
+    // before they reach the grid's element, and undoes inside its own window listener — registered
+    // later, ours would label each change with the PREVIOUS key (measured). A hint lasts one second,
+    // so a Ctrl+Z with nothing to undo cannot mislabel a later change.
+    const onKey = e => {
+      if (!(e.ctrlKey || e.metaKey)) return
+      const k = e.key.toLowerCase()
+      if (k === 'z' && !e.shiftKey) keyHint.current = { what: 'undo', at: performance.now() }
+      else if (k === 'y' || (k === 'z' && e.shiftKey)) keyHint.current = { what: 'redo', at: performance.now() }
+    }
+    window.addEventListener('keydown', onKey, true)
     const { univer, univerAPI } = createUniver({
       locale: LocaleType.EN_US,
       locales: { [LocaleType.EN_US]: merge({}, coreEnUS, filterEnUS, sortEnUS, cfEnUS, dvEnUS, frEnUS, noteEnUS) },
@@ -113,8 +125,8 @@ export default function UniverPane({ rows, syncValues, note }) {
           range.getRawValues().forEach((line, i) => line.forEach((value, j) => cells.push({ r: r0 + i, c: c0 + j, value })))
         }
         const { changes, reverts } = diffAgainst(shadow, cells)
-        const source = lastCmd ? sourceOf(lastCmd) : (keyHint.current || 'undo/redo')
-        if (!lastCmd) keyHint.current = null
+        const hint = keyHint.current && performance.now() - keyHint.current.at < 1000 ? keyHint.current.what : null
+        const source = lastCmd ? sourceOf(lastCmd) : (hint || 'undo/redo')
         if (changes.length) { record(changes, source); syncValues(changes); note(`Univer: ${changes.length} cell${changes.length > 1 ? 's' : ''} changed (${source})`) }
         if (reverts.length) { // a route past the lock (e.g. paste or fill) — put the money back
           blocked(reverts.length)
@@ -129,7 +141,7 @@ export default function UniverPane({ rows, syncValues, note }) {
     // Timed to the end of the work, not the next frame: this window paces frames at ~1/s
     // (a do-nothing double-frame wait measured ~2,000 ms), which would swamp the number.
     setReady(Math.round(performance.now() - t0))
-    return () => { subs.forEach(s => s?.dispose?.()); univer.dispose(); delete window.__univerAPI }
+    return () => { window.removeEventListener('keydown', onKey, true); subs.forEach(s => s?.dispose?.()); univer.dispose(); delete window.__univerAPI }
     // Mount once: the engine owns the sheet after this; later `rows` changes come FROM it.
   }, []) // deliberately mounted once (see comment above)
 
@@ -141,13 +153,7 @@ export default function UniverPane({ rows, syncValues, note }) {
         <span className="spk-ok">its own undo, toolbar, formatting, filter, find, comments, dropdowns</span>
       </div>
       <CaptureBar log={log} label="Univer" />
-      <div className="fill-grid engine-host" ref={box}
-        onKeyDownCapture={e => {
-          if (!(e.ctrlKey || e.metaKey)) return
-          const k = e.key.toLowerCase()
-          if (k === 'z' && !e.shiftKey) keyHint.current = 'undo'
-          else if (k === 'y' || (k === 'z' && e.shiftKey)) keyHint.current = 'redo'
-        }} />
+      <div className="fill-grid engine-host" ref={box} />
     </>
   )
 }

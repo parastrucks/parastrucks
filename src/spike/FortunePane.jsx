@@ -57,7 +57,9 @@ export default function FortunePane({ rows, syncValues, note }) {
   const reverting = useRef(false) // let our own put-back of a locked cell through our own lock
 
   useEffect(() => {
-    window.__fortune = ref.current // spike only: lets the timings be taken from the console
+    // spike only: lets the timings be taken from the console. A getter, not a copy — Fortune rebuilds
+    // its API object as its state changes, and the first one (saved at mount) sees no sheets at all.
+    Object.defineProperty(window, '__fortune', { get: () => ref.current, configurable: true })
     // Timed to the end of mount work, not the next frame (frames can be throttled — see UniverPane).
     setReady(Math.round(performance.now() - t0.current))
     return () => { delete window.__fortune }
@@ -94,6 +96,7 @@ export default function FortunePane({ rows, syncValues, note }) {
 
   // Capture: every op that changed a cell value, whatever caused it.
   const onOp = ops => {
+    (window.__ops ||= []).push(...ops.map(o => JSON.stringify(o).slice(0, 300))) // spike only: raw ops, to check our reading of them
     const cells = ops.map(cellFromOp).filter(Boolean)
     if (!cells.length) return
     const { changes, reverts } = diffAgainst(shadow.current, cells)
