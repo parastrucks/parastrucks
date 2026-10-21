@@ -26,6 +26,22 @@
 
 ---
 
+## Session log — 2026-10-21 (PC): Service Payments parked, waiting on HDFC
+
+Owner: *"can we update everything so I can continue building other features while we wait for details
+from hdfc?"* Nothing built or deployed; the work tidied so the next feature starts clean.
+- Deleted the merged PR #130 branch `fix/log-error-envelope` (squash-merged, so git called it unmerged;
+  checked file by file — all five files identical in `portal` — then `-D`; GitHub had already removed it).
+- Merged `origin/portal` (`6561628`) into the payments branch → `5badbf7`: only the `source-map-js`
+  lockfile bump came in; CLAUDE.md kept this branch's version (its 2026-10-18 block supersedes portal's).
+  Build + `selftest-log-error` 14/0. Payments branch 0 behind `portal`.
+- Docs-only PR to `portal`: CLAUDE.md, this file, the 16 payments backlog docs and the `.gitignore` rules
+  for real payments data, each byte-identical to the payments branch, so the later merge is conflict-free
+  in them. No code, no migration, no EF.
+- Found on the way: the main checkout's `docs/` holds real customer files untracked and, on its branch,
+  unignored (names listed only, nothing opened). The ignore rules on `portal` cover every branch made
+  from it from now on.
+
 ## Session log — 2026-10-17 → 10-18 (PC): the red-team build order finished, migration 9, and crash reporting fixed on prod
 
 Payments work on `claude/payments-reconciliation-tool-6eaab4` (pushed, 0/0), **staging only**. ⛔ **Owner,

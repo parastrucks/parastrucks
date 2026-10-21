@@ -30,6 +30,30 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ---
 
+## Current state (2026-10-21)
+
+- **⏸️ SERVICE PAYMENTS IS PARKED — waiting for details from HDFC (owner, 2026-10-21).** Other features
+  are built meanwhile. Branch `claude/payments-reconciliation-tool-6eaab4` pushed, **0 behind `portal`**
+  (merged `6561628` in `5badbf7`). Nothing is half-built; staging keeps its payments tables, the
+  `service-payments` EF and the dummy data. The HDFC questions are in Next actions → payments item 10
+  (scheduled daily report · is a Mintoak id ever re-issued · the API). Resume there, then the go-live gates.
+- **⭐ New features start from the latest `origin/portal`**, never from the payments branch. `CLAUDE.md`,
+  `PORTAL_HISTORY.md`, the payments `docs/backlog/` files and the `.gitignore` data rules are on
+  `portal` **identical** to the payments branch (docs-only PR, 2026-10-21), so the eventual merge has
+  nothing to resolve in them. Add new state blocks above this one as usual.
+- ⚠️ **Shared files the payments branch changes — a feature that edits them will conflict when payments
+  merges:** `src/index.css` (+473 lines, all `.pay-*` plus the bottom bar) · `src/components/layout/
+  navConfig.js` (`bottomNavLayout`, the Match Payments entry) · `BottomNav.jsx` (layout moved INTO
+  navConfig) · `CreateSheet.jsx` ("Quick actions") · `src/App.jsx` (`/payments` route) · `Icon.jsx` ·
+  `AccessRules.jsx` (route list). Small edits there are fine; after each `portal` release, **merge
+  `origin/portal` into the payments branch** (never rebase it — 118 pushed commits).
+- ⚠️ **The MAIN checkout's `docs/` holds REAL customer files, untracked** (GPay CSVs, a bank statement, a
+  tax invoice, the HDFC report). On its old branch nothing ignores them — never `git add docs/` there;
+  any branch made from `portal` now ignores them.
+- **Staging is shared by both lines of work.** Payments migrations 1–9 sit on staging and nothing on
+  `portal` reads them; `log-error` is identical on both. Deploying another EF to staging from a
+  `portal` branch is fine — just never deploy `service-payments` from one (it does not exist there).
+
 ## Current state (2026-10-18)
 
 - **✅ PROD: client crash reporting fixed — it had NEVER worked.** PR **#130** → `6561628`: `callEdge`
@@ -753,6 +777,8 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ## Next actions
 
+- **⏸️ Service Payments parked, waiting on HDFC (2026-10-21)** — see the 2026-10-21 block. Its own list
+  stays below (items 8–10 + the three go-live gates); do not start it until the owner says so.
 - **⏭️ Owner: file the 45 new October CBNs in Catalog → Triage** (MAV 19, Haulage 9, Oyster
   Staff/Wide shells 12, RMC 3, Ecomet 1215 1, 10x2 Tipper 1). Until then they have no family.
 - **⏭️ Owner: check the TIV detail sheet on a real phone** (PR #125, live). Hard-refresh TIV
