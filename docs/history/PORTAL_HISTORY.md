@@ -26,6 +26,39 @@
 
 ---
 
+## Session log — 2026-10-21 (PC): Phase 10 resumed — four free grids compared side by side
+
+Owner: *"run a full survey and bring this session up to speed"*, then *"I will need to try both
+options to come to a conclusion"*. Spike only, branch `10-pre-grid-compare` (`e1f63c3` → `b7b855d`),
+rebuilt on `portal` `f914e62` rather than reviving the August branch (37 behind). Nothing merged,
+no schema, no deploy. ⭐ Full table and rules: `docs/backlog/phase10-execution-plan.md` → "RESUMED 2026-10-21".
+- `main.jsx`: the spike mount was ported as a CHANGE — copying the August file would have
+  reintroduced the `@vite-ignore` errorLog bug fixed in PR #124.
+- ReactGrid tab (owner: "react looks better") gained undo/redo, B/I/U, Excel's full colour menus,
+  border, and a small remembered default view. ⭐ It reprocesses every cell per change: ~970 ms at
+  180k cells vs 3–7 ms on Glide for the same undo — viable only at month × 25 columns (85 ms).
+- Owner: *"something like Google Sheets with open-source access"* → asked Gemini + ChatGPT (I wrote a
+  short prompt); their claims were checked against the packages (Univer pivot is Pro; FortuneSheet is
+  canvas, no pivot; "OpenSheets" not on npm). Univer 1.1.0 + FortuneSheet 1.0.4 tabs built.
+- ⭐⭐ Univer's `getValue(s)` returns formatted text → commas would have reached money fields, and the
+  lock's put-back looped forever. `getRawValues()` + a guard. Univer measured at full size: edit 17 ms,
+  undo 83 ms, load 270 ms (an earlier "2 s" was a throttled-frame artefact, caught by a do-nothing baseline).
+- Then (`0858dc1`) FortuneSheet run in the owner's Chrome: React 18 fine, 85–105 ms per action at the
+  full book (~5× Univer), mount ~0.8–1 s. Typed / paste / fill / undo / redo all reach the capture on
+  both engines, a paste is one undo, and both locks hold — FortuneSheet's fill skips its own edit
+  hook, so our put-back did the job there. Found: Univer leaves a trailing space after a plain-text
+  paste with Windows line endings; its fill sends blank-then-value; and its undo/redo label had
+  never worked (it handles Ctrl+Z in its own window listener first — fixed by listening earlier).
+  FortuneSheet's API is async and its handle is rebuilt as state changes, so 0 ms and "sheet not
+  found" were measuring mistakes, not results.
+- Evaluation of the final two written up (speed, features, compatibility, licence, upkeep, size) —
+  `14bf611`. FortuneSheet's last release was 2025-11-06; Univer had 39 releases in the year.
+- ✅ **Owner: "go with univer" — DECIDED.** Free presets only, exact versions. The last check was done
+  with a REAL Excel copy (Excel 16 over COM, hidden blank workbook, closed unsaved; a lingering
+  hidden instance was found and quit): no trailing space (Univer reads the HTML), but ⚠️ **money
+  arrives as text with lakh commas ("12,34,567")** — the save layer must convert and refuse. The
+  adapter's eight duties are listed in the plan's "DECIDED" section; cell formulas stay cut.
+
 ## Session log — 2026-10-21 (PC): Service Payments parked, waiting on HDFC
 
 Owner: *"can we update everything so I can continue building other features while we wait for details

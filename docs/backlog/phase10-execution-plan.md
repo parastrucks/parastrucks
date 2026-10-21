@@ -19,7 +19,7 @@ The last open questions were resolved by the owner this session:
 
 | Decision (2026-08-11) | Choice |
 |---|---|
-| Grid library | React 19 deferred (own later project). **Grid choice now settled by a 1 d comparative spike** (owner principle, see below): `react-data-grid@7.0.0-beta.48` (pinned candidate) vs `@glideapps/glide-data-grid@6.0.3` (MIT, React 18, ships Excel-grade range selection/copy/fill natively; canvas-based — editors and a11y are the trade-off). Winner = highest score on the Excel-parity checklist |
+| Grid library | ✅ **Univer 1.1.0 (free presets), decided 2026-10-21** — see "DECIDED" in the RESUMED section. Original text: React 19 deferred (own later project). **Grid choice now settled by a 1 d comparative spike** (owner principle, see below): `react-data-grid@7.0.0-beta.48` (pinned candidate) vs `@glideapps/glide-data-grid@6.0.3` (MIT, React 18, ships Excel-grade range selection/copy/fill natively; canvas-based — editors and a11y are the trade-off). Winner = highest score on the Excel-parity checklist |
 | Rebilled/re-sold chassis | **Superseded rows** — a rebill creates a new row; old row kept, marked superseded |
 | Incentive columns | **Hidden** — visible to admin and HR only (owner, 2026-08-11) |
 | Export | **Separately gated + audited** — its own flag, every export logged |
@@ -339,6 +339,149 @@ Excel, and the export exists for exactly that.
 
 ---
 
+## 🔬 RESUMED 2026-10-21 — the grid comparison (owner: "I will need to try both options")
+
+**Still no production code, schema or EF.** Everything below is spike code on branch
+**`10-pre-grid-compare`** (from `portal` `f914e62`, pushed; supersedes `10-pre-grid-spike`, which
+is 37 commits behind). Commits `e1f63c3` · `22a46a8` · `c1f930d` · `b7b855d`. Not for merging.
+
+Run it: `preview_start {name:"portal"}` (or `npm run dev`) → **`http://localhost:3000/grid-spike?strict=0`**
+(`?strict=0` drops React StrictMode's dev-only double render so timings are fair). Four tabs:
+**ReactGrid | Glide | Univer | FortuneSheet**, same synthetic 2,050 × 88 book (`src/spike/trackerData.js`).
+
+### What the owner asked, and what was built
+
+| Owner said | Built |
+|---|---|
+| "react looks better, but I need undo / text and cell formatting" | ReactGrid tab: one undo/redo stack for values AND formatting (`{rowId,colId,before,after}` — the `tracker_audit` shape, so production undo = replay of the audit), a paste is one step; B/I/U (Ctrl+B/I/U), fill, text colour, border, clear |
+| "will fill and text colour have just limited options?" | Excel's own colour menus: theme row + 5 shade rows + 10 standard + No fill/Automatic + More colours…, plus the three fills the workbooks use. Custom picker applies on `change` only (`input` would be dozens of undo steps) |
+| "a smaller default view, a default view for each user" | Opens at one month × 25 columns, remembered per browser (stands in for the per-person `tracker_views` layout); amber warning above 50,000 cells |
+| "something like Google Sheets with open-source access" | Gemini + ChatGPT answers checked against the packages, then two **spreadsheet-engine** tabs: Univer and FortuneSheet |
+
+### Measured (owner's Chrome, dev build, median of 3 — upper bounds on production)
+
+| | Glide 6.0.3 (MIT, canvas) | ReactGrid 4.1.17 (MIT, DOM) | Univer 1.1.0 (Apache-2.0, canvas, free presets) | FortuneSheet 1.0.4 (MIT, canvas) |
+|---|---|---|---|---|
+| One action, whole book 180k cells | **3–7 ms** | **970 ms** (~80 ms + ~12 µs per cell — reprocesses every cell on each change) | **17–18 ms** edit/bold · 83 ms undo · 92 ms 20×8 block | **85 ms** edit · 93 bold · 104 undo · 98 20×8 block · 92 block undo |
+| One action, month × 25 cols | — | 85 ms | — | — |
+| Load | 10–13 ms first paint | — | 180–290 ms | 760–1,010 ms |
+| Undo/redo, toolbar, formatting | ours to build (built on ReactGrid tab) | ours to build (built) | **built in** | built in |
+| Filter, find, comments, dropdowns | ours | ours (browser Ctrl+F works — DOM) | **built in** (free presets) | built in |
+| Pivot | ours (~7 d) | ours | **Pro only (paid)** → ours | none → ours |
+| Every edit reaches us? (real UI) | yes (our code) | yes (our code) | typed ✅ paste ✅ fill-drag ✅ undo ✅ redo ✅ | typed ✅ paste ✅ fill-drag ✅ undo ✅ redo ✅ |
+| A paste = one undo step | ours (built) | ours (built) | ✅ | ✅ |
+| Lock on computed money | ours | `nonEditable` cells | typing refused (`BeforeSheetEditStart`) · paste/fill caught by our put-back | typing refused · overlapping paste refused whole · ⚠️ **fill goes past the hook** → our put-back restores it (300 ms, once) |
+| Data-quality catches | — | — | ⚠️ paste leaves a **trailing space** (see rules) · ⚠️ fill sends **blank-then-value** | clean paste · source label is a guess (one-cell fill shows "typed") |
+
+### Univer vs FortuneSheet — evaluation (2026-10-21, owner: "both look quite good")
+
+Checked, not recalled: npm registry, GitHub API, the lockfile's licence for every package each pulls
+in, an esbuild size estimate, and the live page's network log.
+
+| | Univer 1.1.0 | FortuneSheet 1.0.4 |
+|---|---|---|
+| Speed per action, full book | 17–92 ms | 85–105 ms (both under the ~100 ms "feels instant" line) |
+| Opening the tab | 0.2–0.3 s | 0.8–1.0 s |
+| Download added (gzip, estimate) | **~2.9 MB** (12 MB raw) | ~0.6 MB (3.6 MB raw) — cached after the first open |
+| Free features | undo, formatting, filter, sort, find, notes, dropdowns, conditional formatting, formulas; also drawing, hyperlinks, tables presets | the same everyday set |
+| Paid / missing | pivot, charts, print, **xlsx import/export**, live collaboration = Pro | pivot none; xlsx via a community add-on (`@corbe30/fortune-excel`, MIT, untested) |
+| Every edit reaches us | ✅, labelled exactly from its command names | ✅, labels guessed |
+| Catches | formatted `getValue` · trailing space on paste · blank-then-value fill | fill skips its lock hook · async API, rebuilt handle · one unexplained blank |
+| React 19 | declared supported | `>= 18.2`, open-ended, untested |
+| Licence | Apache-2.0; 137 packages, all permissive, **0 Pro packages**; "telemetry" is an empty interface; no outside calls seen | MIT; 14 packages, all permissive (`jstat` MIT) |
+| Upkeep | **39 releases in 12 months, last 2026-10-17**; 22.7k stars, 79 contributors, company-backed (DreamNum); 0.10 → 1.1 this year = breaking changes | **last release and commit 2025-11-06 (~11.5 months)**; 3.7k stars, 25 contributors, 96 open issues |
+| Supply-chain surface | 137 packages → more `npm-audit` hits likely | 14 packages |
+
+Excel export does not depend on the engine: the tracker's data lives in our database and the portal
+already ships SheetJS (`xlsx` 0.20.3). **Recommendation: Univer**, pinned to exact versions and
+upgraded on purpose, with trim + before-vs-final collapse in the save layer. FortuneSheet would be the
+pick only if download size or package count mattered more than active upkeep.
+
+### Rules learned (do not re-learn them)
+
+- ⚠️⚠️ **Univer: read values with `range.getRawValues()`, NEVER `getValue(s)`** — those return the
+  FORMATTED text ("2,462,200"). It would have written commas into money fields, and it made the
+  locked-cell put-back loop forever (1,673 → 1,790 put-backs). Fixed + guarded (`reverting` flag).
+- Univer undo/redo emit mutations with **no COMMAND around them** — clear the "last command" on
+  `CommandExecuted`, treat a no-command change as undo/redo, and use the key pressed to say which.
+- ⚠️ **Univer takes Ctrl+Z before the grid's element sees it, and undoes inside its own window
+  listener.** To know undo from redo, listen on the window (capture phase) and register BEFORE
+  `createUniver`, or each change carries the PREVIOUS key's label (measured). A hint expires in 1 s.
+- ⚠️ **Univer paste from a plain-text clipboard with Windows line endings leaves a trailing space**
+  (char 32) on the last cell of every row but the final one ("ENG1 "). FortuneSheet stored it clean.
+  A real Excel copy also carries HTML, which may avoid it — **unchecked**. Trim on save regardless:
+  a trailing space in a chassis or engine number breaks every lookup.
+- ⚠️ **Univer fill-drag blanks each target first, then writes**: 3 real changes arrived as 10 events.
+  The audit must collapse one command's events to before-vs-final, or it fills with fake blanks.
+- FortuneSheet names no commands: the source of an edit is inferred (paste hook / undo keys / cell count)
+  and is labelled "inferred" on screen. A one-cell fill shows as "typed".
+- ⚠️ **FortuneSheet: its fill skips `beforeUpdateCell`** — a fill into a locked column wrote 0 there;
+  the put-back (diff against our copy) restored it. With Fortune the put-back is part of the lock.
+- **FortuneSheet's API is asynchronous** (it queues into React state): a synchronous timer reads 0 ms.
+  Time to the moment the change is visible, yielding via `MessageChannel` (not throttled like frames).
+  And its ref object is **rebuilt** as state changes — read `ref.current` each time, never a saved copy
+  (the copy saved at mount answered "sheet not found").
+- FortuneSheet paste only runs after its own Ctrl+V keydown (`isPasteAction`), so a synthetic paste
+  event is ignored. Test paste with a real Ctrl+V; PowerShell `Set-Clipboard` sets the contents.
+- Once, early on, a FortuneSheet cell went blank straight after Enter. It followed calls through the
+  stale API copy and did not recur in two clean tries on the user path. Not explained; watch for it.
+- **Take click coordinates from a screenshot of the CURRENT layout.** The page above the grid changes
+  height (tab row wrapping, capture bar), so an older screenshot's y lands rows off — it looked like
+  a FortuneSheet bug until a zoom showed the pointer on the selected cell.
+- **Never trust a frame-timed number in a hidden pane or throttled window** — rAF ran at ~1/s, so a
+  do-nothing double-frame wait measured ~2,000 ms and made Univer look like 2 s per action. Time the
+  work itself, and always measure a do-nothing baseline.
+- **Measure the cost of an UPDATE, not just of drawing.** ReactGrid virtualises (468 of 180k cells in
+  the DOM) yet takes ~1 s per action at full size — the first check ("draws little") missed it.
+- AI/web answers were wrong in checkable ways (Univer pivot "free", FortuneSheet "virtual DOM",
+  "OpenSheets"); MIT vs Apache-2.0 is not a real difference for internal commercial use.
+
+### ⏭️ Next on resume
+
+✅ Done 2026-10-21 (`0858dc1`): FortuneSheet loaded, timed and checked; Univer paste, fill-drag and
+lock through the real UI. `getRangePermission().protect()` was not tried — the lock already works
+without it (edit-start refusal + put-back), so it is not needed for the choice.
+
+### ✅ DECIDED 2026-10-21 — the grid is **Univer** (owner: "go with univer")
+
+Univer 1.1.0, Apache-2.0, **free presets only** (nothing from `@univerjs-pro`, nothing unlicensed such
+as `preset-sheets-advanced`), **pinned to exact versions** and upgraded on purpose. Reasons in the
+evaluation table above. This closes the "grid library" question in the PARKED section below.
+
+**The last check, done with a REAL Excel copy** (Excel 16 driven over COM, a hidden blank workbook,
+closed unsaved): Excel puts XML, HTML, RTF, CSV and text on the clipboard; Univer reads the HTML.
+- ✅ No trailing space — that only happens with a plain-text clipboard (Notepad, WhatsApp, a browser).
+- ⚠️⚠️ **Money arrives as TEXT with the PC's grouping: "12,34,567"** (Indian lakh grouping from the
+  Windows locale), not the number 1234567. A money column would receive a string.
+- Undo can change a cell's type (Qty `"1"` came back as the number `1`) — same value, so the capture
+  correctly ignored it, but the save layer must compare per column type.
+
+**The save-layer adapter — the one new piece Univer brings (do not skip any line):**
+1. Read with `getRawValues()` only.
+2. **Money columns: strip grouping commas (lakh and Western), convert to a number, refuse anything
+   else** with the cell named. Text columns: trim.
+3. Collapse each command's events to before-vs-final per cell (fill sends blank-then-value).
+4. Lock: refuse edit-start on computed columns + put back anything that arrives there anyway.
+5. Undo/redo labels from a window capture-phase key listener registered before `createUniver`.
+6. **Refuse `=` formulas typed into data cells** — cell formulas stay cut (decision 17); formulas are
+   column-level and ours.
+7. **Persist formatting** (bold, colours, borders) — Univer holds it in memory only; it needs a store.
+8. Every write goes through our Edge Function with the row's before-value (the audit shape).
+
+**What this does to the "What genuinely remains" table above:** the right-click menu (~3 d) and the
+in-app find (~1 d) come with Univer; undo/redo, the formatting toolbar, filter, sort, dropdowns and
+conditional formatting are its, not ours. New: the adapter above (rough guess ~5 d) and the
+formatting store. Pivot (group-by panel) and column formulas stay ours. **Re-estimate at build start**
+— the net is roughly even with ~12 weeks, not obviously shorter.
+
+### ⏭️ Next — Stage 0 → Stage 1 of the build
+
+- Delete `src/spike/` and the three other grid libraries when the real build starts; the spike branch
+  `10-pre-grid-compare` stays as the record (never merged).
+- Staging is ACTIVE again (payments used it in October), so Stage 1 (schema + RLS + permissions) has
+  somewhere to rehearse. Start from the build order in §2.5 with Univer in place of the grid line.
+- Still owner-side: **the date Excel goes read-only**.
+
 ## ⏸️ PARKED — 2026-08-20 (owner: "put this on the back burner again")
 
 **Planning is complete and approved. Nothing is half-built.** No schema, no Edge Function,
@@ -353,7 +496,7 @@ no production code — the only code written is a throwaway spike on a separate 
 | Formatting | Resolved to **flagging rows needing attention** → highlight + colour rules, already planned |
 | **Budget** | **FREE-TIER ONLY. No paid dependencies.** This rules out the best-fit libraries — see below |
 | Trial group | **The entire back-office team** |
-| Grid library | **STILL OPEN** — see below |
+| Grid library | ~~STILL OPEN~~ → **Univer, decided 2026-10-21** (see "DECIDED" above; the table below is the August record) |
 
 ### Grid library — the one genuinely open question
 
