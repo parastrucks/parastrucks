@@ -26,6 +26,25 @@
 
 ---
 
+## Session log — 2026-10-21 (PC): Phase 10 resumed — four free grids compared side by side
+
+Owner: *"run a full survey and bring this session up to speed"*, then *"I will need to try both
+options to come to a conclusion"*. Spike only, branch `10-pre-grid-compare` (`e1f63c3` → `b7b855d`),
+rebuilt on `portal` `f914e62` rather than reviving the August branch (37 behind). Nothing merged,
+no schema, no deploy. ⭐ Full table and rules: `docs/backlog/phase10-execution-plan.md` → "RESUMED 2026-10-21".
+- `main.jsx`: the spike mount was ported as a CHANGE — copying the August file would have
+  reintroduced the `@vite-ignore` errorLog bug fixed in PR #124.
+- ReactGrid tab (owner: "react looks better") gained undo/redo, B/I/U, Excel's full colour menus,
+  border, and a small remembered default view. ⭐ It reprocesses every cell per change: ~970 ms at
+  180k cells vs 3–7 ms on Glide for the same undo — viable only at month × 25 columns (85 ms).
+- Owner: *"something like Google Sheets with open-source access"* → asked Gemini + ChatGPT (I wrote a
+  short prompt); their claims were checked against the packages (Univer pivot is Pro; FortuneSheet is
+  canvas, no pivot; "OpenSheets" not on npm). Univer 1.1.0 + FortuneSheet 1.0.4 tabs built.
+- ⭐⭐ Univer's `getValue(s)` returns formatted text → commas would have reached money fields, and the
+  lock's put-back looped forever. `getRawValues()` + a guard. Univer measured at full size: edit 17 ms,
+  undo 83 ms, load 270 ms (an earlier "2 s" was a throttled-frame artefact, caught by a do-nothing baseline).
+- Left: FortuneSheet not run; Univer paste / fill-drag / real-UI lock not seen. Owner decides after trying.
+
 ## Session log — 2026-10-21 (PC): Service Payments parked, waiting on HDFC
 
 Owner: *"can we update everything so I can continue building other features while we wait for details
