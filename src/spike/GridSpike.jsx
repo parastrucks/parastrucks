@@ -3,13 +3,16 @@
 // Mounted dev-only from main.jsx, never in a production build. Delete once a grid is chosen.
 // react-data-grid is gone: it cannot run on React 18 (React 19 context shorthand, see
 // docs/backlog/phase10-execution-plan.md, PARKED section).
-import { useMemo, useState, useCallback, useRef, useEffect } from 'react'
+import { useMemo, useState, useCallback, useRef, useEffect, lazy, Suspense } from 'react'
 import { DataEditor, GridCellKind, CompactSelection } from '@glideapps/glide-data-grid'
 import '@glideapps/glide-data-grid/dist/index.css'
 import { ReactGrid } from '@silevis/reactgrid'
 import '@silevis/reactgrid/styles.css'
 import { COLUMNS, makeRows } from './trackerData'
 import ErrorBox from './ErrorBox'
+// Spreadsheet ENGINES, loaded only when their tab opens (Univer's bundle is large).
+const UniverPane = lazy(() => import('./UniverPane'))
+const FortunePane = lazy(() => import('./FortunePane'))
 
 const inr = new Intl.NumberFormat('en-IN')
 const fmtNum = v => typeof v === 'number' ? inr.format(v) : (v ?? '')
@@ -415,6 +418,10 @@ export default function GridSpike() {
     applyValues(list, 'redo')
   }, [])
 
+  // The engine tabs keep their OWN undo stacks, so their edits update the shared rows without
+  // entering this one — otherwise one Ctrl+Z there would also be replayed here.
+  const syncValues = useCallback(list => applyValues(list, 'redo'), []) // deliberately mounted once (see comment above)
+
   const commitFormat = useCallback((cells, make, label) => {
     const list = []
     for (const { rowId, colId } of cells) {
@@ -495,6 +502,16 @@ export default function GridSpike() {
         .view-pick select{font:inherit;font-size:12px;padding:3px 4px}
         .view-warn{color:#b45309;font-weight:700}
         .spk-try{font-size:12px;color:#565656;padding:6px 14px;border-top:1px solid #ececec;background:#fffdf5;line-height:1.5}
+        .tab-sep{font-size:11px;color:#9a9a9a;margin:0 2px 0 8px}
+        .spk-loading{padding:24px;color:#767676;font-size:13px}
+        .engine-host{position:relative;min-height:0}
+        .cap-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:5px 14px;border-bottom:1px solid #d4d4d4;background:#f7fbff;font-size:12px;color:#262626}
+        .cap-title{font-weight:700}
+        .cap-chip{padding:1px 7px;border:1px solid #d4d4d4;border-radius:10px;color:#9a9a9a;background:#fff}
+        .cap-chip[data-on=true]{color:#15803d;border-color:#15803d;background:#effaf3;font-weight:700}
+        .cap-warn{color:#b45309;font-weight:700}
+        .cap-recent{color:#565656;background:#fff;border:1px solid #ececec;padding:1px 6px}
+        .cap-note{color:#9a9a9a;font-style:italic}
       `}</style>
       <div className="spk-head">
         <h1>Phase 10 grid comparison</h1>
@@ -518,16 +535,32 @@ export default function GridSpike() {
         </span>
         <button className="spk-tab" data-on={which === 'rg'} onClick={() => setWhich('rg')}>ReactGrid</button>
         <button className="spk-tab" data-on={which === 'glide'} onClick={() => setWhich('glide')}>Glide</button>
+        <span className="tab-sep">engines →</span>
+        <button className="spk-tab" data-on={which === 'univer'} onClick={() => setWhich('univer')}>Univer</button>
+        <button className="spk-tab" data-on={which === 'fortune'} onClick={() => setWhich('fortune')}>FortuneSheet</button>
       </div>
       <div className="spk-body">
-        {which === 'rg'
-          ? <ErrorBox label="ReactGrid" key="rg">
-              <ReactGridPane rows={shownRows} cols={shownCols} fmt={fmt} commitValues={commitValues} commitFormat={commitFormat}
-                undo={undo} redo={redo} canUndo={h.at > 0} canRedo={h.at < h.stack.length} note={setLog} />
-            </ErrorBox>
-          : <ErrorBox label="Glide" key="glide">
-              <GlidePane rows={rows} commitValues={commitValues} undo={undo} redo={redo} note={setLog} />
-            </ErrorBox>}
+        {which === 'rg' && (
+          <ErrorBox label="ReactGrid" key="rg">
+            <ReactGridPane rows={shownRows} cols={shownCols} fmt={fmt} commitValues={commitValues} commitFormat={commitFormat}
+              undo={undo} redo={redo} canUndo={h.at > 0} canRedo={h.at < h.stack.length} note={setLog} />
+          </ErrorBox>
+        )}
+        {which === 'glide' && (
+          <ErrorBox label="Glide" key="glide">
+            <GlidePane rows={rows} commitValues={commitValues} undo={undo} redo={redo} note={setLog} />
+          </ErrorBox>
+        )}
+        {(which === 'univer' || which === 'fortune') && (
+          // The engines always get the WHOLE book (2,050 × 88): the point is to see whether they stay fast at full size.
+          <ErrorBox label={which === 'univer' ? 'Univer' : 'FortuneSheet'} key={which}>
+            <Suspense fallback={<div className="spk-loading">Loading {which === 'univer' ? 'Univer' : 'FortuneSheet'}…</div>}>
+              {which === 'univer'
+                ? <UniverPane rows={rows} syncValues={syncValues} note={setLog} />
+                : <FortunePane rows={rows} syncValues={syncValues} note={setLog} />}
+            </Suspense>
+          </ErrorBox>
+        )}
       </div>
       <div className="spk-try">
         <b>Try:</b> edit a cell, then <b>Ctrl+Z</b> / <b>Ctrl+Y</b> · paste a block from Excel, then one Ctrl+Z undoes all of it ·

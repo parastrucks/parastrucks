@@ -10,9 +10,18 @@
     "prepare": "husky"
   },
   "dependencies": {
+    "@fortune-sheet/react": "^1.0.4",
     "@glideapps/glide-data-grid": "^6.0.3",
     "@silevis/reactgrid": "^4.1.17",
     "@supabase/supabase-js": "^2.39.7",
+    "@univerjs/preset-sheets-conditional-formatting": "^1.1.0",
+    "@univerjs/preset-sheets-core": "^1.1.0",
+    "@univerjs/preset-sheets-data-validation": "^1.1.0",
+    "@univerjs/preset-sheets-filter": "^1.1.0",
+    "@univerjs/preset-sheets-find-replace": "^1.1.0",
+    "@univerjs/preset-sheets-note": "^1.1.0",
+    "@univerjs/preset-sheets-sort": "^1.1.0",
+    "@univerjs/presets": "^1.1.0",
     "fuse.js": "^7.1.0",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.7",
@@ -25,6 +34,7 @@
     "react-responsive-carousel": "^3.2.23",
     "react-router-dom": "^6.22.3",
     "recharts": "^3.8.1",
+    "rxjs": "^7.8.2",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
