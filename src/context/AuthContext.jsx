@@ -388,10 +388,15 @@ export function AuthProvider({ children }) {
   //     out of the rule editor)
   //   - Non-admin /access-rules → hard-deny regardless of seeded rules
   //   - Otherwise → at least one access_rules row must match on all 4 axes
+  //   - /tracker → the per-person switch only (Phase 10). Admin flips it in
+  //     Employees; access_rules rows for /tracker are ignored, so no department
+  //     rule can open it by accident. This only shows or hides the page — the
+  //     admin-vehicle-units Edge Function re-checks the switch on every call.
   function canAccess(route) {
     if (!profile) return false
     if (profile.permission_level === 'admin') return true
     if (route === '/access-rules') return false
+    if (route === '/tracker') return session?.user?.app_metadata?.tracker_access === true
     return accessRules.some(rule => rule.route === route && ruleMatches(rule, profile))
   }
 

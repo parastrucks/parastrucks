@@ -122,6 +122,11 @@ export default function Employees() {
   // Confirm action state
   const [confirmAction, setConfirmAction] = useState(null) // { type, employee }
 
+  // Vehicle Tracker switch (admin only). Lives in auth app_metadata, not on the
+  // users row, so it is read through admin-users rather than with the employees.
+  const [trackerById, setTrackerById] = useState({})        // id → { tracker_access, tracker_export }
+  const [trackerForm, setTrackerForm] = useState({ tracker_access: false, tracker_export: false })
+
   /* ── fetch employees ───────────────────────────────────────────────── */
   // Phase 6c.3: legacy text columns gone from users. The UUID columns drive
   // every render; the ref-table lookups happen against in-memory maps below.
@@ -341,6 +346,24 @@ export default function Employees() {
     setModal('confirm')
   }
 
+  const fetchTrackerAccess = useCallback(async () => {
+    if (!isAdmin) return
+    try {
+      const r = await callEdge('admin-users', 'listTrackerAccess')
+      setTrackerById(Object.fromEntries((r.access || []).map(a => [a.id, a])))
+    } catch (e) {
+      console.error('Employees: tracker access load failed:', e.message)
+    }
+  }, [isAdmin])
+  useEffect(() => { fetchTrackerAccess() }, [fetchTrackerAccess])
+
+  function openTracker(emp) {
+    setSelected(emp)
+    const cur = trackerById[emp.id]
+    setTrackerForm({ tracker_access: !!cur?.tracker_access, tracker_export: !!cur?.tracker_export })
+    setModal('tracker')
+  }
+
   function closeModal() {
     setModal(null)
     setSelected(null)
@@ -524,6 +547,20 @@ export default function Employees() {
     }, toastOnError).catch(() => {})
   }
 
+  /* ── VEHICLE TRACKER ACCESS (admin) ─────────────────────────────────── */
+  async function handleSetTracker(e) {
+    e.preventDefault()
+    const next = { ...trackerForm, tracker_export: trackerForm.tracker_access && trackerForm.tracker_export }
+    await runSave(async () => {
+      const r = await callEdge('admin-users', 'setTrackerAccess', { id: selected.id, ...next })
+      toast.success(r.sessions_revoked
+        ? `${selected.full_name}: tracker access changed, and they have been signed out.`
+        : `${selected.full_name}: tracker access saved.`)
+      await fetchTrackerAccess()
+      closeModal()
+    }, toastOnError).catch(() => {})
+  }
+
   /* ── DELETE (permanent) ─────────────────────────────────────────────── */
   async function handleDelete() {
     const emp = confirmAction.employee
@@ -680,6 +717,11 @@ export default function Employees() {
                         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                           <button className="btn btn-secondary btn-sm" onClick={() => openEdit(emp)}>Edit</button>
                           <button className="btn btn-secondary btn-sm" onClick={() => openPassword(emp)}>Reset PW</button>
+                          {isAdmin && emp.permission_level !== 'admin' && (
+                            <button className="btn btn-secondary btn-sm" onClick={() => openTracker(emp)}>
+                              {trackerById[emp.id]?.tracker_access ? 'Tracker ✓' : 'Tracker'}
+                            </button>
+                          )}
                           <button
                             className={`btn btn-sm ${emp.is_active ? 'btn-danger' : 'btn-secondary'}`}
                             onClick={() => openConfirm(emp.is_active ? 'deactivate' : 'activate', emp)}
@@ -716,6 +758,11 @@ export default function Employees() {
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                       <button className="btn btn-secondary btn-sm" onClick={() => openEdit(emp)}>Edit</button>
                       <button className="btn btn-secondary btn-sm" onClick={() => openPassword(emp)}>Reset PW</button>
+                      {isAdmin && emp.permission_level !== 'admin' && (
+                        <button className="btn btn-secondary btn-sm" onClick={() => openTracker(emp)}>
+                          {trackerById[emp.id]?.tracker_access ? 'Tracker ✓' : 'Tracker'}
+                        </button>
+                      )}
                       <button
                         className={`btn btn-sm ${emp.is_active ? 'btn-danger' : 'btn-secondary'}`}
                         onClick={() => openConfirm(emp.is_active ? 'deactivate' : 'activate', emp)}
@@ -793,6 +840,47 @@ export default function Employees() {
                 <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
                   <button type="submit" className="btn btn-primary" disabled={saving}>
                     {saving ? <span className="spinner spinner-sm" /> : 'Update Password'}
+                  </button>
+                  <button type="button" className="btn btn-secondary" onClick={closeModal}>Cancel</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── VEHICLE TRACKER ACCESS MODAL (admin) ─────────────────────── */}
+      {modal === 'tracker' && selected && (
+        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && closeModal()}>
+          <div className="modal" ref={trapRef} tabIndex={-1} style={{ maxWidth: 440 }}>
+            <div className="modal-header">
+              <h2>Vehicle Tracker — {selected.full_name}</h2>
+              <button className="modal-close" onClick={closeModal}>×</button>
+            </div>
+            <div className="modal-body">
+              <form onSubmit={handleSetTracker} noValidate>
+                <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 14, marginBottom: 12 }}>
+                  <input type="checkbox" checked={trackerForm.tracker_access}
+                    onChange={e => setTrackerForm(f => ({ ...f, tracker_access: e.target.checked }))} />
+                  <span>Can open the Vehicle Tracker<br />
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Sees purchase and sale figures. Staff incentives stay hidden unless they are in HR.</span>
+                  </span>
+                </label>
+                <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 14,
+                  opacity: trackerForm.tracker_access ? 1 : 0.5 }}>
+                  <input type="checkbox" disabled={!trackerForm.tracker_access}
+                    checked={trackerForm.tracker_access && trackerForm.tracker_export}
+                    onChange={e => setTrackerForm(f => ({ ...f, tracker_export: e.target.checked }))} />
+                  <span>Can download the whole book to Excel<br />
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Every download is logged.</span>
+                  </span>
+                </label>
+                <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.5, marginTop: 14 }}>
+                  Taking access away signs them out everywhere at once. New access shows at their next sign-in.
+                </p>
+                <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+                  <button type="submit" className="btn btn-primary" disabled={saving}>
+                    {saving ? <span className="spinner spinner-sm" /> : 'Save'}
                   </button>
                   <button type="button" className="btn btn-secondary" onClick={closeModal}>Cancel</button>
                 </div>

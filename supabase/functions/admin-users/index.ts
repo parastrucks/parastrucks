@@ -800,6 +800,72 @@ Deno.serve(async (req: Request) => {
         return json({ ok: true })
       }
 
+      // ── Phase 10: the Vehicle Tracker switch (admin only) ─────────────────
+      // Who may open /tracker is a per-person choice, not a rule by department:
+      // app_metadata.tracker_access (+ tracker_export for downloading the book).
+      // app_metadata lives on auth.users, which only the service role can write, so
+      // nobody can grant it to themselves — and NOT on public.users, whose
+      // sync_erp_users webhook would run a full ERP reconcile for every flip.
+      case "listTrackerAccess": {
+        if (caller.role !== "admin") return json({ error: "Only admin manages tracker access" }, 403)
+        const access: { id: string; tracker_access: boolean; tracker_export: boolean }[] = []
+        for (let page = 1; ; page++) {
+          const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 1000 })
+          if (error) return json({ error: error.message }, 400)
+          for (const u of data.users) {
+            const m = (u.app_metadata ?? {}) as Record<string, unknown>
+            if (m.tracker_access === true || m.tracker_export === true) {
+              access.push({ id: u.id, tracker_access: m.tracker_access === true, tracker_export: m.tracker_export === true })
+            }
+          }
+          if (data.users.length < 1000) break
+        }
+        return json({ ok: true, access })
+      }
+
+      case "setTrackerAccess": {
+        if (caller.role !== "admin") return json({ error: "Only admin manages tracker access" }, 403)
+        const { id, tracker_access, tracker_export } = payload as {
+          id?: string; tracker_access?: boolean; tracker_export?: boolean
+        }
+        if (!id || typeof tracker_access !== "boolean" || typeof tracker_export !== "boolean") {
+          return json({ error: "Missing id, tracker_access or tracker_export" }, 400)
+        }
+        if (tracker_export && !tracker_access) {
+          return json({ error: "Downloading the book needs tracker access too" }, 400)
+        }
+        const { data: target } = await admin.from("users")
+          .select("id, is_active, permission_level").eq("id", id).maybeSingle()
+        if (!target) return json({ error: "User not found" }, 404)
+        if (target.permission_level === "admin") return json({ error: "Admin always has the tracker" }, 400)
+        if (tracker_access && !target.is_active) return json({ error: "This account is inactive" }, 400)
+
+        // Read-then-spread, as resetPassword does: correct whether GoTrue merges or
+        // replaces app_metadata, and must_change_password / provider survive.
+        const { data: cur, error: getErr } = await admin.auth.admin.getUserById(id)
+        if (getErr || !cur?.user) return json({ error: getErr?.message ?? "User not found" }, 400)
+        const prev = (cur.user.app_metadata ?? {}) as Record<string, unknown>
+        const before = { tracker_access: prev.tracker_access === true, tracker_export: prev.tracker_export === true }
+        const { error } = await admin.auth.admin.updateUserById(id, {
+          app_metadata: { ...prev, tracker_access, tracker_export },
+        })
+        if (error) {
+          await audit(admin, { actorId: caller.id, action: "setTrackerAccess", targetId: id,
+            before, after: { ok: false, error: error.message } })
+          return json({ error: error.message }, 400)
+        }
+
+        // Taking something away must bite now: the Edge Function re-reads the flag on
+        // every call, but the page itself reads it from the session, so end the
+        // sessions. Granting needs no logout — it shows at their next sign-in or
+        // token refresh (within the hour).
+        const removed = (before.tracker_access && !tracker_access) || (before.tracker_export && !tracker_export)
+        const sessions_revoked = removed ? await adminLogoutUser(admin, id) : false
+        await audit(admin, { actorId: caller.id, action: "setTrackerAccess", targetId: id,
+          before, after: { tracker_access, tracker_export, sessions_revoked } })
+        return json({ ok: true, sessions_revoked })
+      }
+
       case "delete": {
         // Delete is admin-only
         if (caller.role !== "admin") {
