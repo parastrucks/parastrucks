@@ -184,6 +184,7 @@ export function checkValue(spec: ColSpec, raw: unknown): Checked {
       else return { ok: false, reason: typeof v === "string" && v.startsWith("=") ? "formulas are not allowed in data cells" : "not a number" }
       if (!Number.isFinite(n)) return { ok: false, reason: "not a number" }
       if (spec.type === "integer" && !Number.isInteger(n)) return { ok: false, reason: "must be a whole number" }
+      if (spec.type === "integer" && Math.abs(n) > 2147483647) return { ok: false, reason: "too large" }
       if (spec.min !== undefined && n < spec.min) return { ok: false, reason: `must be at least ${spec.min}` }
       if (spec.max !== undefined && n > spec.max) return { ok: false, reason: `must be at most ${spec.max}` }
       if (spec.oneOf && !spec.oneOf.includes(n)) return { ok: false, reason: `must be one of ${spec.oneOf.join(", ")}` }
