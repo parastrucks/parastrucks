@@ -339,6 +339,68 @@ Excel, and the export exists for exactly that.
 
 ---
 
+## 🔬 RESUMED 2026-10-21 — the grid comparison (owner: "I will need to try both options")
+
+**Still no production code, schema or EF.** Everything below is spike code on branch
+**`10-pre-grid-compare`** (from `portal` `f914e62`, pushed; supersedes `10-pre-grid-spike`, which
+is 37 commits behind). Commits `e1f63c3` · `22a46a8` · `c1f930d` · `b7b855d`. Not for merging.
+
+Run it: `preview_start {name:"portal"}` (or `npm run dev`) → **`http://localhost:3000/grid-spike?strict=0`**
+(`?strict=0` drops React StrictMode's dev-only double render so timings are fair). Four tabs:
+**ReactGrid | Glide | Univer | FortuneSheet**, same synthetic 2,050 × 88 book (`src/spike/trackerData.js`).
+
+### What the owner asked, and what was built
+
+| Owner said | Built |
+|---|---|
+| "react looks better, but I need undo / text and cell formatting" | ReactGrid tab: one undo/redo stack for values AND formatting (`{rowId,colId,before,after}` — the `tracker_audit` shape, so production undo = replay of the audit), a paste is one step; B/I/U (Ctrl+B/I/U), fill, text colour, border, clear |
+| "will fill and text colour have just limited options?" | Excel's own colour menus: theme row + 5 shade rows + 10 standard + No fill/Automatic + More colours…, plus the three fills the workbooks use. Custom picker applies on `change` only (`input` would be dozens of undo steps) |
+| "a smaller default view, a default view for each user" | Opens at one month × 25 columns, remembered per browser (stands in for the per-person `tracker_views` layout); amber warning above 50,000 cells |
+| "something like Google Sheets with open-source access" | Gemini + ChatGPT answers checked against the packages, then two **spreadsheet-engine** tabs: Univer and FortuneSheet |
+
+### Measured (owner's Chrome, dev build, median of 3 — upper bounds on production)
+
+| | Glide 6.0.3 (MIT, canvas) | ReactGrid 4.1.17 (MIT, DOM) | Univer 1.1.0 (Apache-2.0, canvas, free presets) | FortuneSheet 1.0.4 (MIT, canvas) |
+|---|---|---|---|---|
+| One action, whole book 180k cells | **3–7 ms** | **970 ms** (~80 ms + ~12 µs per cell — reprocesses every cell on each change) | **17–18 ms** edit/bold · 83 ms undo · 92 ms 20×8 block | ⏭️ not run |
+| One action, month × 25 cols | — | 85 ms | — | — |
+| Load | 10–13 ms first paint | — | 270 ms | ⏭️ |
+| Undo/redo, toolbar, formatting | ours to build (built on ReactGrid tab) | ours to build (built) | **built in** | built in |
+| Filter, find, comments, dropdowns | ours | ours (browser Ctrl+F works — DOM) | **built in** (free presets) | built in |
+| Pivot | ours (~7 d) | ours | **Pro only (paid)** → ours | none → ours |
+| Every edit reaches us? | yes (our code) | yes (our code) | typed ✅ undo ✅ · paste / fill-drag ⏭️ | ⏭️ |
+
+### Rules learned (do not re-learn them)
+
+- ⚠️⚠️ **Univer: read values with `range.getRawValues()`, NEVER `getValue(s)`** — those return the
+  FORMATTED text ("2,462,200"). It would have written commas into money fields, and it made the
+  locked-cell put-back loop forever (1,673 → 1,790 put-backs). Fixed + guarded (`reverting` flag).
+- Univer undo/redo emit mutations with **no COMMAND around them** — clear the "last command" on
+  `CommandExecuted`, treat a no-command change as undo/redo, and use the key pressed to say which.
+- FortuneSheet names no commands: the source of an edit is inferred (paste hook / undo keys / cell count)
+  and is labelled "inferred" on screen.
+- **Never trust a frame-timed number in a hidden pane or throttled window** — rAF ran at ~1/s, so a
+  do-nothing double-frame wait measured ~2,000 ms and made Univer look like 2 s per action. Time the
+  work itself, and always measure a do-nothing baseline.
+- **Measure the cost of an UPDATE, not just of drawing.** ReactGrid virtualises (468 of 180k cells in
+  the DOM) yet takes ~1 s per action at full size — the first check ("draws little") missed it.
+- AI/web answers were wrong in checkable ways (Univer pivot "free", FortuneSheet "virtual DOM",
+  "OpenSheets"); MIT vs Apache-2.0 is not a real difference for internal commercial use.
+
+### ⏭️ Next on resume
+
+1. **FortuneSheet**: load on React 18, timings at the full book (`setCellFormat` bold, `setCellValue`,
+   `handleUndo`, a block write — via `window.__fortune`, no frame waits), capture of typed / undo
+   via `onOp`, and the lock.
+2. **Univer through the real UI**: paste from Excel, fill-drag, double-click on a locked column
+   (`BeforeSheetEditStart`), and what `getRangePermission().protect()` does for the owner.
+3. Put the four side by side for the owner to try by hand; **the owner chooses**. Then record the
+   decision here + `PORTAL_HISTORY.md` + `phase_status`, and delete `src/spike/` in the real build.
+
+Leaning, unconfirmed: an engine (Univer) gives undo, formatting, filter, find, comments and
+dropdowns for free and is fast at full size — but every edit must still be proven to reach the
+database, and pivot stays ours to build in all four.
+
 ## ⏸️ PARKED — 2026-08-20 (owner: "put this on the back burner again")
 
 **Planning is complete and approved. Nothing is half-built.** No schema, no Edge Function,

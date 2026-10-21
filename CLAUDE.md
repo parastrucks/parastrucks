@@ -30,6 +30,17 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ---
 
+## Current state (2026-10-21, later) — Phase 10 grid comparison
+
+- **🔬 Phase 10 Vehicle Tracker RESUMED as a spike: four free grids side by side** on branch
+  `10-pre-grid-compare` (`b7b855d`, pushed, NOT for merge — package.json carries the grids).
+  `http://localhost:3000/grid-spike?strict=0` → ReactGrid | Glide | Univer | FortuneSheet.
+  ReactGrid has undo/formatting/colour menus but ~1 s per action at the full book (fine at month × 25
+  cols); Univer (free presets) is 17–90 ms at full size with undo/formatting/filter/find built in.
+  ⭐ **Univer: `getRawValues()`, never `getValue(s)`** (formatted text → commas in money). ⏭️ FortuneSheet
+  not yet run; Univer paste/fill/lock via the real UI not yet seen; then the **owner chooses**.
+  ⭐ `docs/backlog/phase10-execution-plan.md` → "RESUMED 2026-10-21".
+
 ## Current state (2026-10-21)
 
 - **⏸️ SERVICE PAYMENTS IS PARKED — waiting for details from HDFC (owner, 2026-10-21).** Other features
