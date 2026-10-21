@@ -40,7 +40,9 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   filter/find built in; every kind of edit reaches us on both and both locks hold.
   ⭐ **Univer: `getRawValues()`, never `getValue(s)`** (formatted text → commas in money); its paste can
   leave a trailing space and its fill sends blank-then-value — trim and collapse in the save layer.
-  ⏭️ **The owner tries all four and chooses** (leaning Univer); one check left: a real Excel copy into Univer.
+  ✅ **DECIDED 2026-10-21: the grid is Univer** (free presets, exact versions). ⚠️ A real Excel copy
+  pastes money as TEXT with lakh commas ("12,34,567") — the save adapter converts or refuses. Its
+  eight duties + the next step (Stage 1 on staging): plan → "DECIDED".
   ⭐ `docs/backlog/phase10-execution-plan.md` → "RESUMED 2026-10-21".
 
 ## Current state (2026-10-21)

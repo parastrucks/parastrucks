@@ -19,7 +19,7 @@ The last open questions were resolved by the owner this session:
 
 | Decision (2026-08-11) | Choice |
 |---|---|
-| Grid library | React 19 deferred (own later project). **Grid choice now settled by a 1 d comparative spike** (owner principle, see below): `react-data-grid@7.0.0-beta.48` (pinned candidate) vs `@glideapps/glide-data-grid@6.0.3` (MIT, React 18, ships Excel-grade range selection/copy/fill natively; canvas-based — editors and a11y are the trade-off). Winner = highest score on the Excel-parity checklist |
+| Grid library | ✅ **Univer 1.1.0 (free presets), decided 2026-10-21** — see "DECIDED" in the RESUMED section. Original text: React 19 deferred (own later project). **Grid choice now settled by a 1 d comparative spike** (owner principle, see below): `react-data-grid@7.0.0-beta.48` (pinned candidate) vs `@glideapps/glide-data-grid@6.0.3` (MIT, React 18, ships Excel-grade range selection/copy/fill natively; canvas-based — editors and a11y are the trade-off). Winner = highest score on the Excel-parity checklist |
 | Rebilled/re-sold chassis | **Superseded rows** — a rebill creates a new row; old row kept, marked superseded |
 | Incentive columns | **Hidden** — visible to admin and HR only (owner, 2026-08-11) |
 | Export | **Separately gated + audited** — its own flag, every export logged |
@@ -442,18 +442,45 @@ pick only if download size or package count mattered more than active upkeep.
 lock through the real UI. `getRangePermission().protect()` was not tried — the lock already works
 without it (edit-start refusal + put-back), so it is not needed for the choice.
 
-1. **The owner tries all four by hand** at `http://localhost:3000/grid-spike?strict=0` and chooses.
-   Worth trying on each: type, paste a block copied from a real Excel file, drag-fill, Ctrl+Z, bold,
-   fill colour, filter, find, right-click.
-2. One check left for an engine pick: **paste from a real Excel copy into Univer** — does the
-   trailing space appear when the clipboard also carries HTML?
-3. Then record the decision here + `PORTAL_HISTORY.md` + `phase_status`, and delete `src/spike/` in
-   the real build.
+### ✅ DECIDED 2026-10-21 — the grid is **Univer** (owner: "go with univer")
 
-Leaning, unconfirmed: **Univer** — fastest engine at full size (about 5× FortuneSheet), with undo,
-formatting, filter, find, comments and dropdowns free. Its two catches (trailing space, blank-then-value
-fill) are fixed in our save layer: trim, and collapse each command to before-vs-final. Pivot stays ours
-to build in all four. ReactGrid needs small views; Glide is fast but has none of the spreadsheet features.
+Univer 1.1.0, Apache-2.0, **free presets only** (nothing from `@univerjs-pro`, nothing unlicensed such
+as `preset-sheets-advanced`), **pinned to exact versions** and upgraded on purpose. Reasons in the
+evaluation table above. This closes the "grid library" question in the PARKED section below.
+
+**The last check, done with a REAL Excel copy** (Excel 16 driven over COM, a hidden blank workbook,
+closed unsaved): Excel puts XML, HTML, RTF, CSV and text on the clipboard; Univer reads the HTML.
+- ✅ No trailing space — that only happens with a plain-text clipboard (Notepad, WhatsApp, a browser).
+- ⚠️⚠️ **Money arrives as TEXT with the PC's grouping: "12,34,567"** (Indian lakh grouping from the
+  Windows locale), not the number 1234567. A money column would receive a string.
+- Undo can change a cell's type (Qty `"1"` came back as the number `1`) — same value, so the capture
+  correctly ignored it, but the save layer must compare per column type.
+
+**The save-layer adapter — the one new piece Univer brings (do not skip any line):**
+1. Read with `getRawValues()` only.
+2. **Money columns: strip grouping commas (lakh and Western), convert to a number, refuse anything
+   else** with the cell named. Text columns: trim.
+3. Collapse each command's events to before-vs-final per cell (fill sends blank-then-value).
+4. Lock: refuse edit-start on computed columns + put back anything that arrives there anyway.
+5. Undo/redo labels from a window capture-phase key listener registered before `createUniver`.
+6. **Refuse `=` formulas typed into data cells** — cell formulas stay cut (decision 17); formulas are
+   column-level and ours.
+7. **Persist formatting** (bold, colours, borders) — Univer holds it in memory only; it needs a store.
+8. Every write goes through our Edge Function with the row's before-value (the audit shape).
+
+**What this does to the "What genuinely remains" table above:** the right-click menu (~3 d) and the
+in-app find (~1 d) come with Univer; undo/redo, the formatting toolbar, filter, sort, dropdowns and
+conditional formatting are its, not ours. New: the adapter above (rough guess ~5 d) and the
+formatting store. Pivot (group-by panel) and column formulas stay ours. **Re-estimate at build start**
+— the net is roughly even with ~12 weeks, not obviously shorter.
+
+### ⏭️ Next — Stage 0 → Stage 1 of the build
+
+- Delete `src/spike/` and the three other grid libraries when the real build starts; the spike branch
+  `10-pre-grid-compare` stays as the record (never merged).
+- Staging is ACTIVE again (payments used it in October), so Stage 1 (schema + RLS + permissions) has
+  somewhere to rehearse. Start from the build order in §2.5 with Univer in place of the grid line.
+- Still owner-side: **the date Excel goes read-only**.
 
 ## ⏸️ PARKED — 2026-08-20 (owner: "put this on the back burner again")
 
@@ -469,7 +496,7 @@ no production code — the only code written is a throwaway spike on a separate 
 | Formatting | Resolved to **flagging rows needing attention** → highlight + colour rules, already planned |
 | **Budget** | **FREE-TIER ONLY. No paid dependencies.** This rules out the best-fit libraries — see below |
 | Trial group | **The entire back-office team** |
-| Grid library | **STILL OPEN** — see below |
+| Grid library | ~~STILL OPEN~~ → **Univer, decided 2026-10-21** (see "DECIDED" above; the table below is the August record) |
 
 ### Grid library — the one genuinely open question
 
