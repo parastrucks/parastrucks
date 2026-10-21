@@ -15,17 +15,82 @@ const inr = new Intl.NumberFormat('en-IN')
 const fmtNum = v => typeof v === 'number' ? inr.format(v) : (v ?? '')
 const HISTORY_LIMIT = 200
 
-// The three fills actually used in the six workbooks (formatting census, Aug 2026).
-const FILLS = [
-  { label: 'Yellow', value: '#FFFF00' },
-  { label: 'Red', value: '#FF0000' },
-  { label: 'Green', value: '#C6EFCE' },
+// Excel's own colour menu: the default "Office" theme row, its five shade rows, and the ten
+// standard colours. Any CSS colour works in ReactGrid's cell style, so the palette costs nothing.
+const THEME = ['#FFFFFF', '#000000', '#E7E6E6', '#44546A', '#4472C4', '#ED7D31', '#A5A5A5', '#FFC000', '#5B9BD5', '#70AD47']
+const STANDARD = ['#C00000', '#FF0000', '#FFC000', '#FFFF00', '#92D050', '#00B050', '#00B0F0', '#0070C0', '#002060', '#7030A0']
+// The three fills the six workbooks actually use (formatting census, Aug 2026) — kept one click away.
+const FROM_FILES = [
+  { v: '#FFFF00', t: 'Yellow — used for "look at this"' },
+  { v: '#FF0000', t: 'Red — used for "this record is wrong"' },
+  { v: '#C6EFCE', t: 'Green — the AL Payment Status column' },
 ]
-const INKS = [
-  { label: 'Black', value: '#000000' },
-  { label: 'Red', value: '#C00000' },
-  { label: 'Blue', value: '#0B57D0' },
-]
+const rgbOf = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16))
+const hexOf = rgb => '#' + rgb.map(x => Math.round(x).toString(16).padStart(2, '0')).join('').toUpperCase()
+const mix = (h, toward, amt) => { const a = rgbOf(h), b = rgbOf(toward); return hexOf(a.map((x, i) => x + (b[i] - x) * amt)) }
+// Excel's shade rows: Lighter 80/60/40%, Darker 25/50%. The white column darkens instead and the
+// black column lightens, exactly as Excel lays them out.
+const shades = base =>
+  base === '#FFFFFF' ? [0.05, 0.15, 0.25, 0.35, 0.5].map(a => mix(base, '#000000', a))
+  : base === '#000000' ? [0.5, 0.35, 0.25, 0.15, 0.05].map(a => mix(base, '#FFFFFF', a))
+  : [0.8, 0.6, 0.4].map(a => mix(base, '#FFFFFF', a)).concat([0.25, 0.5].map(a => mix(base, '#000000', a)))
+const SHADE_ROWS = [0, 1, 2, 3, 4].map(r => THEME.map(b => shades(b)[r]))
+
+// A drop-down colour menu laid out like Excel's. Every press is mousedown + preventDefault, so the
+// grid keeps focus and its selection while the menu is open — the colour lands where you were.
+function ColourMenu({ title, noneLabel, current, swatchOf, onPick }) {
+  const [open, setOpen] = useState(false)
+  const box = useRef(null)
+  const pickRef = useRef(onPick)
+  pickRef.current = onPick
+  useEffect(() => {
+    if (!open) return
+    const outside = e => { if (box.current && !box.current.contains(e.target)) setOpen(false) }
+    const esc = e => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', outside)
+    document.addEventListener('keydown', esc)
+    return () => {
+      document.removeEventListener('mousedown', outside)
+      document.removeEventListener('keydown', esc)
+    }
+  }, [open])
+  const pick = v => { pickRef.current(v); setOpen(false) }
+  // The custom picker fires "input" on every drag step; only its final "change" is applied,
+  // otherwise one choice would land as dozens of undo steps.
+  const customRef = el => {
+    if (el && !el.dataset.wired) {
+      el.dataset.wired = '1'
+      el.addEventListener('change', e => pick(e.target.value.toUpperCase()))
+    }
+  }
+  const sw = (v, t) => (
+    <button key={v + (t || '')} type="button" className="cm-sw" title={t || v} style={{ background: v }}
+      data-on={current === v} onMouseDown={e => { e.preventDefault(); pick(v) }} />
+  )
+  return (
+    <span className="cm" ref={box}>
+      <button type="button" className="tb-btn" title={title} data-on={open}
+        onMouseDown={e => { e.preventDefault(); setOpen(o => !o) }}>
+        {swatchOf(current)}<span className="cm-caret">▾</span>
+      </button>
+      {open && (
+        <div className="cm-pop">
+          <button type="button" className="cm-none" onMouseDown={e => { e.preventDefault(); pick(null) }}>{noneLabel}</button>
+          <div className="cm-h">Theme colours</div>
+          <div className="cm-grid">{THEME.map(v => sw(v))}</div>
+          <div className="cm-grid cm-shades">{SHADE_ROWS.flat().map((v, i) => sw(v, `${v} (shade ${Math.floor(i / 10) + 1})`))}</div>
+          <div className="cm-h">Standard colours</div>
+          <div className="cm-grid">{STANDARD.map(v => sw(v))}</div>
+          <div className="cm-h">Used in your workbooks</div>
+          <div className="cm-grid">{FROM_FILES.map(f => sw(f.v, f.t))}</div>
+          <label className="cm-more">More colours…
+            <input ref={customRef} type="color" defaultValue={current || '#FFFFFF'} />
+          </label>
+        </div>
+      )}
+    </span>
+  )
+}
 const LINE = { color: '#262626', style: 'solid', width: '1px' }
 
 function Stopwatch({ label }) {
@@ -249,21 +314,13 @@ function ReactGridPane({ rows, cols, fmt, commitValues, commitFormat, undo, redo
         <Btn onClick={() => toggle('u')} on={focusFmt?.u} title="Underline (Ctrl+U)" style={{ textDecoration: 'underline' }}>U</Btn>
         <span className="tb-sep" />
         <span className="tb-label">Fill</span>
-        {FILLS.map(f => (
-          <Btn key={f.value} onClick={() => setProp('fill', f.value, `fill ${f.label.toLowerCase()}`)}
-            on={focusFmt?.fill === f.value} title={`Fill ${f.label}`}>
-            <span className="sw" style={{ background: f.value }} />
-          </Btn>
-        ))}
-        <Btn onClick={() => setProp('fill', null, 'no fill')} title="No fill">∅</Btn>
-        <span className="tb-sep" />
-        <span className="tb-label">Text</span>
-        {INKS.map(c => (
-          <Btn key={c.value} onClick={() => setProp('color', c.value === '#000000' ? null : c.value, `text ${c.label.toLowerCase()}`)}
-            on={(focusFmt?.color ?? '#000000') === c.value} title={`Text ${c.label}`}>
-            <span style={{ color: c.value, fontWeight: 700 }}>A</span>
-          </Btn>
-        ))}
+        <ColourMenu title="Fill colour" noneLabel="No fill" current={focusFmt?.fill ?? null}
+          swatchOf={v => <span className="sw" style={{ background: v || '#FFFFFF' }} />}
+          onPick={v => setProp('fill', v, v ? `fill ${v}` : 'no fill')} />
+        <span className="tb-label" style={{ marginLeft: 8 }}>Text</span>
+        <ColourMenu title="Text colour" noneLabel="Automatic" current={focusFmt?.color ?? null}
+          swatchOf={v => <span className="ink" style={{ color: v || '#000000', borderBottomColor: v || '#000000' }}>A</span>}
+          onPick={v => setProp('color', v, v ? `text ${v}` : 'text automatic')} />
         <span className="tb-sep" />
         <Btn onClick={() => setProp('border', !focusFmt?.border, focusFmt?.border ? 'no border' : 'border')}
           on={focusFmt?.border} title="Box border">▢ Border</Btn>
@@ -290,8 +347,17 @@ export default function GridSpike() {
   const [rows, setRows] = useState(() => makeRows(2050))
   const [fmt, setFmt] = useState(() => new Map()) // rowId → { [columnKey]: { b, i, u, fill, color, border } }
   const [log, setLog] = useState('no edits yet')
-  const [viewRows, setViewRows] = useState(2050)   // 2050 = whole year · 270 ≈ one month (March sheets: 265–268)
-  const [viewCols, setViewCols] = useState(88)     // 88 = every column · 25 ≈ a working view (plan, E7)
+  // Default = a month × a working set of columns: fast on ReactGrid (measured ~85 ms per action).
+  // The choice is remembered per browser here, standing in for the real build's per-person saved
+  // layout (tracker_views: owner_id, name, is_shared, columns, filters). Storage can be blocked in a
+  // private window, so every read and write is guarded and the default still renders without it.
+  const saved = (() => { try { return JSON.parse(localStorage.getItem('spike.view') || 'null') } catch { return null } })()
+  const [viewRows, setViewRows] = useState(saved?.rows ?? 270)   // 2050 = whole year · 270 ≈ one month (March sheets: 265–268)
+  const [viewCols, setViewCols] = useState(saved?.cols ?? 25)    // 88 = every column · 25 ≈ a working view (plan, E7)
+  useEffect(() => {
+    try { localStorage.setItem('spike.view', JSON.stringify({ rows: viewRows, cols: viewCols })) } catch { /* not remembered */ }
+  }, [viewRows, viewCols])
+  const bigView = viewRows * viewCols > 50000 // above this, measured >0.3 s per action
   const shownRows = useMemo(() => rows.slice(0, viewRows), [rows, viewRows])
   const shownCols = useMemo(() => COLUMNS.slice(0, viewCols), [viewCols])
 
@@ -405,6 +471,20 @@ export default function GridSpike() {
         .tb-sep{width:1px;height:20px;background:#d4d4d4;margin:0 6px}
         .tb-label{font-size:12px;color:#767676;margin-right:2px}
         .sw{display:inline-block;width:14px;height:14px;border:1px solid #767676}
+        .cm{position:relative;display:inline-flex}
+        .cm-caret{font-size:9px;color:#767676;margin-left:2px}
+        .ink{font-weight:700;border-bottom:3px solid;line-height:1;padding:0 1px}
+        .cm-pop{position:absolute;top:32px;left:0;z-index:1000;background:#fff;border:1px solid #bfbfbf;box-shadow:0 8px 24px rgba(0,0,0,.18);padding:8px;width:236px}
+        .cm-none{width:100%;text-align:left;padding:5px 6px;border:none;background:none;font:inherit;font-size:12px;cursor:pointer}
+        .cm-none:hover,.cm-more:hover{background:#f0f0f0}
+        .cm-h{font-size:11px;color:#767676;margin:8px 0 4px}
+        .cm-grid{display:grid;grid-template-columns:repeat(10,20px);gap:2px}
+        .cm-shades{margin-top:4px;row-gap:0}
+        .cm-sw{width:20px;height:20px;padding:0;border:1px solid #d4d4d4;cursor:pointer}
+        .cm-sw:hover{outline:2px solid #f59e0b;outline-offset:-1px;position:relative;z-index:1}
+        .cm-sw[data-on=true]{outline:2px solid #2563eb;outline-offset:-1px}
+        .cm-more{display:flex;align-items:center;justify-content:space-between;margin-top:8px;font-size:12px;cursor:pointer;padding:4px 6px}
+        .cm-more input{width:30px;height:20px;padding:0;border:none;cursor:pointer;background:none}
         .rg-cell.fmt-b{font-weight:700 !important}
         .rg-cell.fmt-i{font-style:italic !important}
         .rg-cell.fmt-u{text-decoration:underline !important}
@@ -413,6 +493,7 @@ export default function GridSpike() {
         .rg-scroll{overflow:auto}
         .view-pick{font-size:12px;color:#565656;display:inline-flex;gap:6px;align-items:center}
         .view-pick select{font:inherit;font-size:12px;padding:3px 4px}
+        .view-warn{color:#b45309;font-weight:700}
         .spk-try{font-size:12px;color:#565656;padding:6px 14px;border-top:1px solid #ececec;background:#fffdf5;line-height:1.5}
       `}</style>
       <div className="spk-head">
@@ -433,6 +514,7 @@ export default function GridSpike() {
             <option value={88}>All 88 columns</option>
             <option value={25}>Working view · 25 columns</option>
           </select>
+          {which === 'rg' && bigView && <span className="view-warn">Large view — each change may take up to a second</span>}
         </span>
         <button className="spk-tab" data-on={which === 'rg'} onClick={() => setWhich('rg')}>ReactGrid</button>
         <button className="spk-tab" data-on={which === 'glide'} onClick={() => setWhich('glide')}>Glide</button>
