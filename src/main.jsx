@@ -30,10 +30,11 @@ window.addEventListener('unhandledrejection', (e) => reportError(
 // build time, so this branch is stripped from every production bundle. Delete with src/spike/.
 if (import.meta.env.DEV && window.location.pathname === '/grid-spike') {
   import('./spike/GridSpike').then(({ default: GridSpike }) => {
+    // ?strict=0 drops StrictMode's deliberate double render (dev-only; production never does
+    // it) so a timing taken here is closer to what a user of the built site would feel.
+    const strict = new URLSearchParams(window.location.search).get('strict') !== '0'
     ReactDOM.createRoot(document.getElementById('root')).render(
-      <React.StrictMode>
-        <GridSpike />
-      </React.StrictMode>
+      strict ? <React.StrictMode><GridSpike /></React.StrictMode> : <GridSpike />
     )
   })
 } else {
