@@ -23,25 +23,290 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
    - **ERP (separate repo)** → `project_hd_hyundai_vertical` — only for ERP tasks
 3. **Master history → [`docs/history/PORTAL_HISTORY.md`](docs/history/PORTAL_HISTORY.md)** — the full record of every phase, the Phase 9 VAPT programme, and session logs. **Do NOT read at session start.** Open only when you need the backstory of a decision, or to append a new session entry.
 4. **Rebuild the system → [`docs/RECONSTRUCTION.md`](docs/RECONSTRUCTION.md)** — step-by-step blueprint to recreate the whole portal from scratch, backed by the canonical DB dumps in [`docs/db/`](docs/db/) (`schema-current.sql`, `seed-reference.sql`).
-5. **Repo `docs/`** → `history/` (delivered reports/specs), `backlog/` (tabled ideas + Phase 10).
+5. **Repo `docs/`** → `history/` (delivered reports/specs), `backlog/` (tabled ideas, Phase 10, and
+   the **Service Payments** plan + its clean-room red-team digest).
 
 **When you finish a piece of work:** update `phase_status.md` + `known_issues.md` (if an issue opens/closes) + append a dated entry to `PORTAL_HISTORY.md`. New owner preference → add a `feedback_*` memory. Keep this file short — it points to detail, it doesn't hold it.
 
 ---
 
+## Current state (2026-10-21)
+
+- **⏸️ SERVICE PAYMENTS IS PARKED — waiting for details from HDFC (owner, 2026-10-21).** Other features
+  are built meanwhile. Branch `claude/payments-reconciliation-tool-6eaab4` pushed, **0 behind `portal`**
+  (merged `6561628` in `5badbf7`). Nothing is half-built; staging keeps its payments tables, the
+  `service-payments` EF and the dummy data. The HDFC questions are in Next actions → payments item 10
+  (scheduled daily report · is a Mintoak id ever re-issued · the API). Resume there, then the go-live gates.
+- **⭐ New features start from the latest `origin/portal`**, never from the payments branch. `CLAUDE.md`,
+  `PORTAL_HISTORY.md`, the payments `docs/backlog/` files and the `.gitignore` data rules are on
+  `portal` **identical** to the payments branch (docs-only PR, 2026-10-21), so the eventual merge has
+  nothing to resolve in them. Add new state blocks above this one as usual.
+- ⚠️ **Shared files the payments branch changes — a feature that edits them will conflict when payments
+  merges:** `src/index.css` (+473 lines, all `.pay-*` plus the bottom bar) · `src/components/layout/
+  navConfig.js` (`bottomNavLayout`, the Match Payments entry) · `BottomNav.jsx` (layout moved INTO
+  navConfig) · `CreateSheet.jsx` ("Quick actions") · `src/App.jsx` (`/payments` route) · `Icon.jsx` ·
+  `AccessRules.jsx` (route list). Small edits there are fine; after each `portal` release, **merge
+  `origin/portal` into the payments branch** (never rebase it — 118 pushed commits).
+- ⚠️ **The MAIN checkout's `docs/` holds REAL customer files, untracked** (GPay CSVs, a bank statement, a
+  tax invoice, the HDFC report). On its old branch nothing ignores them — never `git add docs/` there;
+  any branch made from `portal` now ignores them.
+- **Staging is shared by both lines of work.** Payments migrations 1–9 sit on staging and nothing on
+  `portal` reads them; `log-error` is identical on both. Deploying another EF to staging from a
+  `portal` branch is fine — just never deploy `service-payments` from one (it does not exist there).
+- **CI: `npm-audit` went red on EVERY PR on 2026-10-20** — new HIGH GHSA-587h-7wmj-h5pm: `launch-editor`
+  inside vite ≤ 8.1.5 (the dev server's open-in-editor; never in the built site). PR **#132** → vite
+  **8.1.6**. ⚠️ **Not byte-inert:** it brings rolldown 1.1.5, which gives `Icon`, `api` and a `typeof`
+  helper their own chunks (43 → 46 files, +1.3 KB). Checked by serving a clean build with `vite preview`
+  and importing all 32 chunks (0 errors); a signed-in page render was not checked. ⭐ **A dependency bump
+  that changes the bundler must be A/B'd, not assumed inert** — the source-map-js one was; this was not.
+  Once it lands, merge `origin/portal` into the payments branch (its lockfile still says 8.1.0).
+
 ## Current state (2026-10-18)
 
-- **⭐⭐ CLIENT CRASH REPORTING HAD NEVER WORKED — FIXED in `log-error`.** The browser's logger
-  (`src/lib/errorLog.js`) sends through `callEdge`, which wraps every call as `{ action, payload }`;
-  `log-error` read `body.message` at the top level and answered 400 "message required", which the
-  logger swallows by design. So `error_log` never received a row — before PR #124 (2026-09-19) the
-  module never loaded, and after it every report was refused. Found when a real crash on staging
-  left three 400s and zero rows; confirmed on prod from the served `errorLog-*.js` chunk and the
-  downloaded prod function. **Fix in the function** (`supabase/functions/log-error/report.ts` reads
-  the envelope or a flat body), so every browser already running the portal reports as soon as it
-  is deployed — no frontend release. `scripts/selftest-log-error.mjs` 14/0 (reads the client's own
-  source for the shape; the old reader fails 7). Staging: a `logError()` call and a real uncaught
-  error both recorded. ⚠️ **An empty Error Log tab was never evidence of health** — now it can be.
+- **✅ PROD: client crash reporting fixed — it had NEVER worked.** PR **#130** → `6561628`: `callEdge`
+  sends `{ action, payload }`, `log-error` read `body.message` → 400 "message required", swallowed.
+  `log-error/report.ts` reads both shapes; deployed to prod from `6561628` (downloaded back = repo; 401
+  unauthenticated); post-merge CI + Vercel green. Rode along: `source-map-js` 1.2.2 lockfile bump (new HIGH
+  advisory; proven inert). Live prod test skipped (owner) — **the first real staff error is the proof**
+  (Access Rules → Error Log). ⚠️ **The browser pane cannot load prod** (every `/assets/*` →
+  `ERR_BLOCKED_BY_CLIENT`) — use the owner's Chrome (Claude in Chrome) for prod checks.
+- **⛔ Owner, 2026-10-18: Match Payments will NOT go live now; other changes may be pushed.**
+- **🔨 Payments (staging only), since 10-17:** red-team build order complete (R4-21 `b0ed009`, R4-24
+  `5a9b86f`, R4-9 `8423adb` + end-of-list crash fix, R4-18 `c706422`) · **migration 9** "Something else"
+  needs a note (`9947cd7`, + scroll fix `d59b696`) · **green Confirm** (`31b0764`, owner's idea; the + left
+  as is) · quick-actions wording (`c011aec`). **Prod rollout = NINE migrations, 8 and 9 in LF.**
+  ⭐ Full record: `PORTAL_HISTORY.md` → "Session log — 2026-10-17 → 10-18".
+- ⭐ **The Supabase MCP refuses staging AND prod since 10-17.** Staging SQL:
+  `npx --yes supabase@2.109.1 db query --linked --workdir <scratch>/sb "<sql>"` (or `-f`), after a one-time
+  `supabase link --project-ref klpnhpnlotcbbovwswmq --workdir <scratch>/sb` (memory
+  `reference_portal_sql_workflow.md`).
+- ⚠️ `gh pr merge` can be refused by the permission classifier ("Merge Without Review") even when asked;
+  it went through when the owner said "you do it" directly. Check GitHub before trusting "merged".
+- **Staging now:** 22 bills, 12 receipts, 12 standing matches, KISAN ₹30 the only open payment, `error_log`
+  0 rows (the two ZZPROBE rows deleted with approval). Browser pane signed in as tester@ on localhost.
+
+## Current state (2026-10-17)
+
+- **🔨 SERVICE PAYMENTS — the correction screens are built (staging only; prod untouched).** Branch
+  `claude/payments-reconciliation-tool-6eaab4` at `138e749`+docs, pushed, **97 ahead of `portal`**.
+  ⭐ **Full record: `PORTAL_HISTORY.md` → "Session log — 2026-10-13 → 10-17".** Since 13 Oct:
+  never re-offer an undone bill (`1b9fc87`) · "Matched today" undo list (`8838dab`) · date + truck
+  on cards (`7230a53`) · Cash & cheque tab + **migration 8** (`19e49ad`, revised `5ce2aa6`) · Import
+  clash-row Undo (`40e2f3f`) · picked card says what Confirm does (`3f7fedd`) · Payments tab in the
+  phone bar (`eb970d7`). Every one seen on staging; dummy data put back where written.
+  - **⛔ No more cloud sessions** (owner, 2026-10-13). Pre-mortem 2 (Brief 4, the last) ran but its
+    **bundle never reached the PC** — the report is kept in
+    `docs/backlog/service-payments-premortem-2-summary.md` with the owner's G-decisions. Get the
+    independent view locally now (memory `feedback_second_opinion_cloud.md`).
+  - **✅ R4-21 (simpler-English wordlist) BUILT `b0ed009` and seen on staging 2026-10-17.** The owner
+    said "start" without answering the three questions, so the lane's picks were used (each a
+    one-line revert): "Bill not made yet" · no ".00" when there are no paise · sub-title "Which bill
+    is this payment for?". ⚠️ **The two re-offer undo reasons must keep their exact words** — the
+    re-offer rule matches the SAVED text (a test guards it). R4-24 grey reason line ✅ `5a9b86f`. R4-9 ✅ `8423adb` (pick, then "Set aside ₹30 — not service"; + "Test or top-up ≤ ₹50"; note box built 10-18 as migration 9) — and ⭐ it found that **finishing the LAST payment crashed the page** since `e49ea7b` (12 Oct; staging always had one left) — fixed. R4-18 lists behind the Import counts ✅ `c706422`. **The recorded red-team build order is now complete**; left: R4-29/31 polish (not before go-live) and the owner-side items below. ⚠️ **The wordlist's
+    "bill number = the 10-digit number" row is WRONG** — that number is the SAP customer code.
+  - ⚠️ **Prod: migration 8 must be applied with LF line endings** (staging body md5 `6994bca3…`), and
+    the prod rollout is now **NINE** migrations + `probe-manual-receipt.sql` + `probe-classify-note.sql`
+    (item 9). **Migration 9 also LF** (staging body md5 `2ace6c1d…`).
+  - **2026-10-18 →** migration 9, green Confirm, crash reporting fixed on prod: see the 2026-10-18 block.
+  - **Not seen live (staging has no open parts + labour pair):** the whole-order choice on the cash
+    form and the order wording on the picked card. **Not yet built anywhere:** the GM's weekly
+    exceptions digest, so a 269ST-flagged cash receipt is recorded but shown to nobody yet.
+  - **Staging now:** 22 bills, 12 standing matches, one hand-entered receipt (CR-PTB-2026-00001),
+    only KISAN ₹30 open. Browser pane signed in as tester@ (accounts manager).
+
+## Current state (2026-10-12)
+
+- **🧪 SERVICE PAYMENTS — PRE-MORTEM 1 ("30 days after go-live") DONE on branch `premortem-1`**
+  (cloud session; base `32d3484`; no live system touched). ⭐ **Record, nine ranked findings
+  F1–F9 with evidence tags, two inferred, six owner questions Q1–Q6, proved-safe list, the
+  rehearsal's own gaps and the resume log: `docs/backlog/service-payments-premortem-1.md`.**
+  Scripts `scripts/payments/premortem/` (README; deps outside the repo).
+  - **Track A — the prod migration rehearsed on a prod-shaped PGlite 17.5 database** (snapshot
+    2026-07-21 + seed + every later migration, statement by statement): the seven payments
+    files **219/219 statements, zero failures**; 21 post-migration shape checks PASS (exactly one
+    `source` CHECK and one `event_type` CHECK survive, NULLS NOT DISTINCT idempotency index,
+    security_invoker views, grants, six access rules…); `probe-allocation` **26/0** ·
+    `probe-import-parity` **41/0** · `probe-awaiting-invoice` **30/0** · `probe-read-gates`
+    **57/0** (runs here because the ERP HTTP trigger is deliberately not loaded) · residue 0.
+    A 1,405-row Billing Report imports in ~0.5–1.0 s on WASM.
+  - **Track B — two simulated months** (seeds 7, 11; 28-day backlog; real parsers, importPlan,
+    matcher, matchQueue, RPCs; modelled person): **0 double counted · 0 lost · 0 cache drift ·
+    per-day totals tie on 29/29 days** (midnight pair, Sundays, holiday, overlapping files,
+    failed attempts, re-sent file blocked by hash). What breaks is the loop around the ledger:
+    ⭐ **F1** an advance payment confirmed as "only bill at this exact amount" onto the wrong
+    bill, and after a reversal **the same bill is offered again, still confident** (reproduced
+    3× on one payment; nothing reads `reversed_at` when ranking) · **F2** SAP cancelling a paid
+    bill = the same conflict for 9 mornings with no verb in the product to clear it, and with a
+    "new days only" export it never arrives at all (→ **Q1: export date range**) · **F4** the
+    service queue holds 12–13 % of the month's payments at day 30 and ~60 skips a morning
+    recur · **F5** 1,800 open bills after a month, 95 % never UPI-paid. Track C = the five verbs
+    with no UI (reverse first; lean Q5 (b): reverse + remember the rejection).
+  - ⚠️ Two rehearsal-tooling bugs looked like a "PGlite hang" and "btree_gist unavailable" (an
+    exponential comment regex in `sql-split.mjs`; PGlite dropping the options object when the
+    first argument is not a string). Both fixed; nothing is skipped by default. The earlier
+    bullet's "stalled CPU-bound in the 2026-07/08 migrations" was this.
+  - ⚠️ GitHub push from the cloud session was 403 all day → the branch arrives as a git bundle.
+  - ✅ **Brought in on the PC 2026-10-13** (merge commit on the payments branch): bundle sha256
+    `c75e141d…` = the cloud's value, `git bundle verify` ok, head `4553305`, 8 commits by us, net
+    +1,389 / −0, nothing in `src/`/`supabase/`/package, no hosts/keys/process calls. Its base was
+    `32d3484` (two behind), so a merge, not a fast-forward; `CLAUDE.md` + history conflicts were two
+    independent entries, both kept. **F1, F6, F7, F8 re-read in our code and hold.** ⭐ **F1, F2, F3
+    all converge on red team 4's R4-3 (see/undo matches)** — and F1 says undo must also make a
+    reversed (payment, bill) pair stop being offered as "only bill at this amount".
+- **🔎 SERVICE PAYMENTS — RED TEAM 4 (layman UI/UX): 31 findings → 22 fixed or struck (2026-10-12/13,
+  `e49ea7b` + `93995d1`, pushed to the payments branch, staging only); 8 design items wait for the
+  owner after a cloud second opinion.** Fixed and MEASURED in the browser pane: desktop Confirm bar
+  560 px centred on the column to the pixel (was a 132 px pill — `left:50%;right:auto` with no width
+  shrink-wraps a fixed element; now both edges pinned + auto margins + `left: var(--sidebar-w)` ≥760);
+  what a way-out opens scrolls into view above the bar (360 px: all 5 reasons above it); phone page
+  head 30 px (was 117); landscape bar 73 px side-by-side (was 123); Enter on the picked card focuses
+  Confirm; a search pick returns selected. Plus: Import fold ▸/▾ (`summary{display:flex}` kills the
+  marker) + Clashes open; stale banner said once and the dead button never reads "Confirm ₹…";
+  contrast 6.2–7.3:1 (was 1.84–4.13); 105 px dead scroll gone; end-screen grammar ("could be its own");
+  identical names say "matches"; dates counted from the payment; accounts tie-out labels + totals;
+  "No connection" not TypeError. **Struck after reading code:** "the big number changes meaning
+  between Match and search" — both show what is still due (`matchCandidates.js:89`,
+  `matchQueue.js:245`). `selftest-mobile-render` **89/0** — 9 new CSS contracts, each FAILS on the
+  old stylesheet. ⭐ The pane caught one thing the tests missed (a picked card's "billed 2026-10-10").
+  ⏭️ **Open (owner decides, after the cloud's second opinion — Brief 1 in
+  `docs/backlog/cloud-session-briefs.md`):** R4-3 see/undo today's matches (NO server work —
+  `reverse_allocation` exists: reason required, maker/accounts pre-export, GM after) · R4-5 date +
+  plate on cards · R4-6 part-pay remainder · R4-9 not-service confirm · R4-12 "2 bills" breakdown ·
+  R4-14 nav tab · R4-21 wordlist · R4-24 blue reason line + the + button. ⚠️ Almost every one ADDS a
+  line — the TIV clutter lesson applies; ask what each pushes down. Per-item status table at the top
+  of `docs/backlog/service-payments-redteam4-uiux.md`.
+  **The run itself:**
+  Seven cold-started lanes (mechanic · counter advisor · accounts clerk · first-day user ·
+  plain-English editor · "can I undo?" supervisor · one code-reading expert) over 46 static
+  states × 5 viewports rendered inside the app shell by `scripts/payments/redteam4-rig/`.
+  ⭐ **Record and ranked list: `docs/backlog/service-payments-redteam4-uiux.md`**; raw lanes in
+  `docs/backlog/redteam4-lanes/`. **Blocks:** the desktop confirm bar shrinks to a 132 px pill
+  and floats over the list (no `width` in the ≥721 px rule) · Import fold headings have no ▸
+  (`summary { display:flex }`), so "reverse that match first" is invisible · no screen lists or
+  reverses a match · landscape leaves 134 px for content. **Every persona** asked what a part
+  payment does to the rest, could not tell same-amount bills apart (bill date and truck number
+  are on the candidate but not on the card), and read "raised / imported / payer" as foreign.
+  Wordlist for simpler English in the findings file. (Owner-ranking → partly done, see above;
+  ⏭️ a live run on a device for the 13 items stills cannot judge is still due.) Run in a CLOUD session with no database, no
+  login and no app server (static renders of the real components); checked from here afterwards:
+  staging + prod untouched (row counts, last-write times, 24 h logs). Its 6 commits came to the PC
+  as a git bundle (the cloud push was refused 403; sha256 `c8822f8f…` matched) and were
+  fast-forwarded onto this branch — docs + rig only, 0 lines deleted. ⚠️ The rig's paths are the
+  container's (`/home/user/parastrucks`, a Linux chromium) — edit them before running it here.
+- **🔨 SERVICE PAYMENTS — "BILL NOT RAISED YET" BUILT (staging only, unpushed).** A payment made
+  before its bill can now be marked waiting: it leaves today's list and **comes back by itself when a
+  bill imported SINCE it was marked could be its own** (the plan's "matcher re-offers it on invoice
+  import"). Commits `a9aa45d` → `15e33ed`.
+  - **DB** `20261012_payments_awaiting_invoice.sql` (STAGING): `payments_set_awaiting_invoice`
+    (refuses fully-matched / voided / not-service; moves no money; marking again = "still not
+    raised" → the clock restarts, logged as reconfirmed; unmark twice = no-op) · new
+    `payment_receipts.awaiting_since` · views append `awaiting_since` / `created_at` (all old
+    columns kept, still SECURITY INVOKER + read-only) · event type `awaiting_invoice`.
+    `probe-awaiting-invoice` **30/0**, negative control 7/7 fail; staging prosrc md5 `c306472b…` = file.
+  - **Who:** follows MATCHING, not accounts-only (it moves no money) — UPI: service + accounts;
+    cash/cheque/bank: accounts. `authority.ts` `set_awaiting_invoice`; `selftest-authority`
+    **659/0** (26 × 13); EF `service-payments` **v3 on staging**.
+  - ⭐ **Three design holes caught before shipping, each by thinking through the next morning:**
+    (1) "comes back when it has ANY possible bill" would bounce a ₹1,930 payment straight back past
+    the four ₹1,930 bills the person had just rejected → needs `awaiting_since` vs bill
+    `created_at`; (2) "still not raised" on a returned payment must restart that clock or it
+    returns daily for the same bill; (3) ⭐ **the 3-day match window would NEVER show an advance its
+    bill raised a week later** — `windowDaysFor()` looks from the payment's day to today (≤90),
+    and bills load up to today when anything waits. The demo's 2-day gap hid (3).
+  - **Also:** a bill found by SEARCH now brings its order partner (parts + labour = one confirm).
+  - Tests: match-queue **95** · mobile-render **68** · demo-files **87** (the walkthrough now marks
+    QUICK FREIGHT waiting; report 2 brings its bill and it returns) · build + no-undef clean.
+  - ✅ **Seen working in the browser pane (2026-10-12, owner signed in):** QUICK FREIGHT ₹7,777
+    (paid 8 Oct) → "Bill not raised yet" → confirm → left the list ("Match (2)" → 1; end screen "1 more
+    is waiting for its bill"); DB: flag + `awaiting_since` + one event, no money moved. "Look at the
+    waiting" → amber "Waiting for its bill since 12 Oct", button "Still not raised". Imported a one-bill
+    file (its ₹7,777 bill dated **12 Oct — 4 days after the payment**, outside the old window) → it came
+    back by itself ("a bill imported since could be it", "Only bill at this exact amount · Payer name is
+    similar") → Confirm → DB: placed in full, flag cleared automatically, classified service.
+    The first save after the EF deploy took ~8 s (cold start); later ones were quick.
+  - **Polish from that check** (`9a9335c`): amber text on `--amber-light` measured **4.49:1** (just
+    under AA) → new `--amber-dark` #92400E = **6.34:1** for the waiting note and the payments warn
+    banner; a waiting card no longer says "no open bill within 3 days". `mobile-render` **70/0**.
+    (Colours not re-checked on screen — no amber element was showing by then.)
+  - **Staging now:** 22 bills, 11 payments, 10 matches; one open payment (KISAN ₹30, skipped).
+    All DEMO/dummy. Deleting needs owner approval.
+
+## Current state (2026-10-10)
+
+- **✅ SERVICE PAYMENTS — FIRST BROWSER WALK-THROUGH ON STAGING: EVERY MONEY RULE PASSED; 9 SCREEN
+  FINDINGS, ALL FIXED** (`297e03e`, `94f6e0e`; staging only, unpushed). Run by me in the built-in
+  browser pane at the owner's request, as `tester@` (accounts manager): Billing Report 1 → HDFC
+  report 1 → HDFC report 2 (overlap) → 8 matches → Billing Report 2. Every count checked against the
+  DB: 20 bills / 17 customers; 10 then 1+2-already payments; failed attempt never stored; split job
+  ₹8,450+₹3,200; part payment ₹10,000 of ₹25,000; stale-bills brake held Confirm OFF (verified
+  `disabled`) until report 2; cancellation-under-money became a clash.
+  ⭐ **70 green checks missed all nine screen findings** — they test counts, not how the screen
+  reads: failed attempt filed under "Could not be read" · "same amount as 2 other bills" on a pair
+  (off-by-one, and `selftest-mobile-render` had COPIED it into its expectation) · "Payer name is
+  similar" on every card from a shared common word · the first-ranked of five identical bills not
+  saying why · "hold it as an advance" with no such button · matched payment lingering 3–5 s after
+  Confirm · skips cleared after any import · bills preview total counting ₹3,200 nobody owes (owner
+  chose "18 to be paid" split) · button/grammar wording. `selftest-demo-files` **84/0**.
+  - ⭐ **The built-in browser pane now WORKS here** (the Aug crashes did not recur). Turnstile is
+    off for local only (worktree `.env`, commented; staging has no `TURNSTILE_SECRET` and
+    `REQUIRE_CAPTCHA=false`); the owner signs in (the classifier blocks Claude typing a password);
+    files go in via `fetch('/@fs/…')` + `DataTransfer` from gitignored
+    `node_modules/payments-demo-files/`. Memory `feedback_no_internal_browser.md` has the recipe.
+  - **Staging now holds the DEMO rows** (21 bills, 11 payments, 9 matches incl. NIRAV→CHIRAG used to
+    time the Confirm fix). Deleting them needs owner approval.
+  - ⏭️ **Not yet done:** the role checks (`svc.exec@`: no Import tab; `pt.mgr@`: no page) — need
+    the owner to sign in as each.
+
+## Current state (2026-10-09)
+
+- **🔨 SERVICE PAYMENTS — UPI IS NOW HDFC. Parser, database and Import screen built (staging only,
+  unpushed; branch 36 ahead of `portal`).** Owner, 2026-10-09: HDFC static QRs replace BharatPe and
+  Google Pay (**both completely retired**); merchant **KTR510** has one QR today, more coming; HDFC's
+  API will come later. **Owner chose: accounts uploads the daily HDFC report on the Import tab
+  ("D") until the API ("E").** A Google Apps Script mail-to-portal feed ("B") was proposed and NOT
+  chosen. ⛔ **The Gmail connector cannot read attachments** — it finds the HDFC email but cannot
+  open the transaction file, so "Claude reads the inbox daily" is not possible through it.
+  - **The feed:** HDFC SmartHub Vyapar "Transaction Report" (.xlsx, from `information@hdfcbank.net`,
+    sent on request from the app — not yet known to arrive daily on its own). One sheet, header in
+    row 1, 25 columns. Keys: `Mintoak Transaction ID` (19–20 digits, dedup key, text), `RRN No`
+    (12-digit bank ref = UTR), `Merchant ID`+`Terminal ID` (= the QR → stored as `qr_ref`
+    "KTR510/82388473"), `Transaction State` (SaleSuccess / **SaleFailed**), `Payer’s name` (full
+    names). **No note field → the plate-number signal (17 of 28 August note numbers) is GONE**;
+    matching now leans on amount + payer name.
+  - ⭐⭐ **It ties to the bank to the rupee:** successful payments on 7 Oct = **₹1,48,693 = HDFC's
+    "UPI SETTLEMENT -KTR510- 08/10/26" credit** (alert email from `alerts@hdfcbank.bank.in`). So:
+    amounts are gross (no fee), settlement is next-day for the whole day, and the success filter is
+    right. **All 3 SaleFailed rows had a successful retry the same day** — importing them would
+    double-count. The Import preview now shows success per day to tick against the settlement.
+  - `src/service-payments/lib/parseHdfc.js` + `selftest-parse-hdfc` **35/0 (+5 with `--real <file>`,
+    incl. the settlement tie)**; removing the success filter fails 6, incl. the real ₹1,48,693.
+    Refuses: a Mintoak id stored as an Excel NUMBER (digits already lost), mismatched amount columns,
+    a non-12-digit RRN, an ambiguous date, non-SALE types (refunds held for a person).
+  - **`20261009_payments_hdfc_source.sql` (STAGING):** `source` CHECK widened to allow `hdfc` (old
+    values stay valid) · `payment_receipts.qr_ref` · `v_payments_open_receipts` carries it ·
+    ⭐ **`payments_import_receipts` links a hand-keyed HDFC payment by its RRN** (the Mintoak id is
+    shown to nobody; the RRN is what the payer's phone shows) **and only when the AMOUNTS agree** — a
+    mistyped RRN matching another real payment would otherwise swallow it; a mismatch is HELD.
+    **`probe-import-parity` (generator now SIMULATES state from the preview's own decisions): 41/0.
+    Negative control (old function swapped in, rolled back): 2 payments STORED TWICE, 0 QRs.**
+    Staging body md5 `df40fb27…` = the file.
+  - **Import screen:** an `.xlsx` is recognised as HDFC by its columns, never its name; "failed
+    attempts — not money" shown apart from unreadable rows; overlapping daily uploads are fine.
+    The real report through the browser path: 15 payments + 3 failed attempts, gates pass. **Not
+    sent to staging** — the owner chose dummy data there.
+  - ⚠️ **The real HDFC report sits in the MAIN checkout's `docs/`, unignored there** (its branch is
+    ~10 weeks old). This branch's `.gitignore` now has `docs/Transaction_report*.xlsx`.
+  - ✅ **Dummy walkthrough reworked to HDFC** (`ac4f93c`): two Billing Reports + two HDFC reports
+    (up to yesterday with a failed attempt + retry; this morning's overlapping yesterday). No plate
+    scenarios — every payment found by amount or name. `selftest-demo-files` **70/0**, now including
+    a **replay of the Match tab in the walkthrough's own order** (open bills rebuilt after every
+    Confirm). ⭐ It caught two things the per-payment checks could not: a two-word payer name scored
+    **14.98 vs the 15 "strong" bar** among ~20 demo bills and sank further as bills closed (name
+    weight is rarity among OPEN bills — fine at ~1,000 real bills, fragile in a demo), and NIRAV is
+    offered **four** bills, not five. Sent through the real staging RPCs and rolled back: 20 bills,
+    10 then 1 new + 2 already, every QR stored, each day's total exact, **zero residue**.
+    ⏭️ **The owner's walkthrough is unblocked** — files in `Downloads\payments-demo` (dated 9 Oct;
+    remake on the day).
 
 ## Current state (2026-10-05)
 
@@ -76,6 +341,208 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   names the CSS file, and chunks import the entry), so compare builds with hashed names masked.
 - ⚠️ **Self-tests: `npx --yes esbuild …`** — Vite 8 uses rolldown, so no esbuild is installed.
   **Git Bash `sed -i` converts CRLF files to LF** — use the Edit tool and check `file` afterwards.
+- **🔨 SERVICE PAYMENTS — `/payments` MATCH + IMPORT SCREENS BUILT (staging only, unpushed).**
+  Steps 2 and 3 of the queue are done. Branch **29 commits** (merged with `portal` at `1a2744f`).
+  Prod untouched.
+  - **⭐⭐ The import RPCs counted hand-keyed UPI money TWICE** (fixed, `a90aa4e`,
+    `20260926_payments_import_rules.sql`). `payments_manual_receipt` stores `source='manual'`; the
+    import looked only for its OWN source, so a Google Pay payment keyed by hand during an outage
+    was inserted again when the file came, and a BharatPe one with its UTR typed in **aborted the
+    whole file** on the UTR unique index. The advertised "linked to hand entry" path could never
+    fire. Also: a bill SAP later marks cancelled was cancelled **with money still matched to it**.
+    Now: linked, never copied; other clashes HELD and listed; cancellation-under-money a conflict.
+    ⭐ **`probe-import-parity.sql` is GENERATED** (`gen-probe-import-parity.mjs`) from the Import
+    screen's own diff functions, so it proves **preview == server**: old RPCs **27 checks / 17
+    failed**, fixed **27/0**, zero residue. Staging bodies md5-identical to the file.
+  - **Import tab** (accounts + admin only; `components/ImportPanel.jsx`, logic in
+    `lib/importPlan.js`): parse in the browser (xlsx reader lazy-loaded) → gates (same file twice,
+    a plant that is not PTB, a txn id twice in one file, >5,000 rows) → preview in the server's
+    terms → commit exactly the previewed rows → reconcile server vs preview. Bills carry
+    `source_pulled_at` = the EARLIER of the file's saved time and the end of its last billing day
+    (the report has no export time; upload time is never used). `selftest-import-plan` 59/0.
+    **Run on the four REAL UPI exports: 1,079 payments, 0 refused, all gates pass.** ⚠️ The real
+    Billing Report is no longer on disk — not re-run through the Import path.
+  - Step 2 (the Match screen): route, nav (Service Tools → *Match Payments*), mobile Create-sheet
+    entry, `AccessRules` route list, and a container (`src/service-payments/pages/PaymentsPage.jsx`)
+    that reads under RLS and writes only through the Edge Function with a `client_request_id`.
+  - ⭐ **The READ gates had the same defect as the write gate.** `payments_can_read()` /
+    `payments_can_read_back_office()` — which every payments RLS policy calls — admitted any
+    manager/GM in ANY department, so a Sales/HR/Spares/BO/PDI manager could read every payer name,
+    bill and customer GSTIN straight from PostgREST. Fixed department-first
+    (`20260926_payments_read_gates_and_route.sql`). **`probe-read-gates.sql`: 29/28 before →
+    57/0 after**, zero residue; staging-only by PROPERTY (refuses if `users` has an HTTP trigger).
+    ⚠️ **`access_rules` only hides the nav link — RLS is the control.** Check both sides of any gate.
+  - ⭐⭐ **On every phone the Confirm button was hidden behind the bottom nav** (nav z-index 100 at
+    `bottom: 0` below 760px; the bar z-index 50 at `bottom: 0`). Every test passed because every
+    test rendered the screen ALONE. Found only by putting it inside the app shell. Now a CSS contract
+    in `selftest-mobile-render` (fails 3× on the old stylesheet). The TIV detail sheet had the
+    same overlap on prod — fixed separately in PR #125 (above).
+  - **Also fixed:** the matcher dated a receipt by its UTC day, so every payment between midnight
+    and 05:30 IST was dated the day before (`0db6d41`). Three new views
+    (`20260926_payments_views_for_match.sql`): `v_payments_open_receipts` /
+    `v_payments_open_invoices` (SECURITY INVOKER — "allocated < total" is a column comparison
+    PostgREST cannot filter, so without them a phone downloads every receipt ever) and
+    `v_payments_feed_status` (one timestamp for the stale-bills brake; definer view with its own
+    predicate). SELECT-only, verified with `has_table_privilege`.
+  - **The screen imports the Edge Function's own `authority.ts`** — it cannot offer a button the
+    server refuses. Service staff see UPI receipts only; "Not a service payment" stays visible to
+    them but says accounts decides; **"Bill not raised yet" is hidden — no write path exists.**
+  - Tests: parsers 140 · matcher **50** · authority 630 · **match-queue 67** (2,000 generated
+    split shapes; mutations fail it 5× and 6×) · mobile-render **62** · **import-plan 59**. Build +
+    no-undef clean.
+  - ⚠️ **Neither screen has been rendered in a browser or used by a real login.** Staging payments
+    tables are still EMPTY: the next step is the owner importing a real file on staging.
+
+## Current state (2026-09-20)
+
+- **✅ USER CREATION WAS BROKEN ON PROD FOR SIX WEEKS — FIXED AND VERIFIED LIVE.** HR reported
+  "unable to create new users". It was a **browser crash**, not a server problem: PR #93
+  (`a613b76`, 2026-08-07) titled the Assignment section with `deptById[form.department_id]` inside
+  **`EmployeeFormModal`**, where `deptById` does not exist — it lives in the parent `Employees`.
+  Picking a department threw `deptById is not defined`, killing **Add for everyone and Edit too**
+  (Edit opens with a department already selected). **Nobody had been created since 2026-08-03.**
+  Fix: PR **#124** → `732eafb`, use the `selectedDept` prop the modal already receives.
+  ✅ Owner ran create+delete on prod 2026-09-19 18:01 UTC: both audited, zero residue.
+  ⏭️ **Not yet exercised by an HR login** (their path is entity-locked).
+  - ⚠️⚠️ **`npm run build` does NOT catch an undefined identifier, and this repo has no lint** —
+    that is how a six-week outage shipped. ⭐ **The recipe that does catch it** (install OUTSIDE the
+    repo so nothing is added to it):
+    `npm i eslint@8.57.0 eslint-plugin-react@7.37.2` in a scratch dir, then
+    `<scratch>/node_modules/.bin/eslint --no-eslintrc -c <scratch>/undef.eslintrc.json
+    --resolve-plugins-relative-to <scratch> --ext .js,.jsx src` with
+    `rules: { "no-undef": "error", "react/jsx-no-undef": "error", "react/jsx-uses-vars": "error" }`.
+    Run it after ANY multi-component JSX edit. It flagged the bug on the old code, is clean on the
+    fix, and found **no other undefined name in `src/`**.
+- **✅⭐ CLIENT ERROR REPORTING HAD NEVER WORKED IN PRODUCTION — FIXED (same PR #124).**
+  `error_log` held **zero rows, ever**. `ErrorBoundary` and the `window.error` /
+  `unhandledrejection` handlers in `main.jsx` both loaded `errorLog.js` via a **variable specifier
+  under `@vite-ignore`** — a stopgap from before that file existed, never removed. In prod the path
+  resolved to `/lib/errorLog`, Vercel served `index.html`, the module load failed, and
+  `.catch(() => {})` swallowed it. Now literal specifiers; verified live that `errorLog-<hash>.js`
+  is emitted, referenced from the entry chunk and calls `log-error`.
+  ⚠️ **The 2026-07 cutover cited "Error Log tab empty" as a health signal — it could only ever have
+  been empty.** Never grade on an absence of signal without proving the collector can record one.
+  ⏭️ Still unproven by a real crash.
+- **✅ FAILED user-creates are now recorded** (PR **#123** → `9289828`, `admin-users` **v25**).
+  Only successes were audited and EF logs last one day, so the original report was undiagnosable.
+  Every refusal now writes `security_audit_log` action **`createUserFailed`** with
+  `after_jsonb.stage` (`input`/`entity_scope`/`shape`/`auth_create`/`profile_insert`/`join_tables`/
+  `rate_limit`/`exception`) + the exact message shown; never the password. `auth_create` is the
+  valuable one — GoTrue's own refusals ("already registered", its password rules) are invisible to
+  every check the portal runs itself. `openAdd` also now refuses when reference data failed to load.
+  ⏭️ **If a user-creation problem is ever reported again, start here:**
+  `select created_at, after_jsonb from security_audit_log where action in
+  ('createUserFailed','createUser') order by created_at desc limit 5;`
+- **🔨 SERVICE PAYMENTS — the Edge Function is DEPLOYED AND PROVED ON STAGING** (branch
+  `claude/payments-reconciliation-tool-6eaab4`, 20 commits, unpushed; **nothing on prod, still no
+  `/payments` route**). ⭐ **Reading the gate before its first real call found that it admitted
+  EVERY manager and GM in the company** — on prod that is 4 Sales managers, a Sales GM, a BO GM + 2
+  BO managers and an HR manager — **and that `void_receipt` / `manual_receipt` / `close_tds` /
+  `classify_receipt` accepted "accounts OR any manager"**, though all four are accounts-only in the
+  plan (service managers had them too). Also `assign_customer_group` checked only the customer's
+  entity, so a PTB customer could be filed under a PT group, and it closed the open membership
+  before validating the target group.
+  Rules now live in `supabase/functions/service-payments/authority.ts` (**department first, rank
+  second**); `index.ts` consults `ROLE_GATES` once before reading any payload and keeps no role
+  check of its own. **`selftest-authority` 630 offline checks** (26 people × 12 actions;
+  expectations hand-written from the plan, never from the code; old gate fails it **111×**) +
+  **`probe-ef-authority` 72/72 live** as six real staging logins with **zero rows written**.
+  ⚠️ **Staging has no Sales/HR/BO test account** — those departments are covered offline only,
+  which is exactly why a live probe alone would have missed this.
+  ⚠️ The probe needs the staging password, so **the owner runs it**:
+  `$env:PROBE_PASSWORD = '…'; node scripts/payments/probe-ef-authority.mjs; Remove-Item Env:\PROBE_PASSWORD`
+  ⭐ **Its own two bugs are worth remembering:** a raw-mode password prompt that accepted no input
+  in the VS Code/app terminal, and an embedded `departments(code)` read it never unpacked — which
+  made every account look department-less and produced **22 false failures against correct code**.
+  A profile it cannot resolve now stops that account loudly. *An expectation built from a failed
+  read is not an expectation.*
+
+## Current state (2026-09-08)
+
+- **🔨 SERVICE PAYMENTS — PHASE A1 CORE BUILT AND PROVED ON STAGING. NOT on prod, NOT wired to a route.**
+  Branch `claude/payments-reconciliation-tool-6eaab4`. What exists and is verified:
+  - **Schema** (`20260830_payments_a1_schema.sql`) — 14 tables, 28 policies, 44 indexes, 2 views,
+    append-only audit trigger. **Applied to STAGING** (`klpnhpnlotcbbovwswmq`, PG 17.6).
+  - **Money logic** (`20260908_payments_a1_rpcs.sql`) — 10 SECURITY DEFINER RPCs. Applied to
+    staging and proved by `scripts/payments/probe-allocation.sql`: **24 passed, 0 failed, zero
+    rows left behind** (it self-aborts; a green run ENDS IN AN ERROR reading "PROBE COMPLETE").
+  - **Parsers + matcher + Match screen** — pure JS. `selftest-parsers` 140 · `selftest-matcher` 47 ·
+    `selftest-mobile-render` 52 = **239 offline, all green**; `npm run build` passes. Pointed at the
+    real files `selftest-parsers` runs 166 and proves the August Billing Report parses 1,085 of
+    1,085 rows with zero refusals — with July as a holdout the parsers had never seen.
+    ⚠️ `selftest-mobile-render` needs esbuild first (React is bundled in, so the output runs from
+    anywhere): `npx esbuild scripts/payments/selftest-mobile-render.mjs --bundle --platform=node
+    --format=esm --jsx=automatic --outfile=<tmp>/m.mjs && node <tmp>/m.mjs`
+  - **Edge Function** `supabase/functions/service-payments/index.ts` + `authority.ts` — **deployed
+    to STAGING and proved there 2026-09-20**: 72/72 live authority checks as six real logins, zero
+    rows written. Not on prod. See next-actions for the authority bug this found.
+  - ⛔ **No route, no navConfig entry, no data-fetching container yet** — the UI is presentational
+    and unreachable in the app.
+  - ⭐ **Staging was checked to be a fair proving ground before trusting it:** entities/users/
+    outlets/departments have identical column sets to prod, and current_user_role /
+    get_my_entity_id / is_active_user / is_manager_or_above are **byte-identical** (md5 of
+    `pg_get_functiondef`). Drift is exactly `tiv_forecast_snapshots` + `tiv_upload_all` /
+    `tiv_upload_and_prune` — 2026-08-25 TIV work that landed after staging was paused. All TIV,
+    none of it touched here. **Method worth reusing for any future staging rehearsal.**
+  - ⭐ **THREE defects that only EXECUTION caught, after static review passed:**
+    **(1)** the idempotency index was `UNIQUE (client_request_id)`, but one confirm creates one
+    allocation row **per invoice** — so a parts+labour order paid by a single transfer (245 of 836
+    measured orders) raised a duplicate key on the probe's FIRST assertion. Now
+    `(client_request_id, invoice_id) NULLS NOT DISTINCT`; the NULLS clause stops two `on_account`
+    rows under one request id silently doubling an advance.
+    **(2)** `v_payments_integrity` is a SECURITY DEFINER view with **no access predicate**, granted
+    to `authenticated` — any signed-in user in any entity could read it. Found by
+    `get_advisors(type:security)`. Normally empty, which is why it would never have been noticed.
+    **(3)** scoping that view made the probe's integrity assertion pass **vacuously** (service role
+    ⇒ `current_user_role()` NULL ⇒ zero rows regardless of drift). The probe now computes drift
+    directly and includes a **negative control** that corrupts a cache on purpose.
+  - **⚠️ EXECUTE on the gate functions must stay granted to `authenticated`** — RLS predicates are
+    evaluated with the querying user's privileges, so revoking it breaks every payments SELECT
+    with "permission denied for function". The linter flags this; it is not an oversight.
+  ⭐ **Start at `docs/backlog/service-payments-plan.md` (v4)** — Part 1 is the plain-language story,
+  Part 2 the technical spec. Companions: `docs/backlog/service-payments-redteam3-cleanroom.md`
+  (12-lane clean-room digest) and `scripts/payments/*.cjs` (re-runnable measurements).
+  Full record: `docs/history/PORTAL_HISTORY.md` (2026-08-29 entry) · memory
+  `project_service_payments.md`.
+  - **⭐ THE LESSON OF THE SESSION — measurement killed four natural-sounding assumptions**, each of
+    which would have shipped as a defect:
+    **(1)** the invoice source: the owner's **SAP Billing Report** (one row per invoice, counter
+    sales included, a `Cancelled` column) replaced the R5+R6 route outright and dissolved two
+    blockers at once. **(2)** the warranty predicate: filtering on the `Dealer Order Number` prefix
+    (`WTY…`/`FRE…`) keeps **61** billable invoices where the correct field `Split Order Type` keeps
+    **549** — a paid repair routinely carries a warranty-style job number. **(3)** customer
+    grouping: the proposed "shared vehicle registration" signal measures **exactly zero** — no
+    registration is billed to two customer codes; the relationship is commercial and invisible to
+    SAP, so grouping stays human (GM/admin) with weak hints only. **(4)** `MPI` is the **cash
+    counter sale**, not vendor sales — the largest single block, holding 114 of the ₹1,930 DEF sales.
+  - **Match reality: 12% of receipts match exactly one bill, 63% match several, 25% match none**
+    (payer-name overlap resolves 46 collisions) → the design is **"shortlist fast, human picks"**,
+    never auto-suggest. **Volumes: ~37 payable bills/day vs ~18 UPI receipts/day**, 76% of same-day
+    bills amount-unique → a **15–30 min next-morning session for one person**.
+  - **Two constraints the owner closed permanently:** SAP will **never** give a billing time (date
+    only), and **mobile web is the cornerstone** — most matching happens on staff phones, which
+    inverted the frontend architecture from the earlier desktop-first draft.
+  - **⭐ Three red-team rounds, 21 lanes. Round 3 was 12 CLEAN-ROOM lanes** given no access to the
+    plan or the data, at the owner's request, to get an unbiased opinion. **They independently
+    reinvented the plan's core decisions** — the strongest validation available — and added: the
+    **Busy integration path** (native *Import Vouchers From Excel*; **no Busy voucher XML** — that's
+    Tally; Receipt **and** Journal vouchers from day one; a reversal journal must re-open the
+    original bill reference or Busy shows it paid while the balance disagrees), a document-model
+    ledger with a built-in corruption identity, temporal group membership, GST advance/return
+    obligations, the ₹2L cash hard-block (Sec 269ST — 100% penalty on the dealership), and the rule
+    that **`not_ours` money must still reach Busy as a sister-unit payable** or bank reconciliation
+    cannot tie.
+  - **Owner decisions (don't re-litigate):** PTB first · warranty+AMC excluded · next-day batch
+    matching (point-of-payment capture, a WhatsApp experiment and paise-tagging were each proposed
+    and **rejected on measured volumes**) · no tolerance write-off · TDS capped 5%, **no TAN** ·
+    GM/admin own groups **and** limits · customer master keyed on **SAP customer code**, shown
+    beside every name · groups carry common email/WhatsApp for the planned customer channel · daily
+    cash tie-out + GM sign · weekly GM exceptions digest.
+  - **⛔ Gating the first migration (all owner/accounts-side):** schedule the Billing Report export ·
+    confirm the Busy edition + collect its sample import format (five verbatim questions ready in
+    the plan) · ask accounts how **MPR parts returns** behave. Then a 2-week routine dry run.
+  - ⚠️ **Portal-wide side finding: Vercel Hobby's ToS prohibits commercial use** — suspension risk
+    for the *whole* portal, unrelated to this tool. See `memory/known_issues.md`.
 
 ## Current state (2026-08-25)
 
@@ -171,6 +638,10 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   no-ops — detect the newline style first.
 - ⚠️ **There is no ESLint config in this repo** (`npx eslint` fails; no lint script). `npm run build`
   is the gate — never report a lint pass.
+  ⚠️⚠️ **And the build does NOT catch an undefined identifier.** That is how `deptById is not
+  defined` took user creation down for six weeks (2026-08-07 → 09-19). After any multi-component
+  JSX edit, run the throwaway `no-undef` pass from the 2026-09-20 state block above — installed in
+  a scratch dir, never added to the repo.
 
 ## Current state (2026-08-24)
 
@@ -313,11 +784,135 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ## Next actions
 
+- **⏸️ Service Payments parked, waiting on HDFC (2026-10-21)** — see the 2026-10-21 block. Its own list
+  stays below (items 8–10 + the three go-live gates); do not start it until the owner says so.
 - **⏭️ Owner: file the 45 new October CBNs in Catalog → Triage** (MAV 19, Haulage 9, Oyster
   Staff/Wide shells 12, RMC 3, Ecomet 1215 1, 10x2 Tipper 1). Until then they have no family.
 - **⏭️ Owner: check the TIV detail sheet on a real phone** (PR #125, live). Hard-refresh TIV
   Forecast → tap a number → scroll the sheet to the end: last line fully above the bottom nav →
   rotate to landscape: × fully below the top bar. First render on a device; nothing else pending.
+- **⏭️ SERVICE PAYMENTS — next build steps** (read `docs/backlog/service-payments-plan.md` first —
+  it encodes several bugs already caught by measurement that are easy to reintroduce from first
+  principles, including the ⭐ CORRECTION that a number in a payment note is a **number plate**,
+  not a bill number):
+  1. ~~Deploy `service-payments` to staging and exercise it with a real user JWT.~~ ✅ **DONE
+     2026-09-20. And it was worth doing: reading the gate before the first real call found that it
+     admitted EVERY manager and GM in the company** (on prod: 4 Sales managers, a Sales GM, a BO GM
+     + 2 BO managers, an HR manager) **and that void / manual receipt / close_tds /
+     classify_receipt accepted "accounts OR any manager"** — all four are accounts-only in the
+     plan, so service managers had them too. Rules now live in
+     `supabase/functions/service-payments/authority.ts` (department first, rank second); `index.ts`
+     asks `ROLE_GATES` once before reading any payload and keeps no role check of its own.
+     `selftest-authority` = **630 offline checks** (26 people × 12 actions; expectations written
+     out by hand from the plan, never from the code; restoring the old gate fails it 111×), and
+     `probe-ef-authority` (owner-run, needs the staging password) = **72/72 live against the
+     deployed function**, zero rows written. ⚠️ **Staging has no Sales/HR/BO test account** — those
+     departments are covered offline only.
+  2. ~~Wire the route + container.~~ ✅ **DONE 2026-09-26** (`1655afc`) — see the 2026-09-26 state
+     block. Found on the way: the read gates' any-manager hole, and the confirm button hidden behind
+     the phone nav.
+  3. ~~Import screen.~~ ✅ **DONE 2026-09-26** (`f3ebee0`), and it found the double-count bug in
+     the import RPCs (`a90aa4e`) — see the 2026-09-26 state block.
+  4. ✅ **HDFC as the UPI source — DONE 2026-10-09** (`917a7c0` · `69ec588` · `9f4ccc2`); see the
+     2026-10-09 state block. BharatPe + Google Pay retired (owner).
+  5. ✅ **Dummy walkthrough reworked to HDFC — DONE 2026-10-09** (`ac4f93c`); see the 2026-10-09
+     state block.
+  6. ✅ **Dummy walkthrough RUN 2026-10-10** (in the browser pane; see the 2026-10-10 state block).
+     ⏭️ Left: the role checks as `svc.exec@` and `pt.mgr@` (owner signs in).
+  7. ✅ **"Bill not raised yet" — BUILT AND SEEN WORKING 2026-10-12** (staging; see the 2026-10-12
+     state block), and search now offers a bill's order partner.
+  7b. ✅ **Red team 4 (cloud, layman UI/UX) — 22 of 31 fixed or struck** (`e49ea7b`, `93995d1`); see
+     the 2026-10-12 state block. ⏭️ The 8 design items: when the owner pastes back the cloud's
+     answer to **Brief 1** (`docs/backlog/cloud-session-briefs.md`), put the decisions to the owner
+     with both views side by side, then build. Plus the "needs a live run" list in the findings file
+     (on a real phone).
+  7c. ✅ **Pre-mortem 1 RUN and merged 2026-10-13** (cloud, Brief 2; see the 2026-10-12 state
+     block + `docs/backlog/service-payments-premortem-1.md`). ✅ **Owner decided 2026-10-13** (full
+     text in that doc's "Owner decisions"): Q1 SAP export = **month to date** · Q2 keep ±3 days +
+     Search · Q3 measured: `statement_timeout` 8 s (authenticator; prod = staging) · Q4 ask HDFC ·
+     **Q5 before go-live: undo list + never re-offer a reversed pair + cash/cheque receipts**
+     (all three server paths exist) · Q6 keep Skip, explain it. ✅ **Q5 (2) "never re-offer" BUILT**
+     (`1b9fc87`: matcher `undone`; matcher 66, match-queue 107; read checked on staging); ✅ **SEEN on staging 2026-10-13**: owner-approved undo of MEHUL SHAH ₹3,400 → DEMO INDU SPARES
+     ("Wrong customer", through the EF) → it came back offering ONLY DEMO HARSH TYRES ₹3,400, not
+     pre-picked, hint "…not offered again"; INDU found by search said "taken off this bill before on 13 Oct
+     ("Wrong customer")" — the 01:24 IST undo dated in IST; DB: allocated back to 0 both sides, 1 event.
+     **Staging now 9 matches, open: KISAN ₹30 + MEHUL ₹3,400** (left unmatched for the owner to see).
+     ✅ **Cloud answered Briefs 1 + 3** (the pre-mortem session; verbatim + PC verification +
+     owner decisions in `docs/backlog/cloud-answer-briefs-1-3.md`). Owner 2026-10-13: two undo reasons
+     re-offer the bill · service sees own matches, accounts all · cash duplicates fixed IN THE DB
+     (`p_client_request_id` on `payments_manual_receipt` = **8th prod migration**) · server refuses one
+     cash receipt ≥ ₹2 L, form warns on the payer-day total. `2243129`: "Only other bill at this
+     amount in 3 days" (seen on staging). ✅ **Undo list BUILT `8838dab`** ("Matched today" fold, one row
+     per confirm, server-rule Undo, six tapped reasons; seen on staging: undo "by mistake" re-offered
+     INDU, data put back; 360 px reasons end 438 < bar 455; match-queue 128, mobile-render 109).
+     ✅ **R4-5 BUILT `7230a53`**: card line 3 = "Billed 8 Oct · GJ15AV9044"; the SAP code stays beside the
+     name (plan v4: "shown beside every name" — the cloud had moved it off); bill number once picked.
+     ✅ **Cash & cheque tab + MIGRATION 8 BUILT `19e49ad`** (staging): `20261013_payments_manual_receipt_safe.sql`
+     — `payments_manual_receipt` gains `p_client_request_id` (repeat = first receipt; different money =
+     refused; advisory lock; new `payment_receipts.client_request_id` + unique index; 3-arg version
+     DROPPED) + refuses one cash receipt ≥ ₹2 L (269ST) + RRN wording. `probe-manual-receipt` **24/0**,
+     0 residue; old function made 00001+00002 for one save and took ₹5 L cash. EF passes the id
+     (staging). Tab (accounts/admin): type, amount, day, who, cheque no., outlet, note, optional bill
+     → receipt then match; day-total ₹2 L warns ("Save anyway"); no UPI. Seen: CR-PTB-2026-00001 ₹845
+     DEMO MANAN AUTO → MPI5756260009011 paid; repeat via EF returned 00001. `selftest-cash-receipt` 40.
+     ✅ **Import clash-row Undo BUILT `40e2f3f`**: the clash is in the PREVIEW, so after the undo the
+     preview re-reads the bills and THIS import cancels the bill ("tomorrow" only if the file is
+     blocked); only the money on that bill is reversed (a parts+labour partner keeps its own); the
+     server rule is asked first (Busy = GM). Seen on staging with a re-saved copy of demo report 2,
+     backed out, ASHA re-confirmed. import-plan 74.
+     ✅ **R4-6 + R4-12 BUILT `3f7fedd`**: the picked card + Confirm say what Confirm does ("₹10,000 of
+     ₹25,000 — ₹15,000 stays due", "Labour ₹5,500 + Parts ₹6,150 = ₹11,650 · both bills close"); ONE
+     split rule `splitAcross` shared by allocationTargets and confirmPlan, compared bill by bill over
+     2,000 orders (planted order bug: 858 fails). Part payment seen at 360 px; order wording not live.
+     ✅ **Pre-mortem 2 (cloud, Brief 4, the LAST cloud session) RAN — its bundle never reached the PC**
+     (the download was pre-mortem 1 again; the allowance ended). Its final report is kept verbatim in
+     `docs/backlog/service-payments-premortem-2-summary.md` with the owner's decisions: **G3 record ₹2 L
+     cash WITH a reason, flagged 269ST** (revises 13 Oct "refuse") · **G1 cash form offers the whole
+     order** · G2 leave the freed payment in Match · G6 leave old bills open · G4 fixed as a defect.
+     ✅ **Built `5ce2aa6`** (migration 8 FILE revised — not on prod; staging re-applied, body md5
+     `6994bca3…` = file **with LF line endings** — apply the LF text on prod): a repeat must match every
+     typed field; ₹2 L cash needs a reason (`payment_events.detail.sec_269st`); split rule moved to
+     `lib/confirmPlan.js`. probe-manual-receipt **32/0** (old function 4/4 fail). ✅ **Seen 2026-10-15** (owner
+     signed in): ₹2,10,000 cash → amber 269ST text + "Why was the cash taken?" + "Record anyway"; Save without
+     a reason stopped on the form; Cheque hides it. Via the deployed EF with CR-00001's own save id: same
+     details later that day → CR-00001 replayed with the saved values; corrected name / other day → refused
+     naming CR-00001. Nothing created (1 manual receipt, counter 1). Whole-order choice not seen live (no
+     open pair on staging).
+     ✅ **R4-14 BUILT `eb970d7`**: service + accounts phone bar = Home · Payments (₹, gated by access rules) ·
+     + · Jobs · Profile; the + sheet is "Quick actions" (all depts); layout in `navConfig.bottomNavLayout`,
+     `selftest-bottom-nav` 13/0; seen at 360 px as tester@. ✅ **R4-21 `b0ed009`**, ✅ **R4-24 `5a9b86f`**, ✅ **R4-9 `8423adb`** + end-of-list crash fix, ✅ **R4-18 `c706422`** (all seen on staging) — the build order is done; 10-18: migration 9 note box ✅ `9947cd7`, green Confirm ✅ `31b0764` (the + left as is).
+     No more cloud sessions (owner, 2026-10-13) — all BEFORE item 9.
+  8. **Multiple QRs:** when the next QR is added, map `qr_ref` → outlet and give same-outlet bills a
+     small RANKING bonus (never a filter — owner rule, 2026-09-11).
+  9. Then prod: **nine** migrations (`20260830`, `20260908`, `20260926_…read_gates…`,
+     `20260926_…views…`, `20260926_…import_rules`, `20261009_payments_hdfc_source`,
+     `20261012_payments_awaiting_invoice`, `20261013_payments_manual_receipt_safe` (LF),
+     `20261018_payments_classify_note` (LF)) — ⚠️ the screen
+     now READS `awaiting_since` and bill `created_at` and calls the 4-argument manual receipt, so the
+     migrations must land before the frontend ships, then
+     `probe-allocation.sql` + `probe-import-parity.sql` + `probe-manual-receipt.sql` + `probe-classify-note.sql` (all self-aborting) — ⛔
+     `probe-read-gates.sql` is staging-only and REFUSES on prod by design (ERP-sync webhook on
+     `users`); on prod, prove the gates by md5 of `pg_get_functiondef` against staging instead.
+     Then deploy the EF. Owner-approved, separate step. (Staging shows the import-rules migration
+     twice — the second is an exact-text re-apply; prod takes the one file.)
+  10. **HDFC API (later, "E")** replaces the daily upload; the same parser shape and import RPC
+      sit behind it. Ask HDFC whether SmartHub can SCHEDULE a daily report meanwhile, and (pre-mortem
+      Q4) whether a Mintoak id is ever re-issued or changes when a report is regenerated — dedup
+      rests on it.
+- **⏭️ SERVICE PAYMENTS — three owner/accounts items still gate GO-LIVE (not further building):**
+  1. **Schedule the SAP Billing Report** as a regular export (one-off manual run today); ask for a
+     stable transaction/variant so column names don't drift. ⛔ **Do not ask again for a billing
+     *time* column** — the owner confirmed date-only is the maximum SAP will provide.
+  2. **Busy: confirm the edition, collect the sample import format.** The shape is solved (native
+     *Import Vouchers From Excel*, Receipt+Journal, no Busy XML); the five verbatim questions for
+     the accountant are in the plan, and one screenshot of `Administration → Utilities` settles the
+     edition question.
+  3. **Ask accounts how MPR parts returns behave** — credit against the customer, or money paid
+     back out? Excluded from outstanding until answered.
+  Then: the 2-week daily-routine dry run, then Phase A1 per the plan's build order.
+- **⏭️ Portal-wide, not urgent: Vercel Hobby's ToS prohibits commercial use.** Decide Cloudflare
+  Pages (free, commercial OK) or Vercel Pro (~$20/mo), and pre-commit the Supabase Pro trigger
+  (~$25/mo — the free tier has no backups and no PITR). See `memory/known_issues.md`.
 - ~~**DECISION NEEDED — `tiv_upload_all()` never `DELETE`s.**~~ ✅ **DECIDED AND BUILT 2026-08-25**
   (PR **#118** → `0807489`): owner chose *"ask me, then remove"*. `tiv_upload_and_prune()` lists
   every month that would go, per table, box unticked by default; opt-in, refuses on an empty
