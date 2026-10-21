@@ -25,14 +25,27 @@ window.addEventListener('unhandledrejection', (e) => reportError(
   { kind: 'unhandledrejection', url: location.href },
 ))
 
-ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <BrowserRouter>
-      <AuthProvider>
-        <ToastProvider>
-          <App />
-        </ToastProvider>
-      </AuthProvider>
-    </BrowserRouter>
-  </React.StrictMode>
-)
+// SPIKE ONLY (Phase 10 grid decision): /grid-spike mounts before AuthProvider so it needs no
+// login — its data is generated in the browser. `import.meta.env.DEV` is replaced statically at
+// build time, so this branch is stripped from every production bundle. Delete with src/spike/.
+if (import.meta.env.DEV && window.location.pathname === '/grid-spike') {
+  import('./spike/GridSpike').then(({ default: GridSpike }) => {
+    ReactDOM.createRoot(document.getElementById('root')).render(
+      <React.StrictMode>
+        <GridSpike />
+      </React.StrictMode>
+    )
+  })
+} else {
+  ReactDOM.createRoot(document.getElementById('root')).render(
+    <React.StrictMode>
+      <BrowserRouter>
+        <AuthProvider>
+          <ToastProvider>
+            <App />
+          </ToastProvider>
+        </AuthProvider>
+      </BrowserRouter>
+    </React.StrictMode>
+  )
+}
