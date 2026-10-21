@@ -51,7 +51,13 @@ no schema, no deploy. ⭐ Full table and rules: `docs/backlog/phase10-execution-
   never worked (it handles Ctrl+Z in its own window listener first — fixed by listening earlier).
   FortuneSheet's API is async and its handle is rebuilt as state changes, so 0 ms and "sheet not
   found" were measuring mistakes, not results.
-- Left: the owner tries all four and chooses; one check (a real Excel copy into Univer) for an engine pick.
+- Evaluation of the final two written up (speed, features, compatibility, licence, upkeep, size) —
+  `14bf611`. FortuneSheet's last release was 2025-11-06; Univer had 39 releases in the year.
+- ✅ **Owner: "go with univer" — DECIDED.** Free presets only, exact versions. The last check was done
+  with a REAL Excel copy (Excel 16 over COM, hidden blank workbook, closed unsaved; a lingering
+  hidden instance was found and quit): no trailing space (Univer reads the HTML), but ⚠️ **money
+  arrives as text with lakh commas ("12,34,567")** — the save layer must convert and refuse. The
+  adapter's eight duties are listed in the plan's "DECIDED" section; cell formulas stay cut.
 
 ## Session log — 2026-10-21 (PC): Service Payments parked, waiting on HDFC
 
