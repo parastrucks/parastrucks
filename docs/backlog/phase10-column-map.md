@@ -53,7 +53,7 @@ text (`5K-DSA`), stored as text + a parsed amount and kind · **HID** = hidden f
 | 31 | `diff_amount` | numeric | DB | `Difference - Amount` | `IF(sup=0 OR payment=0, 0, payment_amount − sup)` |
 | 32 | `diff_base` | numeric | DB | `Difference - Base Value` | `diff_amount / (1 + gst_rate)` (sheet: `/1.28` on every row) |
 | 33 | `diff_gst` | numeric | DB | `Difference - GST` | `diff_amount × gst_rate / (1 + gst_rate)` |
-| 33a | `gst_rate` | numeric | DB | — (new) | ✅ owner 2026-10-21: **28% if `ptb_invoice_date` is before the GST change, else 18%** — unsold stock (no invoice date) is 18%. Applies to every GST step on the row (CTC and CTD alike). ❓ confirm the change date = **22 Sep 2025** |
+| 33a | `gst_rate` | numeric | DB | — (new) | ✅ owner 2026-10-21: **28% if `ptb_invoice_date` is before the GST change, else 18%** — unsold stock (no invoice date) is 18%. Applies to every GST step on the row (CTC and CTD alike). ✅ change date **22 Sep 2025** (owner; the data agrees: the last 28% row is 20 Sep, none after). ⚠️ **63 TIPPER rows were already 18% before it** (+1 tractor) — ❓ were tippers always 18%? Plus `gst_rate_override` for the odd row |
 | 34 | `diff_tds` | numeric | DB | `Difference - TDS` | `… × 0.001` |
 | 35 | `total_difference` | numeric | DB | `Total Difference` | `IF(sup=0, 0, diff_base + diff_gst + diff_tds)` |
 | 36 | `parts_pkg` | text | TXT$ | IT `Parts Pkg` | 58/58 text |
@@ -80,8 +80,9 @@ text (`5K-DSA`), stored as text + a parsed amount and kind · **HID** = hidden f
 | 52 | `insurance` | numeric | IN | `INSURANCE` | |
 | 53 | `cretem` | numeric | IN | `CRETEM` | raw (11+ values) |
 | 54a | `road_tax_pct` | numeric, default 6 | IN | — (new) | ✅ owner: usually 6%; **0** for staff buses and where we do not pay lifetime tax (322 typed zeros in 2025-26); the sheets also show 8% on 3 rows |
-| 54 | `full_tax` | numeric | DB + override | `FULL TAX` | `basic × road_tax_pct`, basic = `mrp / (1 + gst_rate)` — the sheets already divide by 1.18 or 1.28. ❓ basic from **MRP** (≈2/3 of rows) or the **customer bill** (≈1/3)? |
+| 54 | `full_tax` | numeric | DB + override | `FULL TAX` | `basic × road_tax_pct`, basic = value ÷ (1 + gst_rate). ✅ owner: the RTO moved from invoice value to MRP — the data puts it exactly at **1 Aug 2025**: invoices to 31 Jul use `tally_bill`, from 2 Aug use `mrp` (only 5 rows break it → overrides). The HSRP/CRTM constant is the `cretem` column (owner: "then that is it") |
 | 54b | `full_tax_override` | numeric, nullable | IN | — (new) | the ~40 typed values that match no formula; shown as overridden |
+| 33b | `gst_rate_override` | numeric, nullable | IN | — (new) | for a row the rule gets wrong; shown as overridden |
 | 55 | `total_receivable` | numeric | DB | `TOTAL RECEIVABLE` | `total + insurance + cretem + full_tax` |
 | 56 | `net_refund` | numeric | DB | `NET REFUND` | `total_recd − total_receivable` |
 | 57 | `refund_status` | text | IN | `Refund Status` | 11 spellings → normalised list on import |
@@ -136,7 +137,7 @@ Side tables: `unit_cell_notes` (the 124 Excel comments + new ones) · `unit_cell
 highlights; the Univer formatting store) · `tracker_audit` · `tracker_views` · `customer_settlements` +
 `settlement_items`.
 
-**Count:** 87 stored business columns (82 + `gst_rate`, `road_tax_pct`, `full_tax_override` and two
+**Count:** 88 stored business columns (82 + `gst_rate`, `gst_rate_override`, `road_tax_pct`, `full_tax_override` and two
 cancel/rebill columns) + 3 screen-only + system columns.
 
 ## G · The AL Balance Sheet — its own ledger, fed by the tracker (owner: "any better way?")
@@ -160,11 +161,11 @@ delivery kept · AL Balance Sheet stays its own ledger. From the data: CBN = V-p
 deductions is its own figure.
 
 Still open (small):
-1. **The GST change date** — 22 September 2025?
-2. **Road tax basic value** — from MRP or from the customer bill? (the sheets use MRP on ~2/3 of rows)
-3. **The constant for HSRP, CRTM and other charges** — is that the **CRETEM** column (7,000 / 6,600 /
-   9,000 …, added in Total Receivable)? No constant appears inside the road-tax formula itself.
-4. **The AL ledger plan** in section G — OK?
+Also answered: GST change 22 Sep 2025 · road tax on the bill value until 31 Jul 2025, on MRP from
+1 Aug 2025 (date found in the data) · the HSRP/CRTM constant is CRETEM.
+
+1. **Tippers and GST** — 63 tippers were billed at 18% before 22 Sep 2025. Were tippers always 18%?
+2. **The AL ledger plan** in section G — owner asked what it means; explained in plain words 2026-10-21.
 5. **Stray cells — where to look** (open the file, go to the cell with Ctrl+G):
    - `2025-26.xlsx` → `Sheet1`: column **AL** (61 cells, from AL142 down) and **AM** (AM742, AM946,
      AM1065 — a formula, AM1929, AM1962, AM1980, AM1981)
