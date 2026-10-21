@@ -524,9 +524,11 @@ Still open with the owner:
   one transaction per paste/fill; editable-column allowlist; **before-value check** (a stale value is a
   conflict, never an overwrite — compared as text, because Univer's undo can turn `"1"` into `1`); a bad
   type aborts the whole batch; a repeated request id replays the first result; audit carries the
-  source (typed/paste/fill/undo/redo/delete/revert). Two changes to the same cell in one batch would
-  conflict — the save adapter collapses each command first (adapter duty 3). `tracker_create_unit()`
-  for quick entry.
+  source (typed/paste/fill/undo/redo/delete/revert). ⚠️ **Corrected in step 3:** two changes to the
+  same cell in one batch do NOT conflict — every before-value is checked before anything is written,
+  so both pass and the later one silently wins. The Edge Function now refuses the batch ("the same
+  cell twice in one save"); the save adapter still collapses each command first (adapter duty 3).
+  `tracker_create_unit()` for quick entry.
 - ⭐ **DEVIATION FROM §2.1/§2.2 — stricter, on purpose:** no grant to `anon`/`authenticated` on ANY
   tracker table or function; RLS on with no policy. RLS hides rows, not columns — a direct read grant
   for back-office would have exposed the incentive columns to every tracker user. **Every read and
@@ -549,16 +551,66 @@ grants + RLS).
   `reference_portal_sql_workflow`); PGlite rig = `run.mjs` creating the three roles, then migration,
   then probe.
 
-### ⏭️ Step 3 — next: the Edge Function `admin-vehicle-units` + the access switch
+### Step 3 🔨 — the Edge Function + the access switch: BUILT, ON STAGING, live probe waiting for the owner (`8d036bb` → `12e23df`)
 
-- Actions: `list` (paginated, the view's columns only; incentives only for admin + HR), `applyChanges`
-  (→ `tracker_apply_changes`, cap 500/call, `client_request_id`), `createUnit`, notes, formats,
-  views, `supersedeUnit`. Fresh `getUser()` each call; `app_metadata.tracker_access` (+ `tracker_export`).
-- `admin-users` gains `setTrackerAccess` (writes `app_metadata`, then revokes sessions via
-  `admin_revoke_user_sessions`). `canAccess` per-user branch for `/tracker` (blast radius §2.7 (1)).
-- Deploy to staging with `--no-verify-jwt`; offline authority self-test + a live probe as real logins
-  (the payments pattern). Then Stage 2: the Univer grid + the save adapter (its 8 duties above).
-- Still owner-side: **the date Excel goes read-only**.
+**`supabase/functions/admin-vehicle-units/`** (the 11th function; staging only, `--no-verify-jwt`):
+- `authority.ts` — `ROLE_GATES`, asked once before any payload is read (the payments pattern). Only
+  **admin or the per-person switch** opens the tracker — rank and department never do (a GM or HR
+  without the switch is refused). Incentives: admin + HR. Download: admin or `tracker_export`.
+  Shared layouts: admin; a personal layout is its owner's only (admin cannot edit or delete it).
+- `columns.ts` — the 102-column catalogue (type, editable, computed, NOT NULL, CHECKs). `validate.ts`
+  — every refusal names the cell and the reason: lakh commas, `₹`, formulas (decision 17), bad or
+  impossible dates, Excel date serials, CHECK ranges, integers beyond Postgres' range, text > 2000,
+  the same cell twice. Strict on purpose: converting what Excel pastes is the save adapter's job.
+- `index.ts` — fresh `getUser()` per call, so the switch is read from GoTrue, not the token. Actions:
+  `list` (layout columns + id/updated_at/superseded_*, incentives merged only for admin + HR and
+  reported as `hidden` otherwise; superseded rows hidden unless asked; 1000/page) · `history` ·
+  `listNotes`/`addNote` · `listFormats`/`setFormats` (`{}` = cleared, so no delete) ·
+  `listViews`/`saveView`/`deleteView` (incentive columns stripped from layouts for non-HR) ·
+  `applyChanges` (≤500, request id **namespaced per person**, returns the recomputed rows) ·
+  `createUnit` (blank = table default) · `supersedeUnit` · `logExport` (export needs the flag; copy
+  is open and logged). Rate limit 240/min (a grid saves every edit). Errors mapped to plain words;
+  unknown database errors are not echoed.
+- **Migration `20261021_phase10_tracker_supersede.sql`** — `tracker_supersede_unit()`: close the old
+  row, open the new (same chassis allowed — the live-row unique index forces close-before-insert),
+  link them, one transaction, one audit batch. Nothing carried over but the chassis: which figures a
+  rebill keeps is a Stage 2 screen decision. **PGlite 19/0** and **STAGING 19/0, 0 residue**, body md5
+  `6b89c377…` (LF); planted bugs caught (no link → 2, wrong audit source → 1, no already-rebilled
+  guard → 1). Foundation probe still 42/0 alongside it.
+
+**`admin-users`** (staging): `setTrackerAccess` + `listTrackerAccess`, **admin only**. Writes
+`auth.users.app_metadata` read-then-spread (so `must_change_password` survives), never `public.users`
+(its `sync_erp_users` webhook would reconcile the ERP per flip). Export needs access; inactive
+accounts cannot be granted; admin needs no flag. **Taking anything away revokes sessions; granting
+does not** (shows at next sign-in / token refresh). Audited both ways, failures included.
+
+**Client:** `canAccess('/tracker')` answers from `session.user.app_metadata.tracker_access` only —
+`access_rules` rows for `/tracker` are ignored, so no department rule can open it. Employees: an
+admin-only "Tracker" button per row (desktop + phone; adds no rows) → a two-switch dialog. No
+`/tracker` route or nav entry yet (Stage 2).
+
+**Proof so far:**
+- `scripts/phase10/selftest-vehicle-units.mjs` **528/0** offline — imports the function's own
+  modules; checks the catalogue against the migration (102 columns, types, NOT NULL, the SQL editable
+  allowlist, the audit trigger's computed list, CHECKs); 13 people × 13 actions by hand. Four
+  authority mutants each fail it (GM by rank → 28 · any manager sees incentives → 1 · inactive check
+  dropped → 2 · export flag alone opens it → 14).
+- `deno check` (Deno 2.5.6, installed in a scratch dir via npm) clean for both functions; build and
+  `no-undef` clean. Deployed source downloaded back = repo for all five files; unauthenticated → 401.
+- ⏳ **`scripts/phase10/probe-ef-tracker.mjs` — the live probe — needs the owner** (staging password):
+  `$env:PROBE_PASSWORD = '…'; node scripts/phase10/probe-ef-tracker.mjs; Remove-Item Env:\PROBE_PASSWORD`.
+  It checks every account × action at the gate, that only admin flips the switch, that **the same
+  token gets in once switched on and is refused on its very next call once switched off**, and the
+  whole write path. It writes: svc.exec@'s switch on then off; **two DEMO rows left on staging**
+  (original + rebill — Stage 2's first rows) with one note and one colour; two layouts it deletes again.
+- ⏳ Not yet seen in a browser: the Employees button and dialog (needs admin signed in on localhost).
+
+Not built here, on purpose: editing incentive figures (read only so far — needs its own audited
+path for admin + HR); deleting a note; the import wizard and revert-import (Stage 6 per the build
+order — Stage 2 needs only the one-off scripted sandbox load, which can write with the service role).
+
+**Next:** the owner runs the probe → Stage 2, the Univer grid + the save adapter (its 8 duties above).
+Still owner-side: **the date Excel goes read-only**.
 
 ## ⏸️ PARKED — 2026-08-20 (owner: "put this on the back burner again")
 

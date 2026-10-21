@@ -37,8 +37,18 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   GST/road-tax rules). Step 2 ✅ `cca8904` migration `20261021_phase10_tracker_foundation.sql` on
   staging, `scripts/phase10/probe-foundation.sql` **42/0** (+3 planted bugs caught), 0 residue.
   ⭐ **No API-role grants on any tracker table** — all access via the Edge Function (RLS cannot hide the
-  incentive columns). ⚠️ Apply the LF text on prod. ⏭️ Step 3 = Edge Function `admin-vehicle-units` +
-  `setTrackerAccess`. ❓ Owner: tippers always 18% GST? · the AL-ledger proposal. Record: plan → "STAGE 1".
+  incentive columns). ⚠️ Apply the LF text on prod. ❓ Owner: tippers always 18% GST? · the AL-ledger
+  proposal. Record: plan → "STAGE 1".
+- **🔨 Step 3 BUILT + on STAGING (`8d036bb` → `12e23df`):** EF `admin-vehicle-units` (authority.ts /
+  columns.ts / validate.ts / index.ts; only admin or the per-person switch opens it) · `admin-users`
+  `setTrackerAccess`/`listTrackerAccess` (admin only; `auth.users.app_metadata`; switching off revokes
+  sessions) · `canAccess('/tracker')` from the session's app_metadata only · Employees "Tracker" button ·
+  migration `20261021_phase10_tracker_supersede.sql` (rebill, 19/0 staging, LF md5 `6b89c377…`).
+  `selftest-vehicle-units` **528/0**, mutants caught, `deno check` clean, deployed = repo.
+  ⏳ **Owner runs** `$env:PROBE_PASSWORD = '…'; node scripts/phase10/probe-ef-tracker.mjs; Remove-Item Env:\PROBE_PASSWORD`
+  (leaves 2 DEMO rows on staging) + looks at the Employees button as admin. ⏭️ Then Stage 2 (Univer grid
+  + save adapter). ⭐ Same cell twice in one save is refused — the SQL alone lets the later one win.
+  ⭐ Deno type-check without installing: `npm i deno@2.5.6` in a scratch dir → `deno check --no-config --no-lock`.
 
 ## Current state (2026-10-21, later) — Phase 10 grid comparison
 

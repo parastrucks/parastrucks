@@ -30,6 +30,15 @@ script (the files live outside the repo, under `D:\PTB\Finances\` and
 | `d_followup.cjs` | Three-way retention relationship, empirical VIN month mapping, the SRS incentive override |
 | `columns.cjs` | Every header of the data sheets with its shape (fill, number/text/date counts, dominant formula) — the input to [`phase10-column-map.md`](../../docs/backlog/phase10-column-map.md). Prints no cell values |
 
+## Tests of the tracker itself (Stage 1)
+
+| Script | What it proves | How to run |
+|---|---|---|
+| `probe-foundation.sql` | The schema: every formula on both sides of both switch dates, the write procedure, grants (42 checks) | `supabase db query --linked -f` (staging) or PGlite; **self-aborting** — green ends in "PROBE COMPLETE: N passed, 0 failed" |
+| `probe-supersede.sql` | Rebill in one transaction (19 checks) | same |
+| `selftest-vehicle-units.mjs` | The Edge Function's own modules: drift against the migration, every person × action, every value check (528) | `node scripts/phase10/selftest-vehicle-units.mjs` (Node 24 strips the types). `AUTHORITY_FILE=<path>` runs it against another authority file (mutants) |
+| `probe-ef-tracker.mjs` | The DEPLOYED functions on staging, as real logins: gate, switch, write path. **Writes dummy data** (see its header) | owner: `$env:PROBE_PASSWORD = '…'; node scripts/phase10/probe-ef-tracker.mjs; Remove-Item Env:\PROBE_PASSWORD` |
+
 ## The one that matters most
 
 `c_sale_g.cjs` is what caught round 1's inverted TCS formula: `tally_bill × 1%` matches

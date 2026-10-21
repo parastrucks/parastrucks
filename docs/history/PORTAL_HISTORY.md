@@ -26,6 +26,31 @@
 
 ---
 
+## Session log — 2026-10-21 (PC, latest): Phase 10 Stage 1 step 3 — the tracker's Edge Function and access switch, on staging
+
+Owner: *"Continue."* Branch `10b-foundation` (`8d036bb` → `12e23df`). Staging only; prod untouched.
+⭐ Full record: `docs/backlog/phase10-execution-plan.md` → "Step 3".
+- **`admin-vehicle-units`** (the 11th function) — the tracker's only door. `authority.ts` (ROLE_GATES
+  before any payload; only admin or the per-person switch opens it — never rank or department),
+  `columns.ts` + `validate.ts` (cell-by-cell refusals with reasons), `index.ts` (fresh `getUser()` per
+  call; list/history/notes/formats/layouts/applyChanges/createUnit/supersedeUnit/logExport).
+- **`admin-users`** `setTrackerAccess` / `listTrackerAccess`, admin only: `auth.users.app_metadata`,
+  never `public.users` (ERP webhook). Removing access revokes sessions; granting does not.
+- **Client:** `canAccess('/tracker')` from the session's `app_metadata` only; Employees "Tracker"
+  button (admin) → two switches. No route yet.
+- **Migration `20261021_phase10_tracker_supersede.sql`** — rebill in one transaction (close, open,
+  link; same chassis allowed). PGlite + STAGING 19/0, 0 residue; three planted bugs caught.
+- ⭐ **Two things found by reading, not by testing:** (1) step 2's claim that the same cell twice in one
+  batch "would conflict" was wrong — all before-values are checked before any write, so the later
+  change silently wins; the function now refuses such a batch. (2) A whole number beyond Postgres'
+  integer range passed the integer check and would have aborted a 500-cell paste naming no cell.
+- **Proof:** `selftest-vehicle-units` 528/0 (incl. drift against the migration; four authority mutants
+  each fail it); `deno check` clean (Deno via npm in a scratch dir — no install in the repo); build +
+  `no-undef` clean; both functions deployed to staging, downloaded back = repo; unauthenticated → 401.
+- ⏳ **Waiting for the owner:** `probe-ef-tracker.mjs` (needs the staging password) — including the
+  claim that switching someone off refuses their same token on its next call. And a look at the
+  Employees button signed in as admin.
+
 ## Session log — 2026-10-21 (PC, later): Phase 10 Stage 1 — the column map and the schema, on staging
 
 Owner: *"yes start stage 1"*. Branch `10b-foundation` from `portal` `f914e62`. Staging only; prod
