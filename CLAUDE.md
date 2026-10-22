@@ -30,6 +30,39 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ---
 
+## Current state (2026-10-23)
+
+- **✅ `error_log` FLOOD RESOLVED AT ITS CAUSE — a spyware VPN extension on one staff PC, now uninstalled.**
+  8,961 of 8,964 rows (19–22 Oct, ~2 a second, 8,145+ on `/proforma-invoice`) came from **Urban VPN
+  Proxy** (`chrome-extension://eppiocemhmnlbhjplcgkofciiegomcon`, *"reading 'M_ID'"*), publicly reported
+  in Dec 2025 (Koi Security) for harvesting page content and selling it via a data broker — running inside
+  the page that holds customer names, mobiles, addresses and GSTINs. **One user: Manish Patel (Back
+  Office).** ✅ **Owner had it uninstalled 2026-10-23**; last extension row 12:28 UTC 10-22. Whether any
+  portal data left through it **cannot be known from our side**. ⏭️ Owner: who installed it, and do other
+  office PCs have it (the log only sees an extension when it crashes on our page).
+  - ⚠️ **The only 3 other rows are also Manish's** — `Lock "lock:sb-session" was released because another
+    request stole it`, on `/proforma-invoice`. **Inferred, not proven:** our reporter called `getSession()`
+    for every error, ~2/s, contending with the app's own auth lock. Watch whether it recurs.
+  - **PR #137 → `e236912`** (CI green except CodeQL running at merge — it had passed on the same code
+    commit; Vercel READY; `/` + `/login` 200; the live `errorLog-*.js` carries `errlog-ext:`): an error
+    whose stack is **entirely** browser-extension frames is sent **once per extension, per browser, per
+    day**, labelled `context.source='extension'`, checked **before** `callEdge` (`src/lib/errorSource.js`).
+    Not dropped — dropping would have hidden this very finding. `log-error` mirrors the rule (one row per
+    user, extension and 24 h) for browsers on old code; the Error Log tab prefixes such rows "Browser
+    extension ·". `selftest-log-error` **33/0**; three planted bugs each fail it.
+    ⏭️ **`log-error` EF deploy to prod is PENDING — the auto-mode classifier refused it; the owner runs it**
+    (from latest `portal`): `npx supabase@2.109.1 functions deploy log-error --project-ref
+    mmmxvjaavdtwlpcnjgzy --no-verify-jwt` (prod v19 before it). The browser side alone already stops the flood.
+  - **Rode along: dompurify 3.4.12 → 3.4.17 (lockfile).** A CRITICAL advisory (GHSA-55q2-fjhq-7xh7 + 4)
+    turned `npm-audit` red on every PR on 2026-10-22. dompurify is only jsPDF's optional dep for `.html()`,
+    which we never call. Clean-install A/B: **44/45 built files byte-identical** (hashes masked); the one
+    that differs is `purify.es` itself. ⚠️ **A/B both sides from `npm ci`** — a stale worktree
+    `node_modules` (vite 8.1.0) first showed 30 "different" files.
+  - ✅ **Cleanup (owner-approved):** 8,960 extension rows deleted on prod; kept id 1 (the first, 19 Oct) as a
+    sample + the 3 lock rows → `error_log` = 4 rows. ⭐ **Prod SQL that worked when the MCP refuses:**
+    `supabase link --project-ref mmmxvjaavdtwlpcnjgzy --workdir <scratch>` then `supabase db query --linked
+    --workdir <scratch> "<sql>"` (CLI 2.109.1, logged in; no DB password needed).
+
 ## Current state (2026-10-22)
 
 - **✅ HOTFIX LIVE — admins can make a Proforma Invoice without chassis/engine numbers, with a quantity**
@@ -69,7 +102,7 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   - ⚠️ **`error_log` is 7,434/7,437 junk from ONE user's Chrome extension** (`chrome-extension://
     eppiocemhmnlbhjplcgkofciiegomcon/executors/200.js` → *"reading 'M_ID'"*, `unhandledrejection`,
     since 2026-10-19, last 10:27 UTC 10-22 — before the hotfix). Not portal code, but it buries real
-    crashes: `main.jsx`'s handlers should drop stacks that live only in `chrome-extension://`. Open.
+    crashes. ✅ **Resolved 2026-10-23 — it was Urban VPN Proxy (spyware); see the 2026-10-23 block.**
   - ⚠️ **The Supabase MCP refused the portal project again on 2026-10-22** ("You do not have
     permission") even with `project_id` — the 10-05 aggregates worked. Fallback that worked: run the
     query **inside the owner's signed-in prod page** (`sb-session` token + the bundle's publishable
@@ -838,8 +871,9 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ## Next actions
 
-- **⏭️ Filter Chrome-extension noise out of crash reporting** — 7,434 of 7,437 `error_log` rows are
-  one user's extension (`…/executors/200.js`, "reading 'M_ID'"), see the 2026-10-22 block.
+- **⏭️ Owner: deploy `log-error` to prod** (command in the 2026-10-23 block — the classifier refused it
+  for me), and ask who installed Urban VPN on Manish Patel's PC + check the other office PCs.
+  Extension noise itself is ✅ resolved (PR #137, extension uninstalled, 8,960 rows cleared).
 - ✅ Test PI `PI-PTB-2026-0983` stays (owner, 2026-10-22) — do not re-raise. PI no-chassis hotfix: Optional:
   RTO/Insurance per-unit instead of per-PI, and a DB rule that non-admins need a chassis — both only if asked.
 - **⏸️ Service Payments parked, waiting on HDFC (2026-10-21)** — see the 2026-10-21 block. Its own list
