@@ -38,7 +38,7 @@ script (the files live outside the repo, under `D:\PTB\Finances\` and
 | `probe-supersede.sql` | Rebill in one transaction (19 checks) | same |
 | `probe-numeric-before.sql` | A stored 1310.50 is not a conflict against a browser's 1310.5 (9 checks; the old function fails 3) | same |
 | `probe-create-units.sql` | New rows from the grid: one savepoint per row, a duplicate chassis fails alone and by name, a repeated request replays (18 checks) | same |
-| `selftest-tracker-cells.mjs` | The screen's own logic: grid cell ↔ database value, the save planner, the new-row planner, cell colours, the screen columns (113) | `node scripts/phase10/selftest-tracker-cells.mjs` |
+| `selftest-tracker-cells.mjs` | The screen's own logic: grid cell ↔ database value, the save planner, the new-row planner, cell colours, the paid rule, the screen columns (117) | `node scripts/phase10/selftest-tracker-cells.mjs` |
 | `selftest-vehicle-units.mjs` | The Edge Function's own modules: drift against the migration, every person × action, every value check (550) | `node scripts/phase10/selftest-vehicle-units.mjs` (Node 24 strips the types). `AUTHORITY_FILE=<path>` runs it against another authority file (mutants) |
 | `probe-ef-tracker.mjs` | The DEPLOYED functions on staging, as real logins: gate, switch, write path. **Writes dummy data** (see its header) | owner: `$env:PROBE_PASSWORD = '…'; node scripts/phase10/probe-ef-tracker.mjs; Remove-Item Env:\PROBE_PASSWORD` |
 

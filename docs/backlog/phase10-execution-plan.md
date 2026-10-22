@@ -505,7 +505,8 @@ Owner decisions 2026-10-21 (do not re-ask):
 Still open with the owner:
 1. ❓ **Tippers and GST** — 63 TIPPER rows (+1 tractor) were billed at 18% before 22 Sep 2025. Were
    tippers always 18%? Until answered: date rule + per-row override.
-2. ❓ The AL ledger proposal above — yes or no (not blocking).
+2. ❓ The AL ledger proposal above — yes or no (not blocking). Owner asked 2026-10-23 "have we decided
+   on this yet?" — **no; re-explained, still open.**
 3. ❓ Stray cells — the owner was given exact addresses to look at (see the column map, last section):
    2025-26 `AL`/`AM`, PTB RETAIL `AN92/125/143/144`, DEALERS `J`–`L`.
 
@@ -722,9 +723,21 @@ No server change: `setFormats`/`listFormats`/`addNote`/`listNotes` from step 3 w
   a refused value no longer wipes a yellow. A paste keeps only the source's FILL (not Excel's font,
   size, borders on every cell). "Clear format" that strips a money cell's lakh format gets it back.
   A new row's pasted fill is reported when the row gets its id.
-- **AL Payment Status is green as a COLUMN** (#C6EFCE), like the locked grey: the workbooks have it on
-  all 2,049 cells whatever the value (`Cash Invoiced` / `IBND`), so it was a column fill, not a
-  rule. ❓ Owner: should the colour depend on the value instead?
+- ~~AL Payment Status green as a whole column~~ → **REPLACED 2026-10-23 (`1bd0fee`), owner: "green
+  only for the vehicles that have been paid for, that is, cash invoiced. IBND (invoiced but not
+  delivered) are invoiced to us but delivered only once the payment is made to Ashok Leyland."** So:
+  a conditional-formatting RULE, `=LOWER(TRIM(Y2))="cash invoiced"` → #C6EFCE (Univer's own text
+  "equal" is exact; typing differs), shipped in the workbook's own data (`resources`) so no Ctrl+Z
+  can remove it, never saved per cell (`cellFormats.paidRule`). ⚠️ The census's "2,049 green cells
+  whatever the value" did not match the owner's rule — the census never cross-checked fill against
+  value; the owner's fact wins.
+  ⭐⭐ **Conditional formatting hooks into Univer's cell READS**: `getCellStyleData()` and even
+  `getCellData()` return a paid cell AS green. The colour saver read cells that way, so editing a
+  green paid cell would have saved the rule's green as the person's colour (and the number-format
+  repair could have written it into the cell). Caught in the DB check, not on screen. **Every style
+  read now uses the raw cell (`getSheet().getCellRaw` + `getStyles().getStyleByCell`).**
+  Seen on staging: `cash invoiced ` → green; a green paid cell edited → no format saved; `IBND` →
+  plain; DB: 0 formats on the truck, 0 saved greens anywhere. Cells test **117/0**.
 - **Notes = Excel's model:** one note per cell. Each saved version is a NEW `unit_cell_notes` row
   (add-only — that is its history); the cell shows the latest. Saved 2.5 s after the note settles.
   The grid keeps notes by truck and **redraws them after load and after every sort** (silent
@@ -775,7 +788,7 @@ Also: a phone view (read-only cards) and the local save queue across reloads (E5
   (`--no-verify-jwt`; the 11th function joins the key-cutover roster), then the frontend.
 - Owner questions still open: tippers always 18% GST? · the AL-ledger proposal (Stage 6) · the stray
   cells · **sandbox load: real data on staging, or the pilot on prod behind the switch?** · the date
-  the Excel files go read-only · AL Payment Status colour by value, or the whole column (as now)?
+  the Excel files go read-only. (AL Payment Status colour: ANSWERED 2026-10-23 — green = Cash Invoiced only.)
 
 ## ⏸️ PARKED — 2026-08-20 (owner: "put this on the back burner again")
 

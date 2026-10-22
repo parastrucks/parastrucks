@@ -53,6 +53,10 @@ Owner: *"yes start stage 2"*. Branch `10b-foundation` (`6a9455f` → `5f38233`).
   a column (as in the workbooks); one note per cell with every version kept, redrawn after each sort
   because Univer leaves notes at their old position (measured). Seen on staging and checked in the DB.
   `selftest-tracker-cells` 113/0.
+- **2026-10-23 — AL Payment Status green only when paid** (owner: green = Cash Invoiced; IBND = invoiced,
+  delivered once paid) → a rule, never saved (`1bd0fee`). ⭐ Univer's conditional formatting leaks into
+  `getCellStyleData()`/`getCellData()` — the colour saver would have stored the rule's green as a
+  person's colour; style reads now use the raw cell. Found by checking the DB. Cells 117/0.
 
 ## Session log — 2026-10-21 (PC, latest): Phase 10 Stage 1 step 3 — the tracker's Edge Function and access switch, on staging
 

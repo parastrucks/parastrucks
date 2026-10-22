@@ -48,6 +48,9 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   part of a cell's style is saved (never the number format), notes one per cell with history.
   `selftest-tracker-cells` **113/0**. ⭐ Univer leaves notes at their sheet position on a sort — the
   grid redraws them by truck. ⭐ A style change arrives as `SheetValueChanged`, undo included.
+  ✅ 10-23 (`1bd0fee`): AL Payment Status green ONLY when "Cash Invoiced" (owner) — a rule, never
+  saved. ⭐⭐ Conditional formatting leaks into `getCellStyleData()`/`getCellData()` — read cell styles
+  RAW (`getSheet().getCellRaw` + `getStyles().getStyleByCell`) or a rule's colour gets saved as a person's.
   ⏭️ Slice 5: layouts/search/copy-for-mail/row history. Record: plan → "STAGE 2".
 - **The PI hotfix pause is over** — `origin/portal` (`e7fcb82`) is merged INTO `10b-foundation`.
   ⚠️ **Any future hotfix still branches from `origin/portal`, never from `10b-foundation`** — this
