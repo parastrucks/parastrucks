@@ -1,5 +1,5 @@
 // Phase 10 — cell looks: each column's own style (number format, the grey of a worked-out column,
-// the green of AL Payment Status), and what a person adds on top (a yellow "look at this", a red
+// and the "paid" green rule on AL Payment Status), and what a person adds on top (a yellow "look at this", a red
 // "this is wrong", bold…). Pure, tested offline by scripts/phase10/selftest-tracker-cells.mjs.
 //
 // What is SAVED for a cell (unit_cell_formats.format) is only the person's part: its style minus the
@@ -14,9 +14,6 @@ export const MONEY = '[<=-100000]-##\\,##\\,##0;[>=100000]##\\,##\\,##0;##,##0'
 export const DATE = 'dd/mm/yy'
 
 const LOCKED = { rgb: '#F3F4F6' }
-// The workbooks fill the whole AL Payment Status column with Excel's "Good" green (#C6EFCE on all
-// 2,049 cells, whatever the value — measured), so here it is the column's own colour.
-const PAY = { rgb: '#C6EFCE' }
 
 export const STYLES = {
   hdr: { bl: 1, bg: { rgb: '#E5E7EB' }, tb: 3 },
@@ -24,11 +21,9 @@ export const STYLES = {
   date: { n: { pattern: DATE } }, dateL: { n: { pattern: DATE }, bg: LOCKED },
   text: { n: { pattern: '@' } }, textL: { n: { pattern: '@' }, bg: LOCKED },
   num: {}, numL: { bg: LOCKED },
-  pay: { n: { pattern: '@' }, bg: PAY },
 }
 
 export function styleKey(col) {
-  if (col.key === 'al_payment_status' && col.editable) return 'pay'
   const kind = col.spec.type === 'date' ? 'date' : col.money ? 'money' : col.spec.type === 'text' ? 'text' : 'num'
   return col.editable ? kind : `${kind}L`
 }
@@ -75,3 +70,27 @@ export function pastedFormat(col, style) {
 }
 
 export const sameFormat = (a, b) => stable(a ?? {}) === stable(b ?? {})
+
+// ── AL Payment Status: green when the truck is PAID ─────────────────────────────────────────────
+// Owner, 2026-10-23: green means paid to Ashok Leyland, i.e. "Cash Invoiced". "IBND" (invoiced but
+// not delivered — AL delivers once it is paid) stays plain. A RULE, worked out as the grid draws, so
+// it follows the value and is never saved per cell. Case and stray spaces are forgiven (Univer's
+// own text "equal" is exact), hence a formula rule.
+export const PAID_GREEN = '#C6EFCE' // Excel's "Good" fill, the workbooks' own colour
+export const columnLetter = (i) => { let s = ''; for (let n = i + 1; n > 0; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(65 + ((n - 1) % 26)) + s; return s }
+
+// columns: the grid's columns in order; lastRow: the last sheet row the rule should cover (0-based)
+export function paidRule(columns, lastRow) {
+  const c = columns.findIndex((col) => col.key === 'al_payment_status')
+  if (c < 0) return null
+  return {
+    cfId: 'al-paid', stopIfTrue: false,
+    ranges: [{ startRow: 1, endRow: lastRow, startColumn: c, endColumn: c }],
+    rule: {
+      type: 'highlightCell', subType: 'formula',
+      // relative to the range's first cell (row 2), as Excel writes it
+      value: `=LOWER(TRIM(${columnLetter(c)}2))="cash invoiced"`,
+      style: { bg: { rgb: PAID_GREEN } },
+    },
+  }
+}

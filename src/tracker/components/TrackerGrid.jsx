@@ -37,9 +37,9 @@ import '@univerjs/preset-sheets-data-validation/lib/index.css'
 import '@univerjs/preset-sheets-find-replace/lib/index.css'
 import '@univerjs/preset-sheets-note/lib/index.css'
 import { toCell } from '../lib/cellValues'
-import { STYLES, styleKey, styleWith, formatOf, lostNumberFormat, pastedFormat, baseStyle } from '../lib/cellFormats'
+import { STYLES, styleKey, styleWith, formatOf, lostNumberFormat, pastedFormat, baseStyle, paidRule } from '../lib/cellFormats'
 
-// Column styles (lakh money, dd/mm/yy dates, locked grey, AL Payment Status green) and the person's
+// Column styles (lakh money, dd/mm/yy dates, locked grey), the "paid" green rule and the person's
 // own formatting on top: lib/cellFormats.js.
 
 // Empty rows kept below the book, as in Excel: a new truck is typed (or a block of them pasted)
@@ -72,8 +72,13 @@ function buildWorkbook(columns, rows, formats) {
   const columnData = {}
   columns.forEach((c, ci) => { columnData[ci] = { w: c.width } })
   columnData[idCol] = { w: 40, hd: 1 }
+  // The "paid" rule ships in the workbook's own data (as Univer saves rules), so it is part of the
+  // book from the start — not a command the person could Ctrl+Z away. It reaches past the spare rows
+  // so rows added later (ensureSpare) are covered too.
+  const paid = paidRule(columns, rows.length + SPARE + 5000)
   return {
     id: 'tracker', name: 'Vehicle Tracker', sheetOrder: ['book'], styles: STYLES,
+    resources: paid ? [{ name: 'SHEET_CONDITIONAL_FORMATTING_PLUGIN', data: JSON.stringify({ book: [paid] }) }] : [],
     sheets: {
       book: {
         id: 'book', name: 'Book', rowCount: rows.length + 1 + SPARE, columnCount: columns.length + 1,
@@ -130,11 +135,11 @@ const TrackerGrid = forwardRef(function TrackerGrid({ columns, rows, formats, no
       for (const { r, id } of tags) rowIds.current[r] = id
       writeRef.current?.(tags.map(({ r, id }) => ({ r, c: idCol, v: id })))
       // a new row's look (a pasted yellow row) was not reported while it had no truck: report it now
-      const sheet = engine.current?.sheet()
-      if (!sheet) return
+      const styleAt = engine.current?.styleAt
+      if (!styleAt) return
       const looked = []
       for (const { r, id } of tags) columns.forEach((col, c) => {
-        const format = formatOf(col, sheet.getRange(r, c).getCellStyleData())
+        const format = formatOf(col, styleAt(r, c))
         if (Object.keys(format).length) looked.push({ id, key: col.key, format })
       })
       if (looked.length) handlers.current.onFormats?.(looked)
@@ -267,9 +272,15 @@ const TrackerGrid = forwardRef(function TrackerGrid({ columns, rows, formats, no
     noteText.current = new Map(notes)
     drawNotes()
 
+    // A cell's STORED style. ⚠️ Never getCellStyleData()/getCellData() for this: conditional formatting
+    // hooks into those reads, so a paid truck's AL Payment Status reads green as if someone had painted
+    // it — and would be saved as their colour (measured 2026-10-23). The raw cell has only what is stored.
+    const styleAt = (r, c) => workbook.getWorkbook().getStyles().getStyleByCell(sheet().getSheet().getCellRaw(r, c)) ?? {}
+
     const isSpare = (r) => !rowIds.current[r]
     engine.current = {
       sheet,
+      styleAt,
       drawNotes,
       firstSpare: () => {
         for (let r = 1; r < rowIds.current.length; r++) if (isSpare(r)) return r
@@ -383,7 +394,7 @@ const TrackerGrid = forwardRef(function TrackerGrid({ columns, rows, formats, no
         // back, keeping only the source's fill — a yellow flag copied across stays yellow.
         if (source === 'paste') {
           for (const { r, c } of looks) {
-            repair.push({ r, c, s: styleWith(columns[c], pastedFormat(columns[c], sheet().getRange(r, c).getCellStyleData())) })
+            repair.push({ r, c, s: styleWith(columns[c], pastedFormat(columns[c], styleAt(r, c))) })
           }
         }
         queueMicrotask(() => {
@@ -393,7 +404,7 @@ const TrackerGrid = forwardRef(function TrackerGrid({ columns, rows, formats, no
           const fix = [], looked = []
           for (const { r, c } of looks) {
             const col = columns[c]
-            const style = sheet().getRange(r, c).getCellStyleData() ?? {}
+            const style = styleAt(r, c)
             if (lostNumberFormat(col, style)) fix.push({ r, c, s: { ...style, n: baseStyle(col).n } })
             if (rowIds.current[r]) looked.push({ id: rowIds.current[r], key: col.key, format: formatOf(col, style) })
           }

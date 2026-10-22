@@ -8,7 +8,7 @@
 // screen and the server are tested with the same rules. Expectations are written out by hand.
 import { fromCell, toCell, isoToSerial, serialToIso, parseTypedDate, parseTypedNumber, sameValue, collapse } from '../../src/tracker/lib/cellValues.js'
 import { planSave, planNewRows, MAX_NEW_ROWS, chunk, refusalMessage } from '../../src/tracker/lib/savePlan.js'
-import { styleKey, formatOf, styleWith, lostNumberFormat, pastedFormat, sameFormat, stable, MONEY } from '../../src/tracker/lib/cellFormats.js'
+import { styleKey, formatOf, styleWith, lostNumberFormat, pastedFormat, sameFormat, stable, MONEY, paidRule, columnLetter, PAID_GREEN } from '../../src/tracker/lib/cellFormats.js'
 import { ageingDays, interestOnAgeing, slab, withScreenColumns, todayIst } from '../../src/tracker/lib/screenColumns.js'
 import { ALL_COLUMNS, COLUMN_BY_KEY, visibleColumns } from '../../src/tracker/lib/columnMeta.js'
 import { COLUMNS, EDITABLE } from '../../supabase/functions/admin-vehicle-units/columns.ts'
@@ -156,12 +156,22 @@ ok(refusalMessage([{ label: 'Chassis No', reason: 'x' }], ' Those cells were cle
 
 // ── cellFormats: what of a cell's look is the person’s (saved) and what is the column’s (never saved)
 const ctc = COLUMN_BY_KEY.ctc, tcs = COLUMN_BY_KEY.tcs, pay = COLUMN_BY_KEY.al_payment_status, model = COLUMN_BY_KEY.model
-ok(styleKey(ctc) === 'money' && styleKey(tcs) === 'moneyL' && styleKey(pay) === 'pay', 'column styles: money, locked money, AL Payment Status green', [styleKey(ctc), styleKey(tcs), styleKey(pay)])
+ok(styleKey(ctc) === 'money' && styleKey(tcs) === 'moneyL' && styleKey(pay) === 'text', 'column styles: money, locked money; AL Payment Status is plain text (its green is a rule)', [styleKey(ctc), styleKey(tcs), styleKey(pay)])
 ok(JSON.stringify(formatOf(ctc, { n: { pattern: MONEY } })) === '{}', 'a plain money cell has nothing of the person’s')
 ok(stable(formatOf(ctc, { n: { pattern: MONEY }, bg: { rgb: '#FFFF00' } })) === stable({ bg: { rgb: '#FFFF00' } }), 'yellow on a money cell = { bg } only (number format never saved)')
 ok(JSON.stringify(formatOf(tcs, { n: { pattern: MONEY }, bg: { rgb: '#F3F4F6' } })) === '{}', 'the grey of a worked-out column is the column’s, not saved')
 ok(stable(formatOf(tcs, { n: { pattern: MONEY }, bg: { rgb: '#FF0000' } })) === stable({ bg: { rgb: '#FF0000' } }), 'red on a worked-out column is saved')
-ok(JSON.stringify(formatOf(pay, { n: { pattern: '@' }, bg: { rgb: '#C6EFCE' } })) === '{}', 'AL Payment Status green is the column’s')
+// AL Payment Status: green only when PAID ("Cash Invoiced"; owner 2026-10-23), as a rule
+ok(columnLetter(0) === 'A' && columnLetter(25) === 'Z' && columnLetter(26) === 'AA' && columnLetter(24) === 'Y' && columnLetter(701) === 'ZZ' && columnLetter(702) === 'AAA',
+  'column letters A, Z, AA, Y, ZZ, AAA')
+const cols = ALL_COLUMNS
+const pr = paidRule(cols, 9000), payAt = cols.findIndex((c) => c.key === 'al_payment_status')
+ok(pr && pr.ranges[0].startColumn === payAt && pr.ranges[0].endColumn === payAt && pr.ranges[0].startRow === 1 && pr.ranges[0].endRow === 9000,
+  'paid rule covers exactly the AL Payment Status column, below the header', pr?.ranges)
+ok(pr?.rule.value === `=LOWER(TRIM(${columnLetter(payAt)}2))="cash invoiced"` && pr.rule.subType === 'formula' && pr.rule.style.bg.rgb === PAID_GREEN && PAID_GREEN === '#C6EFCE',
+  'paid rule: case- and space-forgiving "cash invoiced" on its own column, Excel Good green', pr?.rule)
+ok(paidRule(cols.filter((c) => c.key !== 'al_payment_status'), 10) === null, 'no AL Payment Status column → no rule')
+ok(JSON.stringify(formatOf(pay, { n: { pattern: '@' }, bg: { rgb: '#C6EFCE' } })) !== '{}', 'a hand-painted green on AL Payment Status is the person’s, saved like any colour')
 ok(stable(formatOf(model, { n: { pattern: '@' }, bl: 1, cl: { rgb: '#FF0000' }, bg: null })) === stable({ bl: 1, cl: { rgb: '#FF0000' } }), 'bold + font colour saved; a null key is dropped')
 ok(JSON.stringify(formatOf(ctc, { n: { pattern: '0.00' } })) === '{}', 'a number format changed from the toolbar is never saved (the column owns it)')
 ok(styleWith(ctc, {}) === 'money' && styleWith(ctc, null) === 'money', 'nothing of the person’s → the shared column style')
