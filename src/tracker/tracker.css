@@ -1,0 +1,48 @@
+/* Phase 10 — /tracker. Loaded only with the page (lazy chunk). */
+
+/* The grid fills the window under the page head: desktop .app-main has 28px top + 40px bottom padding. */
+.trk-page {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 68px);
+  min-height: 420px;
+}
+
+.trk-head {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.trk-title { font-size: 22px; font-weight: 700; color: var(--ink); margin: 0; }
+.trk-count { font-size: 13px; color: var(--text-secondary); }
+.trk-notice {
+  font-size: 13px;
+  padding: 3px 10px;
+  border-radius: 6px;
+  background: var(--gray-100);
+  color: var(--gray-800);
+}
+.trk-notice--warn { background: #FEF3C7; color: #92400E; }
+.trk-notice--error { background: #FEE2E2; color: #991B1B; }
+
+.trk-grid {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  border: 1px solid var(--border-faint, #E5E7EB);
+  border-radius: 6px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.trk-loading, .trk-error { padding: 24px 0; font-size: 14px; display: flex; gap: 10px; align-items: center; }
+.trk-error { color: #991B1B; }
+
+.trk-phone-note { display: none; }
+@media (max-width: 759px) {
+  .trk-page { height: auto; }
+  .trk-phone-note { display: block; font-size: 14px; color: var(--text-secondary); padding: 12px 0; }
+  .trk-grid, .trk-loading { display: none; }
+}

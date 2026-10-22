@@ -31,6 +31,7 @@ const FinancierCopy    = lazy(() => import('./pages/FinancierCopy'))
 const MyFinancierCopies = lazy(() => import('./pages/MyFinancierCopies'))
 const FinancierCopyLog = lazy(() => import('./pages/FinancierCopyLog'))
 const ServiceJobs      = lazy(() => import('./pages/ServiceJobs'))
+const TrackerPage      = lazy(() => import('./tracker/pages/TrackerPage'))
 
 // Placeholder for pages not yet built
 const Soon = ({ name }) => (
@@ -111,6 +112,8 @@ export default function App() {
             <Route path="/my-financier-copies"  element={<ProtectedRoute><MyFinancierCopies /></ProtectedRoute>} />
             <Route path="/financier-copy-log"   element={<ProtectedRoute><FinancierCopyLog /></ProtectedRoute>} />
             <Route path="/vendor-jobs"          element={<ProtectedRoute><ServiceJobs /></ProtectedRoute>} />
+            {/* Phase 10 — opened by the per-person switch only (AuthContext.canAccess) */}
+            <Route path="/tracker"              element={<ProtectedRoute><TrackerPage /></ProtectedRoute>} />
 
             {/* Access rules — always admin-only (hardcoded safety net) */}
             <Route
