@@ -28,6 +28,33 @@ export type Report = {
   context: Record<string, unknown> | null
 }
 
+// A browser extension's own crash (2026-10-22: one user's Urban VPN Proxy sent
+// 8,270 in three days). Same rule as the browser's src/lib/errorSource.js —
+// scripts/selftest-log-error.mjs checks the two agree. Kept here too because a
+// browser still running the old code keeps sending them until it reloads.
+const EXT = /\b((?:chrome|moz|safari-web|safari|ms-browser)-extension:\/\/[^/\s)]+)/
+
+/**
+ * The extension origin when EVERY URL frame of the stack (plus the file the
+ * error came from, if any) belongs to a browser extension; otherwise null.
+ */
+export function extensionOrigin(stack: unknown, file?: unknown): string | null {
+  const urls: string[] = []
+  for (const line of String(stack ?? "").split("\n")) {
+    const m = line.match(/\b[a-z][a-z0-9+.-]*:\/\/[^\s)]+/i)
+    if (m) urls.push(m[0])
+  }
+  if (file) urls.push(String(file))
+  if (urls.length === 0) return null
+  let origin: string | null = null
+  for (const u of urls) {
+    const m = u.match(EXT)
+    if (!m) return null
+    origin = origin ?? m[1]
+  }
+  return origin
+}
+
 /** The report inside a request body, or null when there is no message. */
 export function readReport(body: unknown): Report | null {
   const outer = body && typeof body === "object" ? body as Record<string, unknown> : {}

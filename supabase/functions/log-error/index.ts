@@ -21,7 +21,7 @@ import { rateLimit } from "../_shared/rateLimit.ts"
 import { jsonResponse, preflight } from "../_shared/cors.ts"
 // The report is read from callEdge's { action, payload } envelope (or a flat
 // body) — reading only the top level refused every report ever sent (report.ts).
-import { readReport } from "./report.ts"
+import { extensionOrigin, readReport } from "./report.ts"
 
 Deno.serve(async (req: Request) => {
   const json = (b: unknown, status = 200) => jsonResponse(req, b, status)
@@ -66,12 +66,26 @@ Deno.serve(async (req: Request) => {
   const report = readReport(body)
   if (!report) return json({ error: "message required" }, 400)
 
+  // A browser extension's own crash: one row per user, extension and day,
+  // labelled. The browser already holds itself to that; this covers a browser
+  // still running the old code.
+  let context = report.context
+  const ext = extensionOrigin(report.stack, context?.file)
+  if (ext) {
+    const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString()
+    const { data: seen } = await admin.from("error_log").select("id")
+      .eq("user_id", u.user.id).gte("created_at", since)
+      .like("stack", `%${ext}/%`).limit(1)
+    if (seen && seen.length > 0) return json({ ok: true, skipped: "extension already logged today" })
+    context = { ...(context ?? {}), source: "extension", extension: ext }
+  }
+
   const { error } = await admin.from("error_log").insert({
     user_id: u.user.id,
     url: report.url,
     message: report.message,
     stack: report.stack,
-    context: report.context,
+    context,
   })
   if (error) return json({ error: error.message }, 500)
   return json({ ok: true })
