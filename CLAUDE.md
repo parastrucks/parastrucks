@@ -45,9 +45,10 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   sessions) · `canAccess('/tracker')` from the session's app_metadata only · Employees "Tracker" button ·
   migration `20261021_phase10_tracker_supersede.sql` (rebill, 19/0 staging, LF md5 `6b89c377…`).
   `selftest-vehicle-units` **528/0**, mutants caught, `deno check` clean, deployed = repo.
-  ⏳ **Owner runs** `$env:PROBE_PASSWORD = '…'; node scripts/phase10/probe-ef-tracker.mjs; Remove-Item Env:\PROBE_PASSWORD`
-  (leaves 2 DEMO rows on staging) + looks at the Employees button as admin. ⏭️ Then Stage 2 (Univer grid
-  + save adapter). ⭐ Same cell twice in one save is refused — the SQL alone lets the later one win.
+  ✅ **Live probe 2026-10-22 (owner ran it): 133/5, all five the probe's own wrong expectation**
+  (unknown action = 400 for everyone, as the self-test says) — probe fixed. Switch-off refused the same
+  token on its next call. Staging keeps DEMO rows `DEMO-PROBE-202610220945` (original + rebill).
+  Employees button seen as admin. ⏭️ **Stage 2 (Univer grid + save adapter).** ⭐ Same cell twice in one save is refused — the SQL alone lets the later one win.
   ⭐ Deno type-check without installing: `npm i deno@2.5.6` in a scratch dir → `deno check --no-config --no-lock`.
 
 ## Current state (2026-10-21, later) — Phase 10 grid comparison

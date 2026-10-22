@@ -47,9 +47,13 @@ Owner: *"Continue."* Branch `10b-foundation` (`8d036bb` → `12e23df`). Staging 
 - **Proof:** `selftest-vehicle-units` 528/0 (incl. drift against the migration; four authority mutants
   each fail it); `deno check` clean (Deno via npm in a scratch dir — no install in the repo); build +
   `no-undef` clean; both functions deployed to staging, downloaded back = repo; unauthenticated → 401.
-- ⏳ **Waiting for the owner:** `probe-ef-tracker.mjs` (needs the staging password) — including the
-  claim that switching someone off refuses their same token on its next call. And a look at the
-  Employees button signed in as admin.
+- ✅ **2026-10-22, owner ran the live probe: 133 passed, 5 failed — all five the probe's own error**
+  (it expected 403 for an unknown action from users without the switch; the gate says "Unknown
+  action" (400) to everyone first, as the offline self-test specifies). Probe corrected. Held live:
+  switch-off refused the same token on its very next call; only admin flips it; the write path end to
+  end. Staging keeps the dummy rows `DEMO-PROBE-202610220945` (original + rebill). The owner also saw
+  the Employees button and dialog as admin. (First attempt failed on a mistyped password; the Node
+  "Assertion failed … async.c" line after an early exit is a harmless Windows crash on exit.)
 
 ## Session log — 2026-10-21 (PC, later): Phase 10 Stage 1 — the column map and the schema, on staging
 

@@ -551,7 +551,7 @@ grants + RLS).
   `reference_portal_sql_workflow`); PGlite rig = `run.mjs` creating the three roles, then migration,
   then probe.
 
-### Step 3 🔨 — the Edge Function + the access switch: BUILT, ON STAGING, live probe waiting for the owner (`8d036bb` → `12e23df`)
+### Step 3 🔨 — the Edge Function + the access switch: BUILT, ON STAGING, PROVED LIVE 2026-10-22 (`8d036bb` → `12e23df`)
 
 **`supabase/functions/admin-vehicle-units/`** (the 11th function; staging only, `--no-verify-jwt`):
 - `authority.ts` — `ROLE_GATES`, asked once before any payload is read (the payments pattern). Only
@@ -597,13 +597,17 @@ admin-only "Tracker" button per row (desktop + phone; adds no rows) → a two-sw
   dropped → 2 · export flag alone opens it → 14).
 - `deno check` (Deno 2.5.6, installed in a scratch dir via npm) clean for both functions; build and
   `no-undef` clean. Deployed source downloaded back = repo for all five files; unauthenticated → 401.
-- ⏳ **`scripts/phase10/probe-ef-tracker.mjs` — the live probe — needs the owner** (staging password):
-  `$env:PROBE_PASSWORD = '…'; node scripts/phase10/probe-ef-tracker.mjs; Remove-Item Env:\PROBE_PASSWORD`.
-  It checks every account × action at the gate, that only admin flips the switch, that **the same
-  token gets in once switched on and is refused on its very next call once switched off**, and the
-  whole write path. It writes: svc.exec@'s switch on then off; **two DEMO rows left on staging**
-  (original + rebill — Stage 2's first rows) with one note and one colour; two layouts it deletes again.
-- ⏳ Not yet seen in a browser: the Employees button and dialog (needs admin signed in on localhost).
+- ✅ **Live probe `scripts/phase10/probe-ef-tracker.mjs`, run by the owner 2026-10-22: 133 passed, 5
+  failed — all five the PROBE's mistake**: it expected an unknown action from a user without the
+  switch to get 403, but the gate answers "Unknown action" (400) first for everyone — exactly what
+  the offline self-test specifies. Probe corrected; the function was right. Everything else held as
+  real logins: only admin flips the switch; **the same token got in once switched on and was refused
+  on its very next call once switched off**; incentives hidden; export vs copy; the whole write path.
+  Left on staging (dummy, Stage 2's first rows): chassis `DEMO-PROBE-202610220945` (original +
+  rebill), one note, one colour; svc.exec@ signed out; switches back to nobody.
+  Re-run: `$env:PROBE_PASSWORD = '…'; node scripts/phase10/probe-ef-tracker.mjs; Remove-Item Env:\PROBE_PASSWORD`.
+- ✅ Employees button + dialog seen by the owner signed in as admin (2026-10-22): two switches, the
+  download one disabled until access is ticked.
 
 Not built here, on purpose: editing incentive figures (read only so far — needs its own audited
 path for admin + HR); deleting a note; the import wizard and revert-import (Stage 6 per the build

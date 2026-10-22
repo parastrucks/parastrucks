@@ -110,8 +110,10 @@ for (const [email, w] of Object.entries(who)) {
     else check(r.status === 403 && r.body.error === 'No access to the vehicle tracker', `A ${email} ${action}: expected refused`, r)
     if (r.status === 200 && ['createUnit'].includes(action)) check(r.body.ok === false, `A ${email} createUnit {} must not create`, r)
   }
+  // an unknown action is refused as unknown (400) for everyone, before the access check — the same
+  // rule selftest-vehicle-units holds offline; it names nothing and does nothing
   const u = await T(w.token, 'dropTable', {})
-  check(u.status === (hasAccess(w) ? 400 : 403), `A ${email} unknown action`, u)
+  check(u.status === 400 && /Unknown action/.test(u.body.error ?? ''), `A ${email} unknown action`, u)
 }
 
 // ── B. the switch itself: only admin may flip it ─────────────────────────────────────────────
