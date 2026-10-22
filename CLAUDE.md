@@ -30,6 +30,18 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ---
 
+## Current state (2026-10-22) — Phase 10 Stage 2 under way (the grid)
+
+- **🔨 `/tracker` works on STAGING, branch `10b-foundation`:** Univer 1.1.0 (free presets, exact
+  versions, lazy chunk only) shows the book; **typing, paste, fill and undo save** through the Edge
+  Function — each seen in the owner's Chrome and checked in the DB (slices 1–2, `6a9455f` → `5f38233`).
+  Migration `20261022_phase10_tracker_numeric_before.sql` on staging (false conflict on 1310.50 vs
+  1310.5; probe 9/0). `selftest-tracker-cells` **88/0**. 2,050 DUMMY rows on staging (`DEMO-*`).
+  ⭐ Money shows in lakhs; dates dd/mm/yy and typed day first (measured). ⭐ Put-backs are written as a
+  mutation so they never reach the undo stack. ⭐ Each Univer mount needs its own element (dev
+  double-mount). ⏭️ Slices 3–5: new rows, formatting + notes, layouts/search/copy-for-mail. Record:
+  plan → "STAGE 2".
+
 ## Current state (2026-10-21, latest) — Phase 10 Stage 1 under way
 
 - **🔨 Phase 10 Stage 1 on branch `10b-foundation` (from `portal`), STAGING ONLY.** Step 1 ✅ column map

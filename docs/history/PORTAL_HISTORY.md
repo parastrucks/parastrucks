@@ -26,6 +26,22 @@
 
 ---
 
+## Session log — 2026-10-22 (PC): Phase 10 Stage 2 slices 1–2 — the grid shows the book and saves
+
+Owner: *"yes start stage 2"*. Branch `10b-foundation` (`6a9455f` → `5f38233`). Staging only.
+⭐ Full record: `docs/backlog/phase10-execution-plan.md` → "STAGE 2".
+- `/tracker` (lazy; Univer only in its own chunk, 1.85 MB gzip; its CSS cannot restyle other pages)
+  shows 2,050 dummy rows with the workbooks' headers, frozen chassis column, lakh money, dd/mm/yy dates.
+- The save adapter: typing, an Excel-style paste, a fill-drag and undo all saved through the Edge
+  Function and each was checked in the database (labels, one batch per action, no fake blanks,
+  recomputed totals shown); bad values, formulas, worked-out columns, conflicts and row inserts are
+  refused in plain words.
+- Found by doing: a stored 1310.50 vs a browser's 1310.5 would have been a false conflict (migration +
+  probe 9/0, old function fails 3); a paste stripped the column's number format; React's dev
+  double-mount drew a second engine at 0 × 0; the dummy-data generator cycled (identical rows — looked
+  like a sort bug until the database showed the rows really were identical).
+- `selftest-tracker-cells` 88/0; `selftest-vehicle-units` 528/0; build + no-undef clean.
+
 ## Session log — 2026-10-21 (PC, latest): Phase 10 Stage 1 step 3 — the tracker's Edge Function and access switch, on staging
 
 Owner: *"Continue."* Branch `10b-foundation` (`8d036bb` → `12e23df`). Staging only; prod untouched.

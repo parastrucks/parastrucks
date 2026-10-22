@@ -616,6 +616,65 @@ order — Stage 2 needs only the one-off scripted sandbox load, which can write 
 **Next:** the owner runs the probe → Stage 2, the Univer grid + the save adapter (its 8 duties above).
 Still owner-side: **the date Excel goes read-only**.
 
+## 🔨 STAGE 2 — THE GRID, STARTED 2026-10-22 (owner: "yes start stage 2")
+
+Same branch (`10b-foundation`). Built in slices, each seen working in the owner's Chrome on staging
+dummy data and checked in the database.
+
+### Slice 1 ✅ — `/tracker` shows the book in Univer (`6a9455f`)
+- Univer **1.1.0 free presets, exact versions** (core, filter, sort, find, notes, conditional
+  formatting, dropdowns). Lockfile: 134 added, **0 changed, 0 removed**. Audit: no high (CI gate holds);
+  the new `fflate` moderate is jspdf's, not Univer's.
+- Lazy route `/tracker` + nav entry (Back Office Tools); shown only by the per-person switch.
+  **Univer lives only in the TrackerPage chunk (1.85 MB gzip)** — the entry chunk has none. Its CSS has
+  no element/html/body rules (its two `*` rules only define `--univer-tw-*` variables), so visiting
+  the tracker cannot restyle other pages.
+- Measured in the grid: **money in lakhs** — `18,67,000`, `-1,20,468` (formats allow two conditions,
+  so a figure ≥ 1 crore shows as `150,00,000`; four-section patterns are ignored); **dates dd/mm/yy,
+  and typing `05/07/25` gives 5 July** (serial 45843 — the column's format steers the parse).
+- ⚠️ **React's dev double-mount left a second Univer drawn at 0 × 0** in a shared element; each mount
+  now gets its own element (the spike only dodged it with `?strict=0`).
+- **2,050 DUMMY rows on staging** (`scripts/phase10/gen-demo-rows.mjs`; chassis `DEMO-*`,
+  `source_file = 'DEMO seed'`). ⚠️ Its first random generator cycled (plain-JS LCG losing precision),
+  so the load has runs of identical rows — harmless; the generator now uses mulberry32.
+
+### Slice 2 ✅ — the save adapter (`d25d8a1`, `5f38233`)
+Each checked in the database on staging:
+
+| Done in the grid | Result |
+|---|---|
+| typed `20,00,000` into CTC | saved as 2000000; Retention + Total recomputed by the server and shown; audit "typed" |
+| Ctrl+Z | saved back, audit "undo" |
+| Excel-style 3×2 paste of lakh text | 6 numbers, **one** batch, "paste"; cells keep the lakh format |
+| fill-drag over 3 rows | 3 changes, one batch, "fill", **no fake blanks** |
+| `5K`, `=1+1` into CTC | refused by name, old value back |
+| typing into Retention | refused at edit start |
+| a row changed by someone else meanwhile | conflict; the cell shows their value |
+| right-click → Insert row / delete row | refused with a notice; the book unchanged |
+| sort by CTC, then edit the top row | saved to the right truck; the sort wrote nothing |
+
+- **Migration `20261022_phase10_tracker_numeric_before.sql` (STAGING):** a stored `1310.50` against a
+  browser's `1310.5` was a false conflict (before-values compared as text only). Now a conflict needs
+  the values to differ as text AND as jsonb values. `probe-numeric-before.sql` **9/0** on PGlite and
+  staging; the old function fails 3. LF body md5 `2a215c45…`.
+- `src/tracker/lib/savePlan.js` — duties 2, 3, 4, 6 (each cell's LAST value is judged, so a fill's
+  passing blank is never refused). `TrackerGrid` — row → id list re-read after every sort (a paste over
+  the id column is written back); put-backs and server figures written as a **mutation, off the undo
+  stack**; pasted cells get their column's style back (a paste had left money as `2200000`); structural
+  commands cancelled. `TrackerPage` — one save at a time, a request id per save (retries replay),
+  server rows are the truth, retry 1/3/8 s then a Retry button, leave-page warning while unsaved.
+- `scripts/phase10/selftest-tracker-cells.mjs` **88/0**; two planted planner bugs each caught.
+- ⚠️ One undo save took three tries (~4 s) once and did not recur; failures now log their reason
+  (`[tracker] save attempt N failed: …`) — watch for it.
+
+### ⏭️ Still to build in Stage 2
+3. **New rows** — typing/pasting below the last row (chassis first) + quick entry.
+4. **Formatting + notes** — cell colours saved to `unit_cell_formats` (duty 7); Univer notes ↔
+   `unit_cell_notes`; the colour-rule for AL Payment Status.
+5. **Layouts, search by last 6 digits, Copy for mail, row history** — then the one-off scripted
+   sandbox load (needs the owner's decision: real data on staging or the pilot on prod).
+Also: a phone view (read-only cards) and the local save queue across reloads (E5) are not built.
+
 ## ⏸️ PARKED — 2026-08-20 (owner: "put this on the back burner again")
 
 **Planning is complete and approved. Nothing is half-built.** No schema, no Edge Function,
