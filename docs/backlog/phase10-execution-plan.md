@@ -706,17 +706,62 @@ entries, both kept).
 - Not built: "repeat last gatepass × N" (F1) — fill-drag down a column already does it once the
   chassis numbers are in; revisit if the team asks.
 
+### Slice 4 ✅ — colours and notes (`74c9eaa`, 2026-10-22; `portal` #136 merged in first, `8c659fd`)
+No server change: `setFormats`/`listFormats`/`addNote`/`listNotes` from step 3 were enough.
+
+- **Measured first (in the owner's Chrome):** a fill change arrives as the SAME `SheetValueChanged`
+  event as a value, and so do its undo and redo · a value-only mutation keeps a cell's style · ⚠️
+  **Univer leaves a note at its sheet position when the book is sorted** (the truck went from row 2055
+  to row 3, the note stayed on 2055) · the note editor reports after each PAUSE in typing (four key
+  presses → one update), and `Before…` note events fire from the menu but NOT from facade calls ·
+  `silent: true` on the note mutations does not stop the note events.
+- **Colours = duty 7.** After any change the grid reads each touched cell's look; what is saved is the
+  person's part only — the style minus the column's, **never the number format** (the column owns it)
+  — `src/tracker/lib/cellFormats.js` (pure). Only what differs from what was saved goes out (one
+  `setFormats`, ≤2000). Undo/redo are covered by the same path. Put-backs now write the value only, so
+  a refused value no longer wipes a yellow. A paste keeps only the source's FILL (not Excel's font,
+  size, borders on every cell). "Clear format" that strips a money cell's lakh format gets it back.
+  A new row's pasted fill is reported when the row gets its id.
+- **AL Payment Status is green as a COLUMN** (#C6EFCE), like the locked grey: the workbooks have it on
+  all 2,049 cells whatever the value (`Cash Invoiced` / `IBND`), so it was a column fill, not a
+  rule. ❓ Owner: should the colour depend on the value instead?
+- **Notes = Excel's model:** one note per cell. Each saved version is a NEW `unit_cell_notes` row
+  (add-only — that is its history); the cell shows the latest. Saved 2.5 s after the note settles.
+  The grid keeps notes by truck and **redraws them after load and after every sort** (silent
+  mutations — off the undo stack; its own flag ignores the events they raise). A note needs a vehicle
+  (spare rows refuse); **removing a saved note is refused** — not built (no deletion marker in the
+  table yet). ⚠️ `addNote` is not replay-safe: a retry after a lost answer stores the version twice
+  (the cell still shows the right text).
+- Seen in Chrome on staging, each checked in the DB:
+
+| Done | Result |
+|---|---|
+| yellow fill on a Model cell | saved as `{"bg":{"rgb":"#FFFF00"}}` only; back after a reload |
+| red fill, then Ctrl+Z | saved as `{}` |
+| a fill, then "clear format" on CTC | fill gone, lakh money kept |
+| `5K` into a yellow CTC | refused, old value back, **yellow kept** |
+| Add Note from the menu, typed, clicked away | "Saving…" while it settled, then ONE row with its author |
+| sort the book | the note and the yellow both moved with the truck (2055 → 3) |
+| Delete Note from the menu | refused: "A saved note cannot be removed yet — change its text instead." |
+| AL Payment Status | green from the first row to the last spare row |
+
+- `selftest-tracker-cells` **113/0** (13 colour checks + 1 added when a planted "number format saved"
+  bug first survived — the toolbar case was missing). Build + no-undef clean.
+- Staging now also holds DUMMY: formats on DEMO-NEWROW-0004 (Model + CTC yellow) and -0003 (`{}`);
+  notes "DEMO note: held for finance" (DEMO-NEWROW-0003 Model) and two "hand test" notes on
+  DEMO-MB1AR0000517 / DEMO-MB1AT0002049 Model, written by a console test (the event saves are real).
+
 ### ⏭️ Still to build in Stage 2
-4. **Formatting + notes** — cell colours saved to `unit_cell_formats` (duty 7); Univer notes ↔
-   `unit_cell_notes`; the colour-rule for AL Payment Status.
 5. **Layouts, search by last 6 digits, Copy for mail, row history** — then the one-off scripted
    sandbox load (needs the owner's decision: real data on staging or the pilot on prod).
 Also: a phone view (read-only cards) and the local save queue across reloads (E5) are not built.
 
 ### Where things stand (2026-10-22, after slice 3) — resume here
-- Branch `10b-foundation`, pushed and clean. Next: **slice 4, formatting + notes.** (The 2026-10-22
+- Branch `10b-foundation`, pushed and clean. Slice 4 ✅. Next: **slice 5 — layouts, search by the
+  last six digits, Copy for mail, row history.** (The 2026-10-22
   pause for the PI hotfix is over; `portal` is merged in up to `e7fcb82`.)
-- **On staging now:** migrations `…_foundation`, `…_supersede`, `…_numeric_before`, `…_create_units`; Edge Functions
+- **On staging now:** migrations `…_foundation`, `…_supersede`, `…_numeric_before`, `…_create_units`;
+  (slice 4 added no migration — dummy formats and notes only, listed under slice 4); Edge Functions
   `admin-vehicle-units` and `admin-users` (with the tracker actions) as in this branch; 2,052 tracker
   rows (2,050 `DEMO seed` + the probe's original and rebill); test edits from slice 2 on dummy rows
   (CTC/CTD on a few DEMO trucks, Segment → TIPPER on three, "DEMO AFTER SORT" on DEMO-MB1AS0000345,
@@ -730,7 +775,7 @@ Also: a phone view (read-only cards) and the local save queue across reloads (E5
   (`--no-verify-jwt`; the 11th function joins the key-cutover roster), then the frontend.
 - Owner questions still open: tippers always 18% GST? · the AL-ledger proposal (Stage 6) · the stray
   cells · **sandbox load: real data on staging, or the pilot on prod behind the switch?** · the date
-  the Excel files go read-only.
+  the Excel files go read-only · AL Payment Status colour by value, or the whole column (as now)?
 
 ## ⏸️ PARKED — 2026-08-20 (owner: "put this on the back burner again")
 

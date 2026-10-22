@@ -48,6 +48,11 @@ Owner: *"yes start stage 2"*. Branch `10b-foundation` (`6a9455f` → `5f38233`).
   edit raced 50 ms behind its create, a 3-row paste with a duplicate (2 created in one batch, the
   duplicate emptied and named), a cell before its chassis cleared. Found by doing: the button kept
   the keyboard until it opened the cell editor. `selftest-tracker-cells` 99/0.
+- **Slice 4 — colours and notes** (`74c9eaa`; no server change): a person's fill/bold/colour is saved
+  as the style minus the column's (never the number format), undo included; AL Payment Status green as
+  a column (as in the workbooks); one note per cell with every version kept, redrawn after each sort
+  because Univer leaves notes at their old position (measured). Seen on staging and checked in the DB.
+  `selftest-tracker-cells` 113/0.
 
 ## Session log — 2026-10-21 (PC, latest): Phase 10 Stage 1 step 3 — the tracker's Edge Function and access switch, on staging
 

@@ -44,8 +44,11 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   (one savepoint per row, replayable; probe 18/0) + EF `createUnits` (550/0). `selftest-tracker-cells`
   **99/0**. ⭐ A new row has a temporary `new:…` id until the server answers; edits typed meanwhile
   are re-pointed. ⭐ A page button keeps the keyboard from Univer — open the cell editor
-  (`startEditing()`). ⏭️ Slices 4–5: formatting + notes, layouts/search/copy-for-mail. Record:
-  plan → "STAGE 2".
+  (`startEditing()`). ✅ **Slice 4, colours + notes** (`74c9eaa`, no server change): the person's
+  part of a cell's style is saved (never the number format), notes one per cell with history.
+  `selftest-tracker-cells` **113/0**. ⭐ Univer leaves notes at their sheet position on a sort — the
+  grid redraws them by truck. ⭐ A style change arrives as `SheetValueChanged`, undo included.
+  ⏭️ Slice 5: layouts/search/copy-for-mail/row history. Record: plan → "STAGE 2".
 - **The PI hotfix pause is over** — `origin/portal` (`e7fcb82`) is merged INTO `10b-foundation`.
   ⚠️ **Any future hotfix still branches from `origin/portal`, never from `10b-foundation`** — this
   branch adds Univer (package.json + lockfile), `/tracker`, the Employees Tracker button,
