@@ -796,7 +796,10 @@ function ErrorsTab() {
                   <td style={{ fontSize: 12, whiteSpace: 'nowrap' }}>{new Date(r.created_at).toLocaleString()}</td>
                   <td style={{ fontSize: 13 }}>{userLabel(r)}</td>
                   <td style={{ fontSize: 12, fontFamily: 'monospace' }} title={r.url || ''}>{truncate(r.url, 48)}</td>
-                  <td style={{ fontSize: 13 }} title={r.message || ''}>{truncate(r.message, 120)}</td>
+                  <td style={{ fontSize: 13 }} title={r.message || ''}>
+                    {r.context?.source === 'extension' && <span style={{ color: 'var(--gray-500)' }}>Browser extension · </span>}
+                    {truncate(r.message, 120)}
+                  </td>
                 </tr>
               ))}
             </tbody>
