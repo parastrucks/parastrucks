@@ -31,7 +31,7 @@ export const canManageSharedViews = (c: Caller) => isAdmin(c)
 // unknown and refused. Per-row ownership (a personal layout) is checked in the action itself.
 export const ACTIONS = [
   "list", "history", "listNotes", "listFormats", "listViews",
-  "applyChanges", "createUnit", "supersedeUnit", "addNote", "setFormats",
+  "applyChanges", "createUnit", "createUnits", "supersedeUnit", "addNote", "setFormats",
   "saveView", "deleteView", "logExport",
 ] as const
 export type Action = typeof ACTIONS[number]
@@ -44,6 +44,7 @@ export const ROLE_GATES: Record<Action, (c: Caller) => boolean> = {
   listViews:     hasTrackerAccess,
   applyChanges:  hasTrackerAccess,
   createUnit:    hasTrackerAccess,
+  createUnits:   hasTrackerAccess,
   supersedeUnit: hasTrackerAccess,
   addNote:       hasTrackerAccess,
   setFormats:    hasTrackerAccess,

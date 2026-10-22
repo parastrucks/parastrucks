@@ -72,6 +72,19 @@ export function validateValues(values: unknown, opts: { requireChassis: boolean 
   return rejected.length ? { ok: false, rejected } : { ok: true, clean }
 }
 
+// createUnits: [{ column: value, ... }] — new rows typed or pasted below the book. Each row is
+// judged on its own: one bad row is reported by position and the others still go to the database
+// (tracker_create_units gives each its own savepoint). The same checks run again on a retry, so a
+// replayed request sends the database the same rows in the same order.
+export const MAX_NEW_ROWS = 200
+export function validateNewRows(rows: unknown):
+  { ok: true; rows: ({ ok: true; clean: Record<string, string | number | null> } | { ok: false; rejected: Rejection[] })[] }
+  | { ok: false; error: string } {
+  if (!Array.isArray(rows) || rows.length === 0) return { ok: false, error: "rows must be a non-empty list" }
+  if (rows.length > MAX_NEW_ROWS) return { ok: false, error: `too many new rows in one save (${rows.length} > ${MAX_NEW_ROWS})` }
+  return { ok: true, rows: rows.map((values) => validateValues(values, { requireChassis: true })) }
+}
+
 // list: which stored columns to read. Unknown names are an error (a typo in a layout must not
 // silently show an empty column); screen-only names are fine and simply not read.
 export function planRead(columns: unknown, seeIncentives: boolean):

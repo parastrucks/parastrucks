@@ -24,7 +24,7 @@ import { type Caller, gate, canSeeIncentives, canExport, canManageSharedViews, c
 import { INCENTIVE_COLUMNS, isIncentive } from "./columns.ts"
 import {
   EDIT_SOURCES, isUuid, isKnownColumn, planRead, requestKey,
-  validateChanges, validateFormats, validateLayoutColumns, validateValues,
+  validateChanges, validateFormats, validateLayoutColumns, validateNewRows, validateValues,
 } from "./validate.ts"
 
 const PAGE = 1000          // PostgREST's row cap; `list` pages at it
@@ -329,6 +329,39 @@ Deno.serve(async (req: Request) => {
         if (error) { const d = dbError(error); return json({ error: d.error }, d.status) }
         const [row] = await rowsById([id as string])
         return json({ ok: true, id, row })
+      }
+
+      // ── New rows typed or pasted below the book: many at once, each judged on its own ──────
+      // Result, in the order sent: [{ ok: true, id, row } | { ok: false, rejected: [...] }].
+      case "createUnits": {
+        const key = requestKey(caller.id, payload.client_request_id)
+        if (!key) return json({ error: "client_request_id required (8–100 characters)" }, 400)
+        if (payload.batch_id !== undefined && !isUuid(payload.batch_id)) return json({ error: "bad batch id" }, 400)
+        const v = validateNewRows(payload.rows)
+        if (!v.ok) return json({ error: v.error }, 400)
+        const sendable = v.rows.flatMap((r, i) => (r.ok ? [{ i, clean: r.clean }] : []))
+        const results: Record<string, unknown>[] = v.rows.map((r) => (r.ok ? {} : { ok: false, rejected: r.rejected }))
+        let replayed = false
+        if (sendable.length) {
+          const { data, error } = await admin.rpc("tracker_create_units", {
+            p_actor: caller.id,
+            p_batch: (payload.batch_id as string | undefined) ?? crypto.randomUUID(),
+            p_rows: sendable.map((s) => s.clean),
+            p_request_id: key,
+          })
+          if (error) { const d = dbError(error); return json({ error: d.error }, d.status) }
+          const db = data as { results: { ok: boolean; id?: string; reason?: string }[]; replayed: boolean }
+          replayed = db.replayed
+          const made = db.results.flatMap((r) => (r.ok && r.id ? [r.id] : []))
+          const byId = new Map((made.length ? await rowsById(made) : []).map((row) => [row.id as string, row]))
+          sendable.forEach((s, k) => {
+            const r = db.results[k]
+            results[s.i] = r?.ok
+              ? { ok: true, id: r.id, row: byId.get(r.id as string) ?? null }
+              : { ok: false, rejected: [{ unit_id: null, column: "chassis_no", reason: r?.reason ?? "not created" }] }
+          })
+        }
+        return json({ ok: true, results, replayed })
       }
 
       // ── Cancel / rebill: close the old row, open a new one, in one transaction ──────────

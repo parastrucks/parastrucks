@@ -94,7 +94,7 @@ for (const [name, c] of Object.entries(people)) {
   }
   ok(auth.gate('dropTable', c).ok === false && auth.gate('dropTable', c).status === 400, `${name} → unknown action refused`)
 }
-ok(eqSet([...auth.ACTIONS], ['list','history','listNotes','listFormats','listViews','applyChanges','createUnit',
+ok(eqSet([...auth.ACTIONS], ['list','history','listNotes','listFormats','listViews','applyChanges','createUnit','createUnits',
   'supersedeUnit','addNote','setFormats','saveView','deleteView','logExport']), 'the action list is the planned one')
 
 // hasTrackerAccess on its own (gate() checks is_active first; this keeps the second line honest)
@@ -197,6 +197,18 @@ ok(!v.ok, 'quick entry cannot set a system column')
 v = val.validateValues({}, { requireChassis: false })
 ok(v.ok && Object.keys(v.clean).length === 0, 'rebill with nothing new (chassis kept)')
 ok(!val.validateValues([1], { requireChassis: false }).ok && !val.validateValues('x', { requireChassis: false }).ok, 'values must be an object')
+
+// ── validateNewRows (createUnits) ──
+let nr = val.validateNewRows([{ chassis_no: 'MB1A' }, { model: 'no chassis' }, { chassis_no: 'MB1B', ctc: '12,34,567' }, { chassis_no: 'MB1C', tcs: 1 }])
+ok(nr.ok && nr.rows.length === 4, 'new rows: one result per row, in order')
+ok(nr.ok && nr.rows[0].ok && nr.rows[0].clean.chassis_no === 'MB1A', 'new rows: a good row passes')
+ok(nr.ok && !nr.rows[1].ok && nr.rows[1].rejected[0].column === 'chassis_no', 'new rows: no chassis is refused for that row only')
+ok(nr.ok && !nr.rows[2].ok && nr.rows[2].rejected[0].column === 'ctc', 'new rows: lakh text refused (the adapter converts first)')
+ok(nr.ok && !nr.rows[3].ok && nr.rows[3].rejected[0].column === 'tcs', 'new rows: a worked-out column is refused')
+ok(!val.validateNewRows([]).ok && !val.validateNewRows('x').ok && !val.validateNewRows(null).ok, 'new rows: empty or not a list refused')
+ok(val.validateNewRows(Array.from({ length: 200 }, (_, i) => ({ chassis_no: 'C' + i }))).ok, 'new rows: 200 allowed')
+ok(!val.validateNewRows(Array.from({ length: 201 }, (_, i) => ({ chassis_no: 'C' + i }))).ok, 'new rows: 201 refused (database cap is 200)')
+ok(val.MAX_NEW_ROWS === 200, 'new-row cap matches tracker_create_units')
 
 // ── 4. Read plan ──
 let p = val.planRead(['chassis_no', 'ctc', 'dsm_incentive', 'ageing_days'], false)

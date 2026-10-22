@@ -100,7 +100,7 @@ console.log('switch ON at start for:', Object.entries(who).filter(([, w]) => sta
 // ── A. the gate, every account × every action, with payloads that stop before any write ─────
 const STOP = {
   list: { columns: [] }, history: {}, listNotes: {}, listFormats: {}, listViews: {},
-  applyChanges: {}, createUnit: { values: {} }, supersedeUnit: {}, addNote: {}, setFormats: {},
+  applyChanges: {}, createUnit: { values: {} }, createUnits: { rows: [] }, supersedeUnit: {}, addNote: {}, setFormats: {},
   saveView: {}, deleteView: {}, logExport: { kind: 'neither' },
 }
 for (const [email, w] of Object.entries(who)) {
