@@ -37,26 +37,10 @@ import '@univerjs/preset-sheets-data-validation/lib/index.css'
 import '@univerjs/preset-sheets-find-replace/lib/index.css'
 import '@univerjs/preset-sheets-note/lib/index.css'
 import { toCell } from '../lib/cellValues'
+import { STYLES, styleKey, styleWith, formatOf, lostNumberFormat, pastedFormat, baseStyle } from '../lib/cellFormats'
 
-// Indian grouping (18,67,000), measured in Univer 2026-10-22. Formats allow two conditions only, so
-// a figure of a crore or more shows as 150,00,000 — chosen over grouping negatives the Western way,
-// since net refunds are routinely negative lakhs.
-const MONEY = '[<=-100000]-##\\,##\\,##0;[>=100000]##\\,##\\,##0;##,##0'
-// Shown and typed day first. Typing 05/07/25 into a cell with this format gives 5 July (measured).
-const DATE = 'dd/mm/yy'
-
-function styleKey(col) {
-  const kind = col.spec.type === 'date' ? 'date' : col.money ? 'money' : col.spec.type === 'text' ? 'text' : 'num'
-  return col.editable ? kind : `${kind}L`
-}
-
-const STYLES = {
-  hdr: { bl: 1, bg: { rgb: '#E5E7EB' }, tb: 3 },
-  money: { n: { pattern: MONEY } }, moneyL: { n: { pattern: MONEY }, bg: { rgb: '#F3F4F6' } },
-  date: { n: { pattern: DATE } }, dateL: { n: { pattern: DATE }, bg: { rgb: '#F3F4F6' } },
-  text: { n: { pattern: '@' } }, textL: { n: { pattern: '@' }, bg: { rgb: '#F3F4F6' } },
-  num: {}, numL: { bg: { rgb: '#F3F4F6' } },
-}
+// Column styles (lakh money, dd/mm/yy dates, locked grey, AL Payment Status green) and the person's
+// own formatting on top: lib/cellFormats.js.
 
 // Empty rows kept below the book, as in Excel: a new truck is typed (or a block of them pasted)
 // straight into them. The page asks for more before they run out (ensureSpare). At least the
@@ -67,7 +51,8 @@ const SPARE = 250
 // pasted 12,34,567 lands in a lakh-formatted cell
 const blankLine = (columns) => Object.fromEntries(columns.map((c, ci) => [ci, { s: styleKey(c) }]))
 
-function buildWorkbook(columns, rows) {
+// formats: Map "unitId|column" → the person's saved formatting for that cell
+function buildWorkbook(columns, rows, formats) {
   const idCol = columns.length
   const header = {}
   columns.forEach((c, ci) => { header[ci] = { v: c.label, s: 'hdr' } })
@@ -77,7 +62,8 @@ function buildWorkbook(columns, rows) {
     const line = {}
     columns.forEach((c, ci) => {
       const v = toCell(c.spec, row[c.key])
-      line[ci] = v === null ? { s: styleKey(c) } : { v, s: styleKey(c) }
+      const s = styleWith(c, formats.get(`${row.id}|${c.key}`))
+      line[ci] = v === null ? { s } : { v, s }
     })
     line[idCol] = { v: row.id }
     cellData[ri + 1] = line
@@ -104,14 +90,20 @@ const BLOCKED = ['insert-row', 'insert-col', 'remove-row', 'remove-col', 'delete
   'move-rows', 'move-cols', 'move-range', 'add-worksheet-merge', 'insert-sheet', 'remove-sheet', 'copy-sheet']
 const isBlocked = (id) => BLOCKED.some((b) => id.includes(b))
 
-const TrackerGrid = forwardRef(function TrackerGrid({ columns, rows, onChanges, onRefused }, ref) {
+// NOTES. Univer keeps a note at a sheet POSITION: sorting moves the truck and leaves its note behind
+// (measured 2026-10-22 — a note stayed on row 2055 while its truck went to row 3). So the grid keeps
+// its own "unitId|column" → text map and draws every note at its truck's current row, after the
+// load and after every sort. A person's edit updates the map and is reported to the page.
+// formats / notes: Maps "unitId|column" → saved formatting / note text (read once, at mount)
+const TrackerGrid = forwardRef(function TrackerGrid({ columns, rows, formats, notes, onChanges, onFormats, onNote, onRefused }, ref) {
   const box = useRef(null)
   const api = useRef(null)
   const writeRef = useRef(null)
-  const engine = useRef(null) // { sheet, firstSpare, ensureSpare } while mounted
+  const engine = useRef(null) // { sheet, firstSpare, ensureSpare, drawNotes } while mounted
   const rowIds = useRef([]) // sheet row → unit id (index 0 = header)
-  const handlers = useRef({ onChanges, onRefused })
-  handlers.current = { onChanges, onRefused }
+  const noteText = useRef(new Map()) // "unitId|column" → the note shown
+  const handlers = useRef({ onChanges, onFormats, onNote, onRefused })
+  handlers.current = { onChanges, onFormats, onNote, onRefused }
 
   // The page puts values in: a refused cell back to what it was, a converted value, the recomputed
   // figures after a save. Written as a MUTATION, so it never lands on the person's undo stack —
@@ -125,7 +117,9 @@ const TrackerGrid = forwardRef(function TrackerGrid({ columns, rows, onChanges, 
       for (const { id, key, value } of cells) {
         const r = rowOf.get(id), c = colOf.get(key)
         if (r === undefined || r < 1 || c === undefined) continue
-        out.push({ r, c, v: toCell(columns[c].spec, value), s: styleKey(columns[c]) })
+        // the value only: a cell's style stays as it is (a value-only write keeps it — measured), so
+        // a put-back never wipes someone's yellow
+        out.push({ r, c, v: toCell(columns[c].spec, value) })
       }
       writeRef.current?.(out)
     },
@@ -135,12 +129,24 @@ const TrackerGrid = forwardRef(function TrackerGrid({ columns, rows, onChanges, 
       const idCol = columns.length
       for (const { r, id } of tags) rowIds.current[r] = id
       writeRef.current?.(tags.map(({ r, id }) => ({ r, c: idCol, v: id })))
+      // a new row's look (a pasted yellow row) was not reported while it had no truck: report it now
+      const sheet = engine.current?.sheet()
+      if (!sheet) return
+      const looked = []
+      for (const { r, id } of tags) columns.forEach((col, c) => {
+        const format = formatOf(col, sheet.getRange(r, c).getCellStyleData())
+        if (Object.keys(format).length) looked.push({ id, key: col.key, format })
+      })
+      if (looked.length) handlers.current.onFormats?.(looked)
     },
     retag(oldId, newId) {
       const r = rowIds.current.indexOf(oldId)
       if (r < 1) return
       rowIds.current[r] = newId
       writeRef.current?.([{ r, c: columns.length, v: newId }])
+      for (const [k, text] of [...noteText.current]) {
+        if (k.startsWith(`${oldId}|`)) { noteText.current.delete(k); noteText.current.set(`${newId}|${k.slice(oldId.length + 1)}`, text) }
+      }
     },
     // cells in spare rows, by sheet row: [{ r, key }] → emptied, the column's format kept
     clearAt(cells) {
@@ -156,6 +162,8 @@ const TrackerGrid = forwardRef(function TrackerGrid({ columns, rows, onChanges, 
       const out = columns.map((c, ci) => ({ r, c: ci, v: null, s: styleKey(c) }))
       out.push({ r, c: columns.length, v: null })
       writeRef.current?.(out)
+      for (const k of [...noteText.current.keys()]) if (k.startsWith(`${id}|`)) noteText.current.delete(k)
+      engine.current?.drawNotes()
     },
     // "New vehicle": the chassis cell of the first empty row, scrolled into view and selected
     newVehicle() {
@@ -205,7 +213,7 @@ const TrackerGrid = forwardRef(function TrackerGrid({ columns, rows, onChanges, 
       ],
     })
     api.current = univerAPI
-    const workbook = univerAPI.createWorkbook(buildWorkbook(columns, rows))
+    const workbook = univerAPI.createWorkbook(buildWorkbook(columns, rows, formats))
     if (import.meta.env.DEV) window.__trackerUniver = univerAPI // dev only: lets checks be run from the console
 
     const idCol = columns.length
@@ -236,9 +244,33 @@ const TrackerGrid = forwardRef(function TrackerGrid({ columns, rows, onChanges, 
     }
     writeRef.current = write
 
+    // Notes are drawn as silent MUTATIONS (off the undo stack, no note events), at each truck's
+    // current row. Called at load and after every sort — see "NOTES" above the component.
+    let drawingNotes = false
+    const noteMutation = (id, args) => univerAPI.syncExecuteCommand(id, { unitId: workbook.getId(), sheetId: sheet().getSheetId(), silent: true, ...args })
+    const drawNotes = () => {
+      drawingNotes = true
+      try {
+        for (const n of sheet().getNotes()) noteMutation('sheet.mutation.remove-note', { row: n.row, col: n.col })
+        const rowOf = new Map(rowIds.current.map((id, i) => [id, i]))
+        const colOf = new Map(columns.map((c, i) => [c.key, i]))
+        for (const [k, text] of noteText.current) {
+          const bar = k.indexOf('|')
+          const r = rowOf.get(k.slice(0, bar)), c = colOf.get(k.slice(bar + 1))
+          if (r === undefined || r < 1 || c === undefined) continue
+          noteMutation('sheet.mutation.update-note', {
+            row: r, col: c, note: { id: `n-${r}-${c}`, row: r, col: c, width: 220, height: 90, note: text },
+          })
+        }
+      } finally { drawingNotes = false }
+    }
+    noteText.current = new Map(notes)
+    drawNotes()
+
     const isSpare = (r) => !rowIds.current[r]
     engine.current = {
       sheet,
+      drawNotes,
       firstSpare: () => {
         for (let r = 1; r < rowIds.current.length; r++) if (isSpare(r)) return r
         return -1
@@ -273,9 +305,41 @@ const TrackerGrid = forwardRef(function TrackerGrid({ columns, rows, onChanges, 
       }),
       univerAPI.addEvent(univerAPI.Event.CommandExecuted, (p) => {
         if (p?.type === CommandType.COMMAND) lastCmd = ''
-        // sorting moves whole rows (the id column with them): read the new order
-        if (/sort|reorder/.test(p.id)) readIds()
+        // sorting moves whole rows (the id column with them): read the new order — and put the notes
+        // back on their trucks, since Univer leaves them where they were
+        if (/sort|reorder/.test(p.id)) { readIds(); drawNotes() }
       }),
+      // ── Notes: one per cell, as in Excel. Each saved version is kept on the server (add-only). ──
+      univerAPI.addEvent(univerAPI.Event.BeforeSheetNoteAdd, (p) => {
+        if (drawingNotes) return
+        if (p.row === 0 || p.col >= idCol) { p.cancel = true; return }
+        const id = rowIds.current[p.row]
+        if (!id) {
+          p.cancel = true
+          handlers.current.onRefused?.('A note needs a vehicle — type the chassis number in this row first.')
+        }
+      }),
+      univerAPI.addEvent(univerAPI.Event.BeforeSheetNoteDelete, (p) => {
+        if (drawingNotes) return
+        const id = rowIds.current[p.row]
+        const k = `${id}|${columns[p.col]?.key}`
+        // an empty note never saved may go; a saved one stays (removing notes is not built yet)
+        if (id && noteText.current.has(k)) {
+          p.cancel = true
+          handlers.current.onRefused?.('A saved note cannot be removed yet — change its text instead.')
+        }
+      }),
+      ...['SheetNoteAdd', 'SheetNoteUpdate'].map((name) => univerAPI.addEvent(univerAPI.Event[name], (p) => {
+        if (drawingNotes) return
+        const id = rowIds.current[p.row]
+        const key = columns[p.col]?.key
+        const text = (p.note?.note ?? '').trim()
+        if (!id || !key || !text) return // the editor opens empty; an emptied note is not saved
+        const k = `${id}|${key}`
+        if (noteText.current.get(k) === text) return
+        noteText.current.set(k, text)
+        handlers.current.onNote?.(id, key, text)
+      })),
       // Duty 4, first half: refuse to open the editor on the header, the id column or a worked-out column.
       univerAPI.addEvent(univerAPI.Event.BeforeSheetEditStart, (p) => {
         if (p.row === 0 || p.column >= idCol || !columns[p.column]?.editable) {
@@ -305,19 +369,37 @@ const TrackerGrid = forwardRef(function TrackerGrid({ columns, rows, onChanges, 
         }
         const hint = performance.now() - keyHint.at < 1000 ? keyHint.what : null
         const source = sourceOf(lastCmd) ?? hint ?? 'undo'
-        // A paste brings the source's own styling (fonts, borders, no number format) and the cells
-        // lost the column's format (seen: lakh money shown as 2200000). The book's formats are the
-        // columns': put each pasted cell's column style back.
-        if (source === 'paste') {
-          for (const range of p.effectedRanges || []) {
-            const r0 = range.getRow(), c0 = range.getColumn()
-            for (let i = 0; i < range.getHeight(); i++) for (let j = 0; j < range.getWidth(); j++) {
-              const r = r0 + i, c = c0 + j
-              if (r >= 1 && c < idCol) repair.push({ r, c, s: styleKey(columns[c]) })
-            }
+        // Every book cell this touched — its look is checked below (a style change arrives as this
+        // same event, and so do its undo and redo — measured).
+        const looks = []
+        for (const range of p.effectedRanges || []) {
+          const r0 = range.getRow(), c0 = range.getColumn()
+          for (let i = 0; i < range.getHeight(); i++) for (let j = 0; j < range.getWidth(); j++) {
+            if (r0 + i >= 1 && c0 + j < idCol) looks.push({ r: r0 + i, c: c0 + j })
           }
         }
-        if (repair.length) queueMicrotask(() => write(repair))
+        // A paste brings the source's own look: Excel's font, size and borders on every cell and no
+        // number format (seen: lakh money shown as 2200000). Each pasted cell gets its column's style
+        // back, keeping only the source's fill — a yellow flag copied across stays yellow.
+        if (source === 'paste') {
+          for (const { r, c } of looks) {
+            repair.push({ r, c, s: styleWith(columns[c], pastedFormat(columns[c], sheet().getRange(r, c).getCellStyleData())) })
+          }
+        }
+        queueMicrotask(() => {
+          if (repair.length) write(repair)
+          // duty 7: what each touched cell now looks like. A cell that lost its column's number format
+          // ("clear format") gets it back; the person's part is reported, to be saved.
+          const fix = [], looked = []
+          for (const { r, c } of looks) {
+            const col = columns[c]
+            const style = sheet().getRange(r, c).getCellStyleData() ?? {}
+            if (lostNumberFormat(col, style)) fix.push({ r, c, s: { ...style, n: baseStyle(col).n } })
+            if (rowIds.current[r]) looked.push({ id: rowIds.current[r], key: col.key, format: formatOf(col, style) })
+          }
+          if (fix.length) write(fix)
+          if (looked.length) handlers.current.onFormats?.(looked)
+        })
         if (cells.length || fresh.length) handlers.current.onChanges?.(cells, source, fresh)
       }),
     ]
@@ -334,7 +416,7 @@ const TrackerGrid = forwardRef(function TrackerGrid({ columns, rows, onChanges, 
       if (import.meta.env.DEV) delete window.__trackerUniver
     }
     // Mounted once per data load: after this the engine owns the sheet, and changes come FROM it.
-  }, [columns, rows])
+  }, [columns, rows, formats, notes])
 
   return <div className="trk-grid" ref={box} />
 })

@@ -8,6 +8,7 @@
 // screen and the server are tested with the same rules. Expectations are written out by hand.
 import { fromCell, toCell, isoToSerial, serialToIso, parseTypedDate, parseTypedNumber, sameValue, collapse } from '../../src/tracker/lib/cellValues.js'
 import { planSave, planNewRows, MAX_NEW_ROWS, chunk, refusalMessage } from '../../src/tracker/lib/savePlan.js'
+import { styleKey, formatOf, styleWith, lostNumberFormat, pastedFormat, sameFormat, stable, MONEY } from '../../src/tracker/lib/cellFormats.js'
 import { ageingDays, interestOnAgeing, slab, withScreenColumns, todayIst } from '../../src/tracker/lib/screenColumns.js'
 import { ALL_COLUMNS, COLUMN_BY_KEY, visibleColumns } from '../../src/tracker/lib/columnMeta.js'
 import { COLUMNS, EDITABLE } from '../../supabase/functions/admin-vehicle-units/columns.ts'
@@ -152,6 +153,27 @@ ok(n.creates.length === 1 && !('ctc' in n.creates[0].values) && n.refused[0]?.ke
   'new rows: one bad value is refused and cleared; the vehicle is still added', n)
 ok(MAX_NEW_ROWS === 200, "new-row cap = the Edge Function's")
 ok(refusalMessage([{ label: 'Chassis No', reason: 'x' }], ' Those cells were cleared.') === 'Chassis No: x. Those cells were cleared.', 'refusal message ending for new rows')
+
+// ── cellFormats: what of a cell's look is the person’s (saved) and what is the column’s (never saved)
+const ctc = COLUMN_BY_KEY.ctc, tcs = COLUMN_BY_KEY.tcs, pay = COLUMN_BY_KEY.al_payment_status, model = COLUMN_BY_KEY.model
+ok(styleKey(ctc) === 'money' && styleKey(tcs) === 'moneyL' && styleKey(pay) === 'pay', 'column styles: money, locked money, AL Payment Status green', [styleKey(ctc), styleKey(tcs), styleKey(pay)])
+ok(JSON.stringify(formatOf(ctc, { n: { pattern: MONEY } })) === '{}', 'a plain money cell has nothing of the person’s')
+ok(stable(formatOf(ctc, { n: { pattern: MONEY }, bg: { rgb: '#FFFF00' } })) === stable({ bg: { rgb: '#FFFF00' } }), 'yellow on a money cell = { bg } only (number format never saved)')
+ok(JSON.stringify(formatOf(tcs, { n: { pattern: MONEY }, bg: { rgb: '#F3F4F6' } })) === '{}', 'the grey of a worked-out column is the column’s, not saved')
+ok(stable(formatOf(tcs, { n: { pattern: MONEY }, bg: { rgb: '#FF0000' } })) === stable({ bg: { rgb: '#FF0000' } }), 'red on a worked-out column is saved')
+ok(JSON.stringify(formatOf(pay, { n: { pattern: '@' }, bg: { rgb: '#C6EFCE' } })) === '{}', 'AL Payment Status green is the column’s')
+ok(stable(formatOf(model, { n: { pattern: '@' }, bl: 1, cl: { rgb: '#FF0000' }, bg: null })) === stable({ bl: 1, cl: { rgb: '#FF0000' } }), 'bold + font colour saved; a null key is dropped')
+ok(JSON.stringify(formatOf(ctc, { n: { pattern: '0.00' } })) === '{}', 'a number format changed from the toolbar is never saved (the column owns it)')
+ok(styleWith(ctc, {}) === 'money' && styleWith(ctc, null) === 'money', 'nothing of the person’s → the shared column style')
+const sw = styleWith(ctc, { bg: { rgb: '#FFFF00' }, n: { pattern: '0' } })
+ok(sw.bg?.rgb === '#FFFF00' && sw.n?.pattern === MONEY, 'a saved format cannot replace the column’s number format', sw)
+ok(lostNumberFormat(ctc, { bg: { rgb: '#FFFF00' } }) && !lostNumberFormat(ctc, { n: { pattern: MONEY } }) && !lostNumberFormat(COLUMN_BY_KEY.qty, {}),
+  '"clear format" on money is caught; a column with no number format never is')
+ok(stable(pastedFormat(ctc, { ff: 'Calibri', fs: 11, bd: { b: { s: 1 } }, bg: { rgb: '#FFFF00' } })) === stable({ bg: { rgb: '#FFFF00' } }),
+  'a paste keeps only its fill, not Excel’s font, size and borders')
+ok(JSON.stringify(pastedFormat(ctc, { ff: 'Calibri', fs: 11 })) === '{}', 'a paste with no fill brings nothing')
+ok(sameFormat({ bg: { rgb: '#FF0000' }, bl: 1 }, { bl: 1, bg: { rgb: '#FF0000' } }) && sameFormat(undefined, {}) && !sameFormat({}, { bl: 1 }),
+  'formats compare by content, not key order; missing = empty')
 
 // ── screen columns (workbook formulas)
 ok(ageingDays({ al_payment_date: null }, '2026-10-22') === 0, 'ageing: no AL payment → 0')

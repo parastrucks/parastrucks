@@ -9,7 +9,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import TrackerGrid from '../components/TrackerGrid'
 import { ALL_COLUMNS, COLUMN_BY_KEY } from '../lib/columnMeta'
-import { applyChanges, createUnits, listAll } from '../lib/trackerApi'
+import { addNote, applyChanges, createUnits, listAll, listFormats, listNotes, setFormats } from '../lib/trackerApi'
+import { sameFormat } from '../lib/cellFormats'
 import { chunk, MAX_NEW_ROWS, planNewRows, planSave, refusalMessage } from '../lib/savePlan'
 import { todayIst, withScreenColumns } from '../lib/screenColumns'
 import '../tracker.css'
@@ -18,7 +19,10 @@ const STORED_KEYS = ALL_COLUMNS.filter((c) => !c.screen).map((c) => c.key)
 const RETRY_MS = [1000, 3000, 8000]
 const SLAB_INPUTS = new Set(['dse', 'date_of_retail'])
 // what is still waiting to be saved: cells for edits, rows for new vehicles
-const waitingOf = (queue) => queue.reduce((n, q) => n + (q.kind === 'create' ? q.rows.length : q.changes.length), 0)
+const waitingOf = (queue) => queue.reduce((n, q) => n + (q.kind === 'create' ? q.rows.length
+  : q.kind === 'formats' ? q.formats.length : q.kind === 'note' ? 1 : q.changes.length), 0)
+const MAX_FORMATS = 2000  // the Edge Function's cap for one setFormats
+const NOTE_SETTLE_MS = 2500 // Univer reports a note while it is typed (after each pause); save once it settles
 
 export default function TrackerPage() {
   const [state, setState] = useState({ status: 'loading' })
@@ -32,6 +36,9 @@ export default function TrackerPage() {
   const busy = useRef(false)
   const buffer = useRef({ cells: [], fresh: [], source: 'typed', timer: null })
   const realId = useRef(new Map())  // temporary "new:…" id → the id the server gave it
+  const savedFormat = useRef(new Map()) // "unitId|column" → the formatting last saved (or loaded)
+  const fmtBuffer = useRef({ list: [], timer: null })
+  const noteTimers = useRef(new Map())  // "unitId|column" → { timer, id, key, text } not yet queued
 
   const say = useCallback((text, tone = 'info', sticky = false) => {
     setNotice({ text, tone })
@@ -41,16 +48,22 @@ export default function TrackerPage() {
 
   useEffect(() => {
     let cancelled = false
-    listAll(STORED_KEYS)
-      .then(({ rows, hidden }) => {
+    Promise.all([listAll(STORED_KEYS), listFormats(), listNotes()])
+      .then(([{ rows, hidden }, { formats: fmts }, { notes: noteRows }]) => {
         if (cancelled) return
+        const formats = new Map()
+        for (const f of fmts ?? []) if (Object.keys(f.format ?? {}).length) formats.set(`${f.unit_id}|${f.column_key}`, f.format)
+        savedFormat.current = new Map(formats)
+        // a cell shows its latest note; the earlier versions stay on the server as its history
+        const notes = new Map()
+        for (const n of noteRows ?? []) notes.set(`${n.unit_id}|${n.column_key}`, n.body)
         const hide = new Set(hidden)
         // DSE incentive is worked out on screen from the same figures — hidden with them
         if (hide.size) hide.add('dse_incentive')
         const columns = ALL_COLUMNS.filter((c) => !hide.has(c.key))
         const full = withScreenColumns(rows, todayIst())
         shadow.current = new Map(full.map((r) => [r.id, { ...r }]))
-        setState({ status: 'ready', columns, rows: full })
+        setState({ status: 'ready', columns, rows: full, formats, notes })
       })
       .catch((e) => !cancelled && setState({ status: 'error', message: e.message }))
     return () => { cancelled = true }
@@ -58,7 +71,9 @@ export default function TrackerPage() {
 
   // Leaving with unsaved changes asks first.
   useEffect(() => {
-    const onLeave = (e) => { if (queue.current.length) { e.preventDefault(); e.returnValue = '' } }
+    const onLeave = (e) => {
+      if (queue.current.length || noteTimers.current.size || fmtBuffer.current.list.length) { e.preventDefault(); e.returnValue = '' }
+    }
     window.addEventListener('beforeunload', onLeave)
     return () => window.removeEventListener('beforeunload', onLeave)
   }, [])
@@ -107,14 +122,24 @@ export default function TrackerPage() {
         const cur = shadow.current.get(temp) ?? {}
         shadow.current.delete(temp)
         shadow.current.set(res.id, { ...cur, id: res.id })
-        for (const q of queue.current) for (const c of q.changes ?? []) if (c.unit_id === temp) c.unit_id = res.id
+        for (const q of queue.current) {
+          for (const c of q.changes ?? q.formats ?? []) if (c.unit_id === temp) c.unit_id = res.id
+          if (q.unit_id === temp) q.unit_id = res.id
+        }
+        for (const [k, v] of [...savedFormat.current]) {
+          if (k.startsWith(`${temp}|`)) { savedFormat.current.delete(k); savedFormat.current.set(`${res.id}|${k.slice(temp.length + 1)}`, v) }
+        }
         if (res.row) takeRows([res.row], false)
         if (Object.keys(values).some((k) => SLAB_INPUTS.has(k))) slab = true
         made++
       } else {
         grid.current?.clearRow(temp)
         shadow.current.delete(temp)
-        for (const q of queue.current) if (q.changes) q.changes = q.changes.filter((c) => c.unit_id !== temp)
+        for (const q of queue.current) {
+          if (q.changes) q.changes = q.changes.filter((c) => c.unit_id !== temp)
+          if (q.formats) q.formats = q.formats.filter((c) => c.unit_id !== temp)
+          if (q.unit_id === temp) q.dropped = true
+        }
         const why = res?.rejected?.[0]
         const reason = !why ? 'not created'
           : /already in the book/.test(why.reason) ? 'already in the book'
@@ -134,8 +159,10 @@ export default function TrackerPage() {
   const pump = useCallback(async () => {
     if (busy.current || !queue.current.length) return
     const item = queue.current[0]
-    // edits to a new row the server then refused were dropped from their save
-    if (item.kind !== 'create' && !item.changes.length) { queue.current.shift(); pump(); return }
+    // what belonged to a new row the server then refused was dropped from its save
+    const empty = item.kind === 'formats' ? !item.formats.length : item.kind === 'note' ? item.dropped
+      : item.kind !== 'create' && !item.changes.length
+    if (empty) { queue.current.shift(); pump(); return }
     busy.current = true
     setSaving({ waiting: waitingOf(queue.current), failed: false })
     try {
@@ -145,6 +172,14 @@ export default function TrackerPage() {
         })
         queue.current.shift()
         takeCreated(item, r)
+      } else if (item.kind === 'formats') {
+        await setFormats(item.formats)
+        queue.current.shift()
+      } else if (item.kind === 'note') {
+        // ⚠️ not replay-safe: if the answer is lost and this is retried, the version is stored twice
+        // (the cell still shows the right text; the history has a duplicate)
+        await addNote(item.unit_id, item.column_key, item.body)
+        queue.current.shift()
       } else {
         const r = await applyChanges({
           client_request_id: item.requestId, batch_id: item.batchId, source: item.source, changes: item.changes,
@@ -238,6 +273,43 @@ export default function TrackerPage() {
     if (!buffer.current.timer) buffer.current.timer = setTimeout(flush, 0)
   }, [flush])
 
+  // Formatting the grid reports (after any change, undo included): only what differs from what was
+  // saved goes out. Gathered for a tick, so a new row's create is queued ahead of its colours.
+  const onFormats = useCallback((list) => {
+    fmtBuffer.current.list.push(...list)
+    if (fmtBuffer.current.timer) return
+    fmtBuffer.current.timer = setTimeout(() => {
+      const { list: all } = fmtBuffer.current
+      fmtBuffer.current = { list: [], timer: null }
+      const last = new Map()
+      for (const f of all) {
+        const id = realId.current.get(f.id) ?? f.id
+        last.set(`${id}|${f.key}`, { unit_id: id, column_key: f.key, format: f.format })
+      }
+      const changed = [...last.entries()].filter(([k, f]) => !sameFormat(savedFormat.current.get(k), f.format))
+      if (!changed.length) return
+      for (const [k, f] of changed) savedFormat.current.set(k, f.format)
+      for (const piece of chunk(changed.map(([, f]) => f), MAX_FORMATS)) {
+        queue.current.push({ kind: 'formats', formats: piece })
+      }
+      pump()
+    }, 0)
+  }, [pump])
+
+  // A note is saved once it has settled (Univer reports it after each pause in typing).
+  const onNote = useCallback((id, key, text) => {
+    const k = `${id}|${key}`
+    const cur = noteTimers.current.get(k)
+    if (cur) clearTimeout(cur.timer)
+    const timer = setTimeout(() => {
+      noteTimers.current.delete(k)
+      queue.current.push({ kind: 'note', unit_id: realId.current.get(id) ?? id, column_key: key, body: text })
+      pump()
+    }, NOTE_SETTLE_MS)
+    noteTimers.current.set(k, { timer })
+    setSaving((s) => ({ ...s, waiting: s.waiting || 1 }))
+  }, [pump])
+
   const retry = useCallback(() => {
     for (const q of queue.current) q.attempts = 0
     setNotice(null)
@@ -270,7 +342,8 @@ export default function TrackerPage() {
       {state.status === 'loading' && <div className="trk-loading"><span className="spinner" /> Loading the book…</div>}
       {state.status === 'error' && <div className="trk-error" role="alert">Could not load the book: {state.message}</div>}
       {state.status === 'ready' && (
-        <TrackerGrid ref={grid} columns={columns} rows={rows} onChanges={onChanges} onRefused={(m) => say(m)} />
+        <TrackerGrid ref={grid} columns={columns} rows={rows} formats={state.formats} notes={state.notes}
+          onChanges={onChanges} onFormats={onFormats} onNote={onNote} onRefused={(m) => say(m)} />
       )}
     </div>
   )
