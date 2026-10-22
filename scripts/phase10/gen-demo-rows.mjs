@@ -9,8 +9,17 @@
 // Seeded random numbers: the same N gives the same book.
 
 const N = Number(process.argv[2] || 2050)
+// mulberry32. ⚠️ The first version used `seed * 1103515245 % 2**31` in plain JS numbers: the product
+// passes 2**53 and loses precision, so the sequence cycled and the 2026-10-22 staging load has runs
+// of identical rows (same model, V-part, customer, CTC on different chassis). Harmless, but it looked
+// like a grid bug during the sort check.
 let seed = 20261022
-const rnd = () => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648 }
+const rnd = () => {
+  seed = (seed + 0x6D2B79F5) | 0
+  let t = Math.imul(seed ^ (seed >>> 15), 1 | seed)
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+}
 const pick = (a) => a[Math.floor(rnd() * a.length)]
 const int = (lo, hi) => lo + Math.floor(rnd() * (hi - lo + 1))
 const iso = (d) => d.toISOString().slice(0, 10)

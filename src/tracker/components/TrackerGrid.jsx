@@ -4,13 +4,15 @@
 // (TrackerPage) decides what to save, and tells the grid to put a cell back or show a new value.
 //
 // ROW IDENTITY: sorting moves whole rows, so "sheet row 12" is not a truck. Every row carries its
-// database id in a HIDDEN, LOCKED last column; a change is tied to the id read from that row.
+// database id in a HIDDEN, LOCKED last column. The grid keeps its own row → id list (read at load
+// and after every sort) and ties each change to it — so a paste that reaches the id column cannot
+// detach a row from its truck; the id is simply written back.
 //
 // Rules learned in the spike (docs/backlog/phase10-execution-plan.md → "Rules learned"):
 //   * read with getRawValues(), NEVER getValue(s) — those return formatted text ("2,462,200");
 //   * undo/redo arrive as mutations with no command around them; Ctrl+Z / Ctrl+Y says which, from a
 //     window capture-phase listener registered BEFORE createUniver (Univer takes the keys first);
-//   * fill blanks each target before writing — the page collapses each command (cellValues.collapse).
+//   * fill blanks each target before writing — savePlan judges each cell's LAST value.
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
 import { createUniver, LocaleType, merge, CommandType } from '@univerjs/presets'
 import { UniverSheetsCorePreset } from '@univerjs/preset-sheets-core'
@@ -86,32 +88,35 @@ function buildWorkbook(columns, rows) {
   }
 }
 
+// Commands that would add, remove or move rows/columns, or merge cells. Each row is one truck and
+// is tied to it by the id column, so the book's shape is the database's, not the sheet's.
+const BLOCKED = ['insert-row', 'insert-col', 'remove-row', 'remove-col', 'delete-range-move', 'insert-range-move',
+  'move-rows', 'move-cols', 'move-range', 'add-worksheet-merge', 'insert-sheet', 'remove-sheet', 'copy-sheet']
+const isBlocked = (id) => BLOCKED.some((b) => id.includes(b))
+
 const TrackerGrid = forwardRef(function TrackerGrid({ columns, rows, onChanges, onRefused }, ref) {
   const box = useRef(null)
   const api = useRef(null)
-  const reverting = useRef(false)
+  const writeRef = useRef(null)
+  const rowIds = useRef([]) // sheet row → unit id (index 0 = header)
   const handlers = useRef({ onChanges, onRefused })
   handlers.current = { onChanges, onRefused }
 
-  // The page puts values in (a refused cell back to what it was, recomputed figures after a save).
+  // The page puts values in: a refused cell back to what it was, a converted value, the recomputed
+  // figures after a save. Written as a MUTATION, so it never lands on the person's undo stack —
+  // otherwise Ctrl+Z would undo our put-back and replay what was refused.
   useImperativeHandle(ref, () => ({
     // cells: [{ id, key, value }] — value as the database holds it
     setValues(cells) {
-      const sheet = api.current?.getActiveWorkbook()?.getActiveSheet()
-      if (!sheet) return
-      const idCol = columns.length
-      const n = sheet.getMaxRows()
-      const ids = sheet.getRange(0, idCol, n, 1).getRawValues().map((r) => r[0])
-      const rowOf = new Map(ids.map((id, i) => [id, i]))
-      reverting.current = true
-      try {
-        for (const { id, key, value } of cells) {
-          const r = rowOf.get(id)
-          const c = columns.findIndex((col) => col.key === key)
-          if (r === undefined || r < 1 || c < 0) continue
-          sheet.getRange(r, c).setValue(toCell(columns[c].spec, value) ?? '')
-        }
-      } finally { reverting.current = false }
+      const rowOf = new Map(rowIds.current.map((id, i) => [id, i]))
+      const colOf = new Map(columns.map((c, i) => [c.key, i]))
+      const out = []
+      for (const { id, key, value } of cells) {
+        const r = rowOf.get(id), c = colOf.get(key)
+        if (r === undefined || r < 1 || c === undefined) continue
+        out.push({ r, c, v: toCell(columns[c].spec, value), s: styleKey(columns[c]) })
+      }
+      writeRef.current?.(out)
     },
     univerAPI: () => api.current,
   }), [columns])
@@ -147,19 +152,53 @@ const TrackerGrid = forwardRef(function TrackerGrid({ columns, rows, onChanges, 
       ],
     })
     api.current = univerAPI
-    univerAPI.createWorkbook(buildWorkbook(columns, rows))
+    const workbook = univerAPI.createWorkbook(buildWorkbook(columns, rows))
     if (import.meta.env.DEV) window.__trackerUniver = univerAPI // dev only: lets checks be run from the console
 
     const idCol = columns.length
+    const sheet = () => univerAPI.getActiveWorkbook().getActiveSheet()
+    const readIds = () => {
+      rowIds.current = sheet().getRange(0, idCol, sheet().getMaxRows(), 1).getRawValues().map((r) => r[0])
+    }
+    readIds()
+
+    let reverting = false
+    // cells: [{ r, c, v?, s? }] — straight into the sheet, not through the undo stack. A cell given
+    // only `s` keeps its value (restyle); one given `v` gets that value.
+    const write = (cells) => {
+      if (!cells.length) return
+      const cellValue = {}
+      for (const cell of cells) {
+        const out = {}
+        if ('v' in cell) out.v = cell.v ?? null
+        if (cell.s) out.s = cell.s
+        ;(cellValue[cell.r] ??= {})[cell.c] = out
+      }
+      reverting = true
+      try {
+        univerAPI.syncExecuteCommand('sheet.mutation.set-range-values', {
+          unitId: workbook.getId(), subUnitId: sheet().getSheetId(), cellValue,
+        })
+      } finally { reverting = false }
+    }
+    writeRef.current = write
+
     let lastCmd = ''
     const subs = [
       univerAPI.addEvent(univerAPI.Event.BeforeCommandExecute, (p) => {
+        if (isBlocked(p.id)) {
+          p.cancel = true
+          handlers.current.onRefused?.('Rows and columns cannot be added, removed, moved or merged here — each row is one vehicle.')
+          return
+        }
         if (p?.type === CommandType.COMMAND) lastCmd = p.id
       }),
       univerAPI.addEvent(univerAPI.Event.CommandExecuted, (p) => {
         if (p?.type === CommandType.COMMAND) lastCmd = ''
+        // sorting moves whole rows (the id column with them): read the new order
+        if (/sort|reorder/.test(p.id)) readIds()
       }),
-      // Duty 4, first half: refuse to open the editor on the header, the id column or a computed column.
+      // Duty 4, first half: refuse to open the editor on the header, the id column or a worked-out column.
       univerAPI.addEvent(univerAPI.Event.BeforeSheetEditStart, (p) => {
         if (p.row === 0 || p.column >= idCol || !columns[p.column]?.editable) {
           p.cancel = true
@@ -168,28 +207,45 @@ const TrackerGrid = forwardRef(function TrackerGrid({ columns, rows, onChanges, 
         }
       }),
       univerAPI.addEvent(univerAPI.Event.SheetValueChanged, (p) => {
-        if (reverting.current) return // our own put-back or refresh is not an edit
-        const sheet = univerAPI.getActiveWorkbook().getActiveSheet()
-        const cells = []
+        if (reverting) return // our own put-back or refresh is not an edit
+        const cells = [], repair = []
         for (const range of p.effectedRanges || []) {
           const r0 = range.getRow(), c0 = range.getColumn()
           const values = range.getRawValues() // ⚠️ raw, never getValues (formatted text)
-          const formulas = typeof range.getFormulas === 'function' ? range.getFormulas() : null
-          const ids = sheet.getRange(r0, idCol, values.length, 1).getRawValues()
+          const formulas = range.getFormulas()
           values.forEach((line, i) => line.forEach((value, j) => {
-            cells.push({ row: r0 + i, col: c0 + j, id: ids[i]?.[0] ?? null, value,
-              formula: formulas?.[i]?.[j] || null })
+            const r = r0 + i, c = c0 + j
+            // the grid's own cells are repaired here: the header and the id column
+            if (r === 0) { repair.push({ r, c, v: c < idCol ? columns[c].label : 'id', s: 'hdr' }); return }
+            if (c >= idCol) { if (value !== rowIds.current[r]) repair.push({ r, c, v: rowIds.current[r] }); return }
+            const id = rowIds.current[r]
+            if (!id) return
+            cells.push({ id, key: columns[c].key, value, formula: formulas?.[i]?.[j] || null })
           }))
         }
         const hint = performance.now() - keyHint.at < 1000 ? keyHint.what : null
         const source = sourceOf(lastCmd) ?? hint ?? 'undo'
-        handlers.current.onChanges?.(cells, source)
+        // A paste brings the source's own styling (fonts, borders, no number format) and the cells
+        // lost the column's format (seen: lakh money shown as 2200000). The book's formats are the
+        // columns': put each pasted cell's column style back.
+        if (source === 'paste') {
+          for (const range of p.effectedRanges || []) {
+            const r0 = range.getRow(), c0 = range.getColumn()
+            for (let i = 0; i < range.getHeight(); i++) for (let j = 0; j < range.getWidth(); j++) {
+              const r = r0 + i, c = c0 + j
+              if (r >= 1 && c < idCol) repair.push({ r, c, s: styleKey(columns[c]) })
+            }
+          }
+        }
+        if (repair.length) queueMicrotask(() => write(repair))
+        if (cells.length) handlers.current.onChanges?.(cells, source)
       }),
     ]
 
     return () => {
       window.removeEventListener('keydown', onKey, true)
       subs.forEach((s) => s?.dispose?.())
+      writeRef.current = null
       univer.dispose()
       // removed after the engine's own React root has finished unmounting
       setTimeout(() => host.remove(), 0)
