@@ -41,6 +41,13 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   mutation so they never reach the undo stack. ⭐ Each Univer mount needs its own element (dev
   double-mount). ⏭️ Slices 3–5: new rows, formatting + notes, layouts/search/copy-for-mail. Record:
   plan → "STAGE 2".
+- **⏸️ Paused 2026-10-22 for a hotfix in ANOTHER session** (owner). Resume Stage 2 at slice 3 on
+  `10b-foundation` (pushed, clean, `997136b`+). ⚠️ **A hotfix must branch from `origin/portal`, never
+  from `10b-foundation`** — this branch adds Univer (package.json + lockfile), `/tracker`, the
+  Employees Tracker button, `admin-users` tracker actions and three tracker migrations, none approved
+  for prod. After the hotfix lands on `portal`, merge `origin/portal` INTO `10b-foundation` (PR #133
+  docs too, once merged). Open with the owner: tippers always 18% GST? · AL-ledger proposal · stray
+  cells · real data on staging vs the pilot on prod (sandbox load) · the date Excel goes read-only.
 
 ## Current state (2026-10-21, latest) — Phase 10 Stage 1 under way
 

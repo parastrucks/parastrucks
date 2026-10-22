@@ -675,6 +675,26 @@ Each checked in the database on staging:
    sandbox load (needs the owner's decision: real data on staging or the pilot on prod).
 Also: a phone view (read-only cards) and the local save queue across reloads (E5) are not built.
 
+### ⏸️ Paused 2026-10-22 (owner: a hotfix first, in another session) — resume here
+- Branch `10b-foundation`, pushed and clean. Next: **slice 3, new rows** (typing or pasting below the
+  last row, chassis first → `createUnit`; quick entry). The grid currently has exactly one sheet row
+  per truck, so it needs spare rows below the book and a rule for a half-typed new row.
+- **On staging now:** migrations `…_foundation`, `…_supersede`, `…_numeric_before`; Edge Functions
+  `admin-vehicle-units` and `admin-users` (with the tracker actions) as in this branch; 2,052 tracker
+  rows (2,050 `DEMO seed` + the probe's original and rebill); test edits from slice 2 on dummy rows
+  (CTC/CTD on a few DEMO trucks, Segment → TIPPER on three, "DEMO AFTER SORT" on DEMO-MB1AS0000345,
+  CTC 21,11,111 on DEMO-MB1AT0002049 from the conflict test). Nobody has the tracker switch on;
+  admin always has it.
+- Checking in a browser: the owner's Chrome is signed in as `admin@parastrucks.test` on
+  `http://localhost:3000` (the dev server is started with `preview_start {name:"portal"}`); the grid
+  is `window.__trackerUniver` in dev. Staging SQL: `npx --yes supabase@2.109.1 db query --linked
+  --workdir <scratch>/sb …` (linked to `klpnhpnlotcbbovwswmq`).
+- Prod: nothing. The prod rollout, when approved, is the three migrations (LF text), both functions
+  (`--no-verify-jwt`; the 11th function joins the key-cutover roster), then the frontend.
+- Owner questions still open: tippers always 18% GST? · the AL-ledger proposal (Stage 6) · the stray
+  cells · **sandbox load: real data on staging, or the pilot on prod behind the switch?** · the date
+  the Excel files go read-only.
+
 ## ⏸️ PARKED — 2026-08-20 (owner: "put this on the back burner again")
 
 **Planning is complete and approved. Nothing is half-built.** No schema, no Edge Function,
