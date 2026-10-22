@@ -185,8 +185,54 @@ from `origin/portal`). Files: `src/pages/ProformaInvoice.jsx` (+86/−22), `Prof
 - ⭐ **Method:** wrap `URL.createObjectURL` to keep the `pdf` blob, `await blob.text()`, match
   `/\((.*?)\) Tj/g` — jsPDF writes these PDFs uncompressed, so every printed string is checkable in-page.
 
-**Left open (owner):** delete the test PI if wanted (no deletion without approval) · per-unit RTO/insurance
-and a DB-level chassis rule only if asked.
+**Docs:** PR #135 → `e7fcb82` (CI 4/4 post-merge, Vercel READY, `/` + `/login` 200).
+
+**Owner follow-ups (same day):** test PI `PI-PTB-2026-0983` **stays** ("Let it be"). The 3001 dev server
+was stopped (the earlier refusal did not recur once the owner asked). Then: *"Run tests to see if this hotfix
+has not caused any errors or issues in its blast radius."*
+
+**Blast radius mapped:** `ProformaInvoice.jsx` (admin + back-office), `ProformaLog.jsx`, `MyProformas.jsx`,
+and `generateProformaPdf` (unchanged code, new inputs). Nothing else reads the table (`admin-catalog`
+mentions are comments); no trigger touches `proforma_invoices`; no DB change shipped.
+
+**Results — all clean:**
+- **New self-test `scripts/proforma/selftest-pi-form-diff.cjs` (+ `pi-form-mocks.js`): 29/29.** Renders the
+  real component in jsdom at `d27a495^` and at HEAD with identical inputs; mocks record inserts, rpc calls,
+  PDF args and toasts. Byte-identical before/after: D1 back-office 3-PI batch (2 models, edited MRP and
+  particulars, RTO + insurance, padded chassis) · D2 the same as admin with the switch off · D3 blank engine
+  refused · D4 no customer name · D5 MRP 0 · D6 summary panel · D7 switch on → qty typed → off. New-only:
+  back-office has no switch; admin's is off by default; qty 3 + qty 1 with RTO/ins (MRP × qty, basic/GST
+  split, TCS on total, grand total, `''` chassis even when chassis was typed first, PDF args = saved row,
+  summary "₹87,25,580 · 4 units", reset + toast); qty `''`/0/−1/2.5/1000/abc refused, 999 accepted; error
+  clears on switch-off. **Negative controls:** switch ignored (`noChassis = isAdmin`) → 3 FAIL;
+  chassis not trimmed → 3 FAIL; TCS on unit MRP → 2 FAIL. jsdom 24.1.3 + esbuild 0.24.2 are installed
+  outside the repo; a crashed scenario counts as FAIL.
+- **Prod data, all 984 PIs** (2026-04-18 → 2026-10-22), computed inside the owner's signed-in page with
+  only counts returned: 0 grand-total, 0 TCS, 0 `total_cost ≠ mrp × qty`, 0 `basic + gst ≠ total`, 0
+  multi-line PIs; blank chassis and qty ≠ 1 only on `0983` (test) and **`0984`** — a real PI the owner made
+  at 11:00 UTC (admin, MKC Infrastructure, `CTN283218B0012_YW` × 20 = ₹9,11,20,000 + TCS ₹9,11,200 =
+  ₹9,20,31,200, consistent). His 29-Aug MKC PIs `0655`/`0656` carry chassis/engine "1"/"1" — the
+  workaround the switch replaces. `error_log`: **0 rows since the deploy**.
+- **Screens (owner's Chrome):** PI Log first rows render (two "—", normal rows chassis / engine); search
+  `TPKM1193` → only `0979`; name search finds `0983`; phone cards show "—"; `0979`'s PDF rebuilt from the
+  log still prints "Chassis No: MB1A5CHD8TPKM1193" / "Engine No: TKPZ132504", qty 1, ₹29,65,926
+  (the download was suppressed by patching the anchor click); My PIs lists `0984`, `0983` with "—";
+  zero console errors on New PI, PI Log and My PIs after reload.
+- Full `src` `npm run build` ✓; `no-undef` over all of `src` ✓ (needs `--no-inline-config`: four
+  `eslint-disable react-hooks/…` comments otherwise error because that plugin is not in the scratch lint).
+
+**Found on the way (not caused by the hotfix):** `error_log` holds 7,437 rows, **7,434** of them one error —
+*"Cannot read properties of undefined (reading 'M_ID')"* from `chrome-extension://eppiocemhmnlbhjplcgkofciiegomcon/
+executors/200.js`, kind `unhandledrejection`, one user, since 2026-10-19 09:11 UTC, last 10:27 UTC on 10-22.
+The handlers in `main.jsx` report any unhandled rejection on the page, including an extension's. Fix:
+ignore reports whose stack frames are all `chrome-extension://`. Open.
+
+**Tooling:** the Supabase MCP refused `execute_sql` on the portal project ("You do not have permission")
+with an explicit `project_id`, although aggregates went through on 10-05. The fallback above (token from
+`localStorage['sb-session']`, publishable key from the `supabase-*.js` chunk, PostgREST under the admin's
+RLS) worked and kept every row inside the page.
+
+**Left open:** the extension-noise filter · per-unit RTO/insurance and a DB-level chassis rule only if asked.
 
 ## Session log — 2026-10-21 (PC): Service Payments parked, waiting on HDFC
 

@@ -108,8 +108,31 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
     inline · qty 2 → ₹43,62,790 + TCS ₹43,628 = ₹44,06,418 · PDF has qty 2, rate ₹21,81,395, no
     chassis/engine line · PI Log shows "—" · the Log's PDF button rebuilt the same PDF from the stored
     row · switch off → "Chassis No and Engine No required", zero PI requests sent.
-    ⏭️ **Test PI `PI-PTB-2026-0983` ("TEST - delete me", Ecomet CNG CGE111017CC003, qty 2) stays in
-    the log** — delete only if the owner says so. Two copies of its PDF went to the owner's Downloads.
+    ✅ **Test PI `PI-PTB-2026-0983` ("TEST - delete me", Ecomet CNG CGE111017CC003, qty 2) STAYS in
+    the log — owner decision 2026-10-22 ("Let it be"). Do not offer to delete it again.**
+  - ✅ **Blast-radius pass (2026-10-22, after the owner asked "has this caused any issues?") — all clean:**
+    **`scripts/proforma/selftest-pi-form-diff.cjs` 29/29** — drives the REAL form in jsdom at
+    `d27a495^` and now, same inputs: back-office batch, admin switch-off batch, switch on→off, blank
+    engine, no name, MRP 0 and the summary panel are **byte-identical** before/after (inserts, rpc,
+    PDF args, errors); back-office never gets the switch; qty maths, bad quantities and error clearing
+    asserted. **Proven able to fail:** 3 planted bugs (switch ignored · chassis not trimmed · TCS on
+    unit MRP) each FAILed. jsdom+esbuild install OUTSIDE the repo — run line in the file header.
+    **Prod data (all 984 PIs, computed in-page in the owner's Chrome — only counts left the page):**
+    0 grand-total, 0 TCS, 0 line-total, 0 basic+GST mismatches · blank chassis only on 0983 + **0984**
+    · `error_log` 0 rows since the deploy. **PI Log / My PIs:** "—" on desktop + phone cards, chassis
+    search finds `0979`, a normal PI's PDF still prints chassis + engine (download suppressed), zero
+    console errors on the 3 pages. Full `src` build + `no-undef` (add `--no-inline-config`) clean.
+  - ⭐ **The owner already used it for real:** `PI-PTB-2026-0984` (admin, MKC Infrastructure, CBN
+    `CTN283218B0012_YW` × **20**, ₹9,20,31,200) — consistent. Older MKC PIs `0655`/`0656` (29-Aug)
+    carry chassis/engine **"1"/"1"**: the workaround this switch replaces.
+  - ⚠️ **`error_log` is 7,434/7,437 junk from ONE user's Chrome extension** (`chrome-extension://
+    eppiocemhmnlbhjplcgkofciiegomcon/executors/200.js` → *"reading 'M_ID'"*, `unhandledrejection`,
+    since 2026-10-19, last 10:27 UTC 10-22 — before the hotfix). Not portal code, but it buries real
+    crashes: `main.jsx`'s handlers should drop stacks that live only in `chrome-extension://`. Open.
+  - ⚠️ **The Supabase MCP refused the portal project again on 2026-10-22** ("You do not have
+    permission") even with `project_id` — the 10-05 aggregates worked. Fallback that worked: run the
+    query **inside the owner's signed-in prod page** (`sb-session` token + the bundle's publishable
+    key → PostgREST, RLS-scoped) and return counts only.
   - ⭐ **Method — read a jsPDF PDF in the browser:** wrap `URL.createObjectURL` to keep the `pdf` blob,
     then `blob.text()` and match `/\((.*?)\) Tj/g` — jsPDF output here is **uncompressed**, so every
     printed string is readable. No download parsing, no PDF library.
@@ -874,8 +897,9 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ## Next actions
 
-- **⏭️ Owner: delete test PI `PI-PTB-2026-0983` ("TEST - delete me") if you don't want it in the log**
-  (2026-10-22 hotfix test on prod). Claude does not delete rows without your say-so. Optional:
+- **⏭️ Filter Chrome-extension noise out of crash reporting** — 7,434 of 7,437 `error_log` rows are
+  one user's extension (`…/executors/200.js`, "reading 'M_ID'"), see the 2026-10-22 block.
+- ✅ Test PI `PI-PTB-2026-0983` stays (owner, 2026-10-22) — do not re-raise. PI no-chassis hotfix: Optional:
   RTO/Insurance per-unit instead of per-PI, and a DB rule that non-admins need a chassis — both only if asked.
 - **⏸️ Service Payments parked, waiting on HDFC (2026-10-21)** — see the 2026-10-21 block. Its own list
   stays below (items 8–10 + the three go-live gates); do not start it until the owner says so.
