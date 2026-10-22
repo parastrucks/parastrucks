@@ -30,6 +30,31 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ---
 
+## Current state (2026-10-21, latest) — Phase 10 Stage 1 under way
+
+- **🔨 Phase 10 Stage 1 on branch `10b-foundation` (from `portal`), STAGING ONLY.** Step 1 ✅ column map
+  `docs/backlog/phase10-column-map.md` (88 stored + 3 screen columns from the real headers; owner's
+  GST/road-tax rules). Step 2 ✅ `cca8904` migration `20261021_phase10_tracker_foundation.sql` on
+  staging, `scripts/phase10/probe-foundation.sql` **42/0** (+3 planted bugs caught), 0 residue.
+  ⭐ **No API-role grants on any tracker table** — all access via the Edge Function (RLS cannot hide the
+  incentive columns). ⚠️ Apply the LF text on prod. ⏭️ Step 3 = Edge Function `admin-vehicle-units` +
+  `setTrackerAccess`. ❓ Owner: tippers always 18% GST? · the AL-ledger proposal. Record: plan → "STAGE 1".
+
+## Current state (2026-10-21, later) — Phase 10 grid comparison
+
+- **🔬 Phase 10 Vehicle Tracker RESUMED as a spike: four free grids side by side** on branch
+  `10-pre-grid-compare` (`0858dc1`, pushed, NOT for merge — package.json carries the grids).
+  `http://localhost:3000/grid-spike?strict=0` → ReactGrid | Glide | Univer | FortuneSheet.
+  ReactGrid has undo/formatting/colour menus but ~1 s per action at the full book (fine at month × 25
+  cols); Univer (free presets) is 17–90 ms at full size, FortuneSheet 85–105 ms, both with undo/formatting/
+  filter/find built in; every kind of edit reaches us on both and both locks hold.
+  ⭐ **Univer: `getRawValues()`, never `getValue(s)`** (formatted text → commas in money); its paste can
+  leave a trailing space and its fill sends blank-then-value — trim and collapse in the save layer.
+  ✅ **DECIDED 2026-10-21: the grid is Univer** (free presets, exact versions). ⚠️ A real Excel copy
+  pastes money as TEXT with lakh commas ("12,34,567") — the save adapter converts or refuses. Its
+  eight duties + the next step (Stage 1 on staging): plan → "DECIDED".
+  ⭐ `docs/backlog/phase10-execution-plan.md` → "RESUMED 2026-10-21".
+
 ## Current state (2026-10-21)
 
 - **⏸️ SERVICE PAYMENTS IS PARKED — waiting for details from HDFC (owner, 2026-10-21).** Other features

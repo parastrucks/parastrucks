@@ -26,6 +26,62 @@
 
 ---
 
+## Session log — 2026-10-21 (PC, later): Phase 10 Stage 1 — the column map and the schema, on staging
+
+Owner: *"yes start stage 1"*. Branch `10b-foundation` from `portal` `f914e62`. Staging only; prod
+untouched. ⭐ Full record: `docs/backlog/phase10-execution-plan.md` → "STAGE 1".
+- **Column map from the real headers** (`scripts/phase10/columns.cjs`, shapes only, no values) →
+  `docs/backlog/phase10-column-map.md`: 88 stored + 3 screen columns. Found the "gross to AL" formula
+  round 2 could not (Payment Amount = (CTD + AMC) × Qty); answered two questions from the data instead
+  of asking (CBN = V-part 265/266; Other deductions is its own figure, 0/167).
+- **Owner's answers:** GST 28% before 22 Sep 2025 else 18% (data agrees); road tax = basic × 6% (0 for
+  staff buses / no lifetime tax), on the bill value until the RTO switched to MRP — **dated from the
+  data to 1 Aug 2025**; CRETEM is the HSRP/CRTM constant; RET-INT T–V and Subvention Status dropped;
+  cancel/rebill columns kept; AL Balance Sheet stays its own ledger (a generated-ledger proposal is
+  pending — the owner asked what it meant, explained). ❓ Open: were tippers always 18% (63 rows were
+  before the change)?
+- **Migration `20261021_phase10_tracker_foundation.sql` on STAGING** (`cca8904`): the book, the
+  compute trigger, incentives/notes/formats/views/audit/request/import tables, and one write procedure
+  (all-or-nothing, before-value conflicts, idempotent, field audit). ⭐ Stricter than the plan: no API
+  grants at all — RLS cannot hide incentive columns, so every access goes through the Edge Function.
+- **Proof:** `probe-foundation.sql` 42/0 on staging (0 rows left) and on local PGlite 18.6; three
+  planted bugs (TCS on CTC, GST date a day late, no road-tax switch) each caught at their own check.
+  PGlite 0.3.4 crashes on exception blocks — use 0.5.x.
+- Next: step 3, the `admin-vehicle-units` Edge Function and the per-user access switch.
+
+## Session log — 2026-10-21 (PC): Phase 10 resumed — four free grids compared side by side
+
+Owner: *"run a full survey and bring this session up to speed"*, then *"I will need to try both
+options to come to a conclusion"*. Spike only, branch `10-pre-grid-compare` (`e1f63c3` → `b7b855d`),
+rebuilt on `portal` `f914e62` rather than reviving the August branch (37 behind). Nothing merged,
+no schema, no deploy. ⭐ Full table and rules: `docs/backlog/phase10-execution-plan.md` → "RESUMED 2026-10-21".
+- `main.jsx`: the spike mount was ported as a CHANGE — copying the August file would have
+  reintroduced the `@vite-ignore` errorLog bug fixed in PR #124.
+- ReactGrid tab (owner: "react looks better") gained undo/redo, B/I/U, Excel's full colour menus,
+  border, and a small remembered default view. ⭐ It reprocesses every cell per change: ~970 ms at
+  180k cells vs 3–7 ms on Glide for the same undo — viable only at month × 25 columns (85 ms).
+- Owner: *"something like Google Sheets with open-source access"* → asked Gemini + ChatGPT (I wrote a
+  short prompt); their claims were checked against the packages (Univer pivot is Pro; FortuneSheet is
+  canvas, no pivot; "OpenSheets" not on npm). Univer 1.1.0 + FortuneSheet 1.0.4 tabs built.
+- ⭐⭐ Univer's `getValue(s)` returns formatted text → commas would have reached money fields, and the
+  lock's put-back looped forever. `getRawValues()` + a guard. Univer measured at full size: edit 17 ms,
+  undo 83 ms, load 270 ms (an earlier "2 s" was a throttled-frame artefact, caught by a do-nothing baseline).
+- Then (`0858dc1`) FortuneSheet run in the owner's Chrome: React 18 fine, 85–105 ms per action at the
+  full book (~5× Univer), mount ~0.8–1 s. Typed / paste / fill / undo / redo all reach the capture on
+  both engines, a paste is one undo, and both locks hold — FortuneSheet's fill skips its own edit
+  hook, so our put-back did the job there. Found: Univer leaves a trailing space after a plain-text
+  paste with Windows line endings; its fill sends blank-then-value; and its undo/redo label had
+  never worked (it handles Ctrl+Z in its own window listener first — fixed by listening earlier).
+  FortuneSheet's API is async and its handle is rebuilt as state changes, so 0 ms and "sheet not
+  found" were measuring mistakes, not results.
+- Evaluation of the final two written up (speed, features, compatibility, licence, upkeep, size) —
+  `14bf611`. FortuneSheet's last release was 2025-11-06; Univer had 39 releases in the year.
+- ✅ **Owner: "go with univer" — DECIDED.** Free presets only, exact versions. The last check was done
+  with a REAL Excel copy (Excel 16 over COM, hidden blank workbook, closed unsaved; a lingering
+  hidden instance was found and quit): no trailing space (Univer reads the HTML), but ⚠️ **money
+  arrives as text with lakh commas ("12,34,567")** — the save layer must convert and refuse. The
+  adapter's eight duties are listed in the plan's "DECIDED" section; cell formulas stay cut.
+
 ## Session log — 2026-10-21 (PC): Service Payments parked, waiting on HDFC
 
 Owner: *"can we update everything so I can continue building other features while we wait for details

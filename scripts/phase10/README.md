@@ -28,6 +28,7 @@ script (the files live outside the repo, under `D:\PTB\Finances\` and
 | `b_it_formulas.cjs` | INVOICE TRACKER money formulas, the per-column formula-variance scan, the comment census, qty |
 | `c_sale_g.cjs` | Sale-side formulas (**TCS basis**, total, CRETEM), text-in-money columns, settlement/G-series numbers, VIN decode, DSE slab |
 | `d_followup.cjs` | Three-way retention relationship, empirical VIN month mapping, the SRS incentive override |
+| `columns.cjs` | Every header of the data sheets with its shape (fill, number/text/date counts, dominant formula) — the input to [`phase10-column-map.md`](../../docs/backlog/phase10-column-map.md). Prints no cell values |
 
 ## The one that matters most
 
