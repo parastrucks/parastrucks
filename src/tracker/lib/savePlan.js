@@ -71,6 +71,64 @@ export function planSave(cells, colByKey, shadow) {
   return { changes, putBack, refused }
 }
 
+// NEW ROWS: cells typed or pasted into the spare rows below the book (no truck yet). A row becomes a
+// vehicle when its chassis number arrives — on its own or in the same paste as the rest of the row.
+// Anything typed into a spare row before its chassis is refused and cleared: a half-typed row with
+// no chassis would look saved and be nowhere.
+//
+// cells: [{ r, key, value, formula }] — r is the sheet row, the same for one report
+// Returns { creates: [{ r, values, show }], clear: [{ r, key }], refused }
+//   values = what the server is sent; show = cells whose converted value differs from what was typed
+export const MAX_NEW_ROWS = 200 // the Edge Function's (and tracker_create_units') cap
+const NEW_ROW_REASON = 'a new vehicle starts with its chassis number — type that first, in the first column'
+
+export function planNewRows(cells, colByKey) {
+  const byRow = new Map()
+  for (const c of cells) {
+    if (!byRow.has(c.r)) byRow.set(c.r, new Map())
+    const row = byRow.get(c.r)
+    row.delete(c.key) // the last report of each cell wins (duty 3), first-seen order kept
+    row.set(c.key, c)
+  }
+
+  const creates = [], clear = [], refused = []
+  for (const [r, row] of byRow) {
+    const filled = [...row.values()].filter((c) => held(c.value) !== null)
+    if (!filled.length) continue // blanks into an empty row (Delete over spare rows): nothing to do
+    const chassis = row.get('chassis_no')
+    const chassisOk = chassis && held(chassis.value) !== null && !chassis.formula &&
+      fromCell(colByKey.chassis_no.spec, chassis.value).ok
+    if (!chassisOk) {
+      const reason = chassis?.formula ? 'formulas are not allowed in data cells' : NEW_ROW_REASON
+      refused.push({ r, key: 'chassis_no', label: colByKey.chassis_no.label, reason })
+      for (const c of filled) clear.push({ r, key: c.key })
+      continue
+    }
+    const values = {}, show = []
+    for (const { key, value, formula } of filled) {
+      const col = colByKey[key]
+      if (!col) continue
+      // worked-out columns: whatever a paste put there is cleared; the server fills them in
+      if (!col.editable) { clear.push({ r, key }); continue }
+      if (formula) {
+        refused.push({ r, key, label: col.label, reason: 'formulas are not allowed in data cells' })
+        clear.push({ r, key })
+        continue
+      }
+      const v = fromCell(col.spec, value)
+      if (!v.ok) {
+        refused.push({ r, key, label: col.label, reason: v.reason })
+        clear.push({ r, key })
+        continue
+      }
+      values[key] = v.value
+      if (shows(col, v.value) !== held(value)) show.push({ key, value: v.value })
+    }
+    creates.push({ r, values, show })
+  }
+  return { creates, clear, refused }
+}
+
 // Split a save over the Edge Function's limit. Each piece saves all-or-nothing on its own.
 export function chunk(changes, size = MAX_PER_SAVE) {
   const out = []
@@ -79,10 +137,10 @@ export function chunk(changes, size = MAX_PER_SAVE) {
 }
 
 // What a person is told when cells are refused: one line, never a list of 200.
-export function refusalMessage(refused) {
+export function refusalMessage(refused, ending = ' The old value is back.') {
   if (!refused.length) return null
   const first = refused[0]
   const more = refused.length - 1
   return `${first.label}: ${first.reason}.` + (more ? ` (${more} more cell${more > 1 ? 's' : ''} not saved.)` : '') +
-    ' The old value is back.'
+    ending
 }

@@ -58,6 +58,15 @@ const STYLES = {
   num: {}, numL: { bg: { rgb: '#F3F4F6' } },
 }
 
+// Empty rows kept below the book, as in Excel: a new truck is typed (or a block of them pasted)
+// straight into them. The page asks for more before they run out (ensureSpare). At least the
+// largest paste a save can take, so a full paste never runs off the end of the sheet.
+const SPARE = 250
+
+// an empty row that already carries each column's format, so a typed 05/07/25 is a date and a
+// pasted 12,34,567 lands in a lakh-formatted cell
+const blankLine = (columns) => Object.fromEntries(columns.map((c, ci) => [ci, { s: styleKey(c) }]))
+
 function buildWorkbook(columns, rows) {
   const idCol = columns.length
   const header = {}
@@ -73,6 +82,7 @@ function buildWorkbook(columns, rows) {
     line[idCol] = { v: row.id }
     cellData[ri + 1] = line
   })
+  for (let i = 0; i < SPARE; i++) cellData[rows.length + 1 + i] = blankLine(columns)
   const columnData = {}
   columns.forEach((c, ci) => { columnData[ci] = { w: c.width } })
   columnData[idCol] = { w: 40, hd: 1 }
@@ -80,7 +90,7 @@ function buildWorkbook(columns, rows) {
     id: 'tracker', name: 'Vehicle Tracker', sheetOrder: ['book'], styles: STYLES,
     sheets: {
       book: {
-        id: 'book', name: 'Book', rowCount: rows.length + 1, columnCount: columns.length + 1,
+        id: 'book', name: 'Book', rowCount: rows.length + 1 + SPARE, columnCount: columns.length + 1,
         cellData, columnData, defaultRowHeight: 22,
         freeze: { xSplit: 1, ySplit: 1, startRow: 1, startColumn: 1 },
       },
@@ -98,6 +108,7 @@ const TrackerGrid = forwardRef(function TrackerGrid({ columns, rows, onChanges, 
   const box = useRef(null)
   const api = useRef(null)
   const writeRef = useRef(null)
+  const engine = useRef(null) // { sheet, firstSpare, ensureSpare } while mounted
   const rowIds = useRef([]) // sheet row → unit id (index 0 = header)
   const handlers = useRef({ onChanges, onRefused })
   handlers.current = { onChanges, onRefused }
@@ -118,6 +129,48 @@ const TrackerGrid = forwardRef(function TrackerGrid({ columns, rows, onChanges, 
       }
       writeRef.current?.(out)
     },
+    // NEW ROWS. A spare row gets a temporary id ("new:…") the moment its chassis is accepted, so the
+    // edits that follow are tied to it while the server creates it; retag swaps in the real id.
+    tagRows(tags) { // [{ r, id }]
+      const idCol = columns.length
+      for (const { r, id } of tags) rowIds.current[r] = id
+      writeRef.current?.(tags.map(({ r, id }) => ({ r, c: idCol, v: id })))
+    },
+    retag(oldId, newId) {
+      const r = rowIds.current.indexOf(oldId)
+      if (r < 1) return
+      rowIds.current[r] = newId
+      writeRef.current?.([{ r, c: columns.length, v: newId }])
+    },
+    // cells in spare rows, by sheet row: [{ r, key }] → emptied, the column's format kept
+    clearAt(cells) {
+      const colOf = new Map(columns.map((c, i) => [c.key, i]))
+      writeRef.current?.(cells.filter((x) => colOf.has(x.key))
+        .map(({ r, key }) => ({ r, c: colOf.get(key), v: null, s: styleKey(columns[colOf.get(key)]) })))
+    },
+    // a new row the server did not create: emptied and made spare again
+    clearRow(id) {
+      const r = rowIds.current.indexOf(id)
+      if (r < 1) return
+      rowIds.current[r] = null
+      const out = columns.map((c, ci) => ({ r, c: ci, v: null, s: styleKey(c) }))
+      out.push({ r, c: columns.length, v: null })
+      writeRef.current?.(out)
+    },
+    // "New vehicle": the chassis cell of the first empty row, scrolled into view and selected
+    newVehicle() {
+      const e = engine.current
+      if (!e) return
+      const r = e.firstSpare()
+      if (r < 1) return
+      e.sheet().getRange(r, 0).activate()
+      e.sheet().scrollToCell(Math.max(1, r - 5), 0)
+      // open the cell's editor: it takes the keyboard from the button, so typing goes straight in
+      // (measured: without it, the keys stayed on the button and nothing reached the grid)
+      setTimeout(() => api.current?.getActiveWorkbook()?.startEditing(), 0)
+    },
+    // keep at least SPARE empty rows below the book (after creates have used some)
+    ensureSpare() { engine.current?.ensureSpare() },
     univerAPI: () => api.current,
   }), [columns])
 
@@ -183,6 +236,31 @@ const TrackerGrid = forwardRef(function TrackerGrid({ columns, rows, onChanges, 
     }
     writeRef.current = write
 
+    const isSpare = (r) => !rowIds.current[r]
+    engine.current = {
+      sheet,
+      firstSpare: () => {
+        for (let r = 1; r < rowIds.current.length; r++) if (isSpare(r)) return r
+        return -1
+      },
+      ensureSpare: () => {
+        let spare = 0
+        for (let r = 1; r < rowIds.current.length; r++) if (isSpare(r)) spare++
+        if (spare >= SPARE) return
+        const from = sheet().getMaxRows()
+        const more = SPARE - spare
+        // a mutation, like every write of ours: growing the sheet is not something Ctrl+Z undoes
+        univerAPI.syncExecuteCommand('sheet.mutation.set-worksheet-row-count', {
+          unitId: workbook.getId(), subUnitId: sheet().getSheetId(), rowCount: from + more,
+        })
+        const line = blankLine(columns)
+        const cells = []
+        for (let r = from; r < from + more; r++) for (const c of Object.keys(line)) cells.push({ r, c: Number(c), s: line[c].s })
+        write(cells)
+        readIds()
+      },
+    }
+
     let lastCmd = ''
     const subs = [
       univerAPI.addEvent(univerAPI.Event.BeforeCommandExecute, (p) => {
@@ -208,7 +286,7 @@ const TrackerGrid = forwardRef(function TrackerGrid({ columns, rows, onChanges, 
       }),
       univerAPI.addEvent(univerAPI.Event.SheetValueChanged, (p) => {
         if (reverting) return // our own put-back or refresh is not an edit
-        const cells = [], repair = []
+        const cells = [], fresh = [], repair = []
         for (const range of p.effectedRanges || []) {
           const r0 = range.getRow(), c0 = range.getColumn()
           const values = range.getRawValues() // ⚠️ raw, never getValues (formatted text)
@@ -217,10 +295,12 @@ const TrackerGrid = forwardRef(function TrackerGrid({ columns, rows, onChanges, 
             const r = r0 + i, c = c0 + j
             // the grid's own cells are repaired here: the header and the id column
             if (r === 0) { repair.push({ r, c, v: c < idCol ? columns[c].label : 'id', s: 'hdr' }); return }
-            if (c >= idCol) { if (value !== rowIds.current[r]) repair.push({ r, c, v: rowIds.current[r] }); return }
+            if (c >= idCol) { if ((value ?? null) !== (rowIds.current[r] ?? null)) repair.push({ r, c, v: rowIds.current[r] ?? null }); return }
             const id = rowIds.current[r]
-            if (!id) return
-            cells.push({ id, key: columns[c].key, value, formula: formulas?.[i]?.[j] || null })
+            const cell = { key: columns[c].key, value, formula: formulas?.[i]?.[j] || null }
+            // a spare row (no truck yet) is reported by its sheet row — the page decides if it is a new vehicle
+            if (!id) fresh.push({ r, ...cell })
+            else cells.push({ id, ...cell })
           }))
         }
         const hint = performance.now() - keyHint.at < 1000 ? keyHint.what : null
@@ -238,7 +318,7 @@ const TrackerGrid = forwardRef(function TrackerGrid({ columns, rows, onChanges, 
           }
         }
         if (repair.length) queueMicrotask(() => write(repair))
-        if (cells.length) handlers.current.onChanges?.(cells, source)
+        if (cells.length || fresh.length) handlers.current.onChanges?.(cells, source, fresh)
       }),
     ]
 
@@ -246,6 +326,7 @@ const TrackerGrid = forwardRef(function TrackerGrid({ columns, rows, onChanges, 
       window.removeEventListener('keydown', onKey, true)
       subs.forEach((s) => s?.dispose?.())
       writeRef.current = null
+      engine.current = null
       univer.dispose()
       // removed after the engine's own React root has finished unmounting
       setTimeout(() => host.remove(), 0)

@@ -7,7 +7,7 @@
 // Imports the real modules from src/tracker/lib (which import the Edge Function's columns.ts), so the
 // screen and the server are tested with the same rules. Expectations are written out by hand.
 import { fromCell, toCell, isoToSerial, serialToIso, parseTypedDate, parseTypedNumber, sameValue, collapse } from '../../src/tracker/lib/cellValues.js'
-import { planSave, chunk, refusalMessage } from '../../src/tracker/lib/savePlan.js'
+import { planSave, planNewRows, MAX_NEW_ROWS, chunk, refusalMessage } from '../../src/tracker/lib/savePlan.js'
 import { ageingDays, interestOnAgeing, slab, withScreenColumns, todayIst } from '../../src/tracker/lib/screenColumns.js'
 import { ALL_COLUMNS, COLUMN_BY_KEY, visibleColumns } from '../../src/tracker/lib/columnMeta.js'
 import { COLUMNS, EDITABLE } from '../../supabase/functions/admin-vehicle-units/columns.ts'
@@ -122,6 +122,36 @@ ok(chunk(Array.from({ length: 1201 }, (_, i) => i)).map((c) => c.length).join() 
 ok(refusalMessage([]) === null, 'no refusals, no message')
 ok(refusalMessage([{ label: 'CTC', reason: 'not a number' }, { label: 'CTD', reason: 'not a number' }, { label: 'X', reason: 'y' }])
   === 'CTC: not a number. (2 more cells not saved.) The old value is back.', 'one line for many refusals')
+
+// ── planNewRows: cells typed or pasted into the spare rows below the book
+let n = planNewRows([{ r: 2052, key: 'chassis_no', value: 'MB1NEW0001' }], COLUMN_BY_KEY)
+ok(n.creates.length === 1 && n.creates[0].r === 2052 && n.creates[0].values.chassis_no === 'MB1NEW0001' && !n.creates[0].show.length && !n.refused.length,
+  'new row: a typed chassis makes a vehicle', n)
+n = planNewRows([{ r: 2052, key: 'model', value: 'BOSS' }], COLUMN_BY_KEY)
+ok(!n.creates.length && n.refused.length === 1 && n.refused[0].key === 'chassis_no' && n.clear.length === 1 && n.clear[0].key === 'model',
+  'new row: anything before the chassis is refused and cleared', n)
+n = planNewRows([
+  { r: 10, key: 'chassis_no', value: ' MB1NEW0002 ' }, { r: 10, key: 'ctc', value: '12,34,567' },
+  { r: 10, key: 'tcs', value: 5 }, { r: 10, key: 'ptb_invoice_date', value: '05/07/25' }, { r: 10, key: 'dse', value: null },
+  { r: 11, key: 'chassis_no', value: 0, formula: '=A1' }, { r: 11, key: 'model', value: 'X' },
+], COLUMN_BY_KEY)
+const c10 = n.creates.find((c) => c.r === 10)
+ok(n.creates.length === 1 && c10 && c10.values.chassis_no === 'MB1NEW0002' && c10.values.ctc === 1234567 &&
+  c10.values.ptb_invoice_date === '2025-07-05' && !('tcs' in c10.values) && !('dse' in c10.values),
+  'new rows: a pasted row is converted (trim, lakh text, typed date); worked-out and blank cells are not sent', n)
+ok(c10 && ['chassis_no', 'ctc'].every((k) => c10.show.some((x) => x.key === k)), 'new rows: converted values are shown as saved', c10?.show)
+ok(n.clear.some((x) => x.r === 10 && x.key === 'tcs'), 'new rows: a worked-out column pasted into is cleared', n.clear)
+ok(n.refused.some((x) => x.r === 11 && /formula/.test(x.reason)) && ['chassis_no', 'model'].every((k) => n.clear.some((x) => x.r === 11 && x.key === k)),
+  'new rows: a formula chassis refuses and clears its whole row', n)
+n = planNewRows([{ r: 5, key: 'chassis_no', value: null }, { r: 5, key: 'model', value: '' }], COLUMN_BY_KEY)
+ok(!n.creates.length && !n.refused.length && !n.clear.length, 'new rows: Delete over empty rows does nothing', n)
+n = planNewRows([{ r: 6, key: 'chassis_no', value: null }, { r: 6, key: 'chassis_no', value: 'MB1NEW0003' }], COLUMN_BY_KEY)
+ok(n.creates.length === 1 && n.creates[0].values.chassis_no === 'MB1NEW0003', 'new rows: a fill (blank, then value) is judged on its last value', n)
+n = planNewRows([{ r: 7, key: 'chassis_no', value: 'MB1NEW0004' }, { r: 7, key: 'ctc', value: '5K' }], COLUMN_BY_KEY)
+ok(n.creates.length === 1 && !('ctc' in n.creates[0].values) && n.refused[0]?.key === 'ctc' && n.clear[0]?.key === 'ctc',
+  'new rows: one bad value is refused and cleared; the vehicle is still added', n)
+ok(MAX_NEW_ROWS === 200, "new-row cap = the Edge Function's")
+ok(refusalMessage([{ label: 'Chassis No', reason: 'x' }], ' Those cells were cleared.') === 'Chassis No: x. Those cells were cleared.', 'refusal message ending for new rows')
 
 // ── screen columns (workbook formulas)
 ok(ageingDays({ al_payment_date: null }, '2026-10-22') === 0, 'ageing: no AL payment → 0')

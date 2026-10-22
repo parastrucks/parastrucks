@@ -21,6 +21,8 @@ export async function listAll(columns, { includeSuperseded = false } = {}) {
 
 export const applyChanges = (payload) => callEdge(FN, 'applyChanges', payload)
 export const createUnit = (values) => callEdge(FN, 'createUnit', { values })
+// new rows from the grid: { client_request_id, batch_id, rows: [{ column: value }] }, at most 200
+export const createUnits = (payload) => callEdge(FN, 'createUnits', payload)
 export const supersedeUnit = (unit_id, values) => callEdge(FN, 'supersedeUnit', { unit_id, values })
 export const history = (unit_id, column_key) => callEdge(FN, 'history', { unit_id, column_key })
 export const listNotes = () => callEdge(FN, 'listNotes')
