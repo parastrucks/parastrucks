@@ -667,19 +667,56 @@ Each checked in the database on staging:
 - ⚠️ One undo save took three tries (~4 s) once and did not recur; failures now log their reason
   (`[tracker] save attempt N failed: …`) — watch for it.
 
+### Slice 3 ✅ — new rows (`72193d2`, `a54e481`, `fef1334`, 2026-10-22)
+Resumed after the PI hotfix (owner: "hotfix is live, let's continue"); `origin/portal` merged in
+twice (`6a90051` the code, `5f1652a` its docs — CLAUDE.md + history conflicts were two independent
+entries, both kept).
+
+- **Migration `20261022_phase10_tracker_create_units.sql` (STAGING):** `tracker_create_units(actor,
+  batch, rows, request_id)` — up to 200 rows, **each in its own savepoint** (a chassis already in the
+  book fails only that row, by name: "chassis X is already in the book"), the whole result stored in
+  `tracker_requests` so a retry **replays**. `probe-create-units.sql` **18/0** on PGlite and staging,
+  0 residue; mutants caught (no replay → the retry aborts; no duplicate wording → 2 fail). Staging
+  prosrc md5 `8f4e051d…`; apply the LF text on prod. `tracker_create_unit` (one row) is unchanged —
+  rebill still uses it.
+- **EF `createUnits`** (same gate as `createUnit`): each row judged on its own (`validateNewRows`,
+  cap 200), bad rows reported by position, the rest sent with the caller-namespaced request id; returns
+  each created row. `selftest-vehicle-units` **550/0**; deno check clean; deployed to staging.
+- **The grid:** 250 spare rows below the book, each carrying its column formats (grown by a
+  MUTATION when they run low — never on the undo stack). A spare row becomes a vehicle when its
+  **chassis arrives — alone or in the same paste**; anything typed before it is refused and cleared
+  (`planNewRows`, pure). The row gets a temporary id (`new:…`) at once; edits typed while it is being
+  created queue behind the create and are re-pointed to the real id. A row the server refuses is
+  emptied and named. **"+ New vehicle"** = quick entry the Excel way: it opens the chassis editor of
+  the first empty row (no form — F1's "form" would be novelty; typing below the book is what the team
+  does today).
+- Seen in the owner's Chrome on staging, each checked in the DB:
+
+| Done | Result |
+|---|---|
+| + New vehicle → typed a chassis, Tab, a value | one create, count +1, defaults qty 1 / AL / 6%; the value arrived in the same report, so it was part of the create |
+| an edit 50 ms after a new chassis (forced through the grid's own command) | id was `new:…` while creating, then the real one; the edit saved as its own "typed" audit row on the real id |
+| Excel-shaped paste of 3 rows, one chassis already in the book | 2 created in ONE batch; the duplicate's row emptied: "Chassis DEMO-NEWROW-0001: already in the book. That row was not added and has been emptied." |
+| a cell typed into an empty row before its chassis | cleared: "a new vehicle starts with its chassis number — type that first…" |
+
+- ⚠️ **Without `startEditing()` the "New vehicle" button kept the keyboard** — the cell was selected
+  but typing reached nothing (measured). The button now opens the cell's editor.
+- `selftest-tracker-cells` **99/0** (11 new; planted "no chassis first" bug fails 3). Build + no-undef clean.
+- Staging now also holds DUMMY rows `DEMO-NEWROW-0001…0004` (0001's Engine No reads "DEMO NEW MODEL").
+- Not built: "repeat last gatepass × N" (F1) — fill-drag down a column already does it once the
+  chassis numbers are in; revisit if the team asks.
+
 ### ⏭️ Still to build in Stage 2
-3. **New rows** — typing/pasting below the last row (chassis first) + quick entry.
 4. **Formatting + notes** — cell colours saved to `unit_cell_formats` (duty 7); Univer notes ↔
    `unit_cell_notes`; the colour-rule for AL Payment Status.
 5. **Layouts, search by last 6 digits, Copy for mail, row history** — then the one-off scripted
    sandbox load (needs the owner's decision: real data on staging or the pilot on prod).
 Also: a phone view (read-only cards) and the local save queue across reloads (E5) are not built.
 
-### ⏸️ Paused 2026-10-22 (owner: a hotfix first, in another session) — resume here
-- Branch `10b-foundation`, pushed and clean. Next: **slice 3, new rows** (typing or pasting below the
-  last row, chassis first → `createUnit`; quick entry). The grid currently has exactly one sheet row
-  per truck, so it needs spare rows below the book and a rule for a half-typed new row.
-- **On staging now:** migrations `…_foundation`, `…_supersede`, `…_numeric_before`; Edge Functions
+### Where things stand (2026-10-22, after slice 3) — resume here
+- Branch `10b-foundation`, pushed and clean. Next: **slice 4, formatting + notes.** (The 2026-10-22
+  pause for the PI hotfix is over; `portal` is merged in up to `e7fcb82`.)
+- **On staging now:** migrations `…_foundation`, `…_supersede`, `…_numeric_before`, `…_create_units`; Edge Functions
   `admin-vehicle-units` and `admin-users` (with the tracker actions) as in this branch; 2,052 tracker
   rows (2,050 `DEMO seed` + the probe's original and rebill); test edits from slice 2 on dummy rows
   (CTC/CTD on a few DEMO trucks, Segment → TIPPER on three, "DEMO AFTER SORT" on DEMO-MB1AS0000345,
@@ -689,7 +726,7 @@ Also: a phone view (read-only cards) and the local save queue across reloads (E5
   `http://localhost:3000` (the dev server is started with `preview_start {name:"portal"}`); the grid
   is `window.__trackerUniver` in dev. Staging SQL: `npx --yes supabase@2.109.1 db query --linked
   --workdir <scratch>/sb …` (linked to `klpnhpnlotcbbovwswmq`).
-- Prod: nothing. The prod rollout, when approved, is the three migrations (LF text), both functions
+- Prod: nothing. The prod rollout, when approved, is the four migrations (LF text), both functions
   (`--no-verify-jwt`; the 11th function joins the key-cutover roster), then the frontend.
 - Owner questions still open: tippers always 18% GST? · the AL-ledger proposal (Stage 6) · the stray
   cells · **sandbox load: real data on staging, or the pilot on prod behind the switch?** · the date

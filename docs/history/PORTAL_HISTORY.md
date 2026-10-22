@@ -41,6 +41,13 @@ Owner: *"yes start stage 2"*. Branch `10b-foundation` (`6a9455f` → `5f38233`).
   double-mount drew a second engine at 0 × 0; the dummy-data generator cycled (identical rows — looked
   like a sort bug until the database showed the rows really were identical).
 - `selftest-tracker-cells` 88/0; `selftest-vehicle-units` 528/0; build + no-undef clean.
+- **Paused for the PI hotfix, then slice 3 — new rows** (`72193d2` → `fef1334`; `portal` merged in):
+  type or paste below the book, chassis first. New `tracker_create_units` (one savepoint per row, a
+  replayable request; probe 18/0 on staging) + EF `createUnits` (550/0) + 250 spare rows, a temporary
+  id while a row is created, "+ New vehicle". Seen on staging and checked in the DB: a typed row, an
+  edit raced 50 ms behind its create, a 3-row paste with a duplicate (2 created in one batch, the
+  duplicate emptied and named), a cell before its chassis cleared. Found by doing: the button kept
+  the keyboard until it opened the cell editor. `selftest-tracker-cells` 99/0.
 
 ## Session log — 2026-10-21 (PC, latest): Phase 10 Stage 1 step 3 — the tracker's Edge Function and access switch, on staging
 
