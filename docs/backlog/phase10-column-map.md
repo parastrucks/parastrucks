@@ -219,10 +219,41 @@ comes later · **GST follows the PTB invoice date, for CTC and CTD alike** — s
 for a truck invoiced by PTB on/after 22 Sep 2025.
 **Re-run with those rules:** the 21 MTO lines without a chassis are all advances (not shown); 21 trucks
 with a 95% line pair to an MTO advance by customer name (loose word match — the real check should let a
-person confirm the pair) → unfinished splits **72 → 51** · of the 78 GST-ratio CTDs, **75 follow the rule
+person confirm the pair) → unfinished splits **72 → 51**
+(⚠️ superseded by the proposal below: an MTO advance is per ORDER, so name-pairing is the wrong model) · of the 78 GST-ratio CTDs, **75 follow the rule
 (not shown) and 3 do not** (18% in the tracker, PTB invoice before 22 Sep) · unchanged: **172** other CTD
 differences, **43** AL-invoiced trucks on no sheet, 55 spellings, 1 non-MTO line with no chassis, 4 + 3 + 1
-small. One fact to settle either way: the balance sheet says **FRESH OFFTAKE / IBND / MTO**,
+small.
+
+### Proposal 2026-10-23 — MTO as an ORDER, and line types as data (owner asked: "a better way … exceptions
+### will keep snowballing") — ❓ awaiting the owner
+
+**Measured:** an MTO advance line is per ORDER, not per truck: customer + CBN (always filled) + CTD per
+truck × 0.999 × 5% × **quantity** (×2, ×5, ×18, ×20…). 2025-26: **21 orders = 87 trucks**, of which **43**
+got their 95% truck line in the year (e.g. one model 38 ordered / 25 delivered). Only 4 of 43 truck lines
+equal a single advance by amount — pairing truck-to-advance was never the right question.
+
+**Why exceptions snowball:** the check keys every line on the chassis, but the sheet's lines are four
+different things — a truck, an order (no chassis yet), an add-on on a truck, money paid. Each non-truck
+kind becomes a special case in code.
+
+**Proposal (three parts):**
+1. **An order list** (small: AL order ref, customer, CBN, quantity, CTD per truck, advance %, date). An MTO
+   line on the sheet points to an order; a truck row in the tracker gets an "AL Order" pick (customer and
+   model fill from it — less typing, not more). Then advance = CTD × 0.999 × 5% × qty, each truck's 95%
+   line, and "ordered − delivered = still to come" all follow from data. Bonus: open MTO orders and the
+   advance sitting with AL become visible (nowhere today).
+2. **Line types as a table, not code:** each type says what it points to (truck / order / nothing), how
+   its expected amount is worked out, and its spellings. Today's 13 modes collapse to five behaviours:
+   truck (FRESH OFFTAKE, IBND) · order advance (MTO) · add-on on a truck (AMC, PARTS PACKAGE, IALERT, EWP)
+   · return · money. A new case later = a row an admin adds, choosing one of the behaviours; no build.
+3. **Settle once, remembered:** what the rules cannot explain is shown to a person, who links it to a
+   truck/order or marks it right with a reason; the answer is stored, so it never returns next month. The
+   list shrinks over time instead of growing.
+
+Excel change for the team: on an MTO line, the order ref goes in (e.g. the Chassis cell); nothing else.
+Cost: ~2–3 days, inside the AL upload build (after the first real load). ❓ Does AL give an order number
+at MTO time — and is it the tracker's "ODN Number"? One fact to settle either way: the balance sheet says **FRESH OFFTAKE / IBND / MTO**,
 the tracker's AL Payment Status says **Cash Invoiced / IBND** — is FRESH OFFTAKE the same as Cash
 Invoiced (so it turns green), and what is MTO?
 
