@@ -62,6 +62,13 @@ Owner: *"yes start stage 2"*. Branch `10b-foundation` (`6a9455f` → `5f38233`).
   overrides; probe 9/0, old function fails 3) · sandbox = real data on staging, then the live trial ·
   no read-only date yet — updated files in a day or two to build the repository · stray cells read
   and a default proposed per block (two questions left) · AL ledger still open.
+- **2026-10-23 (later) — the last stray-cell answers + an "Endhan Date" column:** AL dates = Endhan
+  given ("I believe so") → `endhan_date` built (migration `…_endhan_date` on staging, probe 6/0,
+  EF redeployed, saved + read back + cleared through the deployed EF; not seen drawn — Chrome screenshot
+  timed out) · DEALERS L ("not sure") → cell notes · rows 720/948 ("not sure") → as billed (overrides).
+  ⭐ `selftest-vehicle-units` read only the foundation migration — now reads columns added later and the
+  newest allowlist (553/0). AL ledger: owner asked for the detail → measured the balance sheet and gave
+  three options (Excel as is · portal ledger · "Copy for AL sheet" button), recommended the button.
 
 ## Session log — 2026-10-21 (PC, latest): Phase 10 Stage 1 step 3 — the tracker's Edge Function and access switch, on staging
 

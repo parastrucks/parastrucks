@@ -804,8 +804,8 @@ Also: a phone view (read-only cards) and the local save queue across reloads (E5
   for finance" on -0003 Model and two "hand test" notes on DEMO-MB1AR0000517 / DEMO-MB1AT0002049 Model);
   10-23 (DEMO-NEWROW-0002 AL Payment Status → IBND via "cash invoiced"/"Cash Invoiced"). No RMC rows.
   Nobody has the tracker switch on; admin always has it.
-- **Tests:** `selftest-tracker-cells` **117/0** · `selftest-vehicle-units` **550/0** · probes
-  foundation 42 · supersede 19 · numeric-before 9 · create-units 18 · rmc-gst 9 (all 0 failed, on PGlite
+- **Tests:** `selftest-tracker-cells` **117/0** · `selftest-vehicle-units` **553/0** · probes
+  foundation 42 · supersede 19 · numeric-before 9 · create-units 18 · rmc-gst 9 · endhan-date 6 (all 0 failed, on PGlite
   and staging) · `gst_rmc.cjs` re-measures the GST rule from the workbook. Build + no-undef clean.
 - **Checking in a browser:** the owner's Chrome (Claude in Chrome) is signed in as
   `admin@parastrucks.test` on `http://localhost:3000`; start the dev server with
@@ -820,15 +820,29 @@ Also: a phone view (read-only cards) and the local save queue across reloads (E5
   `silent` note mutations still fire note events · `Before…` note events fire from the menu, not from
   facade calls · ⭐ conditional formatting leaks into `getCellStyleData()`/`getCellData()` → read styles
   RAW (`getSheet().getCellRaw` + `getStyles().getStyleByCell`).
-- **Prod: nothing.** The prod rollout, when approved: the five migrations (LF text), both functions
+- **Prod: nothing.** The prod rollout, when approved: the six migrations (LF text), both functions
   (`--no-verify-jwt`; `admin-vehicle-units` joins the key-cutover roster), then the frontend.
 - **Owner questions — answered 2026-10-23:** AL Payment Status green = Cash Invoiced only · only RMC is
   always 18% GST · sandbox = real data on staging first, then the trial on the live site · read-only
   date: none yet — updated files in a day or two → repository + archive, then incremental top-ups.
-  **Still open:** the AL-ledger proposal (asked "have we decided?" 10-23 → no; re-explained, yes/no
-  pending) · stray cells: (a) are the 59 dates beside ENDHAN the date Endhan was given? (→ an "Endhan
-  Date" column) (b) what are the 15 dates in DEALERS column L? · rows 720 (RMC at 28%, 29 Aug 2025) and
-  948 (U 4020 tractor at 18%, 9 Sep 2025) of 2025-26: was Excel right? (imported as overrides meanwhile).
+  **Answered later on 10-23:** (a) the 59 dates beside ENDHAN = the day the Endhan was given — "I believe
+  so" → ✅ **"Endhan Date" column BUILT** (below) · (b) DEALERS column L dates — "not sure" → they go in
+  as a **cell note on their truck** (the default: nothing lost, nothing guessed) · (c) rows 720 / 948 —
+  "not sure" → imported **as billed** (`gst_rate_override` = the rate Excel used), so the archive
+  matches what was actually invoiced; flagged in the import report. **Still open:** the AL ledger — the
+  owner asked for the detail to decide; given in full 2026-10-23 (column map → section G, "The decision
+  in detail").
+- ✅ **10-23: "Endhan Date" column** — migration `20261023_phase10_tracker_endhan_date.sql` on STAGING
+  (adds `vehicle_units.endhan_date date`; `tracker_apply_changes` re-created with it on the editable
+  list, otherwise byte-identical to numeric_before; staging prosrc md5 `76308fce…` = file, LF) ·
+  `columns.ts` + EF redeployed to staging · grid column "Endhan Date" right after Endhan.
+  `probe-endhan-date` **6/0** (PGlite + staging; a mutant with the column but not on the list fails 3) ·
+  every earlier probe still green · `selftest-vehicle-units` **553/0** — it now reads columns added by
+  LATER migrations and the newest allowlist (it read only the foundation file, so it flagged the new
+  column at once: a catalogue entry without a migration, or the reverse, fails it). Seen working through
+  the deployed EF from the owner's signed-in tab (set → read back → cleared on DEMO-PROBE-202610220945;
+  two audit rows left there). ⚠️ **Not seen drawn in the grid** — Chrome's screenshot timed out (Claude
+  window hidden); the column comes from `columnMeta.js`. Prod rollout is now **six** migrations.
 
 ## ⏸️ PARKED — 2026-08-20 (owner: "put this on the back burner again")
 

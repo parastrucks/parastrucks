@@ -90,6 +90,7 @@ text (`5K-DSA`), stored as text + a parsed amount and kind · **HID** = hidden f
 | 59 | `payment_status` | text | DB | `Payment Status` | `IF(delivery_status='Stock','Stock', IF(no finance_paymt_recd_date,'Pending','Payment Recd'))` |
 | 60 | `ad_blu_given` | text | TXT$ | `AD-BLU` | carries DSA/URIYA deals too |
 | 61 | `endhan` | text | TXT$ | `ENDHAN` | 84 numeric rows in FY |
+| 61a | `endhan_date` | date | IN | — (the unlabelled dates in 2025-26 col AL) | the day the Endhan was given (owner 2026-10-23, "I believe so"); migration `20261023_phase10_tracker_endhan_date.sql` |
 | — | ~~`subvention_status`~~ | | dropped | `Subvention Status` | ✅ owner: drop |
 
 ## D · Retention and incentives (RETENTION TRACKER internal + AL)
@@ -153,6 +154,31 @@ TDS) — 224 whole, 15 at 95% and a few at 5% (split payments). So the better wa
 `offtake_mode` (`Cash Invoiced` / `IBND`) also lands on the truck as `al_payment_status` (#25).
 **Not Stage 1** — it belongs with the other remaining features (Stage 6). ❓ OK with this?
 
+### The decision in detail (owner asked for it 2026-10-23; measured on `AL Balance Sheet -0326.xlsx`)
+
+**What the workbook is today** — one file per month, ~180–330 lines, starts with a CARRY OVER line:
+- **244 truck lines (credit = what PTB owes AL):** CBN / chassis / engine typed (or pasted), Details =
+  CONCATENATE of the three, Credit = `CTD × 0.999` typed as a formula on every line (224 whole; 15 at
+  95%, a few at 5% / 5%×N — split offtakes). Offtake Mode per line: FRESH OFFTAKE 202 · IBND 37 · MTO 5.
+- **~66 money lines (debit = paid to AL):** INDENT (50 — bank indents: AXIS, INDUSIND, or per chassis),
+  PRICE SUPPORT (12 — AL's support/brokerage/incentive approvals), RTGS (1), CARRY OVER (1).
+- **The balance:** two formulas (Net Balance, Unbilled Balance). A pivot ("Summary": count of CBNs by
+  offtake mode) and "Sheet1" = **"AL BOOKS BALANCE"** — the month's tie-out against AL's own books (IBND,
+  carry-over…).
+- So the CTD and chassis on every truck line are a **second copy** of what the tracker already holds.
+
+**Three options:**
+| | What changes | Cost | Risk |
+|---|---|---|---|
+| **A. Leave it in Excel** | nothing | none | the CTD is typed twice; a CTD corrected in the tracker never reaches the balance sheet |
+| **B. Ledger in the portal (the proposal)** | truck credit lines made by the tracker when the truck is invoiced (splits allowed); indents / price support / RTGS typed; running + unbilled balance and the AL-books tie-out worked out; monthly print/export in today's layout | ~1–2 weeks after the tracker's real load (Stage 6) | a new screen to learn; must match the Excel balance to the rupee on 12 past months before anyone relies on it |
+| **C. In between** | stays in Excel, but the tracker gets a **"Copy for AL sheet"** button that copies the month's invoiced trucks as ready-made lines (CBN, chassis, engine, CTD × 0.999) | ~1 day | low — the team keeps its file; only the retyping goes |
+
+Recommendation: **C now, B later only if the team asks** — adoption first; C removes the double typing
+without a new screen. One fact to settle either way: the balance sheet says **FRESH OFFTAKE / IBND / MTO**,
+the tracker's AL Payment Status says **Cash Invoiced / IBND** — is FRESH OFFTAKE the same as Cash
+Invoiced (so it turns green), and what is MTO?
+
 ## ❓ Questions for the owner
 
 Answered 2026-10-21: GST by invoice date · road tax 6% of basic, 0 for staff buses / no lifetime
@@ -173,6 +199,9 @@ Also answered: GST change 22 Sep 2025 · road tax on the bill value until 31 Jul
    AN = 4 lakh amounts, unlabelled → cell notes · DEALERS J = "DATE OF DELY" labels + 6 dates (+1
    "REPLENISH") → into Date of Delivery · DEALERS K = "RECD" ×3 → cell notes · DEALERS L = 15 DATES,
    unlabelled → ❓ what are they? Default for anything unanswered: a cell note on its truck (nothing lost).
+   ✅ **Owner 2026-10-23:** AL dates = Endhan given date ("I believe so") → `endhan_date` (61a) · DEALERS L
+   = "not sure" → cell notes · rows 720/948 GST = "not sure" → imported as billed (override). The import
+   report lists all three groups so the team can correct any of them in the grid.
    Where they are (Ctrl+G):
    - `2025-26.xlsx` → `Sheet1`: column **AL** (61 cells, from AL142 down) and **AM** (AM742, AM946,
      AM1065 — a formula, AM1929, AM1962, AM1980, AM1981)

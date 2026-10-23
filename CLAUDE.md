@@ -62,7 +62,10 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   `origin/portal` into it after each release (PR #133 docs too, once merged). ✅ 10-23 answers: only
   RMC always 18% GST (migration `…_rmc_gst` on staging, `1c47e00`) · real data on STAGING first, then the
   live trial · no read-only date — **owner sends updated files in a day or two → build the repository +
-  archive, then incremental top-ups.** Still open: AL-ledger proposal · stray cells (2 questions).
+  archive, then incremental top-ups.** Later 10-23: AL dates = Endhan given → `endhan_date` column BUILT (migration `…_endhan_date`
+  on staging, probe 6/0, EF redeployed; **six** tracker migrations for prod) · DEALERS L → notes · rows
+  720/948 → as billed. Still open: **AL ledger — owner wants the detail; options A/B/C in the column map →
+  section G "The decision in detail"** (recommended C: a "Copy for AL sheet" button).
 
 ## Current state (2026-10-21, latest) — Phase 10 Stage 1 under way
 
