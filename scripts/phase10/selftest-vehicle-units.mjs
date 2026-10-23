@@ -10,7 +10,7 @@
 //      (owner, 2026-08-11), never derived from the code;
 //   3. value checks, cell by cell;
 //   4. the read plan (incentives hidden from all but admin + HR).
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 
@@ -34,6 +34,15 @@ for (const line of table.split('\n')) {
   if (m) sqlCols[m[1]] = { type: m[2], rest: m[3] }
 }
 ok(Object.keys(sqlCols).length === 102, `vehicle_units has 102 columns in the migration (found ${Object.keys(sqlCols).length})`)
+// Later tracker migrations: columns they add, and the newest tracker_apply_changes allowlist
+const later = readdirSync(join(root, 'supabase', 'migrations')).filter((f) => /_phase10_tracker_/.test(f)).sort()
+  .map((f) => readFileSync(join(root, 'supabase', 'migrations', f), 'utf8').replace(/\r\n/g, '\n'))
+let added = 0
+for (const text of later) for (const m of text.matchAll(/^alter table public\.vehicle_units add column ([a-z_0-9]+) (text|numeric|integer|date|uuid|timestamptz|boolean)\b(.*)$/gm)) {
+  sqlCols[m[1]] = { type: m[2], rest: m[3] }; added++
+}
+ok(added === 1, `later migrations add 1 column (endhan_date) — found ${added}`)
+const applySql = later.filter((t) => t.includes('editable constant text[] := array[')).at(-1)
 ok(eqSet(Object.keys(sqlCols), Object.keys(cols.COLUMNS)), 'catalogue lists exactly the table\'s columns')
 for (const [k, s] of Object.entries(sqlCols)) {
   ok(cols.COLUMNS[k]?.type === s.type, `type of ${k}: sql ${s.type} vs catalogue ${cols.COLUMNS[k]?.type}`)
@@ -42,9 +51,9 @@ for (const [k, s] of Object.entries(sqlCols)) {
 }
 
 const editableSql = (() => {
-  const a = sql.indexOf('editable constant text[] := array[')
-  const b = sql.indexOf('];', a)
-  return [...sql.slice(a, b).matchAll(/'([a-z_0-9]+)'/g)].map((m) => m[1])
+  const a = applySql.indexOf('editable constant text[] := array[')
+  const b = applySql.indexOf('];', a)
+  return [...applySql.slice(a, b).matchAll(/'([a-z_0-9]+)'/g)].map((m) => m[1])
 })()
 ok(editableSql.length === cols.EDITABLE.length && eqSet(editableSql, cols.EDITABLE),
    `editable list = tracker_apply_changes allowlist (${cols.EDITABLE.length} vs ${editableSql.length})`)

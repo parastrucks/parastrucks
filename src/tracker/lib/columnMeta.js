@@ -46,6 +46,7 @@ const SHOWN = [
   ['total_receivable', 'Total Receivable', 'C', 120], ['net_refund', 'Net Refund', 'C', 110],
   ['refund_status', 'Refund Status', 'C', 110], ['delivery_status', 'Delivery Status', 'C', 110],
   ['payment_status', 'Payment Status', 'C', 110], ['ad_blu_given', 'AD-BLU', 'C', 90], ['endhan', 'Endhan', 'C', 90],
+  ['endhan_date', 'Endhan Date', 'C', 100],
 
   ['dsm', 'DSM', 'D', 110], ['date_of_retail', 'Date of Retail', 'D', 100], ['date_of_delivery', 'Date of Delivery', 'D', 100],
   ['other_deductions', 'Other Deductions', 'D', 110], ['retention_internal', 'Retention (internal)', 'D', 120],

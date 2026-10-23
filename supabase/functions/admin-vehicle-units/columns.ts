@@ -90,6 +90,7 @@ export const COLUMNS: Record<string, ColSpec> = {
   payment_status:           { type: "text", ...C },
   ad_blu_given:             { type: "text", ...E },
   endhan:                   { type: "text", ...E },
+  endhan_date:              { type: "date", ...E },  // the day the Endhan was given (owner, 2026-10-23)
   // D · retention
   dsm:                      { type: "text", ...E },
   date_of_retail:           { type: "date", ...E },
