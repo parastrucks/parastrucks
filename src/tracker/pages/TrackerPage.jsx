@@ -8,6 +8,7 @@
 // old values back (a save is all-or-nothing, so nothing of it was kept).
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import TrackerGrid from '../components/TrackerGrid'
+import TrackerTools from '../components/TrackerTools'
 import { ALL_COLUMNS, COLUMN_BY_KEY } from '../lib/columnMeta'
 import { addNote, applyChanges, createUnits, listAll, listFormats, listNotes, setFormats } from '../lib/trackerApi'
 import { sameFormat } from '../lib/cellFormats'
@@ -316,6 +317,9 @@ export default function TrackerPage() {
     pump()
   }, [pump])
 
+  // the rows as this page holds them (typed edits included), for Find and History
+  const bookRows = useCallback(() => [...shadow.current.values()], [])
+
   const count = state.status === 'ready' ? state.rows.length + added : 0
   const columns = useMemo(() => (state.status === 'ready' ? state.columns : []), [state])
   const rows = useMemo(() => (state.status === 'ready' ? state.rows : []), [state])
@@ -341,6 +345,7 @@ export default function TrackerPage() {
       <div className="trk-phone-note">The tracker opens on a computer. A phone view comes later.</div>
       {state.status === 'loading' && <div className="trk-loading"><span className="spinner" /> Loading the book…</div>}
       {state.status === 'error' && <div className="trk-error" role="alert">Could not load the book: {state.message}</div>}
+      {state.status === 'ready' && <TrackerTools grid={grid} bookRows={bookRows} say={say} />}
       {state.status === 'ready' && (
         <TrackerGrid ref={grid} columns={columns} rows={rows} formats={state.formats} notes={state.notes}
           onChanges={onChanges} onFormats={onFormats} onNote={onNote} onRefused={(m) => say(m)} />

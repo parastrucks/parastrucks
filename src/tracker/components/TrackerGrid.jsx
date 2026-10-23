@@ -37,7 +37,7 @@ import '@univerjs/preset-sheets-data-validation/lib/index.css'
 import '@univerjs/preset-sheets-find-replace/lib/index.css'
 import '@univerjs/preset-sheets-note/lib/index.css'
 import { toCell } from '../lib/cellValues'
-import { STYLES, styleKey, styleWith, formatOf, lostNumberFormat, pastedFormat, baseStyle, paidRule } from '../lib/cellFormats'
+import { STYLES, styleKey, styleWith, formatOf, lostNumberFormat, pastedFormat, baseStyle, paidRule, isPaid, PAID_GREEN } from '../lib/cellFormats'
 
 // Column styles (lakh money, dd/mm/yy dates, locked grey), the "paid" green rule and the person's
 // own formatting on top: lib/cellFormats.js.
@@ -184,6 +184,72 @@ const TrackerGrid = forwardRef(function TrackerGrid({ columns, rows, formats, no
     },
     // keep at least SPARE empty rows below the book (after creates have used some)
     ensureSpare() { engine.current?.ensureSpare() },
+
+    // ── LAYOUTS: a layout is the columns left showing. People hide columns as in Excel (right-click →
+    // Hide); a layout saves what is showing and brings it back. Shown/hidden as MUTATIONS, so choosing a
+    // layout is not something Ctrl+Z undoes. The chassis column always shows (it is frozen, and it is
+    // how a row is recognised).
+    shownKeys() {
+      const s = engine.current?.sheet()?.getSheet()
+      return s ? columns.filter((c, i) => s.getColVisible(i)).map((c) => c.key) : []
+    },
+    showOnly(keys) { // keys: the columns to show; null = every column
+      const e = engine.current
+      if (!e) return
+      const want = keys ? new Set([...keys, 'chassis_no']) : null
+      const show = [], hide = []
+      columns.forEach((c, i) => (want === null || want.has(c.key) ? show : hide).push(i))
+      e.setColumnsShown(show, true)
+      e.setColumnsShown(hide, false)
+    },
+
+    // ── FIND: select a truck's cell and bring it into view. 'hidden' when the person's own filter hides
+    // the row (it is not taken off their filter for them).
+    goTo(id, key) {
+      const e = engine.current
+      if (!e) return 'gone'
+      const r = rowIds.current.indexOf(id)
+      if (r < 1) return 'gone'
+      if (!e.sheet().getSheet().getRowVisible(r)) return 'hidden'
+      let c = columns.findIndex((col) => col.key === key)
+      if (c < 0 || !e.sheet().getSheet().getColVisible(c)) c = 0
+      e.sheet().getRange(r, c).activate()
+      e.sheet().scrollToCell(Math.max(1, r - 3), c)
+      return 'ok'
+    },
+
+    // ── HISTORY: the truck and column of the selected cell (null on the header or an empty row)
+    activeCell() {
+      const range = api.current?.getActiveWorkbook()?.getActiveRange()
+      if (!range) return null
+      const r = range.getRow(), c = range.getColumn()
+      const id = rowIds.current[r]
+      if (r < 1 || !id || String(id).startsWith('new:') || c >= columns.length) return null
+      return { id, key: columns[c].key }
+    },
+
+    // ── COPY FOR MAIL: what is on screen — the rows the filter leaves (trucks only, not the spare rows)
+    // × the columns not hidden, with each cell's own fill (the person's colour, or the paid green).
+    onScreen() {
+      const e = engine.current
+      if (!e) return null
+      const s = e.sheet().getSheet()
+      const cols = columns.map((c, i) => i).filter((i) => s.getColVisible(i))
+      const raw = e.sheet().getRange(0, 0, rowIds.current.length, columns.length).getRawValues()
+      const lines = []
+      for (let r = 1; r < rowIds.current.length; r++) {
+        if (!rowIds.current[r] || !s.getRowVisible(r)) continue
+        lines.push({
+          values: cols.map((i) => raw[r][i]),
+          bgs: cols.map((i) => {
+            const col = columns[i]
+            if (col.key === 'al_payment_status' && isPaid(raw[r][i])) return PAID_GREEN
+            return formatOf(col, e.styleAt(r, i)).bg?.rgb ?? null
+          }),
+        })
+      }
+      return { columns: cols.map((i) => columns[i]), lines }
+    },
     univerAPI: () => api.current,
   }), [columns])
 
@@ -278,10 +344,24 @@ const TrackerGrid = forwardRef(function TrackerGrid({ columns, rows, formats, no
     const styleAt = (r, c) => workbook.getWorkbook().getStyles().getStyleByCell(sheet().getSheet().getCellRaw(r, c)) ?? {}
 
     const isSpare = (r) => !rowIds.current[r]
+    // columns shown or hidden as one mutation each way (contiguous runs → ranges)
+    const setColumnsShown = (cols, shown) => {
+      if (!cols.length) return
+      const ranges = []
+      for (const c of [...cols].sort((a, b) => a - b)) {
+        const last = ranges[ranges.length - 1]
+        if (last && last.endColumn === c - 1) last.endColumn = c
+        else ranges.push({ startRow: 0, endRow: sheet().getMaxRows() - 1, startColumn: c, endColumn: c })
+      }
+      univerAPI.syncExecuteCommand(shown ? 'sheet.mutation.set-col-visible' : 'sheet.mutation.set-col-hidden',
+        { unitId: workbook.getId(), subUnitId: sheet().getSheetId(), ranges })
+    }
+
     engine.current = {
       sheet,
       styleAt,
       drawNotes,
+      setColumnsShown,
       firstSpare: () => {
         for (let r = 1; r < rowIds.current.length; r++) if (isSpare(r)) return r
         return -1

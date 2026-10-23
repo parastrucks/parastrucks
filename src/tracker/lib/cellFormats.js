@@ -80,17 +80,23 @@ export const sameFormat = (a, b) => stable(a ?? {}) === stable(b ?? {})
 export const PAID_GREEN = '#C6EFCE' // Excel's "Good" fill, the workbooks' own colour
 export const columnLetter = (i) => { let s = ''; for (let n = i + 1; n > 0; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(65 + ((n - 1) % 26)) + s; return s }
 
+// The words that mean paid — one list for the grid's rule and for anything that draws the cell outside it
+// (Copy for mail).
+export const PAID_WORDS = ['cash invoiced', 'fresh offtake']
+export const isPaid = (v) => PAID_WORDS.includes(String(v ?? '').trim().toLowerCase())
+
 // columns: the grid's columns in order; lastRow: the last sheet row the rule should cover (0-based)
 export function paidRule(columns, lastRow) {
   const c = columns.findIndex((col) => col.key === 'al_payment_status')
   if (c < 0) return null
+  const cell = `LOWER(TRIM(${columnLetter(c)}2))`
   return {
     cfId: 'al-paid', stopIfTrue: false,
     ranges: [{ startRow: 1, endRow: lastRow, startColumn: c, endColumn: c }],
     rule: {
       type: 'highlightCell', subType: 'formula',
       // relative to the range's first cell (row 2), as Excel writes it
-      value: `=OR(LOWER(TRIM(${columnLetter(c)}2))="cash invoiced",LOWER(TRIM(${columnLetter(c)}2))="fresh offtake")`,
+      value: `=OR(${PAID_WORDS.map((w) => `${cell}="${w}"`).join(',')})`,
       style: { bg: { rgb: PAID_GREEN } },
     },
   }

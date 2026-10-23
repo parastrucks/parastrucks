@@ -8,7 +8,11 @@
 // screen and the server are tested with the same rules. Expectations are written out by hand.
 import { fromCell, toCell, isoToSerial, serialToIso, parseTypedDate, parseTypedNumber, sameValue, collapse } from '../../src/tracker/lib/cellValues.js'
 import { planSave, planNewRows, MAX_NEW_ROWS, chunk, refusalMessage } from '../../src/tracker/lib/savePlan.js'
-import { styleKey, formatOf, styleWith, lostNumberFormat, pastedFormat, sameFormat, stable, MONEY, paidRule, columnLetter, PAID_GREEN } from '../../src/tracker/lib/cellFormats.js'
+import { styleKey, formatOf, styleWith, lostNumberFormat, pastedFormat, sameFormat, stable, MONEY, paidRule, columnLetter, PAID_GREEN, PAID_WORDS, isPaid } from '../../src/tracker/lib/cellFormats.js'
+import { showValue } from '../../src/tracker/lib/showValue.js'
+import { findRows, MIN_FIND } from '../../src/tracker/lib/findRows.js'
+import { mailTable } from '../../src/tracker/lib/mailTable.js'
+import { describeChange } from '../../src/tracker/lib/historyText.js'
 import { ageingDays, interestOnAgeing, slab, withScreenColumns, todayIst } from '../../src/tracker/lib/screenColumns.js'
 import { ALL_COLUMNS, COLUMN_BY_KEY, visibleColumns } from '../../src/tracker/lib/columnMeta.js'
 import { COLUMNS, EDITABLE } from '../../supabase/functions/admin-vehicle-units/columns.ts'
@@ -211,6 +215,49 @@ ok(w.find((r) => r.id === 'r0').dse_incentive === 1200, '5 in August (case/space
 ok(w.find((r) => r.id === 'sep').dse_incentive === 0 && w.find((r) => r.id === 'old').dse_incentive === null && w.find((r) => r.id === 'none').dse_incentive === null,
   'September alone → 0; rebilled and DSE-less rows → none')
 ok(todayIst(new Date('2026-10-21T19:00:00Z')) === '2026-10-22' && todayIst(new Date('2026-10-21T18:00:00Z')) === '2026-10-21', 'today in IST (midnight IST = 18:30 UTC)')
+
+// ── slice 5: a value as people read it, find a vehicle, Copy for mail, a row's history
+const C = (k) => COLUMN_BY_KEY[k]
+ok(showValue(C('ctc'), 1234567) === '12,34,567' && showValue(C('ctc'), -120468) === '-1,20,468' && showValue(C('ctc'), 15000000) === '1,50,00,000',
+  'money in lakhs (a crore shown properly)', [showValue(C('ctc'), 1234567), showValue(C('ctc'), 15000000)])
+ok(showValue(C('ctc'), 1310.5) === '1,311' && showValue(C('ctc'), '1310.50') === '1,311', 'money as on screen: no paise; text from the history too')
+ok(showValue(C('ptb_invoice_date'), 45843) === '05/07/25' && showValue(C('ptb_invoice_date'), '2025-07-05') === '05/07/25', 'a date: serial (grid) or iso (history) → dd/mm/yy')
+ok(showValue(C('road_tax_pct'), 6) === '6' && showValue(C('qty'), 1) === '1' && showValue(C('road_tax_pct'), '8.50') === '8.5', 'percent / count: plain numbers')
+ok(showValue(C('model'), 'CE2820') === 'CE2820' && showValue(C('ctc'), null) === '' && showValue(C('ctc'), '') === '', 'text as is; empty stays empty')
+
+const book = [
+  { id: 'a', chassis_no: 'MB1T2VHD7SPNF1312', engine_no: 'SPP123456', oem_gatepass_no: 'GP-7781312', customer_name: 'Navgujarat CFS' },
+  { id: 'b', chassis_no: 'MB1T2VHD8SPNF1187', engine_no: 'SPP221312', oem_gatepass_no: 'GP-0001', customer_name: 'Rajshree and Co' },
+  { id: 'c', chassis_no: 'MB1AB1312XYZ0001', engine_no: 'X1', customer_name: 'A 1312 Logistics' },
+]
+const ids = (q) => findRows(book, q).map((h) => `${h.id}:${h.key}`)
+ok(JSON.stringify(ids('1312')) === JSON.stringify(['a:chassis_no', 'b:engine_no', 'c:chassis_no']),
+  'ends-with on chassis/engine/gatepass first, then contains; equal ranks keep the book order', ids('1312'))
+ok(JSON.stringify(ids('nf 1312')) === JSON.stringify(['a:chassis_no']), 'spaces and case do not matter', ids('nf 1312'))
+ok(JSON.stringify(ids('gujarat')) === JSON.stringify(['a:customer_name']), 'part of a customer name')
+ok(ids('13').length === 0 && ids('').length === 0, `under ${MIN_FIND} characters finds nothing (every row would match)`)
+ok(ids('7781312')[0] === 'a:oem_gatepass_no' || ids('7781312')[0] === 'a:chassis_no', 'the gatepass digits find the truck', ids('7781312'))
+
+const mt = mailTable([C('chassis_no'), C('ctc'), C('ptb_invoice_date'), C('al_payment_status')], [
+  { values: ['MB1<X>&1', 1234567, 45843, 'Cash Invoiced'], bgs: [null, '#FFFF00', null, PAID_GREEN] },
+  { values: ['MB1\tTAB', null, null, 'IBND'], bgs: [] },
+])
+ok(mt.text === 'Chassis No\tCTC\tPTB Invoice Date\tAL Payment Status\r\nMB1<X>&1\t12,34,567\t05/07/25\tCash Invoiced\r\nMB1 TAB\t\t\tIBND',
+  'plain text: header + one line per row, tab-separated, a tab inside a value cannot split a cell', mt.text)
+ok(mt.html.includes('MB1&lt;X&gt;&amp;1') && !mt.html.includes('<X>'), 'html: text is escaped')
+ok(mt.html.includes('background:#FFFF00') && mt.html.includes(`background:${PAID_GREEN}`) && mt.html.includes('>12,34,567<') && mt.html.includes('text-align:right'),
+  'html: colours travel, money in lakhs and right-aligned')
+ok((mt.html.match(/<tr>/g) || []).length === 3 && (mt.html.match(/<th /g) || []).length === 4, 'html: a header row + one row per vehicle')
+ok(isPaid(' Fresh Offtake ') && isPaid('CASH INVOICED') && !isPaid('IBND') && !isPaid(null), 'paid = cash invoiced or fresh offtake (one list for the rule and the copy)')
+ok(paidRule([C('al_payment_status')], 10).rule.value === `=OR(${PAID_WORDS.map((w) => `LOWER(TRIM(A2))="${w}"`).join(',')})`, 'the grid rule is built from the same list')
+
+const hc = describeChange({ column_key: 'ctc', old_value: '2800000.00', new_value: '2900000', actor_name: 'Staging Admin', source: 'paste', created_at: '2026-10-23T09:05:00Z' }, COLUMN_BY_KEY)
+ok(hc.what === 'CTC' && hc.from === '28,00,000' && hc.to === '29,00,000' && hc.how === 'pasted' && hc.who === 'Staging Admin', 'history: column label, values as on screen, how', hc)
+ok(hc.at.includes('14:35') && /23/.test(hc.at), 'history: the time in IST (09:05 UTC = 14:35 IST)', hc.at)
+const hd = describeChange({ column_key: 'ptb_invoice_date', old_value: null, new_value: '2025-07-05', actor_name: null, source: 'typed', created_at: '2026-10-23T09:05:00Z' }, COLUMN_BY_KEY)
+ok(hd.from === '' && hd.to === '05/07/25' && hd.who === 'someone', 'history: empty before, a date, no name')
+const hn = describeChange({ column_key: '*', old_value: null, new_value: 'MB1X', actor_name: 'A', source: 'create', created_at: '2026-10-23T09:05:00Z' }, COLUMN_BY_KEY)
+ok(hn.what === 'Vehicle added' && hn.to === 'MB1X' && hn.how === 'added', 'history: the row being created')
 
 console.log(`selftest-tracker-cells: ${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)
