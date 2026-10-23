@@ -80,6 +80,10 @@ Owner: *"yes start stage 2"*. Branch `10b-foundation` (`6a9455f` → `5f38233`).
   formatting; seen on staging, cells 117/0) · MTO = a 5% advance before the chassis exists · GST by the PTB
   invoice date for CTC and CTD. Re-run: 75/78 GST CTDs explained (3 real), 21 MTO advances paired by
   customer name (splits 72 → 51).
+- **2026-10-23 — "keep the table flat" (owner):** I proposed an MTO order list linked to trucks (an advance
+  is per ORDER: 21 orders = 87 trucks, 43 delivered in the year); the owner asked for a yes/no column
+  instead and made flatness a rule. Built `mto_advance` on staging (probe 6/0, EF redeployed, seen through
+  the deployed EF); fixed-list columns now take any case.
 
 ## Session log — 2026-10-21 (PC, latest): Phase 10 Stage 1 step 3 — the tracker's Edge Function and access switch, on staging
 

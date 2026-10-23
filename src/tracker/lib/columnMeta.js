@@ -27,7 +27,7 @@ const SHOWN = [
   ['amc_to_al', 'AMC/Service', 'B', 100], ['dsa', 'DSA', 'B', 90], ['ad_blue', 'AD Blue', 'B', 90],
   ['retention_dealer', 'Retention', 'B', 100], ['payment_amount', 'Payment Amount', 'B', 120],
   ['tds', 'TDS', 'B', 80], ['total_payment_to_al', 'Total Payment to AL', 'B', 130],
-  ['al_payment_status', 'AL Payment Status', 'B', 120], ['al_payment_date', 'AL Payment Date', 'B', 100],
+  ['al_payment_status', 'AL Payment Status', 'B', 120], ['mto_advance', 'MTO Advance', 'B', 90], ['al_payment_date', 'AL Payment Date', 'B', 100],
   ['ptb_invoice_date', 'PTB Invoice Date', 'B', 100], ['ageing_days', 'Ageing', 'B', 70],
   ['interest_on_ageing', 'Interest', 'B', 90], ['gst_rate', 'GST %', 'B', 60], ['gst_rate_override', 'GST % Override', 'B', 90],
   ['supplier_invoice_no', 'Supplier Invoice No', 'B', 130], ['supplier_invoice_date', 'Supplier Invoice Date', 'B', 110],

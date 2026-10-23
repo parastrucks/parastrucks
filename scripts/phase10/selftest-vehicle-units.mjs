@@ -41,7 +41,8 @@ let added = 0
 for (const text of later) for (const m of text.matchAll(/^alter table public\.vehicle_units add column ([a-z_0-9]+) (text|numeric|integer|date|uuid|timestamptz|boolean)\b(.*)$/gm)) {
   sqlCols[m[1]] = { type: m[2], rest: m[3] }; added++
 }
-ok(added === 1, `later migrations add 1 column (endhan_date) — found ${added}`)
+ok(added === 2, `later migrations add 2 columns (endhan_date, mto_advance) — found ${added}`)
+ok(sqlCols.mto_advance?.rest.includes("in ('Yes', 'No')") && eqSet(cols.COLUMNS.mto_advance?.oneOf ?? [], ['Yes', 'No']), 'mto_advance values: Yes / No in the table and the catalogue')
 const applySql = later.filter((t) => t.includes('editable constant text[] := array[')).at(-1)
 ok(eqSet(Object.keys(sqlCols), Object.keys(cols.COLUMNS)), 'catalogue lists exactly the table\'s columns')
 for (const [k, s] of Object.entries(sqlCols)) {

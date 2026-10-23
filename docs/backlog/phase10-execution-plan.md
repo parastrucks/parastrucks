@@ -804,8 +804,8 @@ Also: a phone view (read-only cards) and the local save queue across reloads (E5
   for finance" on -0003 Model and two "hand test" notes on DEMO-MB1AR0000517 / DEMO-MB1AT0002049 Model);
   10-23 (DEMO-NEWROW-0002 AL Payment Status → IBND via "cash invoiced"/"Cash Invoiced"). No RMC rows.
   Nobody has the tracker switch on; admin always has it.
-- **Tests:** `selftest-tracker-cells` **117/0** · `selftest-vehicle-units` **553/0** · probes
-  foundation 42 · supersede 19 · numeric-before 9 · create-units 18 · rmc-gst 9 · endhan-date 6 (all 0 failed, on PGlite
+- **Tests:** `selftest-tracker-cells` **127/0** · `selftest-vehicle-units` **556/0** · probes
+  foundation 42 · supersede 19 · numeric-before 9 · create-units 18 · rmc-gst 9 · endhan-date 6 · mto-advance 6 (all 0 failed, on PGlite
   and staging) · `gst_rmc.cjs` re-measures the GST rule from the workbook. Build + no-undef clean.
 - **Checking in a browser:** the owner's Chrome (Claude in Chrome) is signed in as
   `admin@parastrucks.test` on `http://localhost:3000`; start the dev server with
@@ -820,7 +820,7 @@ Also: a phone view (read-only cards) and the local save queue across reloads (E5
   `silent` note mutations still fire note events · `Before…` note events fire from the menu, not from
   facade calls · ⭐ conditional formatting leaks into `getCellStyleData()`/`getCellData()` → read styles
   RAW (`getSheet().getCellRaw` + `getStyles().getStyleByCell`).
-- **Prod: nothing.** The prod rollout, when approved: the six migrations (LF text), both functions
+- **Prod: nothing.** The prod rollout, when approved: the seven migrations (LF text), both functions
   (`--no-verify-jwt`; `admin-vehicle-units` joins the key-cutover roster), then the frontend.
 - **Owner questions — answered 2026-10-23:** AL Payment Status green = Cash Invoiced only · only RMC is
   always 18% GST · sandbox = real data on staging first, then the trial on the live site · read-only
@@ -837,6 +837,10 @@ Also: a phone view (read-only cards) and the local save queue across reloads (E5
   ✅ Owner: FRESH OFFTAKE = Cash Invoiced (green rule accepts both, seen on staging) · MTO = the 5% advance
   before a chassis exists · GST by the PTB invoice date for CTC and CTD → re-run: 75 of 78 GST CTDs follow
   the rule, 3 do not; 21 MTO advances pair to 95% trucks (splits 72 → 51); 172 + 43 remain the review list.
+- ✅ **10-23: "MTO Advance" Yes/No column** (owner chose it over an orders list — **"keep the table as flat as
+  possible"**, now a standing rule) — migration `20261023_phase10_tracker_mto_advance.sql` on STAGING, EF
+  redeployed, probe 6/0, vehicle-units 556/0, cells 127/0 (fixed lists case-forgiving). Prod rollout is now
+  **seven** migrations.
 - ✅ **10-23: "Endhan Date" column** — migration `20261023_phase10_tracker_endhan_date.sql` on STAGING
   (adds `vehicle_units.endhan_date date`; `tracker_apply_changes` re-created with it on the editable
   list, otherwise byte-identical to numeric_before; staging prosrc md5 `76308fce…` = file, LF) ·

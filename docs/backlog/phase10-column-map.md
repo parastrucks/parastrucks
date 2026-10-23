@@ -90,6 +90,7 @@ text (`5K-DSA`), stored as text + a parsed amount and kind · **HID** = hidden f
 | 59 | `payment_status` | text | DB | `Payment Status` | `IF(delivery_status='Stock','Stock', IF(no finance_paymt_recd_date,'Pending','Payment Recd'))` |
 | 60 | `ad_blu_given` | text | TXT$ | `AD-BLU` | carries DSA/URIYA deals too |
 | 61 | `endhan` | text | TXT$ | `ENDHAN` | 84 numeric rows in FY |
+| 25a | `mto_advance` | text Yes/No | IN | — (new; owner 2026-10-23) | make-to-order truck whose 5% advance to AL was paid; empty = not make-to-order |
 | 61a | `endhan_date` | date | IN | — (the unlabelled dates in 2025-26 col AL) | the day the Endhan was given (owner 2026-10-23, "I believe so"); migration `20261023_phase10_tracker_endhan_date.sql` |
 | — | ~~`subvention_status`~~ | | dropped | `Subvention Status` | ✅ owner: drop |
 
@@ -225,7 +226,7 @@ person confirm the pair) → unfinished splits **72 → 51**
 differences, **43** AL-invoiced trucks on no sheet, 55 spellings, 1 non-MTO line with no chassis, 4 + 3 + 1
 small.
 
-### Proposal 2026-10-23 — MTO as an ORDER, and line types as data (owner asked: "a better way … exceptions
+### ~~Proposal~~ 2026-10-23 — MTO as an ORDER, and line types as data (owner asked: "a better way … exceptions
 ### will keep snowballing") — ❓ awaiting the owner
 
 **Measured:** an MTO advance line is per ORDER, not per truck: customer + CBN (always filled) + CTD per
@@ -253,7 +254,19 @@ kind becomes a special case in code.
 
 Excel change for the team: on an MTO line, the order ref goes in (e.g. the Chassis cell); nothing else.
 Cost: ~2–3 days, inside the AL upload build (after the first real load). ❓ Does AL give an order number
-at MTO time — and is it the tracker's "ODN Number"? One fact to settle either way: the balance sheet says **FRESH OFFTAKE / IBND / MTO**,
+at MTO time — and is it the tracker's "ODN Number"?
+
+✅ **Owner's answer: NO order list — one yes/no column on the truck, and "keep the table as flat as possible,
+which would allow for better data understanding and deeper data insights"** (a standing rule now: memory
+`feedback_flat_tables`). Built: **`mto_advance`** (Yes / No / empty = not make-to-order), after AL Payment
+Status — migration `20261023_phase10_tracker_mto_advance.sql` on STAGING (column + CHECK Yes/No; the apply
+function re-created with one more name, staging prosrc md5 `4493b2b9…` = file, LF), EF redeployed,
+`probe-mto-advance` **6/0** (mutant not on the list fails 4), `selftest-vehicle-units` **556/0**,
+`selftest-tracker-cells` **127/0** — ⭐ any fixed-list column now takes what is typed in any case and saves the
+list's spelling (Yes/No also takes Y/N; "Inclusive" → inclusive). Seen through the deployed EF from the owner's
+tab: " y " → Yes saved and read back, "maybe" refused "must be one of Yes, No", cleared again (DEMO-NEWROW-0003,
+three audit rows). The AL upload reconciles per model: trucks marked Yes vs MTO advances (5% × qty) on the
+sheets; a 95% truck line must say Yes. Parts 2–3 (line kinds as a lookup, settle once) stand. One fact to settle either way: the balance sheet says **FRESH OFFTAKE / IBND / MTO**,
 the tracker's AL Payment Status says **Cash Invoiced / IBND** — is FRESH OFFTAKE the same as Cash
 Invoiced (so it turns green), and what is MTO?
 

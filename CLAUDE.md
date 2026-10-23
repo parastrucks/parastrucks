@@ -68,7 +68,9 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   the portal lists discrepancies** — rehearsed on the 12 real sheets (`scripts/phase10/al_balance_check.cjs`;
   78 CTDs = the GST change, 172 others, 43 missing trucks); build after the first real load (column map →
   G "DECIDED"). ✅ FRESH OFFTAKE = Cash Invoiced (green rule takes both) · MTO = 5% advance, no chassis yet ·
-  GST by PTB invoice date for CTC + CTD → 75/78 GST CTDs explained, 3 real.
+  GST by PTB invoice date for CTC + CTD → 75/78 GST CTDs explained, 3 real. ✅ **"MTO Advance" Yes/No column**
+  on staging (migration `…_mto_advance`, probe 6/0; **seven** tracker migrations for prod). ⭐⭐ Owner rule:
+  **keep the table as flat as possible** — a new fact = a column on the truck's row, not a linked list.
 
 ## Current state (2026-10-21, latest) — Phase 10 Stage 1 under way
 

@@ -46,6 +46,17 @@ export function parseTypedNumber(s) {
   return Number(t)
 }
 
+// A column with a fixed list of values takes what was typed in any case ("yes", "YES"), saved as the
+// list spells it; a Yes/No list also takes Y / N. Anything else is left for the list check to refuse.
+function listed(oneOf, typed) {
+  const t = typed.trim().toLowerCase()
+  const hit = oneOf.find((o) => String(o).toLowerCase() === t)
+  if (hit !== undefined) return hit
+  if (oneOf.includes('Yes') && t === 'y') return 'Yes'
+  if (oneOf.includes('No') && t === 'n') return 'No'
+  return null
+}
+
 // What a grid cell holds → what the database should store. Returns { ok, value } or { ok, reason }.
 export function fromCell(spec, raw) {
   let v = raw
@@ -73,6 +84,7 @@ export function fromCell(spec, raw) {
       break
     case 'text':
       if (typeof v === 'boolean') v = v ? 'TRUE' : 'FALSE'
+      if (spec.oneOf && typeof v === 'string') v = listed(spec.oneOf, v) ?? v
       break
   }
   return checkValue(spec, v)

@@ -49,6 +49,7 @@ export const COLUMNS: Record<string, ColSpec> = {
   tds:                      { type: "numeric", ...C },
   total_payment_to_al:      { type: "numeric", ...C },
   al_payment_status:        { type: "text", ...E },
+  mto_advance:              { type: "text", ...E, oneOf: ["Yes", "No"] },  // make-to-order 5% advance paid (owner, 2026-10-23)
   al_payment_date:          { type: "date", ...E },
   ptb_invoice_date:         { type: "date", ...E },
   gst_rate:                 { type: "numeric", ...C },
