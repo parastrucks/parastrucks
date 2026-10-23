@@ -64,8 +64,10 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   live trial · no read-only date — **owner sends updated files in a day or two → build the repository +
   archive, then incremental top-ups.** Later 10-23: AL dates = Endhan given → `endhan_date` column BUILT (migration `…_endhan_date`
   on staging, probe 6/0, EF redeployed; **six** tracker migrations for prod) · DEALERS L → notes · rows
-  720/948 → as billed. Still open: **AL ledger — owner wants the detail; options A/B/C in the column map →
-  section G "The decision in detail"** (recommended C: a "Copy for AL sheet" button).
+  720/948 → as billed. ✅ **AL ledger DECIDED (owner): stays in Excel; the final sheet is uploaded monthly and
+  the portal lists discrepancies** — rehearsed on the 12 real sheets (`scripts/phase10/al_balance_check.cjs`;
+  78 CTDs = the GST change, 172 others, 43 missing trucks); build after the first real load (column map →
+  G "DECIDED"). ❓ FRESH OFFTAKE = Cash Invoiced? MTO? Which CTD for the 78 GST trucks?
 
 ## Current state (2026-10-21, latest) — Phase 10 Stage 1 under way
 

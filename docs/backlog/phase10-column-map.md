@@ -175,7 +175,44 @@ TDS) — 224 whole, 15 at 95% and a few at 5% (split payments). So the better wa
 | **C. In between** | stays in Excel, but the tracker gets a **"Copy for AL sheet"** button that copies the month's invoiced trucks as ready-made lines (CBN, chassis, engine, CTD × 0.999) | ~1 day | low — the team keeps its file; only the retyping goes |
 
 Recommendation: **C now, B later only if the team asks** — adoption first; C removes the double typing
-without a new screen. One fact to settle either way: the balance sheet says **FRESH OFFTAKE / IBND / MTO**,
+without a new screen. → **Superseded the same day by the owner's own option D (below).**
+
+### ✅ DECIDED 2026-10-23 (owner) — option D: keep Excel, upload the final sheet monthly, the portal checks it
+
+Owner: *"keep the Excel file, and every month, once the balance sheet is finalized, it can be sent over to
+the portal by an upload. You can point out any discrepancies or anything that is problematic."* So: no
+ledger screen, no "Copy for AL sheet" button; the team's file stays the record of the AL account, and
+the portal reads it once a month and lists what disagrees with the tracker or with itself.
+
+**Rehearsed on the real 2025-26 files** (`scripts/phase10/al_balance_check.cjs`: 12 monthly sheets against
+the INVOICE TRACKER workbook as the stand-in for the tracker; counts and chassis only):
+2,006 truck lines · 198 add-on lines · 609 money lines. What a person would be shown, for the year:
+
+| Check | Year | What it means |
+|---|---|---|
+| Net Balance = paid − owed; CARRY OVER = last month's Net Balance | **0** | the sheet's own arithmetic ties every month (Net Balance sits in Debit and includes the carry-over line, which is a credit or a debit by sign) |
+| CTD on the sheet = CTD in the tracker | **172** (+78 explained) | 78 are **exactly × 1.28 ÷ 1.18** — AL billed at 28% GST before 22 Sep 2025, the tracker holds 18% (69 have a PTB invoice after the change). The other 172 differ by 1–10% (mostly 96–99%), none after Nov-25 — the review list |
+| Truck taken by AL on no balance sheet | **43** | Cash Invoiced / IBND in the tracker, never credited |
+| Split never completed | **72** | a 95% line with no 5% line in the year (may fall in the next year) |
+| Credit line with no chassis | **22** | MTO lines written against a customer name (e.g. "MTO-… CFS") |
+| Offtake Mode spelt two ways | **55** | PARTS PKG / PARTS PACKAGE · I-ALERT / IALERT · "PATMENT PENDING" · 1 blank |
+| Chassis not in the tracker | **4** | AMC lines on trucks not in the 2025-26 tracker (older stock) |
+| Credit typed as a number, not CTD × 0.999 | **3** | Jan-26 |
+
+**Learnt from the files** (correcting the proposal above): a chassis carries more than its truck line —
+**add-on lines** AMC 58, PARTS PACKAGE 97, IALERT 24, EWP 19, PURCHASE RETURN 2, pending 4, whose CTD cell
+holds the add-on amount (only 24 of 54 AMC lines equal the tracker's AMC column). Offtake modes seen:
+FRESH OFFTAKE 1,482 · IBND 524 · MTO 21. **IBND on the sheet and Cash Invoiced in the tracker is the
+truck's normal life, not a discrepancy** (524 such — the sheet records how AL released it, the tracker
+its state now).
+
+**To build (after the first real load — the checks compare against the tracker's real data):** an
+"AL balance sheet" upload on `/tracker` (admin + back office), read in the browser like the payments
+import (columns by header, never by position; one month per file; refuses a month already uploaded
+unless replaced on purpose), stores the lines in their own table with the month, and shows the list
+above — each line linking to its truck in the grid. Nothing in the tracker is changed by an upload.
+❓ Still to ask: is FRESH OFFTAKE the same as Cash Invoiced, and what is MTO? · for the 78 GST trucks,
+which CTD should the tracker hold — AL's 28% figure or the 18% one? One fact to settle either way: the balance sheet says **FRESH OFFTAKE / IBND / MTO**,
 the tracker's AL Payment Status says **Cash Invoiced / IBND** — is FRESH OFFTAKE the same as Cash
 Invoiced (so it turns green), and what is MTO?
 
@@ -191,7 +228,7 @@ Also answered: GST change 22 Sep 2025 · road tax on the bill value until 31 Jul
 1 Aug 2025 (date found in the data) · the HSRP/CRTM constant is CRETEM.
 
 1. ~~Tippers and GST~~ ✅ **answered 2026-10-23: only RMC is always 18%** (see 33a).
-2. **The AL ledger plan** in section G — owner asked what it means; explained in plain words 2026-10-21.
+2. ~~The AL ledger plan~~ ✅ **decided 2026-10-23: keep Excel, upload the final sheet monthly, the portal checks it** (section G).
 5. **Stray cells** — owner 2026-10-23: "what do you want me to do here?" → read them myself (figures
    masked) and proposed a default per block; owner confirms. **What they hold:** 2025-26 AL = 59 DATES,
    each beside a filled ENDHAN (AK) + two "K-ENDHAN" labels → ❓ the Endhan given date? (if yes: an

@@ -69,6 +69,13 @@ Owner: *"yes start stage 2"*. Branch `10b-foundation` (`6a9455f` → `5f38233`).
   ⭐ `selftest-vehicle-units` read only the foundation migration — now reads columns added later and the
   newest allowlist (553/0). AL ledger: owner asked for the detail → measured the balance sheet and gave
   three options (Excel as is · portal ledger · "Copy for AL sheet" button), recommended the button.
+- **2026-10-23 — AL ledger DECIDED by the owner's own option:** keep Excel; upload the final sheet each
+  month; the portal points out discrepancies. Rehearsed on the 12 real 2025-26 sheets against the invoice
+  tracker (`al_balance_check.cjs`, counts only). ⭐ The first pass flagged ~2,000 "problems" — nearly all
+  my misreading: a chassis has ADD-ON lines (AMC, parts package, i-Alert, EWP) besides its truck line;
+  IBND → Cash Invoiced is a truck's normal life; Net Balance = paid − owed with a signed carry-over. Read
+  right: arithmetic ties every month; 78 CTDs differ by exactly 1.28/1.18 (GST change), 172 by 1–10%, 43
+  AL-invoiced trucks on no sheet, 72 unfinished splits. Build after the first real load.
 
 ## Session log — 2026-10-21 (PC, latest): Phase 10 Stage 1 step 3 — the tracker's Edge Function and access switch, on staging
 

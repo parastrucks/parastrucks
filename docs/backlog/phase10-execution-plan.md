@@ -500,7 +500,7 @@ Owner decisions 2026-10-21 (do not re-ask):
 | RET-INT columns T, U, V | lookups from other tables → **dropped** |
 | Subvention Status | **dropped** |
 | Cancel/rebill | **keep** vehicle location + delivery columns; old→new chassis = superseded rows |
-| AL Balance Sheet | **its own ledger, outside the tracker.** Proposed (owner asked "what is this?" — explained in plain words; answer pending): per-truck credit lines generated from the tracker (measured: every credit = CTD × 0.999, some split 95/5), payments typed, running balance, monthly tie-out with AL. **Stage 6, not Stage 1** |
+| AL Balance Sheet | ✅ **2026-10-23: stays in Excel; the final sheet is uploaded monthly and checked against the tracker** (column map → G). Earlier: **its own ledger, outside the tracker.** Proposed (owner asked "what is this?" — explained in plain words; answer pending): per-truck credit lines generated from the tracker (measured: every credit = CTD × 0.999, some split 95/5), payments typed, running balance, monthly tie-out with AL. **Stage 6, not Stage 1** |
 
 Still open with the owner:
 1. ❓ **Tippers and GST** — 63 TIPPER rows (+1 tractor) were billed at 18% before 22 Sep 2025. Were
@@ -829,9 +829,12 @@ Also: a phone view (read-only cards) and the local save queue across reloads (E5
   so" → ✅ **"Endhan Date" column BUILT** (below) · (b) DEALERS column L dates — "not sure" → they go in
   as a **cell note on their truck** (the default: nothing lost, nothing guessed) · (c) rows 720 / 948 —
   "not sure" → imported **as billed** (`gst_rate_override` = the rate Excel used), so the archive
-  matches what was actually invoiced; flagged in the import report. **Still open:** the AL ledger — the
-  owner asked for the detail to decide; given in full 2026-10-23 (column map → section G, "The decision
-  in detail").
+  matches what was actually invoiced; flagged in the import report. ✅ **AL ledger DECIDED (owner, option D):** keep the
+  Excel file; each month the final sheet is uploaded and the portal lists discrepancies. Rehearsed on the
+  12 real 2025-26 sheets (`scripts/phase10/al_balance_check.cjs`): arithmetic ties every month; 78 CTDs
+  differ by exactly the GST change, 172 by 1–10%, 43 AL-invoiced trucks on no sheet, 72 unfinished
+  splits, 55 mode spellings. Built AFTER the first real load (column map → section G "DECIDED").
+  ❓ FRESH OFFTAKE = Cash Invoiced? MTO? · which CTD for the 78 GST trucks?
 - ✅ **10-23: "Endhan Date" column** — migration `20261023_phase10_tracker_endhan_date.sql` on STAGING
   (adds `vehicle_units.endhan_date date`; `tracker_apply_changes` re-created with it on the editable
   list, otherwise byte-identical to numeric_before; staging prosrc md5 `76308fce…` = file, LF) ·
