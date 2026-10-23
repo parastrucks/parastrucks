@@ -773,31 +773,62 @@ No server change: `setFormats`/`listFormats`/`addNote`/`listNotes` from step 3 w
    those files, on staging.
 Also: a phone view (read-only cards) and the local save queue across reloads (E5) are not built.
 
-### Where things stand (2026-10-22, after slice 3) — resume here
-- Branch `10b-foundation`, pushed and clean. Slice 4 ✅. Next: **slice 5 — layouts, search by the
-  last six digits, Copy for mail, row history.** (The 2026-10-22
-  pause for the PI hotfix is over; `portal` is merged in up to `e7fcb82`.)
-- **On staging now:** migrations `…_foundation`, `…_supersede`, `…_numeric_before`, `…_create_units`;
-  (slice 4 added no migration — dummy formats and notes only, listed under slice 4); Edge Functions
-  `admin-vehicle-units` and `admin-users` (with the tracker actions) as in this branch; 2,052 tracker
-  rows (2,050 `DEMO seed` + the probe's original and rebill); test edits from slice 2 on dummy rows
-  (CTC/CTD on a few DEMO trucks, Segment → TIPPER on three, "DEMO AFTER SORT" on DEMO-MB1AS0000345,
-  CTC 21,11,111 on DEMO-MB1AT0002049 from the conflict test). Nobody has the tracker switch on;
-  admin always has it.
-- Checking in a browser: the owner's Chrome is signed in as `admin@parastrucks.test` on
-  `http://localhost:3000` (the dev server is started with `preview_start {name:"portal"}`); the grid
-  is `window.__trackerUniver` in dev. Staging SQL: `npx --yes supabase@2.109.1 db query --linked
-  --workdir <scratch>/sb …` (linked to `klpnhpnlotcbbovwswmq`).
-- Prod: nothing. The prod rollout, when approved, is the five migrations (LF text; `…_rmc_gst` = md5
-  `714d9b5d…` on staging), both functions
-  (`--no-verify-jwt`; the 11th function joins the key-cutover roster), then the frontend.
-- Owner questions — answered 2026-10-23: AL Payment Status green = Cash Invoiced only · **only RMC is
-  always 18% GST** (migration `20261023_phase10_tracker_rmc_gst.sql`) · sandbox = **real data on staging
-  first, then the trial on the live site** · read-only date: none yet — **updated files from the owner
-  in a day or two → build the repository + archive, then incremental top-ups to go-live.** Still open:
-  the AL-ledger proposal (re-explained 10-23) · stray cells: two ❓ (dates beside ENDHAN; DEALERS L
-  dates), the rest default to cell notes (column map, question 5) · rows 720 and 948 of 2025-26 break
-  the GST rule (import as overrides).
+### Where things stand (2026-10-23, end of session) — resume here
+- **Branch `10b-foundation`, pushed and clean** (last code `1c47e00`, docs after). `origin/portal` merged
+  in up to `e236912` (#137, the error-log fix) — merge it again after every `portal` release; a
+  hotfix still branches from `origin/portal`, never from here.
+- **Done in Stage 2:** slice 1 (the book in Univer) · slice 2 (save adapter) · slice 3 (new rows) ·
+  slice 4 (colours + notes) · AL Payment Status green = Cash Invoiced (rule) · RMC = 18% GST (migration).
+- **Next, in this order:**
+  1. **When the owner's UPDATED workbooks arrive ("in a day or two", owner 2026-10-23): the first real
+     load, onto STAGING** — the one-off scripted sandbox load, which becomes the repository/archive of
+     all the data; incremental top-ups follow until go-live, then the trial on the live site. Carry
+     across: the 124 Excel comments → `unit_cell_notes` (source `excel_comment`), the ~148 manual
+     highlights → `unit_cell_formats` (`{bg}` only), rows 720/948 of 2025-26 as `gst_rate_override`,
+     the stray cells per the column map question 5 (default: a cell note on the truck). Import with
+     `recompute = false` writes history exactly as the workbook holds it; then the full
+     recompute-and-diff of every formula on every row. ⚠️ Ask before loading whether the DEMO rows
+     stay (deleting them needs the owner's approval).
+  2. Otherwise / meanwhile: **slice 5 — layouts, search by the last six digits, Copy for mail, row
+     history.**
+  Also not built: phone view (read-only cards); a local save queue that survives reloads (E5);
+  removing a saved note; incentive editing (admin + HR); the import wizard/revert (Stage 6).
+- **On staging now:** migrations `…_foundation`, `…_supersede`, `…_numeric_before`,
+  `…_create_units` (md5 `8f4e051d…`), `…_rmc_gst` (md5 `714d9b5d…`); Edge Functions
+  `admin-vehicle-units` (with `createUnits`) and `admin-users` (tracker actions) as in this branch.
+  **2,056 tracker rows, all DUMMY:** 2,050 `DEMO seed` + the probe's original and rebill
+  (`DEMO-PROBE-202610220945`) + `DEMO-NEWROW-0001…0004` (slice 3). Test edits left on dummy rows:
+  slice 2 (CTC/CTD on a few DEMO trucks, Segment → TIPPER on three, "DEMO AFTER SORT" on
+  DEMO-MB1AS0000345, CTC 21,11,111 on DEMO-MB1AT0002049); slice 3 (DEMO-NEWROW-0001 Engine No "DEMO NEW
+  MODEL"); slice 4 (yellow on DEMO-NEWROW-0004 Model + CTC, `{}` on -0003 Model; notes "DEMO note: held
+  for finance" on -0003 Model and two "hand test" notes on DEMO-MB1AR0000517 / DEMO-MB1AT0002049 Model);
+  10-23 (DEMO-NEWROW-0002 AL Payment Status → IBND via "cash invoiced"/"Cash Invoiced"). No RMC rows.
+  Nobody has the tracker switch on; admin always has it.
+- **Tests:** `selftest-tracker-cells` **117/0** · `selftest-vehicle-units` **550/0** · probes
+  foundation 42 · supersede 19 · numeric-before 9 · create-units 18 · rmc-gst 9 (all 0 failed, on PGlite
+  and staging) · `gst_rmc.cjs` re-measures the GST rule from the workbook. Build + no-undef clean.
+- **Checking in a browser:** the owner's Chrome (Claude in Chrome) is signed in as
+  `admin@parastrucks.test` on `http://localhost:3000`; start the dev server with
+  `preview_start {name:"portal"}` (it does not survive overnight). The grid is `window.__trackerUniver`
+  in dev. Staging SQL: `npx --yes supabase@2.109.1 db query --linked --workdir <scratch>/sb …` (linked to
+  `klpnhpnlotcbbovwswmq`). Real workbooks: `D:/PTB/Finances/2025-26/INVOICE TRACKER 2025-26.xlsx` and
+  `C:/Users/dhruv/Downloads/PAYMENT TRACKER LIST 2025-26/…` (the owner will send newer copies).
+- **Univer lessons that must not be relearned** (each measured): `getRawValues()` never `getValue(s)` ·
+  put-backs/redraws as MUTATIONS (off the undo stack) · each mount its own element · a page button keeps
+  the keyboard → `startEditing()` · a style change arrives as `SheetValueChanged`, undo included · a
+  value-only mutation keeps the style · notes stay at their sheet POSITION on a sort → redraw by truck ·
+  `silent` note mutations still fire note events · `Before…` note events fire from the menu, not from
+  facade calls · ⭐ conditional formatting leaks into `getCellStyleData()`/`getCellData()` → read styles
+  RAW (`getSheet().getCellRaw` + `getStyles().getStyleByCell`).
+- **Prod: nothing.** The prod rollout, when approved: the five migrations (LF text), both functions
+  (`--no-verify-jwt`; `admin-vehicle-units` joins the key-cutover roster), then the frontend.
+- **Owner questions — answered 2026-10-23:** AL Payment Status green = Cash Invoiced only · only RMC is
+  always 18% GST · sandbox = real data on staging first, then the trial on the live site · read-only
+  date: none yet — updated files in a day or two → repository + archive, then incremental top-ups.
+  **Still open:** the AL-ledger proposal (asked "have we decided?" 10-23 → no; re-explained, yes/no
+  pending) · stray cells: (a) are the 59 dates beside ENDHAN the date Endhan was given? (→ an "Endhan
+  Date" column) (b) what are the 15 dates in DEALERS column L? · rows 720 (RMC at 28%, 29 Aug 2025) and
+  948 (U 4020 tractor at 18%, 9 Sep 2025) of 2025-26: was Excel right? (imported as overrides meanwhile).
 
 ## ⏸️ PARKED — 2026-08-20 (owner: "put this on the back burner again")
 
