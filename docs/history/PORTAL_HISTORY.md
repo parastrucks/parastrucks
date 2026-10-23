@@ -96,6 +96,19 @@ Owner: *"yes start stage 2"*. Branch `10b-foundation` (`6a9455f` → `5f38233`).
   2,523 trucks, 5,154 notes; loads in one transaction on PGlite; the recompute-and-diff shows the purchase and
   dealer sheets divide by 1.28 on every row even after the GST change (1,304 rows). selftest 28/0, 3 planted
   bugs caught. ⭐ Retention's two files carry DIFFERENT retail dates (961, days to weeks) — asked the owner.
+- **2026-10-23 — "the kind of line already exists in the table, right?" (owner):** yes — the AL sheet's own
+  Offtake Mode column. My proposed "line kinds as a setting" was dropped: the check knows the meaning of each
+  word the owner gave; an unknown word or a second spelling is one more line on the review list. Same lesson
+  as the flat table: use what the team's sheet already holds before inventing a structure.
+- **Session lessons (10-23):** the app stops the dev server at the end of each turn → `preview_start` again;
+  Chrome screenshots time out while the Claude window is hidden → drive the page through `javascript_tool`
+  and the page's own modules; `db query -f` needs an absolute path; backslashes in `node -e` / heredoc code
+  can arrive as control characters → use the Write tool. Two self-tests let a planted bug through until their
+  data was widened — plant the bug before trusting a green run.
+- **Open with the owner (end of 10-23):** importer questions — (1) "AL Retail Date" as its own column (961
+  trucks differ), (2) retail as home for CTC + customer, (3) DSE from retention, (4) last year's INVOICE TRACKER
+  for the 224 trucks with no purchase row, (5) ~4,000 disagreement notes vs a separate list · delete the test
+  layout "DEMO layout test"? · whether the DEMO rows stay when the real data is loaded.
 
 ## Session log — 2026-10-21 (PC, latest): Phase 10 Stage 1 step 3 — the tracker's Edge Function and access switch, on staging
 

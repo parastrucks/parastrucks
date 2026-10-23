@@ -58,7 +58,10 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   a measured HOME FILE per column, every other file's different value kept as a note (migration
   `…_import_notes` on staging; **eight** tracker migrations for prod), recompute-and-diff; `selftest-import-merge`
   **28/0**. Run line + findings + 5 owner questions: plan → "THE FIRST-LOAD IMPORTER".
-  ⏭️ **NEXT: when the owner's updated workbooks arrive → run it onto staging (the repository/archive).** ⭐ Resume point
+  ⏭️ **NEXT: when the owner's updated workbooks arrive → run it onto staging (the repository/archive).**
+  ❓ Open: the 5 importer questions · delete the test layout "DEMO layout test"? · DEMO rows stay at the load?
+  ⚠️ The app stops the dev server at each turn's end (`preview_start` again); Chrome screenshots time out
+  while the Claude window is hidden (use `javascript_tool`). Resume: plan → "Where things stand (… session 2)". ⭐ Resume point
   with staging state, dummy-row list, tests and open questions: plan → "STAGE 2" → "Where things stand
   (2026-10-23)".
 - **The PI hotfix pause is over** — `origin/portal` (`e7fcb82`) is merged INTO `10b-foundation`.

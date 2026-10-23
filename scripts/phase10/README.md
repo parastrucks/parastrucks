@@ -29,6 +29,23 @@ script (the files live outside the repo, under `D:\PTB\Finances\` and
 | `c_sale_g.cjs` | Sale-side formulas (**TCS basis**, total, CRETEM), text-in-money columns, settlement/G-series numbers, VIN decode, DSE slab |
 | `d_followup.cjs` | Three-way retention relationship, empirical VIN month mapping, the SRS incentive override |
 | `columns.cjs` | Every header of the data sheets with its shape (fill, number/text/date counts, dominant formula) — the input to [`phase10-column-map.md`](../../docs/backlog/phase10-column-map.md). Prints no cell values |
+| `gst_rmc.cjs` | Which trucks were billed at 18% before the GST change (the RMC rule; rows 720 / 948) |
+| `al_balance_check.cjs` | The 12 monthly AL Balance Sheets checked against the invoice tracker — what the monthly upload would flag (counts and chassis only) |
+| `e_sources.cjs` | The import's sources: which files hold which trucks, overlaps, and where they disagree, per column — the evidence for the importer's home files |
+
+## The first-load importer (`import/`)
+
+Real data passes through these; they print COUNTS ONLY and write their output OUTSIDE the repository
+(`run.cjs` refuses a folder inside it).
+
+| Step | Script | What it does |
+|---|---|---|
+| 1 | `import/read.cjs` | Workbooks → rows, each cell with value, formula, comment, fill, number format. A file is recognised by its sheets + headers, never its name |
+| 2 | `import/merge.cjs` | One record per truck: a HOME file per column (`RULES`, measured), every other file's different value kept as a note; comments, flag colours, hand formulas, overrides, incentives, rebill links |
+| — | `import/run.cjs` | `node scripts/phase10/import/run.cjs <scratch folder> [files/folders]` → `import.json` + counts. No files given = the 2025-26 set on this PC |
+| 3 | `import/sql.cjs` | `node scripts/phase10/import/sql.cjs <scratch folder> <actor uuid>` → `import.sql`: ONE transaction, `recompute = false`, one import batch |
+| 4 | `import/recompute-diff.sql` | Self-aborting: per worked-out column, how many imported rows the database's rules would give another figure |
+| test | `selftest-import-merge.cjs` | The merge rules on made-up rows (28 checks) — `node scripts/phase10/selftest-import-merge.cjs` |
 
 ## Tests of the tracker itself (Stage 1)
 
@@ -38,8 +55,11 @@ script (the files live outside the repo, under `D:\PTB\Finances\` and
 | `probe-supersede.sql` | Rebill in one transaction (19 checks) | same |
 | `probe-numeric-before.sql` | A stored 1310.50 is not a conflict against a browser's 1310.5 (9 checks; the old function fails 3) | same |
 | `probe-create-units.sql` | New rows from the grid: one savepoint per row, a duplicate chassis fails alone and by name, a repeated request replays (18 checks) | same |
-| `selftest-tracker-cells.mjs` | The screen's own logic: grid cell ↔ database value, the save planner, the new-row planner, cell colours, the paid rule, the screen columns (117) | `node scripts/phase10/selftest-tracker-cells.mjs` |
-| `selftest-vehicle-units.mjs` | The Edge Function's own modules: drift against the migration, every person × action, every value check (550) | `node scripts/phase10/selftest-vehicle-units.mjs` (Node 24 strips the types). `AUTHORITY_FILE=<path>` runs it against another authority file (mutants) |
+| `probe-rmc-gst.sql` | RMC = 18% on any date; an override still wins (9) | same |
+| `probe-endhan-date.sql` | The Endhan Date column: stored, typed, audited, cleared (6) | same |
+| `probe-mto-advance.sql` | The MTO Advance Yes/No column; the table refuses anything else (6) | same |
+| `selftest-tracker-cells.mjs` | The screen's own logic: grid cell ↔ database value, the save planner, the new-row planner, cell colours, the paid rule, the screen columns, Find, Copy for mail, history text (147) | `node scripts/phase10/selftest-tracker-cells.mjs` |
+| `selftest-vehicle-units.mjs` | The Edge Function's own modules: drift against ALL the tracker migrations (columns added later, the newest allowlist), every person × action, every value check (556) | `node scripts/phase10/selftest-vehicle-units.mjs` (Node 24 strips the types). `AUTHORITY_FILE=<path>` runs it against another authority file (mutants) |
 | `probe-ef-tracker.mjs` | The DEPLOYED functions on staging, as real logins: gate, switch, write path. **Writes dummy data** (see its header) | owner: `$env:PROBE_PASSWORD = '…'; node scripts/phase10/probe-ef-tracker.mjs; Remove-Item Env:\PROBE_PASSWORD` |
 
 ## The one that matters most
