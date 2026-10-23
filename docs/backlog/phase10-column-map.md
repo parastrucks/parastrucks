@@ -266,9 +266,13 @@ function re-created with one more name, staging prosrc md5 `4493b2b9…` = file,
 list's spelling (Yes/No also takes Y/N; "Inclusive" → inclusive). Seen through the deployed EF from the owner's
 tab: " y " → Yes saved and read back, "maybe" refused "must be one of Yes, No", cleared again (DEMO-NEWROW-0003,
 three audit rows). The AL upload reconciles per model: trucks marked Yes vs MTO advances (5% × qty) on the
-sheets; a 95% truck line must say Yes. Parts 2–3 (line kinds as a lookup, settle once) stand. One fact to settle either way: the balance sheet says **FRESH OFFTAKE / IBND / MTO**,
-the tracker's AL Payment Status says **Cash Invoiced / IBND** — is FRESH OFFTAKE the same as Cash
-Invoiced (so it turns green), and what is MTO?
+sheets; a 95% truck line must say Yes.
+
+✅ **Part 2 dropped (owner, 2026-10-23: "the kind of line already exists in the table, right?").** It does —
+the sheet's own **Offtake Mode** column. No setting: the check knows the meaning of each word the owner gave
+(FRESH OFFTAKE = Cash Invoiced, IBND, MTO = 5% advance, AMC / PARTS PACKAGE / IALERT / EWP = add-ons on a
+truck, PURCHASE RETURN); a word it does not know, or a second spelling, is simply one more line on the
+monthly review list. Part 3 (a person settles a line once, remembered) stands for the upload screen.
 
 ## ❓ Questions for the owner
 
