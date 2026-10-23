@@ -89,6 +89,13 @@ Owner: *"yes start stage 2"*. Branch `10b-foundation` (`6a9455f` → `5f38233`).
   browser), Copy for mail (filtered rows × shown columns as HTML + text, logged), row History (who / when IST
   / old → new). No server change. Seen on staging in the owner's Chrome; cells 147/0. Layout order and
   filters are not saved yet; the test layout "DEMO layout test" stays on staging until the owner says.
+- **2026-10-23 — the first-load importer (`0a82d80`), offline only:** the sources turned out to be 38 files
+  (monthly lists and retention trackers, not six books); recognised by headers, merged one row per truck
+  with a measured home file per column — the purchase file is the odd one out on CTC and the customer, the
+  year file's mixed layouts spoil its invoice date and AD-BLU — and every disagreement kept as a cell note.
+  2,523 trucks, 5,154 notes; loads in one transaction on PGlite; the recompute-and-diff shows the purchase and
+  dealer sheets divide by 1.28 on every row even after the GST change (1,304 rows). selftest 28/0, 3 planted
+  bugs caught. ⭐ Retention's two files carry DIFFERENT retail dates (961, days to weeks) — asked the owner.
 
 ## Session log — 2026-10-21 (PC, latest): Phase 10 Stage 1 step 3 — the tracker's Edge Function and access switch, on staging
 

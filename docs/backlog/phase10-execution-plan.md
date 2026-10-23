@@ -820,7 +820,7 @@ Also: a phone view (read-only cards) and the local save queue across reloads (E5
   `silent` note mutations still fire note events · `Before…` note events fire from the menu, not from
   facade calls · ⭐ conditional formatting leaks into `getCellStyleData()`/`getCellData()` → read styles
   RAW (`getSheet().getCellRaw` + `getStyles().getStyleByCell`).
-- **Prod: nothing.** The prod rollout, when approved: the seven migrations (LF text), both functions
+- **Prod: nothing.** The prod rollout, when approved: the eight migrations (LF text), both functions
   (`--no-verify-jwt`; `admin-vehicle-units` joins the key-cutover roster), then the frontend.
 - **Owner questions — answered 2026-10-23:** AL Payment Status green = Cash Invoiced only · only RMC is
   always 18% GST · sandbox = real data on staging first, then the trial on the live site · read-only
@@ -864,6 +864,52 @@ Also: a phone view (read-only cards) and the local save queue across reloads (E5
   + "Vehicle added" (imported), IST times, "Only Model" left the added line. **Not exercised:** the layout
   Delete button (deleting a row needs the owner's OK — the test layout "DEMO layout test" is still on staging),
   a shared layout seen by a non-admin, a real paste into Outlook.
+- ✅ **10-23: THE FIRST-LOAD IMPORTER, built and rehearsed OFFLINE on the real 2025-26 files** (`0a82d80`;
+  nothing loaded on staging — that waits for the owner's UPDATED files). `scripts/phase10/import/`:
+  **read.cjs** (a file is recognised by its sheets + headers, never its name) → **merge.cjs** (pure: one record
+  per truck) → **run.cjs** (writes `import.json` OUTSIDE the repo — it refuses a folder inside it — counts only)
+  → **sql.cjs** (one transaction, `recompute = false`, one import batch id) → **recompute-diff.sql**
+  (self-aborting: what the database's rules would give vs the workbook, per worked-out column).
+  ⭐ **The sources are 38 files, not six:** INVOICE TRACKER (2 sheets) · the year file 2025-26.xlsx · 12 monthly
+  INVOICE LISTs (PTB RETAIL — bill column "TALLY BILL" in 8 months, "CUSTOMER BILL" in 4 — + OTHER DEALER
+  retail + DEALERS + canc rebill in 5) · 12 + 12 RETENTION TRACKERs (data on the month's sheet, not SUMMARY;
+  7 internal months have no DSM column). Out: each list's Sheet5 (prior-year receivables, R2-24), FINANCE DATA,
+  the Pending Reco sheets, AL Balance Sheet (its own monthly upload, section G).
+  ⭐ **A HOME FILE PER COLUMN, measured** (`scripts/phase10/e_sources.cjs`, counts only): engine numbers agree
+  everywhere (0 of ~1,900) → the join is sound · the purchase file is the odd one out on **CTC** (~25%, mostly
+  within 2% — settled again at sale) and the **customer** (~18%) while retail, the lists and retention agree →
+  **retail is home for both** · **CTD**: purchase ↔ retention agree best → purchase is home · the year file ⊇ the
+  12 monthly retail lists and agrees with them on every sale column EXCEPT invoice date (188) and AD-BLU (186) —
+  its mixed layouts (R2-4) → **the monthly list is home for those two** · segment: retention's "MDV BUS / ICV
+  BUS" refines retail's "BUS" (not a conflict) · DSE: retention is home (it pays the incentive; 162 differ) ·
+  identity (model, V-part, HSN, gatepass, ODN) from the purchase file. **Every other file's different value is
+  kept as a note on that cell** (source `import`, naming the file and row) — migration
+  `20261023_phase10_tracker_import_notes.sql` on STAGING (constraint + 'import').
+  Also carried: 140 Excel comments → notes · 984 hand-typed input formulas → notes (`excel_formula`) · 250 flag
+  colours → `{bg}` (the paid green is the rule, not imported) · GST overrides (rows 720 / 948 — exactly 2) ·
+  road tax read from the FULL TAX formula (321 at 0% ≈ the 322 measured, 2 at 8%) · 68 full-tax overrides ·
+  59 Endhan dates · stray cells as notes · DSM / GM incentives + 60-odd typed DSE overrides (1,387 rows) ·
+  "Bought from" (the list's DEALOR column) as a note · cancel/rebill: 8 pairs, **4 real links** (the other 4
+  re-billed the SAME chassis) + remarks typed into its new-chassis column as notes.
+  **Result: 38 files → 2,523 trucks · 5,154 notes (4,030 disagreements) · loads in ONE transaction on PGlite
+  with all 8 tracker migrations (~6 MB of SQL, seconds); probe-foundation still 42/0.**
+  **Recompute-and-diff** (rows where the database's rule gives another figure): diff base / GST **1,304** (the
+  purchase sheet divides by 1.28 on EVERY row, also after the GST change — the rule corrects it) · retention
+  (dealer) 488 (retail's CTC vs the sheet's own) · app amt 551 · retention internal 295 · receivable / net
+  refund 202 · TCS 126 / total 130 (the year file's TCS breaks tally × 1% on ~5%) · dealer basic/TDS/net
+  61–70 (also /1.28) · payment amount / TDS / to-AL 10 · payment status 14 · **full tax 0**. History stays as
+  the workbook holds it (recompute = false) until a row is edited — then the WHOLE row is reworked by the
+  rules (the figures above change on the first edit; the audit logs the typed cell, not the reworked ones).
+  `selftest-import-merge` **28/0** (made-up rows; 3 planted bugs — CTC home, history compared, paid green
+  imported — each caught). ⚠️ **Not yet known:** how the grid draws ~5,000 notes (only ~10 so far); 224 trucks
+  sold in 2025-26 have no purchase row (bought in 2024-25 — last year's INVOICE TRACKER would give it).
+  **To load (when the updated files arrive):** `node scripts/phase10/import/run.cjs <scratch> [files/folders]`
+  → `node scripts/phase10/import/sql.cjs <scratch> <admin uuid>` → PGlite rehearsal → staging
+  `db query -f import.sql` → `recompute-diff.sql`. ⚠️ Ask first whether the DEMO rows stay.
+  ❓ **Owner:** (1) AL's retail date differs from the internal one on 961 trucks (days to weeks, never a typo
+  pattern) — its own column "AL Retail Date"? (2) retail as home for CTC and the customer — OK? (3) DSE from
+  retention — OK? (4) send last year's INVOICE TRACKER too (224 trucks)? (5) ~4,000 disagreement notes for
+  the pilot — OK, or a separate list instead?
 - ✅ **10-23: "Endhan Date" column** — migration `20261023_phase10_tracker_endhan_date.sql` on STAGING
   (adds `vehicle_units.endhan_date date`; `tracker_apply_changes` re-created with it on the editable
   list, otherwise byte-identical to numeric_before; staging prosrc md5 `76308fce…` = file, LF) ·

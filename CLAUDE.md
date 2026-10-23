@@ -54,8 +54,11 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   ✅ **Slice 5 (`1c08d05`): Find a vehicle · layouts (hide as in Excel, then save; admin
   shares) · Copy for mail (filter × columns showing, logged) · row History** — one toolbar line; seen on
   staging (copy = 196 TIPPER rows exactly). `selftest-tracker-cells` **147/0**.
-  ⏭️ **NEXT: when the owner's updated workbooks arrive → the first REAL load onto staging (the
-  repository/archive).** ⭐ Resume point
+  ✅ **The first-load IMPORTER (`0a82d80`), rehearsed offline on the real files:** 38 files → 2,523 trucks,
+  a measured HOME FILE per column, every other file's different value kept as a note (migration
+  `…_import_notes` on staging; **eight** tracker migrations for prod), recompute-and-diff; `selftest-import-merge`
+  **28/0**. Run line + findings + 5 owner questions: plan → "THE FIRST-LOAD IMPORTER".
+  ⏭️ **NEXT: when the owner's updated workbooks arrive → run it onto staging (the repository/archive).** ⭐ Resume point
   with staging state, dummy-row list, tests and open questions: plan → "STAGE 2" → "Where things stand
   (2026-10-23)".
 - **The PI hotfix pause is over** — `origin/portal` (`e7fcb82`) is merged INTO `10b-foundation`.
