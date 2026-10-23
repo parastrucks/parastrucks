@@ -211,8 +211,18 @@ its state now).
 import (columns by header, never by position; one month per file; refuses a month already uploaded
 unless replaced on purpose), stores the lines in their own table with the month, and shows the list
 above — each line linking to its truck in the grid. Nothing in the tracker is changed by an upload.
-❓ Still to ask: is FRESH OFFTAKE the same as Cash Invoiced, and what is MTO? · for the 78 GST trucks,
-which CTD should the tracker hold — AL's 28% figure or the 18% one? One fact to settle either way: the balance sheet says **FRESH OFFTAKE / IBND / MTO**,
+✅ **Owner answers, 2026-10-23:** FRESH OFFTAKE **is** Cash Invoiced (→ the tracker's green rule now accepts
+either word, `cellFormats.paidRule`; seen on staging: "fresh OFFTAKE" green, "Cash Invoiced" green, IBND and
+blank plain, nothing saved as a person's colour) · **MTO = make-to-order: AL starts building on a 5%
+advance**, paid before there is a chassis, so the line carries the customer's name; the truck's 95% line
+comes later · **GST follows the PTB invoice date, for CTC and CTD alike** — so the tracker's 18% CTD is right
+for a truck invoiced by PTB on/after 22 Sep 2025.
+**Re-run with those rules:** the 21 MTO lines without a chassis are all advances (not shown); 21 trucks
+with a 95% line pair to an MTO advance by customer name (loose word match — the real check should let a
+person confirm the pair) → unfinished splits **72 → 51** · of the 78 GST-ratio CTDs, **75 follow the rule
+(not shown) and 3 do not** (18% in the tracker, PTB invoice before 22 Sep) · unchanged: **172** other CTD
+differences, **43** AL-invoiced trucks on no sheet, 55 spellings, 1 non-MTO line with no chassis, 4 + 3 + 1
+small. One fact to settle either way: the balance sheet says **FRESH OFFTAKE / IBND / MTO**,
 the tracker's AL Payment Status says **Cash Invoiced / IBND** — is FRESH OFFTAKE the same as Cash
 Invoiced (so it turns green), and what is MTO?
 

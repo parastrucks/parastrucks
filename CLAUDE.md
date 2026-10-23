@@ -67,7 +67,8 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   720/948 → as billed. ✅ **AL ledger DECIDED (owner): stays in Excel; the final sheet is uploaded monthly and
   the portal lists discrepancies** — rehearsed on the 12 real sheets (`scripts/phase10/al_balance_check.cjs`;
   78 CTDs = the GST change, 172 others, 43 missing trucks); build after the first real load (column map →
-  G "DECIDED"). ❓ FRESH OFFTAKE = Cash Invoiced? MTO? Which CTD for the 78 GST trucks?
+  G "DECIDED"). ✅ FRESH OFFTAKE = Cash Invoiced (green rule takes both) · MTO = 5% advance, no chassis yet ·
+  GST by PTB invoice date for CTC + CTD → 75/78 GST CTDs explained, 3 real.
 
 ## Current state (2026-10-21, latest) — Phase 10 Stage 1 under way
 

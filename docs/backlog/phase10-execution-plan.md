@@ -834,7 +834,9 @@ Also: a phone view (read-only cards) and the local save queue across reloads (E5
   12 real 2025-26 sheets (`scripts/phase10/al_balance_check.cjs`): arithmetic ties every month; 78 CTDs
   differ by exactly the GST change, 172 by 1–10%, 43 AL-invoiced trucks on no sheet, 72 unfinished
   splits, 55 mode spellings. Built AFTER the first real load (column map → section G "DECIDED").
-  ❓ FRESH OFFTAKE = Cash Invoiced? MTO? · which CTD for the 78 GST trucks?
+  ✅ Owner: FRESH OFFTAKE = Cash Invoiced (green rule accepts both, seen on staging) · MTO = the 5% advance
+  before a chassis exists · GST by the PTB invoice date for CTC and CTD → re-run: 75 of 78 GST CTDs follow
+  the rule, 3 do not; 21 MTO advances pair to 95% trucks (splits 72 → 51); 172 + 43 remain the review list.
 - ✅ **10-23: "Endhan Date" column** — migration `20261023_phase10_tracker_endhan_date.sql` on STAGING
   (adds `vehicle_units.endhan_date date`; `tracker_apply_changes` re-created with it on the editable
   list, otherwise byte-identical to numeric_before; staging prosrc md5 `76308fce…` = file, LF) ·

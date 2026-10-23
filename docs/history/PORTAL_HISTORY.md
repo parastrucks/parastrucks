@@ -76,6 +76,10 @@ Owner: *"yes start stage 2"*. Branch `10b-foundation` (`6a9455f` → `5f38233`).
   IBND → Cash Invoiced is a truck's normal life; Net Balance = paid − owed with a signed carry-over. Read
   right: arithmetic ties every month; 78 CTDs differ by exactly 1.28/1.18 (GST change), 172 by 1–10%, 43
   AL-invoiced trucks on no sheet, 72 unfinished splits. Build after the first real load.
+  Owner then: FRESH OFFTAKE = Cash Invoiced → the green rule takes both words (`=OR(…)` conditional
+  formatting; seen on staging, cells 117/0) · MTO = a 5% advance before the chassis exists · GST by the PTB
+  invoice date for CTC and CTD. Re-run: 75/78 GST CTDs explained (3 real), 21 MTO advances paired by
+  customer name (splits 72 → 51).
 
 ## Session log — 2026-10-21 (PC, latest): Phase 10 Stage 1 step 3 — the tracker's Edge Function and access switch, on staging
 

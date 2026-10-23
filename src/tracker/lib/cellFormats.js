@@ -73,7 +73,8 @@ export const sameFormat = (a, b) => stable(a ?? {}) === stable(b ?? {})
 
 // ── AL Payment Status: green when the truck is PAID ─────────────────────────────────────────────
 // Owner, 2026-10-23: green means paid to Ashok Leyland, i.e. "Cash Invoiced". "IBND" (invoiced but
-// not delivered — AL delivers once it is paid) stays plain. A RULE, worked out as the grid draws, so
+// not delivered — AL delivers once it is paid) stays plain. "Fresh Offtake" is AL's own word for Cash
+// Invoiced (owner, 2026-10-23 — the AL Balance Sheet uses it), so it is green too. A RULE, worked out as the grid draws, so
 // it follows the value and is never saved per cell. Case and stray spaces are forgiven (Univer's
 // own text "equal" is exact), hence a formula rule.
 export const PAID_GREEN = '#C6EFCE' // Excel's "Good" fill, the workbooks' own colour
@@ -89,7 +90,7 @@ export function paidRule(columns, lastRow) {
     rule: {
       type: 'highlightCell', subType: 'formula',
       // relative to the range's first cell (row 2), as Excel writes it
-      value: `=LOWER(TRIM(${columnLetter(c)}2))="cash invoiced"`,
+      value: `=OR(LOWER(TRIM(${columnLetter(c)}2))="cash invoiced",LOWER(TRIM(${columnLetter(c)}2))="fresh offtake")`,
       style: { bg: { rgb: PAID_GREEN } },
     },
   }

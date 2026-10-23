@@ -168,8 +168,8 @@ const cols = ALL_COLUMNS
 const pr = paidRule(cols, 9000), payAt = cols.findIndex((c) => c.key === 'al_payment_status')
 ok(pr && pr.ranges[0].startColumn === payAt && pr.ranges[0].endColumn === payAt && pr.ranges[0].startRow === 1 && pr.ranges[0].endRow === 9000,
   'paid rule covers exactly the AL Payment Status column, below the header', pr?.ranges)
-ok(pr?.rule.value === `=LOWER(TRIM(${columnLetter(payAt)}2))="cash invoiced"` && pr.rule.subType === 'formula' && pr.rule.style.bg.rgb === PAID_GREEN && PAID_GREEN === '#C6EFCE',
-  'paid rule: case- and space-forgiving "cash invoiced" on its own column, Excel Good green', pr?.rule)
+ok(pr?.rule.value === `=OR(LOWER(TRIM(${columnLetter(payAt)}2))="cash invoiced",LOWER(TRIM(${columnLetter(payAt)}2))="fresh offtake")` && pr.rule.subType === 'formula' && pr.rule.style.bg.rgb === PAID_GREEN && PAID_GREEN === '#C6EFCE',
+  'paid rule: case- and space-forgiving "cash invoiced" or "fresh offtake" on its own column, Excel Good green', pr?.rule)
 ok(paidRule(cols.filter((c) => c.key !== 'al_payment_status'), 10) === null, 'no AL Payment Status column → no rule')
 ok(JSON.stringify(formatOf(pay, { n: { pattern: '@' }, bg: { rgb: '#C6EFCE' } })) !== '{}', 'a hand-painted green on AL Payment Status is the person’s, saved like any colour')
 ok(stable(formatOf(model, { n: { pattern: '@' }, bl: 1, cl: { rgb: '#FF0000' }, bg: null })) === stable({ bl: 1, cl: { rgb: '#FF0000' } }), 'bold + font colour saved; a null key is dropped')
