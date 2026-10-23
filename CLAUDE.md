@@ -51,8 +51,11 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   ✅ 10-23 (`1bd0fee`): AL Payment Status green ONLY when "Cash Invoiced" (owner) — a rule, never
   saved. ⭐⭐ Conditional formatting leaks into `getCellStyleData()`/`getCellData()` — read cell styles
   RAW (`getSheet().getCellRaw` + `getStyles().getStyleByCell`) or a rule's colour gets saved as a person's.
+  ✅ **Slice 5 (`1c08d05`): Find a vehicle · layouts (hide as in Excel, then save; admin
+  shares) · Copy for mail (filter × columns showing, logged) · row History** — one toolbar line; seen on
+  staging (copy = 196 TIPPER rows exactly). `selftest-tracker-cells` **147/0**.
   ⏭️ **NEXT: when the owner's updated workbooks arrive → the first REAL load onto staging (the
-  repository/archive); meanwhile slice 5 (layouts/search/copy-for-mail/row history).** ⭐ Resume point
+  repository/archive).** ⭐ Resume point
   with staging state, dummy-row list, tests and open questions: plan → "STAGE 2" → "Where things stand
   (2026-10-23)".
 - **The PI hotfix pause is over** — `origin/portal` (`e7fcb82`) is merged INTO `10b-foundation`.

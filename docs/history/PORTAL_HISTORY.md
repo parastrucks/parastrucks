@@ -84,6 +84,11 @@ Owner: *"yes start stage 2"*. Branch `10b-foundation` (`6a9455f` → `5f38233`).
   is per ORDER: 21 orders = 87 trucks, 43 delivered in the year); the owner asked for a yes/no column
   instead and made flatness a rule. Built `mto_advance` on staging (probe 6/0, EF redeployed, seen through
   the deployed EF); fixed-list columns now take any case.
+- **2026-10-23 — Stage 2 slice 5 (`1c08d05`):** one toolbar line — Find (last digits of chassis / engine /
+  gatepass), layouts (the columns left showing; hide as in Excel, save, admin shares; remembered per
+  browser), Copy for mail (filtered rows × shown columns as HTML + text, logged), row History (who / when IST
+  / old → new). No server change. Seen on staging in the owner's Chrome; cells 147/0. Layout order and
+  filters are not saved yet; the test layout "DEMO layout test" stays on staging until the owner says.
 
 ## Session log — 2026-10-21 (PC, latest): Phase 10 Stage 1 step 3 — the tracker's Edge Function and access switch, on staging
 

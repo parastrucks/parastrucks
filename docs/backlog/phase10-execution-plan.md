@@ -804,7 +804,7 @@ Also: a phone view (read-only cards) and the local save queue across reloads (E5
   for finance" on -0003 Model and two "hand test" notes on DEMO-MB1AR0000517 / DEMO-MB1AT0002049 Model);
   10-23 (DEMO-NEWROW-0002 AL Payment Status → IBND via "cash invoiced"/"Cash Invoiced"). No RMC rows.
   Nobody has the tracker switch on; admin always has it.
-- **Tests:** `selftest-tracker-cells` **127/0** · `selftest-vehicle-units` **556/0** · probes
+- **Tests:** `selftest-tracker-cells` **147/0** · `selftest-vehicle-units` **556/0** · probes
   foundation 42 · supersede 19 · numeric-before 9 · create-units 18 · rmc-gst 9 · endhan-date 6 · mto-advance 6 (all 0 failed, on PGlite
   and staging) · `gst_rmc.cjs` re-measures the GST rule from the workbook. Build + no-undef clean.
 - **Checking in a browser:** the owner's Chrome (Claude in Chrome) is signed in as
@@ -841,6 +841,29 @@ Also: a phone view (read-only cards) and the local save queue across reloads (E5
   possible"**, now a standing rule) — migration `20261023_phase10_tracker_mto_advance.sql` on STAGING, EF
   redeployed, probe 6/0, vehicle-units 556/0, cells 127/0 (fixed lists case-forgiving). Prod rollout is now
   **seven** migrations.
+- ✅ **10-23: SLICE 5 — Find, layouts, Copy for mail, row history** (`1c08d05`, no server change — the EF
+  actions existed since Stage 1). ONE toolbar line above the grid (the grid gives up one line of height):
+  · **Find**: the last digits of a chassis / engine / gatepass (ends-with on those three ranks first, then
+  contains, then ODN, V-part, invoice numbers, customer, dealer, model; ≥3 characters); Enter goes to the
+  next; a row hidden by the person's filter is named, not unfiltered. Univer's own Ctrl+F still searches
+  every cell. · **Layouts** = the columns left showing: hide as in Excel (right-click → Hide), "Save layout"
+  with a name (same name = update); admin may tick "Shared with everyone"; applied as MUTATIONS (Ctrl+Z
+  does not undo a layout choice); remembered per browser; chassis always shows. NOT in a layout yet: column
+  ORDER (the book's order) and FILTERS. · **Copy for mail**: the rows the filter leaves × the columns
+  showing, as an HTML table (colours: the person's fill + the paid green; money in lakhs, a crore shown
+  properly; dd/mm/yy) + tab-separated text; asks first above 20,000 cells; logged `tracker_copy` (rows,
+  columns, incentives yes/no). · **History**: the selected cell's truck — who, when (IST), what, old →
+  new, how (typed / pasted / filled / undone / added / imported), latest 200; "Only <column>" filter.
+  Pure logic in `showValue.js` / `findRows.js` / `mailTable.js` / `historyText.js`; "paid" is now ONE list
+  (`PAID_WORDS`) for the grid rule and the copy. `selftest-tracker-cells` **147/0**; build + no-undef clean.
+  **Seen on staging in the owner's Chrome:** Find "001374" → "1 found" → Enter landed on DEMO-MB1AS0001374 ·
+  hid 60 columns → saved "DEMO layout test" (39 columns) → All columns (all back) → the layout (same 60
+  hidden) → reload: the layout came back · with Segment = TIPPER filtered, Copy gave **196 rows × 39
+  columns = the 196 TIPPER trucks exactly**, HTML + text, logged on staging (196 / 39 / incentives true) ·
+  History on DEMO-MB1AS0000345: "Customer Name: DEMO CUSTOMER 426 → DEMO AFTER SORT" (Staging Admin, typed)
+  + "Vehicle added" (imported), IST times, "Only Model" left the added line. **Not exercised:** the layout
+  Delete button (deleting a row needs the owner's OK — the test layout "DEMO layout test" is still on staging),
+  a shared layout seen by a non-admin, a real paste into Outlook.
 - ✅ **10-23: "Endhan Date" column** — migration `20261023_phase10_tracker_endhan_date.sql` on STAGING
   (adds `vehicle_units.endhan_date date`; `tracker_apply_changes` re-created with it on the editable
   list, otherwise byte-identical to numeric_before; staging prosrc md5 `76308fce…` = file, LF) ·
