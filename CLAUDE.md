@@ -56,8 +56,10 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   ⚠️ **Any future hotfix still branches from `origin/portal`, never from `10b-foundation`** — this
   branch adds Univer (package.json + lockfile), `/tracker`, the Employees Tracker button,
   `admin-users` tracker actions and four tracker migrations, none approved for prod. Merge
-  `origin/portal` into it after each release (PR #133 docs too, once merged). Open with the owner: tippers always 18% GST? · AL-ledger proposal · stray
-  cells · real data on staging vs the pilot on prod (sandbox load) · the date Excel goes read-only.
+  `origin/portal` into it after each release (PR #133 docs too, once merged). ✅ 10-23 answers: only
+  RMC always 18% GST (migration `…_rmc_gst` on staging, `1c47e00`) · real data on STAGING first, then the
+  live trial · no read-only date — **owner sends updated files in a day or two → build the repository +
+  archive, then incremental top-ups.** Still open: AL-ledger proposal · stray cells (2 questions).
 
 ## Current state (2026-10-21, latest) — Phase 10 Stage 1 under way
 

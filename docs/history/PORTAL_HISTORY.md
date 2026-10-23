@@ -57,6 +57,11 @@ Owner: *"yes start stage 2"*. Branch `10b-foundation` (`6a9455f` → `5f38233`).
   delivered once paid) → a rule, never saved (`1bd0fee`). ⭐ Univer's conditional formatting leaks into
   `getCellStyleData()`/`getCellData()` — the colour saver would have stored the rule's green as a
   person's colour; style reads now use the raw cell. Found by checking the DB. Cells 117/0.
+- **2026-10-23 — owner answers:** only RMC is always 18% GST → migration `…_rmc_gst` on staging
+  (`1c47e00`; re-measured: the "63 tippers" are all RMC chassis; 2 rows of ~1,630 break the rule →
+  overrides; probe 9/0, old function fails 3) · sandbox = real data on staging, then the live trial ·
+  no read-only date yet — updated files in a day or two to build the repository · stray cells read
+  and a default proposed per block (two questions left) · AL ledger still open.
 
 ## Session log — 2026-10-21 (PC, latest): Phase 10 Stage 1 step 3 — the tracker's Edge Function and access switch, on staging
 

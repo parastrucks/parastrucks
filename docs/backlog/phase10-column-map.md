@@ -53,7 +53,7 @@ text (`5K-DSA`), stored as text + a parsed amount and kind · **HID** = hidden f
 | 31 | `diff_amount` | numeric | DB | `Difference - Amount` | `IF(sup=0 OR payment=0, 0, payment_amount − sup)` |
 | 32 | `diff_base` | numeric | DB | `Difference - Base Value` | `diff_amount / (1 + gst_rate)` (sheet: `/1.28` on every row) |
 | 33 | `diff_gst` | numeric | DB | `Difference - GST` | `diff_amount × gst_rate / (1 + gst_rate)` |
-| 33a | `gst_rate` | numeric | DB | — (new) | ✅ owner 2026-10-21: **28% if `ptb_invoice_date` is before the GST change, else 18%** — unsold stock (no invoice date) is 18%. Applies to every GST step on the row (CTC and CTD alike). ✅ change date **22 Sep 2025** (owner; the data agrees: the last 28% row is 20 Sep, none after). ⚠️ **63 TIPPER rows were already 18% before it** (+1 tractor) — ❓ were tippers always 18%? Plus `gst_rate_override` for the odd row |
+| 33a | `gst_rate` | numeric | DB | — (new) | ✅ owner 2026-10-21: **28% if `ptb_invoice_date` is before the GST change, else 18%** — unsold stock (no invoice date) is 18%. Applies to every GST step on the row (CTC and CTD alike). ✅ change date **22 Sep 2025** (owner; the data agrees: the last 28% row is 20 Sep, none after). ⚠️ **63 TIPPER rows were already 18% before it** (+1 tractor) — ✅ **owner 2026-10-23: "only RMC always at 18%"** — the 63 are all RMC chassis (model `… R RMC`, filed under TIPPER); RMC = 18% on any date (migration `20261023_phase10_tracker_rmc_gst.sql`, `scripts/phase10/gst_rmc.cjs`). 2 rows of ~1,630 break it → `gst_rate_override` at import: row 720 (RMC billed 28%, 29 Aug 2025) · row 948 (U 4020 TT tractor billed 18%, 9 Sep 2025). Plus `gst_rate_override` for the odd row |
 | 34 | `diff_tds` | numeric | DB | `Difference - TDS` | `… × 0.001` |
 | 35 | `total_difference` | numeric | DB | `Total Difference` | `IF(sup=0, 0, diff_base + diff_gst + diff_tds)` |
 | 36 | `parts_pkg` | text | TXT$ | IT `Parts Pkg` | 58/58 text |
@@ -164,9 +164,16 @@ Still open (small):
 Also answered: GST change 22 Sep 2025 · road tax on the bill value until 31 Jul 2025, on MRP from
 1 Aug 2025 (date found in the data) · the HSRP/CRTM constant is CRETEM.
 
-1. **Tippers and GST** — 63 tippers were billed at 18% before 22 Sep 2025. Were tippers always 18%?
+1. ~~Tippers and GST~~ ✅ **answered 2026-10-23: only RMC is always 18%** (see 33a).
 2. **The AL ledger plan** in section G — owner asked what it means; explained in plain words 2026-10-21.
-5. **Stray cells — where to look** (open the file, go to the cell with Ctrl+G):
+5. **Stray cells** — owner 2026-10-23: "what do you want me to do here?" → read them myself (figures
+   masked) and proposed a default per block; owner confirms. **What they hold:** 2025-26 AL = 59 DATES,
+   each beside a filled ENDHAN (AK) + two "K-ENDHAN" labels → ❓ the Endhan given date? (if yes: an
+   "Endhan Date" column) · AM = "REPLENISH" ×2, 4–5 lakh amounts, 1 formula → cell notes · PTB RETAIL
+   AN = 4 lakh amounts, unlabelled → cell notes · DEALERS J = "DATE OF DELY" labels + 6 dates (+1
+   "REPLENISH") → into Date of Delivery · DEALERS K = "RECD" ×3 → cell notes · DEALERS L = 15 DATES,
+   unlabelled → ❓ what are they? Default for anything unanswered: a cell note on its truck (nothing lost).
+   Where they are (Ctrl+G):
    - `2025-26.xlsx` → `Sheet1`: column **AL** (61 cells, from AL142 down) and **AM** (AM742, AM946,
      AM1065 — a formula, AM1929, AM1962, AM1980, AM1981)
    - `INVOICE LIST - MAR 26.xlsx` → `PTB RETAIL`: **AN92, AN125, AN143, AN144**

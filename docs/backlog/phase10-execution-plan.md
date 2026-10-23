@@ -766,7 +766,11 @@ No server change: `setFormats`/`listFormats`/`addNote`/`listNotes` from step 3 w
 
 ### ⏭️ Still to build in Stage 2
 5. **Layouts, search by last 6 digits, Copy for mail, row history** — then the one-off scripted
-   sandbox load (needs the owner's decision: real data on staging or the pilot on prod).
+   sandbox load. ✅ **Owner 2026-10-23: real data on STAGING first, then the trial on the live site.**
+   ✅ **Owner 2026-10-23 on the read-only date: no date yet — he sends the UPDATED versions of all the
+   files "in a day or two"; we build the full repository and archive all the data from them first,
+   then add the rest incrementally until go-live.** So the sandbox load = the first real import, from
+   those files, on staging.
 Also: a phone view (read-only cards) and the local save queue across reloads (E5) are not built.
 
 ### Where things stand (2026-10-22, after slice 3) — resume here
@@ -784,11 +788,16 @@ Also: a phone view (read-only cards) and the local save queue across reloads (E5
   `http://localhost:3000` (the dev server is started with `preview_start {name:"portal"}`); the grid
   is `window.__trackerUniver` in dev. Staging SQL: `npx --yes supabase@2.109.1 db query --linked
   --workdir <scratch>/sb …` (linked to `klpnhpnlotcbbovwswmq`).
-- Prod: nothing. The prod rollout, when approved, is the four migrations (LF text), both functions
+- Prod: nothing. The prod rollout, when approved, is the five migrations (LF text; `…_rmc_gst` = md5
+  `714d9b5d…` on staging), both functions
   (`--no-verify-jwt`; the 11th function joins the key-cutover roster), then the frontend.
-- Owner questions still open: tippers always 18% GST? · the AL-ledger proposal (Stage 6) · the stray
-  cells · **sandbox load: real data on staging, or the pilot on prod behind the switch?** · the date
-  the Excel files go read-only. (AL Payment Status colour: ANSWERED 2026-10-23 — green = Cash Invoiced only.)
+- Owner questions — answered 2026-10-23: AL Payment Status green = Cash Invoiced only · **only RMC is
+  always 18% GST** (migration `20261023_phase10_tracker_rmc_gst.sql`) · sandbox = **real data on staging
+  first, then the trial on the live site** · read-only date: none yet — **updated files from the owner
+  in a day or two → build the repository + archive, then incremental top-ups to go-live.** Still open:
+  the AL-ledger proposal (re-explained 10-23) · stray cells: two ❓ (dates beside ENDHAN; DEALERS L
+  dates), the rest default to cell notes (column map, question 5) · rows 720 and 948 of 2025-26 break
+  the GST rule (import as overrides).
 
 ## ⏸️ PARKED — 2026-08-20 (owner: "put this on the back burner again")
 
