@@ -30,6 +30,45 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ---
 
+## Current state (2026-10-24)
+
+- **💡 CREDIT RELEASE + INVOICE SENDING + GATE APP — PLAN v0.2, NOTHING BUILT** (owner's idea 2026-10-24;
+  PR **#139**, docs only, open). ⭐ **Start at `docs/backlog/credit-release-plan.md`.** Service uploads the
+  SAP invoice PDF → the portal reads it → the customer gets it by email (WhatsApp last) → for an unpaid
+  vehicle, one tap asks the GM/owner → the guard's phone shows "may go / hold" → promises are followed up.
+  - **Measured, not assumed:** the WhatsApp group "Vehicle Gate Pass" (31 Aug → 24 Oct, 593 msgs) =
+    **150 release requests ≈ 2.8/day**, **GM 116 / owner 8**, median reply **6 min**, ₹28.5 L released on
+    credit; ~1 in 10 approvals carries a payment promise **nobody tracks**; "outstanding?" asked 41×.
+    **Three SAP invoice PDFs are digital** (SAP NetWeaver 758) — two layouts named by SAP form:
+    counter sale `ZSF_RETAIL_INVOICE_GST_NEW` (1 page, PAYMENT TERMS field, no plate) and workshop
+    `ZDBMF_COVERING_LETTER_001` (page 1 summary: job card, customer + SAP code, REGN. NO, every L/P bill +
+    grand total; labour + parts = total). Workshop jobs carry **no payment-terms field** → the release is
+    raised by a person. ⭐ **Same PAN + GSTIN under two SAP codes** = one legal entity (grouping hint).
+  - **Owner decisions:** credit vehicles only (paid ones keep accounts' gate pass) · only GM/owner approve ·
+    **standalone — the payments DB does NOT go to prod** → own `gate_*` tables (payments already creates
+    `customers` + `service_invoices`), keyed by SAP code + bill no. · WhatsApp **Business API**, built
+    **LAST** · message = invoice no. + amount + PDF + a thank-you · **one login per guard** · counter sales:
+    send, no gate step · CRM later (roadmap) · email from **`accounts.guj@parastrucks.in`**.
+  - ⚠️ **Guards must be exempt from the ≥1-brand user-shape rule** — a brand opens catalog/quotation/PI RLS,
+    and `hdh` syncs the user into the ERP. New Security department; outlet yes, brand no.
+  - ⚠️ **Edge Functions block outbound ports 25 and 587** (Supabase docs) → Gmail over **SMTPS 465**.
+    `parastrucks.in` = Google Workspace, SPF + Google DKIM present, **no DMARC**. The account needs
+    2-Step Verification + app passwords allowed; **the owner enters the app password as an EF secret**.
+  - Build order: upload + read + email → request + approval + gate + guard logins → promises / mark paid →
+    WhatsApp. Waiting on the owner to say "start" (and "merge" for #139).
+- **✅ vite 8.1.6 LIVE** (PR **#132** → `04dcf02`, the owner said "you do it" after a classifier refusal):
+  post-merge CI + Vercel green. **Checked signed in on prod in the owner's Chrome** (Claude in Chrome): new
+  build `index-C3Y6kJ6J`, **all 12 menu pages render, 0 errors**; in the pane, all 30 prod chunks import.
+- ⚠️ **The browser pane LOADS prod again** (the 10-18 block was temporary) **but cannot sign in there:
+  Cloudflare Turnstile fails in the pane (error 600010)** — never bypass or weaken it. Signed-in prod checks
+  → Claude in Chrome (the owner's Chrome is signed in as admin).
+- **Crash reporting proved on prod 2026-10-21:** the Error Log's first real rows ever — all noise from one
+  staff PC's browser extension. Resolved by another session (PR #137 → `e236912`; record in PR #138).
+- **Payments branch:** `portal` merged in after #131/#132 (`9308fcc`, 0 behind then); `fix/log-error-envelope`
+  deleted (squash-merged; all five files checked identical in `portal`).
+- `.gitignore` (in #139): `docs/*Tax Invoice*.pdf` (the old rule only matched "TAX INVOICE" where git
+  ignores case) and `docs/Vehicle Gate Pass*` (the chat export).
+
 ## Current state (2026-10-22)
 
 - **✅ HOTFIX LIVE — admins can make a Proforma Invoice without chassis/engine numbers, with a quantity**
@@ -111,9 +150,9 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   inside vite ≤ 8.1.5 (the dev server's open-in-editor; never in the built site). PR **#132** → vite
   **8.1.6**. ⚠️ **Not byte-inert:** it brings rolldown 1.1.5, which gives `Icon`, `api` and a `typeof`
   helper their own chunks (43 → 46 files, +1.3 KB). Checked by serving a clean build with `vite preview`
-  and importing all 32 chunks (0 errors); a signed-in page render was not checked. ⭐ **A dependency bump
-  that changes the bundler must be A/B'd, not assumed inert** — the source-map-js one was; this was not.
-  Once it lands, merge `origin/portal` into the payments branch (its lockfile still says 8.1.0).
+  and importing all 32 chunks (0 errors). ⭐ **A dependency bump that changes the bundler must be A/B'd,
+  not assumed inert** — the source-map-js one was; this was not. ✅ Landed `04dcf02`, signed-in prod check
+  done and `portal` merged into the payments branch (`9308fcc`) — see the 2026-10-24 block.
 
 ## Current state (2026-10-18)
 
@@ -122,8 +161,8 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   `log-error/report.ts` reads both shapes; deployed to prod from `6561628` (downloaded back = repo; 401
   unauthenticated); post-merge CI + Vercel green. Rode along: `source-map-js` 1.2.2 lockfile bump (new HIGH
   advisory; proven inert). Live prod test skipped (owner) — **the first real staff error is the proof**
-  (Access Rules → Error Log). ⚠️ **The browser pane cannot load prod** (every `/assets/*` →
-  `ERR_BLOCKED_BY_CLIENT`) — use the owner's Chrome (Claude in Chrome) for prod checks.
+  (Access Rules → Error Log). ~~The browser pane cannot load prod~~ — that was temporary; since 10-21 it
+  loads prod but cannot sign in (Turnstile) — see the 2026-10-24 block.
 - **⛔ Owner, 2026-10-18: Match Payments will NOT go live now; other changes may be pushed.**
 - **🔨 Payments (staging only), since 10-17:** red-team build order complete (R4-21 `b0ed009`, R4-24
   `5a9b86f`, R4-9 `8423adb` + end-of-list crash fix, R4-18 `c706422`) · **migration 9** "Something else"
