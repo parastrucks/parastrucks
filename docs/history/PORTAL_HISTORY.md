@@ -26,6 +26,59 @@
 
 ---
 
+## Session log — 2026-10-21 → 10-24 (PC): vite live and checked signed in, and the credit-release plan
+
+One session (the payments session, worktree `id-login-issue-logs-8810c0`), after payments was parked.
+**Prod change: vite 8.1.6 only.** Everything else is docs.
+
+**Tidy-up and vite (21 Oct).** The merged PR #130 branch `fix/log-error-envelope` was deleted — git called
+it unmerged (squash), so each of its five files was compared with `portal` first (all identical), then `-D`;
+GitHub had already removed its copy. The docs PR #131 failed `npm-audit` on a HIGH advisory published the
+day before (launch-editor inside vite ≤ 8.1.5 — dev server only), so PR **#132** bumped vite to 8.1.6 (released
+6 Oct). Unlike the source-map-js bump it was **not byte-inert**: rolldown 1.1.5 re-chunks `Icon`, `api` and a
+`typeof` helper (43 → 46 files). Checked by two clean `npm ci` builds (every old file present), a
+`vite preview` build against staging (login drawn, 32/32 chunks imported, console clean). The first merge
+timed out on the network, the retry was refused by the classifier ("Merge Without Review"); on the owner's
+"you do it" it merged (`04dcf02`); post-merge CI + Vercel green; prod served the new chunks (every asset 200).
+#131 was then brought up to date and merged (`f914e62`), and `portal` merged into the payments branch
+(`9308fcc`, docs merged with no conflict as designed). This checkout was reinstalled to vite 8.1.6 with the
+payments demo files in `node_modules/payments-demo-files/` backed up and restored (6/6 checksums).
+
+**Prod checked (21 Oct).** The owner asked "can't you look in your browser pane?" — it **loads prod again**
+(30/30 chunks imported, console clean) but **cannot sign in: Cloudflare Turnstile fails in the pane (600010)**.
+Not bypassed. In the owner's Chrome (Claude in Chrome, signed in as admin): build `index-C3Y6kJ6J`, **all 12
+menu pages rendered with 0 errors** (TIV took a few seconds to load data). The Error Log held its **first real
+rows ever** — proof the 10-18 fix works — but all 100 shown were one staff browser's extension
+(`chrome-extension://…/executors/200.js`, 100 in 16 s, a minute before #132 merged). Offered a filter; another
+session found and fixed the cause (PR #137, record in #138).
+
+**Credit release plan (24 Oct).** The owner proposed: service uploads the invoice, the portal reads it and
+sends it to the customer, the GM/owner approve credit releases, a guard app shows may go / hold, plus a CRM.
+Measured before designing — the "Vehicle Gate Pass" WhatsApp export (aggregates only; the file stays outside
+the repo): 150 requests in 54 days (~2.8/day, max 9), GM 116 / owner 8, median reply 6 min (p90 45), ₹28.5 L
+released on credit, ~94 customers (15 repeat = 42% of requests), every request the same template, ~1 in 10
+approvals with a promise or a named responsible person, "outstanding" asked 41×. Three SAP invoice PDFs
+(main checkout `docs/`, read with the portal's `pdfjs-dist` 4.10): all digital, two layouts identified by the
+SAP form name; workshop jobs have no payment-terms field (series prefix only); labour + parts = the summary
+total; **two SAP codes with the same PAN + GSTIN** (checked against the third invoice's own PAN, so the field
+is genuine). The owner answered every question: credit vehicles only · GM/owner only · payments DB stays off
+prod → standalone `gate_*` tables · WhatsApp Business API, built last · one login per guard · the message
+carries invoice no., amount, the PDF and a thank-you · counter sales: send only · CRM later · email from
+`accounts.guj@parastrucks.in`. Checked: Edge Functions block ports 25/587 (Supabase docs) → SMTPS 465;
+`parastrucks.in` is Google Workspace with SPF + DKIM, no DMARC. Found while designing: **guards must be
+exempt from the one-brand user-shape rule** (brands open RLS and the ERP sync). Plan v0.1 → v0.2 in PR
+**#139** (`docs/backlog/credit-release-plan.md`), with `.gitignore` rules for the new sources.
+
+**Payments branch kept current (24 Oct).** `portal` (#134–#137) merged into it → `8bb769d`, clean; `AccessRules.jsx`
+keeps the `/payments` route and gains the extension label; build + log-error 33/0, match-queue 143/0, mobile-render
+151/0. A reinstall (`npm ci`) wiped the gitignored demo files in `node_modules/payments-demo-files/`; restored
+from the scratch copy made on 21 Oct (checksums 6/6).
+
+**Lessons.** (1) Measure the real process before designing it: the chat showed the value is in the untracked
+promise and the outstanding, not the 6-minute "yes". (2) A dependency bump that changes the bundler is a code
+change — A/B it and load every chunk. (3) A new kind of user that should see almost nothing collides with
+rules that assume everyone sees something (the brand rule) — design the exemption first.
+
 ## Session log — 2026-10-22 → 10-23 (PC): the `error_log` flood — a spyware VPN extension, resolved at its cause
 
 The task as filed was *"Filter Chrome-extension noise out of error_log"*. Owner, before any code:

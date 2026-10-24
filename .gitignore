@@ -23,3 +23,7 @@ docs/*TAX INVOICE*.pdf
 docs/Billing Report*.xlsx
 # HDFC SmartHub Vyapar reports (from Oct 2026) — real payer names, amounts, RRNs.
 docs/Transaction_report*.xlsx
+# Credit-release sources (2026-10-24): SAP invoices in either letter case (git is case-
+# sensitive off Windows) and the "Vehicle Gate Pass" WhatsApp export — names, phones, amounts.
+docs/*Tax Invoice*.pdf
+docs/Vehicle Gate Pass*
