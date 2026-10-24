@@ -10,10 +10,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import TrackerGrid from '../components/TrackerGrid'
 import TrackerTools from '../components/TrackerTools'
 import { ALL_COLUMNS, COLUMN_BY_KEY } from '../lib/columnMeta'
-import { addNote, applyChanges, createUnits, listAll, listFormats, listNotes, setFormats } from '../lib/trackerApi'
+import { addNote, applyChanges, createUnits, loadBook, setFormats } from '../lib/trackerApi'
 import { sameFormat } from '../lib/cellFormats'
 import { chunk, MAX_NEW_ROWS, planNewRows, planSave, refusalMessage } from '../lib/savePlan'
-import { todayIst, withScreenColumns } from '../lib/screenColumns'
+import { dseMonthKey, todayIst, withScreenColumns } from '../lib/screenColumns'
 import '../tracker.css'
 
 const STORED_KEYS = ALL_COLUMNS.filter((c) => !c.screen).map((c) => c.key)
@@ -25,7 +25,12 @@ const waitingOf = (queue) => queue.reduce((n, q) => n + (q.kind === 'create' ? q
 const MAX_FORMATS = 2000  // the Edge Function's cap for one setFormats
 const NOTE_SETTLE_MS = 2500 // Univer reports a note while it is typed (after each pause); save once it settles
 
+// what the grid holds (owner, 2026-10-24: "current year only"): this financial year + every older truck still
+// open, or one past year, or all of them; Find reaches the rest. A 4× test of the whole book took minutes.
+const scopeKey = (s) => s.scope === 'year' ? `year-${s.year}` : s.scope
+
 export default function TrackerPage() {
+  const [scope, setScope] = useState({ scope: 'working' })
   const [state, setState] = useState({ status: 'loading' })
   const [notice, setNotice] = useState(null)
   const [saving, setSaving] = useState({ waiting: 0, failed: false })
@@ -40,6 +45,8 @@ export default function TrackerPage() {
   const savedFormat = useRef(new Map()) // "unitId|column" → the formatting last saved (or loaded)
   const fmtBuffer = useRef({ list: [], timer: null })
   const noteTimers = useRef(new Map())  // "unitId|column" → { timer, id, key, text } not yet queued
+  const slabBase = useRef(new Map())    // "DSE|yyyy-mm" → that month's trucks NOT in this scope (the server counts them)
+  const goAfterLoad = useRef(null)      // a truck Find found in another year: go to it once its year is loaded
 
   const say = useCallback((text, tone = 'info', sticky = false) => {
     setNotice({ text, tone })
@@ -49,9 +56,15 @@ export default function TrackerPage() {
 
   useEffect(() => {
     let cancelled = false
-    Promise.all([listAll(STORED_KEYS), listFormats(), listNotes()])
-      .then(([{ rows, hidden }, { formats: fmts }, { notes: noteRows }]) => {
+    setState({ status: 'loading' })
+    setAdded(0)
+    loadBook(STORED_KEYS, scope, (got, of) => !cancelled && of > 2500 && setState({ status: 'loading', got, of }))
+      .then(({ rows, hidden, formats: fmts, notes: noteRows, dseCounts, fyStart, total }) => {
         if (cancelled) return
+        // the slab counts the whole month: the server's count, less the trucks of it this page holds
+        const base = new Map(Object.entries(dseCounts ?? {}))
+        for (const r of rows) { const k = !r.superseded_at && dseMonthKey(r); if (k && base.has(k)) base.set(k, base.get(k) - 1) }
+        slabBase.current = base
         const formats = new Map()
         for (const f of fmts ?? []) if (Object.keys(f.format ?? {}).length) formats.set(`${f.unit_id}|${f.column_key}`, f.format)
         savedFormat.current = new Map(formats)
@@ -62,13 +75,33 @@ export default function TrackerPage() {
         // DSE incentive is worked out on screen from the same figures — hidden with them
         if (hide.size) hide.add('dse_incentive')
         const columns = ALL_COLUMNS.filter((c) => !hide.has(c.key))
-        const full = withScreenColumns(rows, todayIst())
+        const full = withScreenColumns(rows, todayIst(), slabBase.current)
         shadow.current = new Map(full.map((r) => [r.id, { ...r }]))
-        setState({ status: 'ready', columns, rows: full, formats, notes })
+        setState({ status: 'ready', columns, rows: full, formats, notes, fyStart, total })
       })
       .catch((e) => !cancelled && setState({ status: 'error', message: e.message }))
     return () => { cancelled = true }
-  }, [])
+  }, [scope])
+
+  // a truck Find brought from another year: go to it once the grid has drawn
+  useEffect(() => {
+    if (state.status !== 'ready' || !goAfterLoad.current) return
+    const id = goAfterLoad.current
+    goAfterLoad.current = null
+    const t = setTimeout(() => grid.current?.goTo(id, 'chassis_no'), 300)
+    return () => clearTimeout(t)
+  }, [state])
+
+  // Change what the grid holds. Refused while anything is still being saved (the grid is rebuilt).
+  const changeScope = useCallback((next, goToId = null) => {
+    if (queue.current.length || noteTimers.current.size || fmtBuffer.current.list.length || buffer.current.cells.length) {
+      say('Wait until “All changes saved”, then change the year.', 'warn')
+      return false
+    }
+    goAfterLoad.current = goToId
+    setScope(next)
+    return true
+  }, [say])
 
   // Leaving with unsaved changes asks first.
   useEffect(() => {
@@ -97,7 +130,7 @@ export default function TrackerPage() {
       shadow.current.set(fresh.id, withScreen)
     }
     if (touchedSlab && visibleKeys.includes('dse_incentive')) {
-      const all = withScreenColumns([...shadow.current.values()], today)
+      const all = withScreenColumns([...shadow.current.values()], today, slabBase.current)
       for (const r of all) {
         const cur = shadow.current.get(r.id)
         if (cur.dse_incentive !== r.dse_incentive) {
@@ -321,6 +354,10 @@ export default function TrackerPage() {
   const bookRows = useCallback(() => [...shadow.current.values()], [])
 
   const count = state.status === 'ready' ? state.rows.length + added : 0
+  const fy = state.fyStart ? Number(state.fyStart.slice(0, 4)) : null
+  const fyLabel = (y) => `${y}-${String(y + 1).slice(2)}`
+  const holding = scope.scope === 'working' ? (fy ? `${fyLabel(fy)} + still open` : 'this year + still open')
+    : scope.scope === 'year' ? fyLabel(scope.year) : 'all years'
   const columns = useMemo(() => (state.status === 'ready' ? state.columns : []), [state])
   const rows = useMemo(() => (state.status === 'ready' ? state.rows : []), [state])
 
@@ -328,7 +365,11 @@ export default function TrackerPage() {
     <div className="trk-page">
       <div className="trk-head">
         <h1 className="trk-title">Vehicle Tracker<span className="period-accent">.</span></h1>
-        {state.status === 'ready' && <span className="trk-count">{count.toLocaleString('en-IN')} vehicles</span>}
+        {state.status === 'ready' && (
+          <span className="trk-count" title={`The book holds ${Number(state.total ?? count).toLocaleString('en-IN')} vehicles in all years`}>
+            {count.toLocaleString('en-IN')} vehicles · {holding}
+          </span>
+        )}
         {state.status === 'ready' && (
           <button type="button" className="btn btn-sm btn-secondary" title="Go to the first empty row — type the chassis number there"
             onClick={() => grid.current?.newVehicle()}>+ New vehicle</button>
@@ -343,11 +384,13 @@ export default function TrackerPage() {
         {notice && <span className={`trk-notice trk-notice--${notice.tone}`} role="status">{notice.text}</span>}
       </div>
       <div className="trk-phone-note">The tracker opens on a computer. A phone view comes later.</div>
-      {state.status === 'loading' && <div className="trk-loading"><span className="spinner" /> Loading the book…</div>}
+      {state.status === 'loading' && <div className="trk-loading"><span className="spinner" /> Loading {scope.scope === 'all' ? 'every year of the book' : 'the book'}…
+        {state.of ? ` ${state.got.toLocaleString('en-IN')} of ${state.of.toLocaleString('en-IN')} vehicles` : ''}</div>}
       {state.status === 'error' && <div className="trk-error" role="alert">Could not load the book: {state.message}</div>}
-      {state.status === 'ready' && <TrackerTools grid={grid} bookRows={bookRows} say={say} />}
+      {state.status === 'ready' && <TrackerTools grid={grid} bookRows={bookRows} say={say}
+        scope={scope} fyStart={fy} onScope={changeScope} />}
       {state.status === 'ready' && (
-        <TrackerGrid ref={grid} columns={columns} rows={rows} formats={state.formats} notes={state.notes}
+        <TrackerGrid key={scopeKey(scope)} ref={grid} columns={columns} rows={rows} formats={state.formats} notes={state.notes}
           onChanges={onChanges} onFormats={onFormats} onNote={onNote} onRefused={(m) => say(m)} />
       )}
     </div>

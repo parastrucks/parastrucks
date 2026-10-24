@@ -30,7 +30,7 @@ export const canManageSharedViews = (c: Caller) => isAdmin(c)
 // Every action, and the gate it passes BEFORE its payload is read. Anything not listed is
 // unknown and refused. Per-row ownership (a personal layout) is checked in the action itself.
 export const ACTIONS = [
-  "list", "history", "listNotes", "listFormats", "listViews",
+  "list", "book", "find", "history", "listNotes", "listFormats", "listViews",
   "applyChanges", "createUnit", "createUnits", "supersedeUnit", "addNote", "setFormats",
   "saveView", "deleteView", "logExport",
 ] as const
@@ -38,6 +38,8 @@ export type Action = typeof ACTIONS[number]
 
 export const ROLE_GATES: Record<Action, (c: Caller) => boolean> = {
   list:          hasTrackerAccess,
+  book:          hasTrackerAccess,   // the working set / a year / all, with notes + colours, in one call
+  find:          hasTrackerAccess,   // a truck in any year
   history:       hasTrackerAccess,
   listNotes:     hasTrackerAccess,
   listFormats:   hasTrackerAccess,

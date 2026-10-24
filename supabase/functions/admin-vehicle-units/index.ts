@@ -19,7 +19,7 @@ import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.1
 import { secretKey, publishableKey } from "../_shared/keys.ts"
 import { rateLimit } from "../_shared/rateLimit.ts"
 import { audit } from "../_shared/auditLog.ts"
-import { jsonResponse, preflight } from "../_shared/cors.ts"
+import { corsHeaders, jsonResponse, preflight } from "../_shared/cors.ts"
 import { type Caller, gate, canSeeIncentives, canExport, canManageSharedViews, canEditView } from "./authority.ts"
 import { INCENTIVE_COLUMNS, isIncentive } from "./columns.ts"
 import {
@@ -29,6 +29,7 @@ import {
 
 const PAGE = 1000          // PostgREST's row cap; `list` pages at it
 const ID_CHUNK = 150       // ids per .in() filter, to keep the request URL short
+const BOOK_PAGE = 2500     // trucks per `book` page (measured at 24,606 trucks: 2,000 rows of all columns 0.4–2.3 s in the database, 5,000 up to 2.8 s + 10 MB — too near the 8 s limit)
 
 type VerifyResult = { err: Response } | { caller: Caller; admin: SupabaseClient }
 
@@ -178,6 +179,53 @@ Deno.serve(async (req: Request) => {
           ok: true, rows, hidden: plan.hidden, total: count ?? undefined,
           nextOffset: rows.length < limit ? null : offset + limit,
         })
+      }
+
+      // ── The book as the grid opens it: ONE call for the rows of a scope, their notes and colours ──
+      // (owner, 2026-10-24: "current year only"; tracker_book, migration 20261024_phase10_tracker_working_set.sql).
+      // scope: 'working' (default — this financial year + every older truck still open) · 'year' + year ·
+      // 'all' · 'ids' + ids. The database builds the JSON (only the asked-for columns, no empty cells) and it is
+      // passed through as text: parsing ~10 MB here would spend the 2 s CPU allowance for nothing.
+      case "book": {
+        const plan = planRead(payload.columns, seeIncentives)
+        if (!plan.ok) return json({ error: plan.error }, 400)
+        const scope = payload.scope === undefined ? "working" : payload.scope
+        if (!["working", "year", "all", "ids"].includes(scope as string)) return json({ error: "unknown scope" }, 400)
+        const year = scope === "year" ? payload.year : null
+        if (scope === "year" && !(Number.isInteger(year) && (year as number) >= 2000 && (year as number) <= 2100)) return json({ error: "year required" }, 400)
+        const ids = scope === "ids" ? payload.ids : null
+        if (scope === "ids" && !(Array.isArray(ids) && ids.length > 0 && ids.length <= 500 && ids.every(isUuid))) return json({ error: "ids: 1 to 500 row ids" }, 400)
+        // one page of the scope (the database call must finish inside PostgREST's 8 s statement timeout)
+        const offset = Number.isInteger(payload.offset) && (payload.offset as number) >= 0 ? payload.offset as number : 0
+        const limit = Math.min(Number.isInteger(payload.limit) && (payload.limit as number) > 0 ? payload.limit as number : BOOK_PAGE, BOOK_PAGE)
+        const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/rest/v1/rpc/tracker_book`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", apikey: secretKey(), Authorization: `Bearer ${secretKey()}` },
+          body: JSON.stringify({
+            p_scope: scope, p_year: year, p_cols: plan.unitCols, p_inc_cols: plan.incentiveCols, p_ids: ids,
+            p_include_superseded: payload.includeSuperseded === true, p_hidden_keys: seeIncentives ? [] : INCENTIVE_COLUMNS,
+            p_offset: offset, p_limit: limit,
+          }),
+        })
+        if (!res.ok) { console.error("tracker_book failed:", res.status, (await res.text()).slice(0, 300)); return json({ error: "The book could not be read" }, 500) }
+        const book = await res.text()
+        return new Response(`{"ok":true,"hidden":${JSON.stringify(plan.hidden)},"book":${book}}`,
+          { status: 200, headers: { ...corsHeaders(req), "Content-Type": "application/json" } })
+      }
+
+      // ── Find a truck in ANY year (the grid holds only its scope) ─────────────────────────
+      case "find": {
+        const q = typeof payload.q === "string" ? payload.q.replace(/\s+/g, "").toUpperCase() : ""
+        if (q.length < 3 || q.length > 40) return json({ error: "type at least 3 characters" }, 400)
+        if (!/^[A-Z0-9./-]+$/.test(q)) return json({ error: "letters, digits, dot, slash and dash only" }, 400)
+        const cols = ["chassis_no", "engine_no", "oem_gatepass_no", "odn_no", "vpart_no", "supplier_invoice_no",
+          "al_invoice_no", "dealer_invoice_no", "customer_name", "sold_to_dealer", "model"]
+        const { data, error } = await admin.from("vehicle_units")
+          .select("id, chassis_no, customer_name, model, ptb_invoice_date, date_of_retail, oem_gatepass_date, superseded_at")
+          .or(cols.map((c) => `${c}.ilike.*${q}*`).join(","))
+          .order("created_at", { ascending: false }).limit(50)
+        if (error) { const d = dbError(error); return json({ error: d.error }, d.status) }
+        return json({ ok: true, hits: data ?? [] })
       }
 
       // ── Who changed what on one row ─────────────────────────────────────────────────────

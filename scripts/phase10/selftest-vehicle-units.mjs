@@ -44,6 +44,14 @@ for (const text of later) for (const m of text.matchAll(/^alter table public\.ve
 ok(added === 4, `later migrations add 4 columns (endhan_date, mto_advance, al_retail_date, al_ctc) — found ${added}`)
 ok(sqlCols.mto_advance?.rest.includes("in ('Yes', 'No')") && eqSet(cols.COLUMNS.mto_advance?.oneOf ?? [], ['Yes', 'No']), 'mto_advance values: Yes / No in the table and the catalogue')
 const applySql = later.filter((t) => t.includes('editable constant text[] := array[')).at(-1)
+// the working set's "still open" rule (20261024_phase10_tracker_working_set.sql) says paid with the grid's own words
+{
+  const { PAID_WORDS } = await import('../../src/tracker/lib/cellFormats.js')
+  const ws = later.find((t) => t.includes('function public.tracker_still_open')) ?? ''
+  const m = /not in \(([^)]*)\)\)/.exec(ws)
+  const sqlWords = m ? m[1].split(',').map((w) => w.trim().replace(/^'|'$/g, '')) : []
+  ok(eqSet(sqlWords, PAID_WORDS), `still-open rule's paid words = PAID_WORDS (${sqlWords.join(' / ')})`)
+}
 ok(eqSet(Object.keys(sqlCols), Object.keys(cols.COLUMNS)), 'catalogue lists exactly the table\'s columns')
 for (const [k, s] of Object.entries(sqlCols)) {
   ok(cols.COLUMNS[k]?.type === s.type, `type of ${k}: sql ${s.type} vs catalogue ${cols.COLUMNS[k]?.type}`)
@@ -104,7 +112,7 @@ for (const [name, c] of Object.entries(people)) {
   }
   ok(auth.gate('dropTable', c).ok === false && auth.gate('dropTable', c).status === 400, `${name} → unknown action refused`)
 }
-ok(eqSet([...auth.ACTIONS], ['list','history','listNotes','listFormats','listViews','applyChanges','createUnit','createUnits',
+ok(eqSet([...auth.ACTIONS], ['list','book','find','history','listNotes','listFormats','listViews','applyChanges','createUnit','createUnits',
   'supersedeUnit','addNote','setFormats','saveView','deleteView','logExport']), 'the action list is the planned one')
 
 // hasTrackerAccess on its own (gate() checks is_active first; this keeps the second line honest)

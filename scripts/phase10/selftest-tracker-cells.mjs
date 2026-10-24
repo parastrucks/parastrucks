@@ -15,6 +15,7 @@ import { mailTable } from '../../src/tracker/lib/mailTable.js'
 import { describeChange } from '../../src/tracker/lib/historyText.js'
 import { ageingDays, interestOnAgeing, slab, withScreenColumns, todayIst } from '../../src/tracker/lib/screenColumns.js'
 import { ALL_COLUMNS, COLUMN_BY_KEY, visibleColumns } from '../../src/tracker/lib/columnMeta.js'
+import { fyOfTruck, fyLabel } from '../../src/tracker/lib/bookYear.js'
 import { COLUMNS, EDITABLE } from '../../supabase/functions/admin-vehicle-units/columns.ts'
 
 let pass = 0, fail = 0
@@ -258,6 +259,15 @@ const hd = describeChange({ column_key: 'ptb_invoice_date', old_value: null, new
 ok(hd.from === '' && hd.to === '05/07/25' && hd.who === 'someone', 'history: empty before, a date, no name')
 const hn = describeChange({ column_key: '*', old_value: null, new_value: 'MB1X', actor_name: 'A', source: 'create', created_at: '2026-10-23T09:05:00Z' }, COLUMN_BY_KEY)
 ok(hn.what === 'Vehicle added' && hn.to === 'MB1X' && hn.how === 'added', 'history: the row being created')
+
+// the working set (2026-10-24): the slab counts the whole month, also the trucks this page does not hold
+const two = [{ id: 'a', dse: 'Ravi', date_of_retail: '2026-05-03' }, { id: 'b', dse: 'RAVI ', date_of_retail: '2026-05-20' }]
+ok(withScreenColumns(two, '2026-10-22')[0].dse_incentive === 0, 'two trucks in the month → slab 0')
+ok(withScreenColumns(two, '2026-10-22', new Map([['RAVI|2026-05', 3]]))[0].dse_incentive === 1200, 'with 3 more in the month that the page does not hold → 5 → 1,200')
+ok(withScreenColumns(two, '2026-10-22', new Map([['RAVI|2026-04', 9]]))[1].dse_incentive === 0, 'another month’s count does not leak in')
+ok(fyOfTruck({ ptb_invoice_date: '2026-03-31' }) === 2025 && fyOfTruck({ ptb_invoice_date: '2026-04-01' }) === 2026, 'financial year turns on 1 April')
+ok(fyOfTruck({ date_of_retail: '2024-07-01', oem_gatepass_date: '2023-01-01' }) === 2024 && fyOfTruck({ oem_gatepass_date: '2023-01-01' }) === 2022, 'invoice, else retail, else gatepass date')
+ok(fyOfTruck({}) === null && fyLabel(2025) === '2025-26', 'no date → null · label 2025-26')
 
 console.log(`selftest-tracker-cells: ${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

@@ -80,6 +80,12 @@
 .trk-pop-hint { margin: 0; color: var(--text-secondary); font-size: 12.5px; }
 .trk-pop-check { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; }
 .trk-pop-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+/* Find: trucks found in other years (the grid holds one year + the still-open ones) */
+.trk-elsewhere { left: 60px; width: 420px; gap: 4px; }
+.trk-elsewhere-hit { display: flex; gap: 8px; align-items: baseline; text-align: left; padding: 6px 8px; border: 1px solid transparent; border-radius: 6px; background: none; cursor: pointer; font-size: 13px; }
+.trk-elsewhere-hit:hover, .trk-elsewhere-hit:focus-visible { border-color: var(--border, #D1D5DB); background: var(--gray-50, #F9FAFB); }
+.trk-elsewhere-year { margin-left: auto; color: var(--text-secondary); font-size: 12px; white-space: nowrap; }
+.trk-elsewhere-more { color: var(--text-secondary); font-size: 12px; padding: 0 8px; }
 .trk-pop-delete { margin-left: auto; color: #991B1B; }
 .trk-history {
   position: absolute;

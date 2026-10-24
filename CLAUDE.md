@@ -76,8 +76,14 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   updated files → load ALL years onto staging (plan → "Where things stand").
   ⚠️⚠️ **10-24 LOAD TEST at 4× (24,606 dummy trucks, 34k notes; `scripts/phase10/load-x4.sql`, staging): open
   100–270 s, 20 s freeze, 582 MB tab, 2 s freeze per edit, sort never finishes, ~55 MB per open (free egress 5
-  GB/month ≈ 90 opens)** — every open loads the whole book. ⏭️ owner to choose: working set (this + last FY +
-  open trucks) by default, older years on request. DEMO LOAD x4 rows stay on staging until the owner says.
+  GB/month ≈ 90 opens)** — every open loads the whole book. ✅ Owner chose **"current year only"** → BUILT (staging):
+  migration `…_working_set` (`tracker_book` paged + indexed, `tracker_still_open`; **eleven** tracker migrations
+  for prod), EF actions `book`/`find`, Year picker + "Search all years". At 4× steady (3,688 shown): open 9.5 s,
+  0.2 s freeze, 154 MB, edit 1.2 s; pessimistic (9,074): 18 s. ⚠️ PostgREST = authenticator's **8 s
+  statement_timeout** → pages of 2,500, one at a time. ⚠️ OPEN: a sort freezes ~31 s (Univer ~28 s — a plain
+  workbook sorts in 0.39 s; suspect the paid-green CF rule; test interrupted) — plan → "THE WORKING SET".
+  ⭐ Univer events are engine-wide: every grid listener now checks its own workbook (`BOOK_ID`).
+  DEMO LOAD x4 rows stay on staging (steady shape) until the owner says.
   ⚠️ The app stops the dev server at each turn's end (`preview_start` again); Chrome screenshots time out
   while the Claude window is hidden (use `javascript_tool`). Resume: plan → "Where things stand (… session 2)". ⭐ Resume point
   with staging state, dummy-row list, tests and open questions: plan → "STAGE 2" → "Where things stand

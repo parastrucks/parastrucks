@@ -841,11 +841,98 @@ Also: a phone view (read-only cards) and the local save queue across reloads (E5
   ⏭️ Owner decision pending (see the session's reply): load a WORKING SET by default (this and last financial
   year + every truck still open), older years on request; notes/colours only for loaded rows; pages fetched in
   parallel, nulls dropped; then re-measure at 4×. The DEMO LOAD x4 rows stay on staging until the owner says.
+- ✅ **2026-10-24 (session 3, last part): THE WORKING SET — the grid no longer loads the whole book.** Owner chose
+  **"Current year only"** (this financial year + every older truck still open; other years on request) and to
+  KEEP the DEMO LOAD x4 rows for re-measuring. Uncommitted at the start of the compaction → committed with these docs.
+  - **DB** `supabase/migrations/20261024_phase10_tracker_working_set.sql` (STAGING; **eleven** tracker migrations
+    for prod now): `tracker_still_open(8 plain columns)` IMMUTABLE — stock (no invoice + no retail date, not
+    delivered) · AL status filled and not Cash Invoiced/Fresh Offtake · refund pending/to collect (also "p", "to")
+    · delivery pending/stock · financed (not CASH) with no finance-received date. Measured on the real 2022-26
+    files: **1,491 of 5,832 older trucks** (refund 937 — many since 2022-23, may be stale · finance 249 · stock
+    235 · delivery 101 · AL 25) → the real grid would open ~1,630 trucks, not 5,974. **Indexes**
+    `vehicle_units_book_date` (expression: coalesce(invoice, retail, gatepass)) + partial
+    `vehicle_units_still_open` (created_at, id). `tracker_book(scope, year, cols, inc_cols, ids,
+    include_superseded, hidden_keys, offset, limit)` → ONE call: a PAGE of rows (only asked columns, nulls
+    stripped), their incentives, notes (+author name), colours, `dse_counts` (the whole book's DSE-month counts
+    for the months the page touches), `scope_count`, `fy_start` (India date), `total`. Scopes working / year /
+    all / ids; the WHERE is built per scope (EXECUTE) so the indexes are used. service_role only.
+    Staging prosrc md5: tracker_book `504093d3…`, tracker_still_open `8d2c7186…` = file.
+    `scripts/phase10/probe-working-set.sql` **16/0** (PGlite + staging) — **6 planted mutants each caught** (open
+    rule dropped · nulls kept · notes of the whole scope on every page · grant to authenticated · slab counts
+    only loaded rows · limit ignored). ⚠️ The first mutant run had a survivor (notes per page) → the probe now
+    sums notes across pages.
+  - **EF** `admin-vehicle-units` (deployed to staging): actions **`book`** (planRead → POST
+    `/rest/v1/rpc/tracker_book` with the secret key, the DB's JSON passed through as TEXT — never parsed, to
+    spare the 2 s CPU — wrapped as `{"ok":true,"hidden":[…],"book":…}`; `BOOK_PAGE = 2500`) and **`find`**
+    (q 3–40 chars of A-Z 0-9 . / -, ilike on the 11 Find columns, 50 newest, returns id/chassis/customer/model/
+    the three dates/superseded_at). Both on `hasTrackerAccess`. `list`/`listNotes`/`listFormats` still exist
+    (unused by the page now).
+  - **Client**: `trackerApi.loadBook(columns, scope, onProgress)` — page 1 says scope_count, the rest ONE AT A
+    TIME (AT_ONCE = 1), each tried 3× (1.5 s, 3 s back-off), every asked column re-filled as null;
+    `findAnywhere(q)`. `TrackerPage`: scope state ({scope:'working'} default; year / all), `slabBase` = server
+    dse_counts − this page's trucks of that month → `withScreenColumns(rows, today, base)` (new 3rd arg in
+    screenColumns.js; `dseMonthKey` exported), `changeScope` refused while anything waits to save, grid
+    remounts per scope (`key`), header "3,688 vehicles · 2026-27 + still open" (title = whole book total),
+    "Loading … x of y vehicles". `TrackerTools`: **Year** select ("2026-27 + still open" · each year 2022-23 →
+    now "only" · "All years (slow)" with a confirm); Find "not in this view" → **Search all years** → list of
+    hits (year shown) → opens that year and goes to the truck (`goAfterLoad`). `src/tracker/lib/bookYear.js`
+    (FIRST_YEAR 2022 — the books start Nov 2022, owner · fyLabel · fyOfTruck). CSS `.trk-elsewhere*`.
+  - **Grid hardening** (TrackerGrid.jsx): `BOOK_ID = 'tracker'`; every lookup by id, never "the active
+    workbook"; ALL 7 Univer listeners return unless the event is ours (`mine(p)`: p.workbook / **p.payload.params.unitId**
+    (SheetValueChanged carries the command as payload) / p.params.unitId) and `ourRanges(p)` filters
+    effectedRanges by `range.getUnitId()`. ⭐ Found because a TEST workbook created in the same engine fired the
+    tracker's save path with 380k cells (stack overflow; nothing saved — the copy held identical values; DB
+    checked twice). A sort no longer runs the value/format scan (`/sort|reorder/` on lastCmd → return).
+  - **Measured at 4× (24,606 trucks, 34k notes) in the owner's Chrome, dev build** — before → after:
+    | | whole book (before) | working set, pessimistic (9,074) | working set, steady (3,688) |
+    |---|---|---|---|
+    | open | 100–270 s | **18–19 s** | **9.5 s** (21–25 s when the instance was cold/busy) |
+    | freeze after load | 20 s | 0.5–0.6 s | **0.2 s** |
+    | tab memory | 582 MB | 202–256 MB | **154 MB** |
+    | edit: freeze / saved | 2.1 s / 4.8 s | 0.8 s / 2.6 s | **0.18 s / 1.2 s** |
+    | scroll (work per wheel step) | 230 ms | 110 ms | **< 50 ms** |
+    | sort the grid | never finished | — | ⚠️ **31 s** (see below) |
+    | data per open | ~55 MB | ~19 MB | ~7 MB |
+    Pessimistic = 26% of all history stays open for ever (the real share today); steady = only about today's
+    open count stays open (`scripts/phase10/load-x4-shape.sql`: copy 1 → this year, copies 2–11 back one year
+    each, share 0.35 → pessimistic / 0 → steady; staging is in the STEADY shape now). In the DB a 2,000-row page
+    = 0.37–0.6 s once indexed (was 1.6 s, 1.46 s of it deciding the scope; filter 1,459 → 6 ms).
+  - ⚠️ **Free-tier limits found:** PostgREST calls run under the **authenticator's 8 s statement_timeout**
+    (service_role has none of its own; anon 3 s, authenticated 8 s) — a 9,000-row single call took 5–14 s →
+    "The book could not be read"; pages of 5,000 (≈10 MB) also failed → 2,500. Three pages at once overloaded the
+    free instance (~13 s each, some over the limit) → one at a time. Each EF call costs ~1.1–2.5 s fixed (sign-in
+    check, profile, rate limit). The instance's speed varies a lot under sustained load (the same page 1.9 s,
+    later 12 s) — re-measure on a quiet instance. Supabase docs (2026-10-24): EF 256 MB, 2 s CPU/request, 150 s
+    wall; egress 5 GB uncached/month free; DB 500 MB (staging 53 MB at 4×).
+  - ⚠️ **OPEN — sorting:** at 3,688 trucks a full-width sort froze the page **~31 s**: our handlers 2.3 s
+    (re-reading ids + redrawing ~2,000 notes, ~0.9 ms a note), **Univer ~28 s**. The same values in a PLAIN
+    workbook in the same engine sort in **0.39 s** (all 102 columns; 12 columns 0.19 s) → something on the
+    tracker's sheet makes Univer's sort slow. Suspect: the one conditional-format rule (paid green, a FORMULA rule
+    over AL Payment Status for rows + 5,000 spare). The test with the rule removed was interrupted by the
+    compaction — **re-run it first**: load /tracker, `ws.deleteConditionalFormattingRule` for each rule, sort
+    (set a timer; read `window.__sortMs` after), then try data validation / styles if it is still slow.
+    Possible fixes: a range-limited rule, the colour applied as a style instead of a rule, or sort through our
+    own row order (sort the rows array and rebuild the sheet).
+  - ⚠️ **OPEN — the edit freeze** (0.18 s at 3,688, 0.8 s at 9,074) grows with rows and is not in our handlers
+    (nothing scans the sheet) — most likely the same CF rule recalculating; check with the sort test.
+  - Not done yet: a planted-bug test for the client paging/retry; the browser check of Year switching and
+    "Search all years" (built, build + lint clean, not clicked through); 'all' years at 4×.
+  - Tests: `selftest-tracker-cells` **153/0** (+6: slab base, fyOfTruck) · `selftest-vehicle-units` **587/0** (+the
+    still-open rule's paid words = PAID_WORDS; a planted "cash invoiced only" fails it) · import-merge 39/0 ·
+    import-read 12/0 · probe-working-set 16/0 · deno check · build · no-undef lint clean.
+  - ⭐ **Lessons:** a mutant run on an UNTRACKED file cannot be undone with `git checkout` (it silently did
+    nothing and left the planted bug in the migration — caught by re-reading; restore by hand and re-test).
+    A probe must not page through the real table on a big book (3-row pages over 9,000 rows hit the timeout) —
+    page through its own rows. Univer events are ENGINE-wide. Measure the DB alone, the EF alone and the page
+    to find where time goes — each had a different bottleneck.
 - **Next, in this order:**
+  0. **Finish the working set:** re-run the sort test with the conditional-format rule removed (see above) and fix
+     the sort; click through Year switching + "Search all years"; re-measure steady + pessimistic on a quiet
+     instance; then ask the owner whether the DEMO LOAD x4 rows may go (delete needs approval; script kept).
   1. **When the owner's UPDATED files arrive: run the importer onto STAGING** (the repository/archive) — now
      ALL years at once (`run.cjs <scratch>` with no files, or the owner's folders):
      `node scripts/phase10/import/run.cjs <scratch> [files/folders]` → `node scripts/phase10/import/sql.cjs
-     <scratch> <admin uuid>` → rehearse on PGlite (all 10 tracker migrations, then `import.sql`, then
+     <scratch> <admin uuid>` → rehearse on PGlite (all 11 tracker migrations, then `import.sql`, then
      `recompute-diff.sql` + `probe-foundation.sql`) → staging `db query --linked -f <scratch>/import.sql` →
      `recompute-diff.sql` on staging → open `/tracker` and MEASURE how the grid draws ~5,000 notes (only ~10
      so far). ✅ The DEMO rows STAY (owner 2026-10-24) — the real trucks load beside them (their chassis all
@@ -859,7 +946,8 @@ Also: a phone view (read-only cards) and the local save queue across reloads (E5
 - **On staging now (klpnhpnlotcbbovwswmq):** migrations `…_foundation`, `…_supersede`, `…_numeric_before`,
   `…_create_units` (md5 `8f4e051d…`), `…_rmc_gst` (md5 `714d9b5d…`), `…_endhan_date`, `…_mto_advance`,
   `…_import_notes` (note source 'import'), `…_al_retail_date`, `…_two_ctc` (compute md5 `ee1a22a6…`, apply
-  `08ff1a12…` = file); Edge Functions `admin-vehicle-units` (endhan_date + mto_advance + al_retail_date + al_ctc) and `admin-users` (tracker actions) as in
+  `08ff1a12…` = file), `…_working_set` (tracker_book `504093d3…`, tracker_still_open `8d2c7186…` = file); Edge Functions
+  `admin-vehicle-units` (endhan_date + mto_advance + al_retail_date + al_ctc; actions `book` + `find`, BOOK_PAGE 2500) and `admin-users` (tracker actions) as in
   this branch. **2,056 tracker rows, all DUMMY** (2,050 `DEMO seed` + `DEMO-PROBE-202610220945` original and
   rebill + `DEMO-NEWROW-0001…0004`). Test edits left on dummy rows: slice 2 (CTC/CTD on a few DEMO trucks,
   Segment → TIPPER on three, "DEMO AFTER SORT" on DEMO-MB1AS0000345, CTC 21,11,111 on DEMO-MB1AT0002049);
@@ -902,7 +990,7 @@ Also: a phone view (read-only cards) and the local save queue across reloads (E5
   Write tool, or build backslashes with `String.fromCharCode(92)`; check edited files with `cat -A`. A test
   that passes first time is not yet a test: plant the bug and watch it fail (two of this session's
   self-tests let a planted bug through until their data was widened).
-- **Prod: nothing.** The prod rollout, when approved: the **ten** tracker migrations (LF text), both functions
+- **Prod: nothing.** The prod rollout, when approved: the **eleven** tracker migrations (LF text), both functions
   (`--no-verify-jwt`; `admin-vehicle-units` joins the key-cutover roster), then the frontend.
 - **Owner questions — answered 2026-10-23:** AL Payment Status green = Cash Invoiced only · only RMC is
   always 18% GST · sandbox = real data on staging first, then the trial on the live site · read-only

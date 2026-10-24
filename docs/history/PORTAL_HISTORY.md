@@ -138,6 +138,13 @@ Owner: *"yes start stage 2"*. Branch `10b-foundation` (`6a9455f` → `5f38233`).
   problem (53 MB of 500); the page is — it loads the whole book on every open: 100–270 s to open, a 20 s freeze,
   2 s per edit, a sort that never finishes, and ~55 MB sent per open against a 5 GB monthly free allowance.
   ⭐ A grid that is fast at 2,000 rows told us nothing about year four: test at the size it will reach.
+- **2026-10-24 (end) — the working set:** owner chose "current year only". The grid now opens this financial year
+  plus every older truck still open (a rule measured on the real files: 1,491 of 5,832 older trucks), in pages,
+  with a Year picker and Find across all years. At 4× it opens in 9.5 s instead of minutes. Three bottlenecks,
+  found one at a time by measuring each layer: the database checking every truck (fixed by indexes: 1.5 s →
+  6 ms), PostgREST's 8-second limit (pages of 2,500, one at a time) and the free instance overloading under
+  parallel calls. A test workbook showed the grid's listeners were engine-wide — now each checks its own
+  workbook. Still open: a sort at 3,688 trucks freezes ~31 s inside Univer (a plain workbook: 0.39 s).
 
 ## Session log — 2026-10-21 (PC, latest): Phase 10 Stage 1 step 3 — the tracker's Edge Function and access switch, on staging
 

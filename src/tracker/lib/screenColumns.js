@@ -32,9 +32,14 @@ const dseKey = (row) => {
   return dse && month ? `${dse}|${month}` : null
 }
 
+// The slab's key: "DSE|yyyy-mm" (the server's dse_counts uses the same).
+export const dseMonthKey = dseKey
+
 // Adds the screen columns to every row (rebilled rows are counted out of the incentive month).
-export function withScreenColumns(rows, todayIso) {
-  const counts = new Map()
+// base: "DSE|yyyy-mm" → trucks of that month NOT among these rows (the grid holds one scope of the book;
+// the server counts the rest), so the slab counts the whole month either way.
+export function withScreenColumns(rows, todayIso, base = null) {
+  const counts = new Map(base ?? [])
   for (const r of rows) {
     if (r.superseded_at) continue
     const k = dseKey(r)

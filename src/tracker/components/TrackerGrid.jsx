@@ -45,6 +45,8 @@ import { STYLES, styleKey, styleWith, formatOf, lostNumberFormat, pastedFormat, 
 // Empty rows kept below the book, as in Excel: a new truck is typed (or a block of them pasted)
 // straight into them. The page asks for more before they run out (ensureSpare). At least the
 // largest paste a save can take, so a full paste never runs off the end of the sheet.
+// the workbook's id: every lookup names it (Univer's 'active workbook' can be another one)
+const BOOK_ID = 'tracker'
 const SPARE = 250
 
 // an empty row that already carries each column's format, so a typed 05/07/25 is a date and a
@@ -77,7 +79,7 @@ function buildWorkbook(columns, rows, formats) {
   // so rows added later (ensureSpare) are covered too.
   const paid = paidRule(columns, rows.length + SPARE + 5000)
   return {
-    id: 'tracker', name: 'Vehicle Tracker', sheetOrder: ['book'], styles: STYLES,
+    id: BOOK_ID, name: 'Vehicle Tracker', sheetOrder: ['book'], styles: STYLES,
     resources: paid ? [{ name: 'SHEET_CONDITIONAL_FORMATTING_PLUGIN', data: JSON.stringify({ book: [paid] }) }] : [],
     sheets: {
       book: {
@@ -180,7 +182,7 @@ const TrackerGrid = forwardRef(function TrackerGrid({ columns, rows, formats, no
       e.sheet().scrollToCell(Math.max(1, r - 5), 0)
       // open the cell's editor: it takes the keyboard from the button, so typing goes straight in
       // (measured: without it, the keys stayed on the button and nothing reached the grid)
-      setTimeout(() => api.current?.getActiveWorkbook()?.startEditing(), 0)
+      setTimeout(() => api.current?.getWorkbook(BOOK_ID)?.startEditing(), 0)
     },
     // keep at least SPARE empty rows below the book (after creates have used some)
     ensureSpare() { engine.current?.ensureSpare() },
@@ -220,7 +222,7 @@ const TrackerGrid = forwardRef(function TrackerGrid({ columns, rows, formats, no
 
     // ── HISTORY: the truck and column of the selected cell (null on the header or an empty row)
     activeCell() {
-      const range = api.current?.getActiveWorkbook()?.getActiveRange()
+      const range = api.current?.getWorkbook(BOOK_ID)?.getActiveRange()
       if (!range) return null
       const r = range.getRow(), c = range.getColumn()
       const id = rowIds.current[r]
@@ -285,10 +287,16 @@ const TrackerGrid = forwardRef(function TrackerGrid({ columns, rows, formats, no
     })
     api.current = univerAPI
     const workbook = univerAPI.createWorkbook(buildWorkbook(columns, rows, formats))
+    // Univer's events are the whole engine's, not one workbook's: answer only our own (a second workbook in
+    // the same engine fired this sheet's save path with its own cells — seen in a test, 2026-10-24)
+    const ourId = workbook.getId()
+    // (a sheet event names its workbook; a command names it in params; SheetValueChanged in payload.params)
+    const mine = (p) => (p?.workbook?.getId?.() ?? p?.payload?.params?.unitId ?? p?.params?.unitId ?? ourId) === ourId
+    const ourRanges = (p) => (p.effectedRanges || []).filter((range) => (range.getUnitId?.() ?? ourId) === ourId)
     if (import.meta.env.DEV) window.__trackerUniver = univerAPI // dev only: lets checks be run from the console
 
     const idCol = columns.length
-    const sheet = () => univerAPI.getActiveWorkbook().getActiveSheet()
+    const sheet = () => univerAPI.getWorkbook(ourId).getActiveSheet()   // our own book, not "the active one"
     const readIds = () => {
       rowIds.current = sheet().getRange(0, idCol, sheet().getMaxRows(), 1).getRawValues().map((r) => r[0])
     }
@@ -387,6 +395,7 @@ const TrackerGrid = forwardRef(function TrackerGrid({ columns, rows, formats, no
     let lastCmd = ''
     const subs = [
       univerAPI.addEvent(univerAPI.Event.BeforeCommandExecute, (p) => {
+        if (!mine(p)) return
         if (isBlocked(p.id)) {
           p.cancel = true
           handlers.current.onRefused?.('Rows and columns cannot be added, removed, moved or merged here — each row is one vehicle.')
@@ -395,6 +404,7 @@ const TrackerGrid = forwardRef(function TrackerGrid({ columns, rows, formats, no
         if (p?.type === CommandType.COMMAND) lastCmd = p.id
       }),
       univerAPI.addEvent(univerAPI.Event.CommandExecuted, (p) => {
+        if (!mine(p)) return
         if (p?.type === CommandType.COMMAND) lastCmd = ''
         // sorting moves whole rows (the id column with them): read the new order — and put the notes
         // back on their trucks, since Univer leaves them where they were
@@ -402,6 +412,7 @@ const TrackerGrid = forwardRef(function TrackerGrid({ columns, rows, formats, no
       }),
       // ── Notes: one per cell, as in Excel. Each saved version is kept on the server (add-only). ──
       univerAPI.addEvent(univerAPI.Event.BeforeSheetNoteAdd, (p) => {
+        if (!mine(p)) return
         if (drawingNotes) return
         if (p.row === 0 || p.col >= idCol) { p.cancel = true; return }
         const id = rowIds.current[p.row]
@@ -411,6 +422,7 @@ const TrackerGrid = forwardRef(function TrackerGrid({ columns, rows, formats, no
         }
       }),
       univerAPI.addEvent(univerAPI.Event.BeforeSheetNoteDelete, (p) => {
+        if (!mine(p)) return
         if (drawingNotes) return
         const id = rowIds.current[p.row]
         const k = `${id}|${columns[p.col]?.key}`
@@ -421,6 +433,7 @@ const TrackerGrid = forwardRef(function TrackerGrid({ columns, rows, formats, no
         }
       }),
       ...['SheetNoteAdd', 'SheetNoteUpdate'].map((name) => univerAPI.addEvent(univerAPI.Event[name], (p) => {
+        if (!mine(p)) return
         if (drawingNotes) return
         const id = rowIds.current[p.row]
         const key = columns[p.col]?.key
@@ -433,6 +446,7 @@ const TrackerGrid = forwardRef(function TrackerGrid({ columns, rows, formats, no
       })),
       // Duty 4, first half: refuse to open the editor on the header, the id column or a worked-out column.
       univerAPI.addEvent(univerAPI.Event.BeforeSheetEditStart, (p) => {
+        if (!mine(p)) return
         if (p.row === 0 || p.column >= idCol || !columns[p.column]?.editable) {
           p.cancel = true
           handlers.current.onRefused?.(p.row === 0 ? 'The header row is fixed.'
@@ -440,9 +454,14 @@ const TrackerGrid = forwardRef(function TrackerGrid({ columns, rows, formats, no
         }
       }),
       univerAPI.addEvent(univerAPI.Event.SheetValueChanged, (p) => {
+        if (!mine(p)) return
         if (reverting) return // our own put-back or refresh is not an edit
+        // A sort moves whole rows (the id column with them): no truck's value or look changed, so nothing is
+        // checked here — the new order is read when the command ends (CommandExecuted). Checking every
+        // cell of the book as an edit took 31 s for 3,688 trucks (measured 2026-10-24).
+        if (/sort|reorder/i.test(lastCmd)) return
         const cells = [], fresh = [], repair = []
-        for (const range of p.effectedRanges || []) {
+        for (const range of ourRanges(p)) {
           const r0 = range.getRow(), c0 = range.getColumn()
           const values = range.getRawValues() // ⚠️ raw, never getValues (formatted text)
           const formulas = range.getFormulas()
@@ -463,7 +482,7 @@ const TrackerGrid = forwardRef(function TrackerGrid({ columns, rows, formats, no
         // Every book cell this touched — its look is checked below (a style change arrives as this
         // same event, and so do its undo and redo — measured).
         const looks = []
-        for (const range of p.effectedRanges || []) {
+        for (const range of ourRanges(p)) {
           const r0 = range.getRow(), c0 = range.getColumn()
           for (let i = 0; i < range.getHeight(); i++) for (let j = 0; j < range.getWidth(); j++) {
             if (r0 + i >= 1 && c0 + j < idCol) looks.push({ r: r0 + i, c: c0 + j })

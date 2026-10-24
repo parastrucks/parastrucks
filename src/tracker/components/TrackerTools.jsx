@@ -1,27 +1,54 @@
-// Phase 10 — the toolbar above the grid (slice 5): find a vehicle, layouts, Copy for mail, a row's history.
-// One line, so the grid gives up one line of height for all four. Everything here reads the grid or the
-// server; nothing writes a cell.
+// Phase 10 — the toolbar above the grid (slice 5): find a vehicle, layouts, Copy for mail, a row's history,
+// and which year the grid holds (2026-10-24). One line, so the grid gives up one line of height for all of
+// them. Everything here reads the grid or the server; nothing writes a cell.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
-import { deleteView, history, listViews, logExport, saveView } from '../lib/trackerApi'
+import { deleteView, findAnywhere, history, listViews, logExport, saveView } from '../lib/trackerApi'
 import { findRows, MIN_FIND } from '../lib/findRows'
 import { mailTable, BIG_COPY } from '../lib/mailTable'
 import { describeChange } from '../lib/historyText'
 import { COLUMN_BY_KEY } from '../lib/columnMeta'
+import { FIRST_YEAR, fyLabel, fyOfTruck } from '../lib/bookYear'
 
 const LAYOUT_KEY = 'trk-layout' // the layout last chosen, per browser
 const remembered = () => { try { return localStorage.getItem(LAYOUT_KEY) ?? '' } catch { return '' } }
 const remember = (id) => { try { if (id) localStorage.setItem(LAYOUT_KEY, id); else localStorage.removeItem(LAYOUT_KEY) } catch { /* private window */ } }
 
 // grid: the TrackerGrid handle · bookRows(): the rows as the page holds them · say(text, tone)
-export default function TrackerTools({ grid, bookRows, say }) {
+// scope: what the grid holds ({ scope: 'working' | 'year' | 'all', year }) · fyStart: this financial year (its
+// April) · onScope(next, goToId): load another scope (the page refuses while saves are waiting)
+export default function TrackerTools({ grid, bookRows, say, scope, fyStart, onScope }) {
   const { isAdmin, profile } = useAuth()
 
+  // ── Which year the grid holds ──────────────────────────────────────────────────────────────
+  const thisYear = fyStart ?? FIRST_YEAR
+  const years = []
+  for (let y = thisYear; y >= FIRST_YEAR; y--) years.push(y)
+  const scopeValue = scope?.scope === 'year' ? String(scope.year) : (scope?.scope ?? 'working')
+  const chooseScope = (v) => {
+    if (v === 'all' && !window.confirm('All years is the whole book — it is slow to open and slow to use. Open it anyway?')) return
+    onScope?.(v === 'working' || v === 'all' ? { scope: v } : { scope: 'year', year: Number(v) })
+  }
+
   // ── Find a vehicle ───────────────────────────────────────────────────────────────────────────
-  const [find, setFind] = useState({ q: '', hits: [], at: -1, note: '' })
+  const [find, setFind] = useState({ q: '', hits: [], at: -1, note: '', elsewhere: null })
   const onFind = (q) => {
     const hits = findRows(bookRows(), q)
-    setFind({ q, hits, at: -1, note: q.trim().length < MIN_FIND ? '' : hits.length ? `${hits.length} found` : 'not found' })
+    setFind({ q, hits, at: -1, note: q.trim().length < MIN_FIND ? '' : hits.length ? `${hits.length} found` : 'not in this view', elsewhere: null })
+  }
+  // not among the rows the grid holds → look in every year on the server
+  const findElsewhere = async () => {
+    setFind((f) => ({ ...f, note: 'searching all years…' }))
+    try {
+      const here = new Set(bookRows().map((r) => r.id))
+      const hits = (await findAnywhere(find.q)).filter((h) => !h.superseded_at && !here.has(h.id))
+      setFind((f) => ({ ...f, elsewhere: hits, note: hits.length ? `${hits.length} in other years` : 'not found in any year' }))
+    } catch (e) { setFind((f) => ({ ...f, note: `could not search: ${e.message}` })) }
+  }
+  const openElsewhere = (h) => {
+    const y = fyOfTruck(h)
+    const next = y === null || (y === fyStart) ? { scope: 'working' } : { scope: 'year', year: y }
+    onScope?.(next, h.id)
   }
   const nextHit = () => {
     if (!find.hits.length) return
@@ -126,6 +153,31 @@ export default function TrackerTools({ grid, bookRows, say }) {
             onChange={(e) => onFind(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); nextHit() } }} />
           {find.note && <span className="trk-find-note">{find.note}{find.hits.length > 0 && find.at < 0 ? ' — Enter to go' : ''}</span>}
+          {!find.hits.length && find.q.trim().length >= MIN_FIND && find.elsewhere === null && find.note === 'not in this view' && (
+            <button type="button" className="btn btn-sm btn-secondary" onClick={findElsewhere}>Search all years</button>
+          )}
+        </label>
+        {find.elsewhere?.length > 0 && (
+          <div className="trk-pop trk-elsewhere" role="dialog" aria-label="Found in other years">
+            {find.elsewhere.slice(0, 8).map((h) => (
+              <button type="button" key={h.id} className="trk-elsewhere-hit" onClick={() => openElsewhere(h)}>
+                <strong>{h.chassis_no}</strong> {h.customer_name ?? ''} {h.model ? `· ${h.model}` : ''}
+                <span className="trk-elsewhere-year">{fyOfTruck(h) === null ? 'no date yet' : fyLabel(fyOfTruck(h))}</span>
+              </button>
+            ))}
+            {find.elsewhere.length > 8 && <div className="trk-elsewhere-more">{find.elsewhere.length - 8} more — type more digits</div>}
+            <button type="button" className="btn btn-sm btn-ghost" onClick={() => setFind((f) => ({ ...f, elsewhere: null }))}>Close</button>
+          </div>
+        )}
+
+        <label className="trk-layout">
+          <span className="trk-tools-label">Year</span>
+          <select value={scopeValue} onChange={(e) => chooseScope(e.target.value)}
+            title="The grid opens this financial year and every older vehicle still open; pick another year to see it">
+            <option value="working">{fyLabel(thisYear)} + still open</option>
+            {years.map((y) => <option key={y} value={String(y)}>{fyLabel(y)} only</option>)}
+            <option value="all">All years (slow)</option>
+          </select>
         </label>
 
         <label className="trk-layout">
