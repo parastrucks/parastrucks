@@ -74,7 +74,8 @@ for (const [name, stack, file, want] of cases) {
 let store = {}
 globalThis.localStorage = { getItem: k => store[k] ?? null, setItem: (k, v) => { store[k] = String(v) } }
 ok('the first one today is sent', firstTodayFor(URBAN) === true)
-ok('...the next ones today are not', firstTodayFor(URBAN) === false && firstTodayFor(URBAN) === false)
+const repeats = [firstTodayFor(URBAN), firstTodayFor(URBAN)]
+ok('...the next ones today are not', repeats.every(sent => sent === false))
 ok('a different extension is sent once too', firstTodayFor('chrome-extension://other') === true && firstTodayFor('chrome-extension://other') === false)
 store[`errlog-ext:${URBAN}`] = '2000-01-01'
 ok('a new day sends it again', firstTodayFor(URBAN) === true)

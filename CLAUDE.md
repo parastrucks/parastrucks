@@ -30,6 +30,81 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ---
 
+## Current state (2026-10-24)
+
+- **💡 CREDIT RELEASE + INVOICE SENDING + GATE APP — PLAN v0.2, NOTHING BUILT** (owner's idea 2026-10-24;
+  PR **#139**, docs only, open). ⭐ **Start at `docs/backlog/credit-release-plan.md`.** Service uploads the
+  SAP invoice PDF → the portal reads it → the customer gets it by email (WhatsApp last) → for an unpaid
+  vehicle, one tap asks the GM/owner → the guard's phone shows "may go / hold" → promises are followed up.
+  - **Measured, not assumed:** the WhatsApp group "Vehicle Gate Pass" (31 Aug → 24 Oct, 593 msgs) =
+    **150 release requests ≈ 2.8/day**, **GM 116 / owner 8**, median reply **6 min**, ₹28.5 L released on
+    credit; ~1 in 10 approvals carries a payment promise **nobody tracks**; "outstanding?" asked 41×.
+    **Three SAP invoice PDFs are digital** (SAP NetWeaver 758) — two layouts named by SAP form:
+    counter sale `ZSF_RETAIL_INVOICE_GST_NEW` (1 page, PAYMENT TERMS field, no plate) and workshop
+    `ZDBMF_COVERING_LETTER_001` (page 1 summary: job card, customer + SAP code, REGN. NO, every L/P bill +
+    grand total; labour + parts = total). Workshop jobs carry **no payment-terms field** → the release is
+    raised by a person. ⭐ **Same PAN + GSTIN under two SAP codes** = one legal entity (grouping hint).
+  - **Owner decisions:** credit vehicles only (paid ones keep accounts' gate pass) · only GM/owner approve ·
+    **standalone — the payments DB does NOT go to prod** → own `gate_*` tables (payments already creates
+    `customers` + `service_invoices`), keyed by SAP code + bill no. · WhatsApp **Business API**, built
+    **LAST** · message = invoice no. + amount + PDF + a thank-you · **one login per guard** · counter sales:
+    send, no gate step · CRM later (roadmap) · email from **`accounts.guj@parastrucks.in`**.
+  - ⚠️ **Guards must be exempt from the ≥1-brand user-shape rule** — a brand opens catalog/quotation/PI RLS,
+    and `hdh` syncs the user into the ERP. New Security department; outlet yes, brand no.
+  - ⚠️ **Edge Functions block outbound ports 25 and 587** (Supabase docs) → Gmail over **SMTPS 465**.
+    `parastrucks.in` = Google Workspace, SPF + Google DKIM present, **no DMARC**. The account needs
+    2-Step Verification + app passwords allowed; **the owner enters the app password as an EF secret**.
+  - Build order: upload + read + email → request + approval + gate + guard logins → promises / mark paid →
+    WhatsApp. Waiting on the owner to say "start" (and "merge" for #139).
+- **✅ vite 8.1.6 LIVE** (PR **#132** → `04dcf02`, the owner said "you do it" after a classifier refusal):
+  post-merge CI + Vercel green. **Checked signed in on prod in the owner's Chrome** (Claude in Chrome): new
+  build `index-C3Y6kJ6J`, **all 12 menu pages render, 0 errors**; in the pane, all 30 prod chunks import.
+- ⚠️ **The browser pane LOADS prod again** (the 10-18 block was temporary) **but cannot sign in there:
+  Cloudflare Turnstile fails in the pane (error 600010)** — never bypass or weaken it. Signed-in prod checks
+  → Claude in Chrome (the owner's Chrome is signed in as admin).
+- **Crash reporting proved on prod 2026-10-21:** the Error Log's first real rows ever — all noise from one
+  staff PC's browser extension. Resolved by another session (PR #137 → `e236912`; record in PR #138).
+- **Payments branch:** `portal` merged in after #131/#132 (`9308fcc`) and again on 10-24 after #134–#137
+  (`8bb769d`, clean; build + log-error 33 · match-queue 143 · mobile-render 151) — **0 behind**.
+  ⚠️ `npm ci` wipes the gitignored `node_modules/payments-demo-files/` — back them up first (it happened;
+  restored from a scratch copy, checksums 6/6). `fix/log-error-envelope` deleted (squash-merged; all five
+  files checked identical in `portal`).
+- `.gitignore` (in #139): `docs/*Tax Invoice*.pdf` (the old rule only matched "TAX INVOICE" where git
+  ignores case) and `docs/Vehicle Gate Pass*` (the chat export).
+
+## Current state (2026-10-23)
+
+- **✅ `error_log` FLOOD RESOLVED AT ITS CAUSE — a spyware VPN extension on one staff PC, now uninstalled.**
+  8,961 of 8,964 rows (19–22 Oct, ~2 a second, 8,145+ on `/proforma-invoice`) came from **Urban VPN
+  Proxy** (`chrome-extension://eppiocemhmnlbhjplcgkofciiegomcon`, *"reading 'M_ID'"*), publicly reported
+  in Dec 2025 (Koi Security) for harvesting page content and selling it via a data broker — running inside
+  the page that holds customer names, mobiles, addresses and GSTINs. **One user: Manish Patel (Back
+  Office).** ✅ **Owner had it uninstalled 2026-10-23**; last extension row 12:28 UTC 10-22. Whether any
+  portal data left through it **cannot be known from our side**. ⏭️ Owner: who installed it, and do other
+  office PCs have it (the log only sees an extension when it crashes on our page).
+  - ⚠️ **The only 3 other rows are also Manish's** — `Lock "lock:sb-session" was released because another
+    request stole it`, on `/proforma-invoice`. **Inferred, not proven:** our reporter called `getSession()`
+    for every error, ~2/s, contending with the app's own auth lock. Watch whether it recurs.
+  - **PR #137 → `e236912`** (CI green except CodeQL running at merge — it had passed on the same code
+    commit; Vercel READY; `/` + `/login` 200; the live `errorLog-*.js` carries `errlog-ext:`): an error
+    whose stack is **entirely** browser-extension frames is sent **once per extension, per browser, per
+    day**, labelled `context.source='extension'`, checked **before** `callEdge` (`src/lib/errorSource.js`).
+    Not dropped — dropping would have hidden this very finding. `log-error` mirrors the rule (one row per
+    user, extension and 24 h) for browsers on old code; the Error Log tab prefixes such rows "Browser
+    extension ·". `selftest-log-error` **33/0**; three planted bugs each fail it.
+    ⏭️ **`log-error` EF deploy to prod is PENDING — the auto-mode classifier refused it; the owner runs it**
+    (from latest `portal`): `npx supabase@2.109.1 functions deploy log-error --project-ref
+    mmmxvjaavdtwlpcnjgzy --no-verify-jwt` (prod v19 before it). The browser side alone already stops the flood.
+  - **Rode along: dompurify 3.4.12 → 3.4.17 (lockfile).** A CRITICAL advisory (GHSA-55q2-fjhq-7xh7 + 4)
+    turned `npm-audit` red on every PR on 2026-10-22. dompurify is only jsPDF's optional dep for `.html()`,
+    which we never call. Clean-install A/B: **44/45 built files byte-identical** (hashes masked); the one
+    that differs is `purify.es` itself. ⚠️ **A/B both sides from `npm ci`** — a stale worktree
+    `node_modules` (vite 8.1.0) first showed 30 "different" files.
+  - ✅ **Cleanup (owner-approved):** 8,960 extension rows deleted on prod; kept id 1 (the first, 19 Oct) as a
+    sample + the 3 lock rows → `error_log` = 4 rows. ⭐ **Prod SQL that worked when the MCP refuses:**
+    `supabase link --project-ref mmmxvjaavdtwlpcnjgzy --workdir <scratch>` then `supabase db query --linked
+    --workdir <scratch> "<sql>"` (CLI 2.109.1, logged in; no DB password needed).
+
 ## Current state (2026-10-22) — Phase 10 Stage 2 under way (the grid)
 
 - **🔨 `/tracker` works on STAGING, branch `10b-foundation`:** Univer 1.1.0 (free presets, exact
@@ -180,7 +255,7 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   - ⚠️ **`error_log` is 7,434/7,437 junk from ONE user's Chrome extension** (`chrome-extension://
     eppiocemhmnlbhjplcgkofciiegomcon/executors/200.js` → *"reading 'M_ID'"*, `unhandledrejection`,
     since 2026-10-19, last 10:27 UTC 10-22 — before the hotfix). Not portal code, but it buries real
-    crashes: `main.jsx`'s handlers should drop stacks that live only in `chrome-extension://`. Open.
+    crashes. ✅ **Resolved 2026-10-23 — it was Urban VPN Proxy (spyware); see the 2026-10-23 block.**
   - ⚠️ **The Supabase MCP refused the portal project again on 2026-10-22** ("You do not have
     permission") even with `project_id` — the 10-05 aggregates worked. Fallback that worked: run the
     query **inside the owner's signed-in prod page** (`sb-session` token + the bundle's publishable
@@ -222,9 +297,9 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   inside vite ≤ 8.1.5 (the dev server's open-in-editor; never in the built site). PR **#132** → vite
   **8.1.6**. ⚠️ **Not byte-inert:** it brings rolldown 1.1.5, which gives `Icon`, `api` and a `typeof`
   helper their own chunks (43 → 46 files, +1.3 KB). Checked by serving a clean build with `vite preview`
-  and importing all 32 chunks (0 errors); a signed-in page render was not checked. ⭐ **A dependency bump
-  that changes the bundler must be A/B'd, not assumed inert** — the source-map-js one was; this was not.
-  Once it lands, merge `origin/portal` into the payments branch (its lockfile still says 8.1.0).
+  and importing all 32 chunks (0 errors). ⭐ **A dependency bump that changes the bundler must be A/B'd,
+  not assumed inert** — the source-map-js one was; this was not. ✅ Landed `04dcf02`, signed-in prod check
+  done and `portal` merged into the payments branch (`9308fcc`) — see the 2026-10-24 block.
 
 ## Current state (2026-10-18)
 
@@ -233,8 +308,8 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   `log-error/report.ts` reads both shapes; deployed to prod from `6561628` (downloaded back = repo; 401
   unauthenticated); post-merge CI + Vercel green. Rode along: `source-map-js` 1.2.2 lockfile bump (new HIGH
   advisory; proven inert). Live prod test skipped (owner) — **the first real staff error is the proof**
-  (Access Rules → Error Log). ⚠️ **The browser pane cannot load prod** (every `/assets/*` →
-  `ERR_BLOCKED_BY_CLIENT`) — use the owner's Chrome (Claude in Chrome) for prod checks.
+  (Access Rules → Error Log). ~~The browser pane cannot load prod~~ — that was temporary; since 10-21 it
+  loads prod but cannot sign in (Turnstile) — see the 2026-10-24 block.
 - **⛔ Owner, 2026-10-18: Match Payments will NOT go live now; other changes may be pushed.**
 - **🔨 Payments (staging only), since 10-17:** red-team build order complete (R4-21 `b0ed009`, R4-24
   `5a9b86f`, R4-9 `8423adb` + end-of-list crash fix, R4-18 `c706422`) · **migration 9** "Something else"
@@ -949,12 +1024,18 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ## Next actions
 
-- **⏭️ Filter Chrome-extension noise out of crash reporting** — 7,434 of 7,437 `error_log` rows are
-  one user's extension (`…/executors/200.js`, "reading 'M_ID'"), see the 2026-10-22 block.
+- **⏭️ Owner: deploy `log-error` to prod** (command in the 2026-10-23 block — the classifier refused it
+  for me), and ask who installed Urban VPN on Manish Patel's PC + check the other office PCs.
+  Extension noise itself is ✅ resolved (PR #137, extension uninstalled, 8,960 rows cleared).
 - ✅ Test PI `PI-PTB-2026-0983` stays (owner, 2026-10-22) — do not re-raise. PI no-chassis hotfix: Optional:
   RTO/Insurance per-unit instead of per-PI, and a DB rule that non-admins need a chassis — both only if asked.
 - **⏸️ Service Payments parked, waiting on HDFC (2026-10-21)** — see the 2026-10-21 block. Its own list
   stays below (items 8–10 + the three go-live gates); do not start it until the owner says so.
+- **💡 Credit release + invoice sending + gate app — PLAN v0.2, not built (2026-10-24):**
+  `docs/backlog/credit-release-plan.md`. Owner: standalone (`gate_*` tables, payments DB stays off prod) ·
+  WhatsApp **Business API** (invoice no. + amount + PDF + thank-you) + Gmail (port 465) · one login per guard
+  (⚠️ exempt guards from the brand rule — brands open RLS + ERP sync) · counter sales: send only · CRM later.
+  Build order: upload+read+email → approval + gate → promises → **WhatsApp LAST** (owner). Email from `accounts.guj@parastrucks.in` (Workspace; SPF+DKIM ok).
 - **⏭️ Owner: file the 45 new October CBNs in Catalog → Triage** (MAV 19, Haulage 9, Oyster
   Staff/Wide shells 12, RMC 3, Ecomet 1215 1, 10x2 Tipper 1). Until then they have no family.
 - **⏭️ Owner: check the TIV detail sheet on a real phone** (PR #125, live). Hard-refresh TIV
