@@ -28,6 +28,7 @@ function newRow(vehicle) {
     id: rowIdCounter++,
     chassis_no: '',
     engine_no: '',
+    qty: '1',
     description: vehicle?.description || '',
     mrp: vehicle?.mrp_incl_gst ?? '',
     rtoTax: '',
@@ -38,6 +39,8 @@ function newRow(vehicle) {
 function newModel(vehicle) {
   return { id: modelIdCounter++, vehicle, rows: [newRow(vehicle)] }
 }
+
+const MAX_QTY = 999
 
 function fmtINR(n) {
   if (!n && n !== 0) return '—'
@@ -83,8 +86,14 @@ function useVehicleSearch(catalog, fuseInst) {
 }
 
 export default function ProformaInvoice() {
-  const { profile } = useAuth()
+  const { profile, isAdmin } = useAuth()
   const toast = useToast()
+
+  // Admin-only switch: PIs without chassis/engine numbers, with an adjustable
+  // quantity per row. Off (and for everyone else) the form behaves as before:
+  // one chassis per row, qty 1, chassis + engine required.
+  const [noChassisMode, setNoChassisMode] = useState(false)
+  const noChassis = isAdmin && noChassisMode
 
   const [catalog, setCatalog] = useState([])
   const [fuseInst, setFuseInst] = useState(null)
@@ -186,14 +195,21 @@ export default function ProformaInvoice() {
       setErrorField(f => f === `ce-${modelId}-${rowId}` ? null : f)
     } else if (field === 'mrp') {
       setErrorField(f => f === `mrp-${modelId}-${rowId}` ? null : f)
+    } else if (field === 'qty') {
+      setErrorField(f => f === `qty-${modelId}-${rowId}` ? null : f)
     }
   }
 
-  const totalRows = models.reduce((n, m) => n + m.rows.length, 0)
+  // Quantity only counts while the switch is on; otherwise every row is 1 unit.
+  const rowQty = r => noChassis ? (parseInt(r.qty, 10) || 0) : 1
+  const rowTotal = r => (parseInt(r.mrp, 10) || 0) * rowQty(r)
 
-  const totalMrp = models.reduce((s, m) => s + m.rows.reduce((ss, r) => ss + (parseInt(r.mrp, 10) || 0), 0), 0)
+  const totalRows = models.reduce((n, m) => n + m.rows.length, 0)
+  const totalUnits = models.reduce((n, m) => n + m.rows.reduce((nn, r) => nn + rowQty(r), 0), 0)
+
+  const totalMrp = models.reduce((s, m) => s + m.rows.reduce((ss, r) => ss + rowTotal(r), 0), 0)
   const totalTcs = models.reduce((s, m) =>
-    s + m.rows.reduce((ss, r) => ss + Math.round(((parseInt(r.mrp, 10) || 0) * tcsRate) / 100), 0), 0)
+    s + m.rows.reduce((ss, r) => ss + Math.round((rowTotal(r) * tcsRate) / 100), 0), 0)
   const totalRto = models.reduce((s, m) => s + m.rows.reduce((ss, r) => ss + (parseInt(r.rtoTax, 10) || 0), 0), 0)
   const totalIns = models.reduce((s, m) => s + m.rows.reduce((ss, r) => ss + (parseInt(r.insurance, 10) || 0), 0), 0)
   const grandTotal = totalMrp + totalTcs + totalRto + totalIns
@@ -235,7 +251,15 @@ export default function ProformaInvoice() {
       const m = models[mi]
       for (let ri = 0; ri < m.rows.length; ri++) {
         const r = m.rows[ri]
-        if (!r.chassis_no.trim() || !r.engine_no.trim()) {
+        if (noChassis) {
+          const q = Number(r.qty)
+          if (!Number.isInteger(q) || q < 1 || q > MAX_QTY) {
+            setError(`Model ${mi + 1} row ${ri + 1}: Quantity must be a whole number from 1 to ${MAX_QTY}.`)
+            setErrorField(`qty-${m.id}-${r.id}`)
+            focusEl(document.getElementById(`pi-qty-${m.id}-${r.id}`))
+            return
+          }
+        } else if (!r.chassis_no.trim() || !r.engine_no.trim()) {
           setError(`Model ${mi + 1} row ${ri + 1}: Chassis No and Engine No required.`)
           setErrorField(`ce-${m.id}-${r.id}`)
           focusEl(document.getElementById(
@@ -275,22 +299,28 @@ export default function ProformaInvoice() {
 
         for (const row of model.rows) {
           const mrp = parseInt(row.mrp, 10) || 0
+          const qty = rowQty(row)
+          const totalCost = mrp * qty
           const rtoVal = parseInt(row.rtoTax, 10) || null
           const insVal = parseInt(row.insurance, 10) || null
+          // Without the switch these are always the typed numbers; with it,
+          // the column is NOT NULL so "no chassis yet" is stored as ''.
+          const chassisNo = noChassis ? '' : row.chassis_no.trim()
+          const engineNo  = noChassis ? '' : row.engine_no.trim()
 
           const lineItems = [{
             cbn:         vehicle.cbn,
             description: row.description.trim() || vehicle.description,
-            qty:         1,
+            qty,
             mrp,
-            total_cost:  mrp,
-            basic_amt:   Math.round(mrp / 1.18),
-            gst_amt:     mrp - Math.round(mrp / 1.18),
+            total_cost:  totalCost,
+            basic_amt:   Math.round(totalCost / 1.18),
+            gst_amt:     totalCost - Math.round(totalCost / 1.18),
             brand_id:    brandId,
           }]
 
-          const rowTcsAmount = Math.round(mrp * tcsRate / 100)
-          const rowGrandTotal = mrp + rowTcsAmount + (rtoVal || 0) + (insVal || 0)
+          const rowTcsAmount = Math.round(totalCost * tcsRate / 100)
+          const rowGrandTotal = totalCost + rowTcsAmount + (rtoVal || 0) + (insVal || 0)
 
           const { data: piNum, error: rpcErr } = await supabase.rpc('next_proforma_number', { p_entity_id: entityId })
           if (rpcErr) throw new Error(`Row ${count + 1}: ${rpcErr.message}`)
@@ -300,8 +330,8 @@ export default function ProformaInvoice() {
             entity_id:        entityId,
             brand_id:         brandId,
             created_by:       profile.id,
-            chassis_no:       row.chassis_no.trim(),
-            engine_no:        row.engine_no.trim(),
+            chassis_no:       chassisNo,
+            engine_no:        engineNo,
             customer_name:    customer.name.trim(),
             customer_address: customer.address.trim() || null,
             customer_mobile:  customer.mobile.trim() || null,
@@ -330,8 +360,8 @@ export default function ProformaInvoice() {
             rtoTax:     rtoVal,
             insurance:  insVal,
             grandTotal: rowGrandTotal,
-            chassisNo:  row.chassis_no.trim(),
-            engineNo:   row.engine_no.trim(),
+            chassisNo,
+            engineNo,
             preparedBy: profile?.full_name,
           })
 
@@ -454,6 +484,24 @@ export default function ProformaInvoice() {
                 </div>
               </div>
               {errorField === 'search' && <div className="form-error">{error}</div>}
+
+              {isAdmin && (
+                <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px dashed var(--gray-200)' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600, color: 'var(--gray-700)' }}>
+                    <input type="checkbox" role="switch" checked={noChassisMode}
+                      onChange={e => {
+                        setNoChassisMode(e.target.checked)
+                        setErrorField(f => typeof f === 'string' && (f.startsWith('ce-') || f.startsWith('qty-')) ? null : f)
+                      }} />
+                    Without chassis &amp; engine no. (admin)
+                  </label>
+                  {noChassis && (
+                    <div style={{ fontSize: 12, color: 'var(--gray-500)', marginTop: 4, paddingLeft: 24 }}>
+                      Each row becomes one PI for the quantity you enter. RTO Tax and Insurance are totals for that PI.
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {models.map((model, mi) => (
@@ -473,7 +521,7 @@ export default function ProformaInvoice() {
                 </div>
 
                 <div className="model-chip-subtitle">
-                  Chassis &amp; Engine ({model.rows.length})
+                  {noChassis ? 'Proforma Invoices' : 'Chassis & Engine'} ({model.rows.length})
                 </div>
 
                 <div className="model-chip-rows">
@@ -481,6 +529,20 @@ export default function ProformaInvoice() {
                     <div key={row.id} className="model-chip-row">
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                         <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--gray-400)', width: 20, flexShrink: 0 }}>#{ri + 1}</span>
+                        {noChassis ? (
+                          <>
+                            <label className="form-label" htmlFor={`pi-qty-${model.id}-${row.id}`} style={{ marginBottom: 0 }}>Quantity *</label>
+                            <input id={`pi-qty-${model.id}-${row.id}`}
+                              className={`form-input ${errorField === `qty-${model.id}-${row.id}` ? 'error' : ''}`}
+                              type="number" min="1" max={MAX_QTY} step="1"
+                              value={row.qty}
+                              onChange={e => updateRow(model.id, row.id, 'qty', e.target.value)}
+                              style={{ width: 96 }} />
+                            <span style={{ flex: 1, fontSize: 12, color: 'var(--gray-500)' }}>
+                              No chassis / engine no.
+                            </span>
+                          </>
+                        ) : (<>
                         <input id={`pi-chassis-${model.id}-${row.id}`}
                           className={`form-input ${errorField === `ce-${model.id}-${row.id}` && !row.chassis_no.trim() ? 'error' : ''}`}
                           placeholder="Chassis No."
@@ -495,6 +557,7 @@ export default function ProformaInvoice() {
                           onChange={e => updateRow(model.id, row.id, 'engine_no', e.target.value)}
                           style={{ flex: 1, minWidth: 120 }}
                           aria-label={`Model ${mi + 1} row ${ri + 1} engine number`} />
+                        </>)}
                         <button type="button" className="btn btn-ghost btn-sm"
                           style={{ color: 'var(--red)', padding: '4px 8px' }}
                           onClick={() => removeRow(model.id, row.id)}
@@ -502,7 +565,7 @@ export default function ProformaInvoice() {
                           <Icon name="x" size={18} />
                         </button>
                       </div>
-                      {errorField === `ce-${model.id}-${row.id}` && <div className="form-error">{error}</div>}
+                      {(errorField === `ce-${model.id}-${row.id}` || errorField === `qty-${model.id}-${row.id}`) && <div className="form-error">{error}</div>}
 
                       <div style={{ paddingLeft: 28, marginTop: 8 }}>
                         <textarea className="form-input" rows={3}
@@ -515,7 +578,7 @@ export default function ProformaInvoice() {
 
                       <div className="model-chip-row-prices">
                         <div className="form-group" style={{ marginBottom: 0 }}>
-                          <label className="form-label">MRP (₹) *</label>
+                          <label className="form-label">{noChassis ? 'MRP per unit (₹) *' : 'MRP (₹) *'}</label>
                           <input id={`pi-mrp-${model.id}-${row.id}`}
                             className={`form-input ${errorField === `mrp-${model.id}-${row.id}` ? 'error' : ''}`}
                             type="number" min="0"
@@ -544,7 +607,7 @@ export default function ProformaInvoice() {
 
                 <button type="button" className="btn btn-secondary btn-sm model-chip-add-row"
                   onClick={() => addRow(model.id)}>
-                  + Add chassis for this model
+                  {noChassis ? '+ Add another PI for this model' : '+ Add chassis for this model'}
                 </button>
               </div>
             ))}
@@ -580,6 +643,7 @@ export default function ProformaInvoice() {
                   </div>
                   <div style={{ fontSize: 11.5, color: 'var(--gray-500)', textAlign: 'center', marginTop: 8 }}>
                     {totalRows} row{totalRows !== 1 ? 's' : ''} across {models.length} model{models.length !== 1 ? 's' : ''}
+                    {noChassis && ` · ${totalUnits} unit${totalUnits !== 1 ? 's' : ''}`}
                   </div>
                 </>
               ) : (

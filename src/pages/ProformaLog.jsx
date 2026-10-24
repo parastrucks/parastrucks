@@ -205,7 +205,7 @@ export default function ProformaLog() {
                       {p.customer_mobile && <div className="q-customer-sub">{p.customer_mobile}</div>}
                     </td>
                     <td>
-                      <div style={{ fontFamily: 'monospace', fontSize: 12 }}>{p.chassis_no}</div>
+                      <div style={{ fontFamily: 'monospace', fontSize: 12 }}>{p.chassis_no || '—'}</div>
                       <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>{p.engine_no}</div>
                     </td>
                     <td style={{ textAlign: 'right', fontWeight: 700 }}>{fmtINR(p.grand_total)}</td>
@@ -228,7 +228,7 @@ export default function ProformaLog() {
                 <div className="m-card-kvs">
                   <div><div className="m-kv-label">Grand Total</div><div className="m-kv-val">{fmtINR(p.grand_total)}</div></div>
                   <div><div className="m-kv-label">Prepared By</div><div className="m-kv-val">{p.users?.full_name || '—'}</div></div>
-                  <div><div className="m-kv-label">Chassis / Engine</div><div className="m-kv-val" style={{ fontFamily: 'monospace', fontSize: 11.5 }}>{p.chassis_no}{p.engine_no ? ` / ${p.engine_no}` : ''}</div></div>
+                  <div><div className="m-kv-label">Chassis / Engine</div><div className="m-kv-val" style={{ fontFamily: 'monospace', fontSize: 11.5 }}>{p.chassis_no || '—'}{p.engine_no ? ` / ${p.engine_no}` : ''}</div></div>
                   <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'flex-end' }}>{pdfBtn(p)}</div>
                 </div>
               </div>

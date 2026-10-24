@@ -8,6 +8,7 @@
 // Other units (e.g. the ErrorBoundary in U4) import this dynamically:
 //   import('../lib/errorLog').then(m => m.logError?.(err, { component: 'X' }))
 import { callEdge } from './api'
+import { extensionOrigin, firstTodayFor } from './errorSource'
 
 /**
  * Report an error to the server-side error_log table.
@@ -18,6 +19,13 @@ import { callEdge } from './api'
  */
 export async function logError(error, context = {}) {
   try {
+    // A browser extension's own crash: once a day per extension, labelled,
+    // and BEFORE callEdge so the flood never touches the session lock.
+    const ext = extensionOrigin(error?.stack, context.file)
+    if (ext) {
+      if (!firstTodayFor(ext)) return
+      context = { ...context, source: 'extension', extension: ext }
+    }
     await callEdge('log-error', 'write', {
       message: error?.message ?? String(error),
       stack:   error?.stack,
