@@ -15,6 +15,10 @@
 //
 // Pure: no files, no database. Tested by scripts/phase10/selftest-import-merge.cjs.
 
+// the DSE incentive the grid works out today (src/tracker/lib/screenColumns.js — the same code, so the
+// import and the screen can never disagree on what "today's rule" gives)
+const { withScreenColumns } = require('../../../src/tracker/lib/screenColumns.js')
+
 // family labels as a person reads them in a note
 const LABEL = {
   IT: 'Invoice Tracker', IT_OD: 'Invoice Tracker (other dealer)', FY: 'Sales book', LIST: 'Invoice List',
@@ -316,14 +320,14 @@ function merge(families) {
     }
     u.gst_rate = u.gst_rate_override ?? gst
 
-    // incentives (admin + HR only): DSM and GM as typed; the DSE slab is worked out on screen, so only a
-    // hand-typed DSE figure (the SRS zeroes) is kept, as the override
+    // incentives (admin + HR only): DSM and GM as typed. The DSE figure the month's sheet worked out is what
+    // was PAID; it is compared with today's rule after every truck is known (below)
     const inc = {}
     for (const [key, from] of Object.entries(INCENTIVES)) {
       for (const [fam, head] of from) { const p = parseNum(latest(fam)?.cells[head]?.v); if (p.ok !== undefined) { inc[key] = p.ok; break } }
     }
     const dseCell = latest('RET_INT')?.cells['DSE INCENTIVE']
-    if (dseCell && !dseCell.f && typeof dseCell.v === 'number') inc.dse_incentive_override = dseCell.v
+    if (dseCell && typeof dseCell.v === 'number') inc.dse_paid = { value: dseCell.v, typed: !dseCell.f }
     if (Object.keys(inc).length) incentives.push({ chassis, ...inc })
 
     // cancel/rebill: this truck was re-billed as a new chassis
@@ -343,7 +347,25 @@ function merge(families) {
     u.source_row = home.row
     units.push(u)
   }
-  return { units, notes, formats, incentives, links, report }
+
+  // DSE incentive history (owner, 2026-10-24): the sheets' rule changed over time — a ₹1,000 retention bonus
+  // until Dec 2025, and slab steps that swap between 4/7/11 and 5/9/13 from one month's sheet to the next — so
+  // no date rule can rebuild what was paid. Today's rule (the screen's slab, 5/9/13, no bonus) stays the
+  // default; where the month's sheet paid a DIFFERENT figure, that figure is kept as the override, so the
+  // grid shows what was paid. A hand-typed figure is always kept (the SRS zeroes, R2-19).
+  const superseded = new Set(links.map((l) => l.chassis))
+  const today = new Map(withScreenColumns(units.map((u) => ({ ...u, superseded_at: superseded.has(u.chassis_no) ? 'x' : null })), '2026-01-01')
+    .map((x) => [x.chassis_no, x.dse_incentive]))
+  report.dsePaidDiffers = 0
+  for (const inc of incentives) {
+    const paid = inc.dse_paid; delete inc.dse_paid
+    if (!paid) continue
+    if (paid.typed || paid.value !== (today.get(inc.chassis) ?? null)) {
+      inc.dse_incentive_override = paid.value
+      if (!paid.typed) report.dsePaidDiffers++
+    }
+  }
+  return { units, notes, formats, incentives: incentives.filter((i) => Object.keys(i).length > 1), links, report }
 }
 
 // a family's header → the tracker column it feeds (for comments and colours)

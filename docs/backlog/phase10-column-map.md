@@ -114,7 +114,7 @@ text (`5K-DSA`), stored as text + a parsed amount and kind · **HID** = hidden f
 | 73 | `al_claim_age` | int | IN | RET-AL `Age` | typed, no formula |
 | 74 | `al_claim_interest` | numeric | IN | RET-AL `Interest` | typed, no formula |
 | — | `dse_incentive` | — | SCREEN, HID | RET-INT `DSE INCENTIVE` | monthly slab on that DSE's count: <5 → 0, <9 → 1,200, <13 → 1,500, else 1,800 |
-| 75 | `dse_incentive_override` | numeric | IN, HID | — | SRS rows are zeroed by hand (60 rows); shown as overridden |
+| 75 | `dse_incentive_override` | numeric | IN, HID | RET-INT `DSE INCENTIVE` where it differs from today's rule | SRS rows are zeroed by hand (60 rows); shown as overridden. ✅ Owner 2026-10-24: the ₹1,000 retention bonus was paid until ~Nov 2025 (sheets: last in Dec 2025, none from Jan 2026); the sheets' slab steps swap between 4/7/11 and 5/9/13 month to month, so the import keeps every month's PAID figure here when it differs from today's slab (5/9/13, no bonus — Jan 2026 matches on 140/140, Feb 195/197). Rehearsed: 2,624 kept (1,278 of them old rows with no retail date) |
 | 76 | `dsm_incentive` | numeric | IN, HID | RET-INT `DSM INCENTIVE` | |
 | 77 | `gm_incentive` | numeric | IN, HID | RET-INT `GM INCENTIVE` | |
 | — | ~~RET-INT T, U, V~~ | | dropped | unnamed, filled on all 268 rows | ✅ owner: lookups from other tables — the tracker holds the source columns, so nothing to store |

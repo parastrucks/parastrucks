@@ -70,8 +70,10 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   migration that re-creates a function must SORT after the last one that did (`…_al_ctc` sorted before
   `…_al_retail_date` and was overwritten — the probe caught it). ⭐ `String.replace(a, b)` treats `$'` in b
   as "the rest of the string" — use `replace(a, () => b)` in edit scripts.
-  ❓ Open: DSE incentive (every sheet adds a ₹1,000 retention bonus; slab steps were 4/7/11 until 2024-25 —
-  the tracker has neither) · sales books for 2023-24 + 2024-25 are not on this PC · do the books start Nov 2022?
+  ✅ End of 10-24 owner: DSE bonus paid until ~Nov 2025 (sheets: to Dec 2025) → today's screen rule stays (5/9/13,
+  no bonus; Jan 2026 matches 140/140), the import keeps each month's PAID figure as the override where it differs
+  (2,624) · the books start **Nov 2022** · ⏭️ the owner sends the 2023-24 + 2024-25 sales books shortly, then the
+  updated files → load ALL years onto staging (plan → "Where things stand").
   ⚠️ The app stops the dev server at each turn's end (`preview_start` again); Chrome screenshots time out
   while the Claude window is hidden (use `javascript_tool`). Resume: plan → "Where things stand (… session 2)". ⭐ Resume point
   with staging state, dummy-row list, tests and open questions: plan → "STAGE 2" → "Where things stand

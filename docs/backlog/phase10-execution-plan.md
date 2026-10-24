@@ -986,10 +986,13 @@ Also: a phone view (read-only cards) and the local save queue across reloads (E5
   and asked again: notes on the cells, or a separate review list. · Test layout deleted · DEMO rows stay.
   ✅ **Owner, later 10-24:** (4) "one continuous database … all vehicles" → every year, built (above) ·
   (5) **notes on the cells** · CTC = two figures → built (above).
-  ❓ **Open (end of 10-24):** (a) the DSE incentive bonus + the older slab steps — what should the tracker
-  show (proposal: imported trucks keep the workbook's figure as paid history; new sales = today's slab + the
-  ₹1,000 bonus)? · (b) send the sales books (PAYMENT TRACKER / year sales file) for 2023-24 and 2024-25 ·
-  (c) do the books start in Nov 2022 (the first PAYMENT TRACKER), or is there earlier data?
+  ✅ **Owner, end of 10-24:** (a) the bonus was paid "until last year … not from around November 2025" — the
+  sheets agree (bonus formula to Dec 2025, none from Jan 2026). The slab steps are NOT a date rule (they swap
+  between 4/7/11 and 5/9/13 sheet to sheet), so: **today's screen rule stays (5/9/13, no bonus — Jan 2026
+  matches 140/140); the import keeps each month's PAID figure as `dse_incentive_override` where it differs**
+  (`merge.cjs`, using the screen's own `withScreenColumns`, so import and grid cannot disagree; 2,624 kept
+  in the rehearsal, 2,306 of them formula figures; `selftest-import-merge` **39/0**, 2 mutants caught) ·
+  (b) the 2023-24 + 2024-25 sales books: the owner will send them "shortly" · (c) the books start **Nov 2022**.
 - ✅ **10-23: "Endhan Date" column** — migration `20261023_phase10_tracker_endhan_date.sql` on STAGING
   (adds `vehicle_units.endhan_date date`; `tracker_apply_changes` re-created with it on the editable
   list, otherwise byte-identical to numeric_before; staging prosrc md5 `76308fce…` = file, LF) ·

@@ -11,7 +11,7 @@ const ok = (cond, label, got) => { if (cond) pass++; else { fail++; console.log(
 const cell = (v, extra = {}) => ({ v, f: null, note: null, bg: null, col: 'A', z: null, ...extra })
 const row = (file, n, cells) => ({ file, sheet: 'x', row: n, cells: Object.fromEntries(Object.entries(cells).map(([k, v]) => [k, v && typeof v === 'object' && 'v' in v ? v : cell(v)])) })
 
-const A = 'MB1AAAAAAAAAA0001', B = 'MB1BBBBBBBBBB0002', C = 'MB1CCCCCCCCCC0003'
+const A = 'MB1AAAAAAAAAA0001', B = 'MB1BBBBBBBBBB0002', C = 'MB1CCCCCCCCCC0003', D = 'MB1DDDDDDDDDD0004'
 const fam = {
   IT: [row('2024-25 IT.xlsx', 7, { 'CHASSIS NO': A, CTD: 2550000, 'OEM GATEPASS NUMBER': 'GP-OLD', 'CUSTOMER NAME': 'M/S NEW NAME PVT LTD' }),
     row('IT.xlsx', 2, { 'CHASSIS NO': A, 'ENGINE NO': 'E1', MODEL: 'CE2820 R RMC', CTC: 2800000, CTD: cell(2600000, { f: '2055000/1.28*1.18' }),
@@ -24,7 +24,11 @@ const fam = {
   row('FY.xlsx', 11, { 'CHASSIS NUMBER': C, 'NAME OF THE CUSTOMER': 'C CUST', CTC: 900000, 'FULL TAX': 0, '#AM': cell('REPLENISH', { col: 'AM' }) })],
   LIST: [row('LIST-APR.xlsx', 5, { 'CHASSIS NUMBER': A, 'PTB INVOICE DATE': 45843, 'AD-BLU': 'GIVEN', TCS: 31000 })],
   LIST_OD: [row('LIST-APR.xlsx', 7, { 'CHASSIS NO': C, DEALOR: 'SOME DEALER' })],
-  RET_INT: [row('RET-APR.xlsx', 4, { 'CHASSIS NO': A, SEGMENT: 'MDV BUS', DSE: 'RAVI', 'DATE OF RETAIL': 45840, 'DSE INCENTIVE': 0, 'DSM INCENTIVE': 500, '#T': 'lookup' })],
+  RET_INT: [row('RET-APR.xlsx', 4, { 'CHASSIS NO': A, SEGMENT: 'MDV BUS', DSE: 'RAVI', 'DATE OF RETAIL': 45840, 'DSE INCENTIVE': 0, 'DSM INCENTIVE': 500, '#T': 'lookup' }),
+    // two trucks of SITA in July 2025: today's slab (2 trucks) is 0. D's sheet worked out 0 (the same);
+    // C's sheet added the ₹1,000 retention bonus of the time (paid, so kept)
+    row('RET-APR.xlsx', 5, { 'CHASSIS NO': D, DSE: 'SITA', 'DATE OF RETAIL': 45840, 'DSE INCENTIVE': cell(0, { f: 'IF(COUNTIF($B:$B,$B5)<4,0,1200)' }) }),
+    row('RET-APR.xlsx', 6, { 'CHASSIS NO': C, DSE: 'SITA', 'DATE OF RETAIL': 45840, 'DSE INCENTIVE': cell(1000, { f: 'IF(COUNTIF($B:$B,$B6)<4,0,1200)+IF(O6>=40000,1000,0)' }) })],
   RET_AL: [row('RET-AL-MAR.xlsx', 3, { 'CHASSIS NO': A, AGE: 10, INTEREST: 100 }),
     row('RET-AL-APR.xlsx', 6, { 'CHASSIS NO': A, 'DATE OF RETAIL': 45855, CTC: 2790000, AGE: 40, INTEREST: 400 })],
   DEALERS: [row('LIST-APR.xlsx', 9, { MODEL: B, 'CHASSIS NO': 'E2', 'NAME OF DEALER': 'APRIL DEALER' }),
@@ -37,7 +41,7 @@ const res = merge(fam)
 const u = (ch) => res.units.find((x) => x.chassis_no === ch)
 const notesOn = (ch, key) => res.notes.filter((n) => n.chassis === ch && n.column_key === key)
 
-ok(res.report.trucks === 3 && res.units.length === 3, 'three trucks, one row each', res.report)
+ok(res.report.trucks === 4 && res.units.length === 4, 'four trucks, one row each', res.report)
 // homes (measured): CTC + customer from retail, CTD from the purchase file, invoice date purchase → list → year file
 ok(u(A).ctc === 2850000 && u(A).customer_name === 'NEW NAME' && u(A).ctd === 2600000, 'CTC and customer from retail; CTD from purchase', u(A))
 ok(u(A).ptb_invoice_date === '2025-07-05', 'invoice date from the purchase file (Excel serial → date)', u(A).ptb_invoice_date)
@@ -89,6 +93,12 @@ ok(u(A).al_claim_age === 40 && u(A).al_claim_interest === 400 && !notesOn(A, 'al
   'claim age and interest: the latest month only, no note for last month’s (they grow by design)', u(A))
 ok(!notesOn(A, 'customer_name').some((n) => /PVT LTD/.test(n.body)), 'M/S … PVT LTD is the same customer, not a disagreement', notesOn(A, 'customer_name'))
 ok(notesOn(A, 'customer_name').some((n) => /OLD NAME/.test(n.body)), 'a different name is still a note')
+
+// DSE incentive history (owner, 2026-10-24: the bonus stopped around Nov 2025; the sheets' slab steps varied)
+const incOf = (ch) => res.incentives.find((x) => x.chassis === ch)
+ok(incOf(C)?.dse_incentive_override === 1000, 'a month’s sheet paid more than today’s rule (the old bonus): the paid figure is kept', incOf(C))
+ok(incOf(D)?.dse_incentive_override === undefined, 'the sheet’s formula gave what today’s rule gives: no override', incOf(B))
+ok(res.report.dsePaidDiffers === 1, 'counted: one paid figure differs from today’s rule', res.report.dsePaidDiffers)
 
 console.log(`selftest-import-merge: ${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

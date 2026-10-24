@@ -129,6 +129,11 @@ Owner: *"yes start stage 2"*. Branch `10b-foundation` (`6a9455f` → `5f38233`).
   carries a ₹1,000 retention bonus the tracker never had, and the slab steps changed in 2025-26 — asked.
   ⭐ The first draft migration sorted before the file whose function it extended and was silently overwritten;
   the probe caught it on the first run.
+- **2026-10-24 (end) — the DSE incentive:** owner — the ₹1,000 bonus stopped around Nov 2025 (the sheets: last
+  in Dec 2025). The sheets' slab steps swap month to month, so history cannot be rebuilt from a date rule: the
+  import keeps each month's paid figure where it differs from today's rule, and today's rule (already the
+  screen's) is confirmed by Jan 2026 matching on every truck. Books start Nov 2022; the missing 2023-24 and
+  2024-25 sales books are on their way.
 
 ## Session log — 2026-10-21 (PC, latest): Phase 10 Stage 1 step 3 — the tracker's Edge Function and access switch, on staging
 

@@ -46,7 +46,7 @@ Real data passes through these; they print COUNTS ONLY and write their output OU
 | 3 | `import/sql.cjs` | `node scripts/phase10/import/sql.cjs <scratch folder> <actor uuid>` → `import.sql`: ONE transaction, `recompute = false`, one import batch |
 | 4 | `import/recompute-diff.sql` | Self-aborting: per worked-out column, how many imported rows the database's rules would give another figure |
 | 4b | `import/recompute-by-year.sql` | The same, split by financial year — do the rules hold for older years? |
-| test | `selftest-import-merge.cjs` | The merge rules on made-up rows (36 checks) — `node scripts/phase10/selftest-import-merge.cjs` |
+| test | `selftest-import-merge.cjs` | The merge rules on made-up rows (39 checks) — `node scripts/phase10/selftest-import-merge.cjs` |
 | test | `selftest-import-read.cjs` | The reader on made-up workbooks: the older layouts land in the right families under the newer names (12) |
 
 ## Tests of the tracker itself (Stage 1)
