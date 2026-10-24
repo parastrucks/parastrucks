@@ -39,7 +39,7 @@ app for them. Counter credit sales get the invoice sent, with no gate step.
 | Which vehicles does the guard app cover? | **Credit vehicles only.** Paid ones keep accounts' gate pass. |
 | Who approves a credit release? | **Only the GM or the owner.** |
 | Are SAP invoices digital PDFs? | **Yes** — confirmed on three samples (below). |
-| How is email sent? | **The owner's own Gmail ID with an app password**, as the automation reports already are. |
+| How is email sent? | **From `accounts.guj@parastrucks.in`** (Google Workspace) with an app password, as the automation reports already are. |
 | What does the guard see? | **"May go / hold" only.** The database needs a way to create security-guard logins. |
 | Payments database on prod for this? | **No.** This feature stands on its own. |
 | WhatsApp route | **WhatsApp Business API** (automatic sending). |
@@ -141,8 +141,12 @@ so nobody mistakes it for the Busy figure.
 - **Owner-side setup the API needs first:** a **Meta Business account, verified**; a **phone number not used
   on the normal WhatsApp app** (a new number, or one moved off the app); the template approved by Meta. Meta
   charges a small amount per message (check the current rate for utility messages in India).
-- **Email:** the same content, PDF attached, sent through the owner's Gmail with an app password kept as an
-  Edge Function secret, over **SMTPS port 465**. ⚠️ Supabase Edge Functions **block outbound ports 25 and
+- **Email:** the same content, PDF attached, sent **from `accounts.guj@parastrucks.in`** with an app password kept as an
+  Edge Function secret, over **SMTPS port 465** (`smtp.gmail.com`). Checked 2026-10-24: `parastrucks.in` mail is
+  **Google Workspace** (MX `aspmx.l.google.com`), SPF `include:_spf.google.com` and Google DKIM are both in
+  place, so mail sent this way passes both; **no DMARC record** (optional — `p=none` to start would add
+  protection against spoofing). The account needs 2-Step Verification on to create an app password, and the
+  Workspace admin must allow app passwords. ⚠️ Supabase Edge Functions **block outbound ports 25 and
   587** (Supabase docs, *Functions → Limits*), so 465 is the route. Gmail allows ~500 recipients/day (free) or
   2,000 (Workspace); volume is ~30 bills/day. Not yet proven live — the first thing to try.
 - Recipient: the mobile and email on the invoice; staff can correct a number before sending, and the
@@ -188,7 +192,8 @@ Each step: say what it pushes down a screen (TIV lesson); prove on staging; prod
 1. **Meta setup for the Business API:** a verified Meta Business account and a dedicated number. (The owner
    was unsure on 2026-10-24 whether a WhatsApp Business number exists.)
 2. **Template wording** — approve the thank-you text before it goes to Meta.
-3. **The Gmail ID** to send from, and its app password (entered by the owner as a secret, never in chat).
+3. ~~The Gmail ID~~ → **`accounts.guj@parastrucks.in`** (owner, 2026-10-24). Its **app password** is entered by the
+   owner as an Edge Function secret when step 1 is built — never in chat.
 
 ## Future roadmap (owner: nothing now)
 - **CRM:** contact history per customer, follow-ups, service reminders.
