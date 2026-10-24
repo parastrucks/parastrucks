@@ -822,6 +822,25 @@ Also: a phone view (read-only cards) and the local save queue across reloads (E5
   - Tests: `selftest-import-read` **12/0** (new; 4 mutants caught) · `selftest-import-merge` **36/0** (3 new
     mutants caught) · `selftest-vehicle-units` **560/0** · `selftest-tracker-cells` **147/0** · deno check ·
     build clean.
+- ⚠️⚠️ **2026-10-24: LOAD TEST at 4× — THE GRID DOES NOT SCALE AS BUILT** (owner: "check for 4 times the
+  quantity … the next 3-4 years", "ensure everything falls within Supabase limits"). `scripts/phase10/load-x4.sql`
+  on STAGING: 11 copies of the DEMO seed → **24,606 trucks · 34,004 notes · 6,604 colours** (one import batch
+  "DEMO LOAD x4"; DB 20 → 53 MB of 500). Measured in the owner's Chrome (dev build), staging free tier:
+  | what | 4× result |
+  |---|---|
+  | open the page | **~100 s** first time, **~270 s** the second (25 sequential pages of 1,000 at 1.5 → 5–27 s each as the free instance slowed; `listNotes` 23 → **61 s** — the EF wall limit is 150 s) |
+  | after the data arrives | one **20 s** freeze building the grid; tab memory **365 → 582 MB** |
+  | Find (Enter) | ~**2 s** each |
+  | type one cell | **2.1 s** freeze before the save starts, saved at ~4.8 s (same on the put-back) |
+  | scroll | ~**230 ms** of work per wheel step (≈ 4 frames/s) |
+  | sort the book | **never finished** — the tab hung > 4 min, twice; nothing was saved (audit: only the test edit + put-back) |
+  | data per open | ~**55 MB** raw JSON (trucks 39 with nulls stripped / 68 with, notes 12.6, colours 1.4) → the free 5 GB/month egress = **~90 opens a month** uncompressed (~900 if gzip ~10:1 — not documented) |
+  Supabase free limits (docs, 2026-10-24): EF 256 MB memory, **2 s CPU per request**, 150 s wall clock; egress
+  5 GB uncached / month; DB 500 MB. DB size is fine for decades; **the cause is the design: every open loads the
+  whole book (all years, ~100 columns, every note) into the browser**, so cost grows with history, not with work.
+  ⏭️ Owner decision pending (see the session's reply): load a WORKING SET by default (this and last financial
+  year + every truck still open), older years on request; notes/colours only for loaded rows; pages fetched in
+  parallel, nulls dropped; then re-measure at 4×. The DEMO LOAD x4 rows stay on staging until the owner says.
 - **Next, in this order:**
   1. **When the owner's UPDATED files arrive: run the importer onto STAGING** (the repository/archive) — now
      ALL years at once (`run.cjs <scratch>` with no files, or the owner's folders):

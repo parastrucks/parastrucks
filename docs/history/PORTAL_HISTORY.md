@@ -134,6 +134,10 @@ Owner: *"yes start stage 2"*. Branch `10b-foundation` (`6a9455f` → `5f38233`).
   import keeps each month's paid figure where it differs from today's rule, and today's rule (already the
   screen's) is confirmed by Jan 2026 matching on every truck. Books start Nov 2022; the missing 2023-24 and
   2024-25 sales books are on their way.
+- **2026-10-24 (end) — load test at 4× (owner's idea):** 24,606 dummy trucks on staging. The database is not the
+  problem (53 MB of 500); the page is — it loads the whole book on every open: 100–270 s to open, a 20 s freeze,
+  2 s per edit, a sort that never finishes, and ~55 MB sent per open against a 5 GB monthly free allowance.
+  ⭐ A grid that is fast at 2,000 rows told us nothing about year four: test at the size it will reach.
 
 ## Session log — 2026-10-21 (PC, latest): Phase 10 Stage 1 step 3 — the tracker's Edge Function and access switch, on staging
 

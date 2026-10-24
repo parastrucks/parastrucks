@@ -74,6 +74,10 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   no bonus; Jan 2026 matches 140/140), the import keeps each month's PAID figure as the override where it differs
   (2,624) · the books start **Nov 2022** · ⏭️ the owner sends the 2023-24 + 2024-25 sales books shortly, then the
   updated files → load ALL years onto staging (plan → "Where things stand").
+  ⚠️⚠️ **10-24 LOAD TEST at 4× (24,606 dummy trucks, 34k notes; `scripts/phase10/load-x4.sql`, staging): open
+  100–270 s, 20 s freeze, 582 MB tab, 2 s freeze per edit, sort never finishes, ~55 MB per open (free egress 5
+  GB/month ≈ 90 opens)** — every open loads the whole book. ⏭️ owner to choose: working set (this + last FY +
+  open trucks) by default, older years on request. DEMO LOAD x4 rows stay on staging until the owner says.
   ⚠️ The app stops the dev server at each turn's end (`preview_start` again); Chrome screenshots time out
   while the Claude window is hidden (use `javascript_tool`). Resume: plan → "Where things stand (… session 2)". ⭐ Resume point
   with staging state, dummy-row list, tests and open questions: plan → "STAGE 2" → "Where things stand
