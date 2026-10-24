@@ -785,21 +785,21 @@ Also: a phone view (read-only cards) and the local save queue across reloads (E5
 - **Next, in this order:**
   1. **When the owner's UPDATED files arrive: run the importer onto STAGING** (the repository/archive):
      `node scripts/phase10/import/run.cjs <scratch> [files/folders]` → `node scripts/phase10/import/sql.cjs
-     <scratch> <admin uuid>` → rehearse on PGlite (all 8 tracker migrations, then `import.sql`, then
+     <scratch> <admin uuid>` → rehearse on PGlite (all 9 tracker migrations, then `import.sql`, then
      `recompute-diff.sql` + `probe-foundation.sql`) → staging `db query --linked -f <scratch>/import.sql` →
      `recompute-diff.sql` on staging → open `/tracker` and MEASURE how the grid draws ~5,000 notes (only ~10
-     so far). ⚠️ First ask the owner whether the DEMO rows stay (deleting them needs approval) and apply the
-     answers to the 5 importer questions (below) — each is a line in `merge.cjs` RULES.
+     so far). ✅ The DEMO rows STAY (owner 2026-10-24) — the real trucks load beside them (their chassis all
+     start `DEMO-`, so nothing clashes). Importer answers: see "Owner, 2026-10-24" below; two still open.
   2. Then the **AL Balance Sheet monthly upload** (column map → section G "DECIDED"; rehearsal
      `scripts/phase10/al_balance_check.cjs`; MTO advances reconcile per model against `mto_advance`; the
      check knows the meaning of each Offtake Mode word — no setting; "settle once, remembered").
   3. Not built: phone view (read-only cards) · a save queue that survives reloads (E5) · removing a saved
      note · incentive editing (admin + HR) · layout column ORDER and saved FILTERS · the import wizard/revert
-     (Stage 6) · "AL Retail Date" column if the owner says yes.
+     (Stage 6).
 - **On staging now (klpnhpnlotcbbovwswmq):** migrations `…_foundation`, `…_supersede`, `…_numeric_before`,
-  `…_create_units` (md5 `8f4e051d…`), `…_rmc_gst` (md5 `714d9b5d…`), `…_endhan_date`, `…_mto_advance`
-  (apply-function prosrc md5 `4493b2b9…` = file), `…_import_notes` (note source 'import'); Edge Functions
-  `admin-vehicle-units` (endhan_date + mto_advance in its catalogue) and `admin-users` (tracker actions) as in
+  `…_create_units` (md5 `8f4e051d…`), `…_rmc_gst` (md5 `714d9b5d…`), `…_endhan_date`, `…_mto_advance`,
+  `…_import_notes` (note source 'import'), `…_al_retail_date` (apply-function prosrc md5 `c85b0832…` = file);
+  Edge Functions `admin-vehicle-units` (endhan_date + mto_advance + al_retail_date in its catalogue) and `admin-users` (tracker actions) as in
   this branch. **2,056 tracker rows, all DUMMY** (2,050 `DEMO seed` + `DEMO-PROBE-202610220945` original and
   rebill + `DEMO-NEWROW-0001…0004`). Test edits left on dummy rows: slice 2 (CTC/CTD on a few DEMO trucks,
   Segment → TIPPER on three, "DEMO AFTER SORT" on DEMO-MB1AS0000345, CTC 21,11,111 on DEMO-MB1AT0002049);
@@ -807,12 +807,13 @@ Also: a phone view (read-only cards) and the local save queue across reloads (E5
   `{}` on -0003 Model; notes "DEMO note: held for finance" on -0003 Model, two "hand test" notes on
   DEMO-MB1AR0000517 / DEMO-MB1AT0002049 Model); 10-23 (DEMO-NEWROW-0002 AL Payment Status → IBND; audit rows
   only, values put back: Endhan Date set+cleared on DEMO-PROBE-202610220945, AL Payment Status "fresh OFFTAKE"
-  set+cleared on DEMO-NEWROW-0001, MTO Advance Yes+cleared on DEMO-NEWROW-0003). **Layout "DEMO layout test"**
-  (personal, admin, 39 columns) — ❓ owner asked whether to delete it (also tests the Delete button). Audit:
+  set+cleared on DEMO-NEWROW-0001, MTO Advance Yes+cleared on DEMO-NEWROW-0003). Layout "DEMO layout test"
+  DELETED 2026-10-24 (owner: "Sure"; by SQL, by id — so the Delete BUTTON is still unexercised); no layouts
+  left. Audit:
   one `tracker_copy` (196 rows × 39 columns). No RMC rows. Nobody has the tracker switch on; admin always has it.
-- **Tests:** `selftest-tracker-cells` **147/0** · `selftest-vehicle-units` **556/0** · `selftest-import-merge`
-  **28/0** · probes foundation 42 · supersede 19 · numeric-before 9 · create-units 18 · rmc-gst 9 · endhan-date 6 ·
-  mto-advance 6 (all 0 failed, PGlite and staging) · `gst_rmc.cjs` / `al_balance_check.cjs` / `e_sources.cjs`
+- **Tests:** `selftest-tracker-cells` **147/0** · `selftest-vehicle-units` **558/0** · `selftest-import-merge`
+  **29/0** · probes foundation 42 · supersede 19 · numeric-before 9 · create-units 18 · rmc-gst 9 · endhan-date 6 ·
+  mto-advance 6 · al-retail-date 6 (all 0 failed, PGlite and staging) · `gst_rmc.cjs` / `al_balance_check.cjs` / `e_sources.cjs`
   re-measure from the workbooks (counts only). Build + no-undef clean.
 - **Checking in a browser:** the owner's Chrome (Claude in Chrome, tab on `http://localhost:3000/tracker`) is
   signed in as `admin@parastrucks.test`. ⚠️ **The app stops the dev server at the end of each turn** ("stopped
@@ -841,7 +842,7 @@ Also: a phone view (read-only cards) and the local save queue across reloads (E5
   Write tool, or build backslashes with `String.fromCharCode(92)`; check edited files with `cat -A`. A test
   that passes first time is not yet a test: plant the bug and watch it fail (two of this session's
   self-tests let a planted bug through until their data was widened).
-- **Prod: nothing.** The prod rollout, when approved: the **eight** tracker migrations (LF text), both functions
+- **Prod: nothing.** The prod rollout, when approved: the **nine** tracker migrations (LF text), both functions
   (`--no-verify-jwt`; `admin-vehicle-units` joins the key-cutover roster), then the frontend.
 - **Owner questions — answered 2026-10-23:** AL Payment Status green = Cash Invoiced only · only RMC is
   always 18% GST · sandbox = real data on staging first, then the trial on the live site · read-only
@@ -931,6 +932,17 @@ Also: a phone view (read-only cards) and the local save queue across reloads (E5
   pattern) — its own column "AL Retail Date"? (2) retail as home for CTC and the customer — OK? (3) DSE from
   retention — OK? (4) send last year's INVOICE TRACKER too (224 trucks)? (5) ~4,000 disagreement notes for
   the pilot — OK, or a separate list instead?
+  ✅ **Owner, 2026-10-24:** (1) **Yes** → `al_retail_date` BUILT (migration `20261024_phase10_tracker_al_retail_date.sql`
+  on STAGING, probe `probe-al-retail-date.sql` 6/0 + a planted "not editable" mutant fails 3; EF redeployed;
+  `date_of_retail` now reads ONLY the internal retention file, `al_retail_date` ONLY the AL one). Re-run on
+  the real files: filled on 1,980 trucks, differs on 961, so **notes 5,154 → 4,193 (disagreements 4,030 →
+  3,069)** · (2) "I guess, not sure why you ask" → kept (retail home); the reason was explained: the purchase
+  and sales files disagree on CTC for ~25% and the customer for ~18%, and the grid can show only one ·
+  (3) **Yes** · (4) "What year? The full year has ~2,000 vehicles" → asked back: 2024-25's INVOICE TRACKER, of
+  which only the 224 rows for trucks SOLD in 2025-26 would be used (or all of it, if 2024-25 should be in the
+  archive too — then its lists and retention files are needed as well) · (5) "What is this?" → explained in
+  plain words (one value shown, the other file's value pinned to the cell as a note, like an Excel comment)
+  and asked again: notes on the cells, or a separate review list. · Test layout deleted · DEMO rows stay.
 - ✅ **10-23: "Endhan Date" column** — migration `20261023_phase10_tracker_endhan_date.sql` on STAGING
   (adds `vehicle_units.endhan_date date`; `tracker_apply_changes` re-created with it on the editable
   list, otherwise byte-identical to numeric_before; staging prosrc md5 `76308fce…` = file, LF) ·

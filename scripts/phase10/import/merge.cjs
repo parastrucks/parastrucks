@@ -73,7 +73,8 @@ const RULES = {
   endhan_date: { kind: 'date', from: [['FY', '#AL']] },
   // D · retention
   dsm: { kind: 'text', from: [['RET_INT', 'DSM']] },
-  date_of_retail: { kind: 'date', from: [['RET_INT', 'DATE OF RETAIL'], ['RET_AL', 'DATE OF RETAIL']] },
+  date_of_retail: { kind: 'date', from: [['RET_INT', 'DATE OF RETAIL']] },
+  al_retail_date: { kind: 'date', from: [['RET_AL', 'DATE OF RETAIL']] },  // AL's own date: 961 differ (owner, 2026-10-24)
   // DEALERS column J holds a few delivery dates under a "DATE OF DELY" label (column map Q5)
   date_of_delivery: { kind: 'date', from: [['RET_INT', 'DATE OF DELIVERY'], ['RET_AL', 'DATE OF DELIVERY'], ['DEALERS', '#J']] },
   other_deductions: { kind: 'num', from: [['RET_INT', 'OTHER DEDUCTIONS'], ['RET_AL', 'OTHER DEDUCTIONS']] },

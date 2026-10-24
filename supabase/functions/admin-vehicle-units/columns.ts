@@ -95,6 +95,7 @@ export const COLUMNS: Record<string, ColSpec> = {
   // D · retention
   dsm:                      { type: "text", ...E },
   date_of_retail:           { type: "date", ...E },
+  al_retail_date:           { type: "date", ...E },  // the retail date on the AL claim (owner, 2026-10-24)
   date_of_delivery:         { type: "date", ...E },
   other_deductions:         { type: "numeric", ...E },
   retention_internal:       { type: "numeric", ...C },

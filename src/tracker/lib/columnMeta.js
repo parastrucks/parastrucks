@@ -48,7 +48,7 @@ const SHOWN = [
   ['payment_status', 'Payment Status', 'C', 110], ['ad_blu_given', 'AD-BLU', 'C', 90], ['endhan', 'Endhan', 'C', 90],
   ['endhan_date', 'Endhan Date', 'C', 100],
 
-  ['dsm', 'DSM', 'D', 110], ['date_of_retail', 'Date of Retail', 'D', 100], ['date_of_delivery', 'Date of Delivery', 'D', 100],
+  ['dsm', 'DSM', 'D', 110], ['date_of_retail', 'Date of Retail', 'D', 100], ['al_retail_date', 'AL Retail Date', 'D', 100], ['date_of_delivery', 'Date of Delivery', 'D', 100],
   ['other_deductions', 'Other Deductions', 'D', 110], ['retention_internal', 'Retention (internal)', 'D', 120],
   ['retention_al_claim', 'Retention (AL claim)', 'D', 120], ['app_amt', 'App Amt', 'D', 100],
   ['retention_remarks', 'Remarks', 'D', 160], ['sale_category', 'Sale Category', 'D', 110],

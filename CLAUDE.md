@@ -59,7 +59,10 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   `…_import_notes` on staging; **eight** tracker migrations for prod), recompute-and-diff; `selftest-import-merge`
   **28/0**. Run line + findings + 5 owner questions: plan → "THE FIRST-LOAD IMPORTER".
   ⏭️ **NEXT: when the owner's updated workbooks arrive → run it onto staging (the repository/archive).**
-  ❓ Open: the 5 importer questions · delete the test layout "DEMO layout test"? · DEMO rows stay at the load?
+  ✅ 10-24 owner: **"AL Retail Date" column BUILT** (migration `…_al_retail_date` on staging, probe 6/0, EF
+  redeployed; **nine** tracker migrations for prod; notes at the load 5,154 → 4,193) · retail home for CTC +
+  customer kept · DSE from retention · test layout deleted · DEMO rows STAY at the load.
+  ❓ Open: (4) which year's INVOICE TRACKER, only the 224 rows or all? · (5) disagreement notes on cells or a list?
   ⚠️ The app stops the dev server at each turn's end (`preview_start` again); Chrome screenshots time out
   while the Claude window is hidden (use `javascript_tool`). Resume: plan → "Where things stand (… session 2)". ⭐ Resume point
   with staging state, dummy-row list, tests and open questions: plan → "STAGE 2" → "Where things stand

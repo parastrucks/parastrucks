@@ -109,6 +109,15 @@ Owner: *"yes start stage 2"*. Branch `10b-foundation` (`6a9455f` → `5f38233`).
   trucks differ), (2) retail as home for CTC + customer, (3) DSE from retention, (4) last year's INVOICE TRACKER
   for the 224 trucks with no purchase row, (5) ~4,000 disagreement notes vs a separate list · delete the test
   layout "DEMO layout test"? · whether the DEMO rows stay when the real data is loaded.
+- **2026-10-24 — owner's answers:** (1) "Yes" → **"AL Retail Date" column built** (migration
+  `20261024_phase10_tracker_al_retail_date.sql` on staging, probe 6/0 with a planted mutant failing, EF
+  redeployed; prod now nine tracker migrations). Each retention file now fills its own date column, so the
+  961 differing dates stop being notes: notes at the load 5,154 → 4,193. (2) "I guess, not sure why you ask"
+  → retail stays home for CTC + customer; the why explained. (3) "Yes" → DSE from retention. (4) "What year?
+  ~2,000 vehicles" and (5) "What is this?" → both re-asked in plain words (only the 224 rows, or the whole
+  2024-25 year? notes on the cells or a separate list?). Test layout "DEMO layout test" deleted (approved,
+  by id, 1 row). DEMO rows stay when the real data loads. ⭐ Two of five questions came back as questions:
+  "home file" and "disagreement notes" are my words, not the owner's — ask with an example from their sheet.
 
 ## Session log — 2026-10-21 (PC, latest): Phase 10 Stage 1 step 3 — the tracker's Edge Function and access switch, on staging
 

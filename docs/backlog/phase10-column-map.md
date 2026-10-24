@@ -99,7 +99,8 @@ text (`5K-DSA`), stored as text + a parsed amount and kind · **HID** = hidden f
 | # | Column | Type | Role | Source | Notes / formula |
 |---|---|---|---|---|---|
 | 62 | `dsm` | text | IN | RET-INT `DSM` | |
-| 63 | `date_of_retail` | date | IN | RET `DATE OF RETAIL` | the incentive month key |
+| 63 | `date_of_retail` | date | IN | RET-INT `DATE OF RETAIL` | the incentive month key (PTB's own retail date) |
+| 63a | `al_retail_date` | date | IN | RET-AL `DATE OF RETAIL` | AL's retail date on the claim — differs from 63 on 961 of 1,980 trucks (days to weeks); its own column (owner 2026-10-24, "Yes"); migration `20261024_phase10_tracker_al_retail_date.sql` |
 | 64 | `date_of_delivery` | date | IN | RET `DATE OF DELIVERY` | |
 | 65 | `other_deductions` | numeric | IN | RET `Other deductions` | ✅ a separate figure: equals IT amc + dsa + ad_blue on **0 of 167** filled rows |
 | 66 | `retention_internal` | numeric | DB | RET-INT `Retention` = RET-AL `Diff between CTC and CTD` | `ctc − ctd − other_deductions` |

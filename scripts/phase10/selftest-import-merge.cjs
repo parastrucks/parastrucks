@@ -24,7 +24,7 @@ const fam = {
   LIST: [row('LIST-APR.xlsx', 5, { 'CHASSIS NUMBER': A, 'PTB INVOICE DATE': 45843, 'AD-BLU': 'GIVEN', TCS: 31000 })],
   LIST_OD: [row('LIST-APR.xlsx', 7, { 'CHASSIS NO': C, DEALOR: 'SOME DEALER' })],
   RET_INT: [row('RET-APR.xlsx', 4, { 'CHASSIS NO': A, SEGMENT: 'MDV BUS', DSE: 'RAVI', 'DATE OF RETAIL': 45840, 'DSE INCENTIVE': 0, 'DSM INCENTIVE': 500, '#T': 'lookup' })],
-  RET_AL: [],
+  RET_AL: [row('RET-AL-APR.xlsx', 6, { 'CHASSIS NO': A, 'DATE OF RETAIL': 45855 })],
   DEALERS: [row('LIST-APR.xlsx', 9, { MODEL: B, 'CHASSIS NO': 'E2', 'NAME OF DEALER': 'APRIL DEALER' }),
     row('LIST-MAY.xlsx', 9, { MODEL: B, 'CHASSIS NO': 'E2', 'NAME OF DEALER': 'MAY DEALER' })],
   REBILL: [row('LIST-MAY.xlsx', 3, { 'CHASSIS NUMBER': B, 'NEW CHASSIS NO': C, 'VEHICLE LOCATION': 'YARD' })],
@@ -42,6 +42,8 @@ ok(u(A).ptb_invoice_date === '2025-07-05', 'invoice date from the purchase file 
 ok(u(A).ad_blu_given === 'GIVEN', 'AD-BLU from the monthly list, not the year file (its shifted layouts)', u(A).ad_blu_given)
 ok(u(A).segment === 'MDV BUS' && !notesOn(A, 'segment').length, 'segment: the finer word, and BUS vs MDV BUS is no disagreement')
 ok(u(A).dse === 'RAVI', 'DSE from retention (it pays the incentive)')
+ok(u(A).date_of_retail === '2025-07-02' && u(A).al_retail_date === '2025-07-17' && !notesOn(A, 'date_of_retail').length,
+  'two retail dates: internal and AL’s each in its own column, no disagreement note (owner, 2026-10-24)', u(A))
 // every disagreement is kept, naming the file
 const ctcNote = notesOn(A, 'ctc')[0]
 ok(ctcNote?.source === 'import' && /Invoice Tracker/.test(ctcNote.body) && /28,00,000/.test(ctcNote.body) && /Shown: 2025-26 sales/.test(ctcNote.body),
