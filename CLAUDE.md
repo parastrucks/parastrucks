@@ -64,8 +64,11 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   → Claude in Chrome (the owner's Chrome is signed in as admin).
 - **Crash reporting proved on prod 2026-10-21:** the Error Log's first real rows ever — all noise from one
   staff PC's browser extension. Resolved by another session (PR #137 → `e236912`; record in PR #138).
-- **Payments branch:** `portal` merged in after #131/#132 (`9308fcc`, 0 behind then); `fix/log-error-envelope`
-  deleted (squash-merged; all five files checked identical in `portal`).
+- **Payments branch:** `portal` merged in after #131/#132 (`9308fcc`) and again on 10-24 after #134–#137
+  (`8bb769d`, clean; build + log-error 33 · match-queue 143 · mobile-render 151) — **0 behind**.
+  ⚠️ `npm ci` wipes the gitignored `node_modules/payments-demo-files/` — back them up first (it happened;
+  restored from a scratch copy, checksums 6/6). `fix/log-error-envelope` deleted (squash-merged; all five
+  files checked identical in `portal`).
 - `.gitignore` (in #139): `docs/*Tax Invoice*.pdf` (the old rule only matched "TAX INVOICE" where git
   ignores case) and `docs/Vehicle Gate Pass*` (the chat export).
 

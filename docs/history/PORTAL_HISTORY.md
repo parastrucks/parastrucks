@@ -69,6 +69,11 @@ carries invoice no., amount, the PDF and a thank-you · counter sales: send only
 exempt from the one-brand user-shape rule** (brands open RLS and the ERP sync). Plan v0.1 → v0.2 in PR
 **#139** (`docs/backlog/credit-release-plan.md`), with `.gitignore` rules for the new sources.
 
+**Payments branch kept current (24 Oct).** `portal` (#134–#137) merged into it → `8bb769d`, clean; `AccessRules.jsx`
+keeps the `/payments` route and gains the extension label; build + log-error 33/0, match-queue 143/0, mobile-render
+151/0. A reinstall (`npm ci`) wiped the gitignored demo files in `node_modules/payments-demo-files/`; restored
+from the scratch copy made on 21 Oct (checksums 6/6).
+
 **Lessons.** (1) Measure the real process before designing it: the chat showed the value is in the untracked
 promise and the outstanding, not the 6-minute "yes". (2) A dependency bump that changes the bundler is a code
 change — A/B it and load every chunk. (3) A new kind of user that should see almost nothing collides with
