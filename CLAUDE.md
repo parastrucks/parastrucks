@@ -62,7 +62,16 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   ✅ 10-24 owner: **"AL Retail Date" column BUILT** (migration `…_al_retail_date` on staging, probe 6/0, EF
   redeployed; **nine** tracker migrations for prod; notes at the load 5,154 → 4,193) · retail home for CTC +
   customer kept · DSE from retention · test layout deleted · DEMO rows STAY at the load.
-  ❓ Open: (4) which year's INVOICE TRACKER, only the 224 rows or all? · (5) disagreement notes on cells or a list?
+  ✅ Later 10-24 owner: **"one continuous database … all vehicles"** → the importer reads EVERY year (2022-23 →,
+  older layouts aliased; later file wins, earlier different figure = note; two copies of one year's book
+  REFUSED) — rehearsed: 89 files → 5,974 trucks, 8,425 notes, one transaction · notes stay on cells ·
+  **two CTCs BUILT**: `al_ctc` "AL CTC" (told to AL; Retention + App Amt on it) beside `ctc` "PTB CTC"
+  (migration `…_two_ctc` on staging, probe 9/0, 3 mutants; **ten** tracker migrations for prod). ⭐ A
+  migration that re-creates a function must SORT after the last one that did (`…_al_ctc` sorted before
+  `…_al_retail_date` and was overwritten — the probe caught it). ⭐ `String.replace(a, b)` treats `$'` in b
+  as "the rest of the string" — use `replace(a, () => b)` in edit scripts.
+  ❓ Open: DSE incentive (every sheet adds a ₹1,000 retention bonus; slab steps were 4/7/11 until 2024-25 —
+  the tracker has neither) · sales books for 2023-24 + 2024-25 are not on this PC · do the books start Nov 2022?
   ⚠️ The app stops the dev server at each turn's end (`preview_start` again); Chrome screenshots time out
   while the Claude window is hidden (use `javascript_tool`). Resume: plan → "Where things stand (… session 2)". ⭐ Resume point
   with staging state, dummy-row list, tests and open questions: plan → "STAGE 2" → "Where things stand

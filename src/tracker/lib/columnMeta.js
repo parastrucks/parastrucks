@@ -23,7 +23,7 @@ const SHOWN = [
 
   ['purchase_source', 'Bought From', 'B', 100], ['oem_gatepass_no', 'OEM Gatepass No', 'B', 140],
   ['oem_gatepass_date', 'OEM Gatepass Date', 'B', 100], ['odn_no', 'ODN No', 'B', 120],
-  ['ctc', 'CTC', 'B', 110], ['ctd', 'CTD', 'B', 110], ['ctc_basis', 'CTC Basis', 'B', 90],
+  ['ctc', 'PTB CTC', 'B', 110], ['al_ctc', 'AL CTC', 'B', 110], ['ctd', 'CTD', 'B', 110], ['ctc_basis', 'CTC Basis', 'B', 90],
   ['amc_to_al', 'AMC/Service', 'B', 100], ['dsa', 'DSA', 'B', 90], ['ad_blue', 'AD Blue', 'B', 90],
   ['retention_dealer', 'Retention', 'B', 100], ['payment_amount', 'Payment Amount', 'B', 120],
   ['tds', 'TDS', 'B', 80], ['total_payment_to_al', 'Total Payment to AL', 'B', 130],

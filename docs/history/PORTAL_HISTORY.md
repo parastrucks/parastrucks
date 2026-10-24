@@ -118,6 +118,17 @@ Owner: *"yes start stage 2"*. Branch `10b-foundation` (`6a9455f` → `5f38233`).
   2024-25 year? notes on the cells or a separate list?). Test layout "DEMO layout test" deleted (approved,
   by id, 1 row). DEMO rows stay when the real data loads. ⭐ Two of five questions came back as questions:
   "home file" and "disagreement notes" are my words, not the owner's — ask with an example from their sheet.
+- **2026-10-24 (later) — two CTCs and one continuous book.** Owner: CTC is two figures, AL CTC (told to AL;
+  retention is paid on it) and PTB CTC (internal) — "If there is a scope of creating a difference, we do it".
+  The measurement agreed before the code: purchase ≈ AL claim file, sales ≈ internal retention; each file's
+  own formulas say which CTC each worked-out column uses. Built `al_ctc` (migration `…_two_ctc`, staging,
+  probe 9/0, 3 mutants). Owner: "one continuous database … all vehicles … no inconsistency" → the importer
+  now reads every year from 2022-23 (old layouts aliased into the same families, a duplicate year book
+  refused, an earlier year's different figure kept as a note): 5,974 trucks rehearsed. Missing on this PC:
+  the 2023-24 and 2024-25 sales books. ⭐ Found while checking old formulas: the DSE incentive in every sheet
+  carries a ₹1,000 retention bonus the tracker never had, and the slab steps changed in 2025-26 — asked.
+  ⭐ The first draft migration sorted before the file whose function it extended and was silently overwritten;
+  the probe caught it on the first run.
 
 ## Session log — 2026-10-21 (PC, latest): Phase 10 Stage 1 step 3 — the tracker's Edge Function and access switch, on staging
 

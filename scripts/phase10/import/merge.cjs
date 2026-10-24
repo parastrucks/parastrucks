@@ -8,7 +8,8 @@
 // the conflicts self-evident").
 //
 // The homes are MEASURED (scripts/phase10/e_sources.cjs, 2026-10-23): the purchase file disagrees with
-// every other file on CTC and the customer while those agree with each other → retail is home for both;
+// every other file on the customer while those agree with each other → retail is home for it; CTC is TWO
+// columns (owner, 2026-10-24): PTB CTC from the sales side, AL CTC from the AL side (see RULES);
 // CTD agrees best between purchase and retention → purchase is home; the year file's mixed layouts
 // shift its invoice-date and AD-BLU columns on ~190 rows → the monthly list is home for those two.
 //
@@ -16,7 +17,7 @@
 
 // family labels as a person reads them in a note
 const LABEL = {
-  IT: 'Invoice Tracker', IT_OD: 'Invoice Tracker (other dealer)', FY: '2025-26 sales', LIST: 'Invoice List',
+  IT: 'Invoice Tracker', IT_OD: 'Invoice Tracker (other dealer)', FY: 'Sales book', LIST: 'Invoice List',
   RET_INT: 'Retention (internal)', RET_AL: 'Retention (AL)', DEALERS: 'Dealers', REBILL: 'Cancel/rebill',
 }
 
@@ -32,13 +33,17 @@ const RULES = {
   mfrs_year: { kind: 'int', from: [['LIST', 'MFRS YEAR'], ['LIST_OD', 'MFRS YEAR']] },
   // retention names the bus kind (MDV BUS / ICV BUS) where retail says BUS — the finer word is home
   segment: { kind: 'text', from: [['RET_INT', 'SEGMENT'], ['RET_AL', 'SEGMENT'], ['FY', 'SEGMENT'], ['LIST', 'SEGMENT'], ['LIST_OD', 'SEGMENT']], refines: true },
-  customer_name: { kind: 'text', from: [['FY', 'NAME OF THE CUSTOMER'], ['LIST', 'NAME OF THE CUSTOMER'], ['LIST_OD', 'NAME OF THE CUSTOMER'], ['RET_INT', 'NAME'], ['RET_AL', 'NAME'], ...IT('CUSTOMER NAME')] },
+  customer_name: { kind: 'text', names: true, from: [['FY', 'NAME OF THE CUSTOMER'], ['LIST', 'NAME OF THE CUSTOMER'], ['LIST_OD', 'NAME OF THE CUSTOMER'], ['RET_INT', 'NAME'], ['RET_AL', 'NAME'], ...IT('CUSTOMER NAME')] },
   qty: { kind: 'int', from: [...IT('QTY'), ['FY', 'QUANTITY'], ['LIST', 'QUANTITY'], ['LIST_OD', 'QUANTITY']] },
   // B · purchase from AL
   oem_gatepass_no: { kind: 'text', from: IT('OEM GATEPASS NUMBER') },
   oem_gatepass_date: { kind: 'date', from: IT('OEM GATEPASS DATE') },
   odn_no: { kind: 'text', from: IT('ODN NUMBER') },
-  ctc: { kind: 'num', from: [['FY', 'CTC'], ['LIST', 'CTC'], ['LIST_OD', 'CTC'], ['RET_INT', 'CTC'], ...IT('CTC'), ['RET_AL', 'CTC']] },
+  // two CTCs (owner, 2026-10-24): PTB CTC = the internal figure (the sales lists + internal retention agree
+  // on it), AL CTC = the figure told to AL (the AL retention file + the purchase file agree on it). A truck
+  // not sold yet has only the purchase file's figure: it fills PTB CTC as a fallback, never compared.
+  ctc: { kind: 'num', from: [['FY', 'CTC'], ['LIST', 'CTC'], ['LIST_OD', 'CTC'], ['RET_INT', 'CTC']], fallback: IT('CTC') },
+  al_ctc: { kind: 'num', from: [['RET_AL', 'CTC'], ...IT('CTC')] },
   ctd: { kind: 'num', from: [...IT('CTD'), ['RET_INT', 'CTD'], ['RET_AL', 'CTD'], ['FY', 'CTD'], ['LIST', 'CTD'], ['LIST_OD', 'CTD'], ['DEALERS', 'CTD']] },
   amc_to_al: { kind: 'num', from: [['IT', 'AMC/SERVICE'], ['IT_OD', 'AMC']] },
   dsa: { kind: 'num', from: IT('DSA') },
@@ -83,8 +88,9 @@ const RULES = {
   sale_category: { kind: 'text', from: [['RET_AL', 'SALE CATEGORY']] },
   al_invoice_no: { kind: 'text', from: [['RET_AL', 'AL INVOICE NO.']] },
   dealer_invoice_no: { kind: 'text', from: [['RET_AL', 'DEALER INVOICE NO.']] },
-  al_claim_age: { kind: 'int', from: [['RET_AL', 'AGE']] },
-  al_claim_interest: { kind: 'num', from: [['RET_AL', 'INTEREST']] },
+  // age and interest grow month by month on a claim still open: the latest month is the record
+  al_claim_age: { kind: 'int', latestOnly: true, from: [['RET_AL', 'AGE']] },
+  al_claim_interest: { kind: 'num', latestOnly: true, from: [['RET_AL', 'INTEREST']] },
   // E · inter-dealer, cancel/rebill
   sold_to_dealer: { kind: 'text', from: [['DEALERS', 'NAME OF DEALER']] },
   vehicle_location: { kind: 'text', from: [['REBILL', 'VEHICLE LOCATION']] },
@@ -161,6 +167,11 @@ function parse(kind, v) {
 // two values the same? numbers to the rupee; text ignoring case, spaces and punctuation
 const same = (kind, a, b) => (kind === 'num' || kind === 'int') ? Math.abs(a - b) < 1
   : String(a).toUpperCase().replace(/[^A-Z0-9]/g, '') === String(b).toUpperCase().replace(/[^A-Z0-9]/g, '')
+// a customer's name written two ways (M/S, PVT LTD / PRIVATE LIMITED, a word left off the end) is no
+// disagreement: compared on its words, the shorter's words all in the longer
+const NAME_NOISE = new Set(['M', 'S', 'MS', 'PVT', 'PRIVATE', 'LTD', 'LIMITED', 'THE', 'AND', 'CO', 'COMPANY', 'LLP'])
+const nameWords = (v) => String(v).toUpperCase().replace(/[^A-Z0-9 ]/g, ' ').split(/\s+/).filter((w) => w && !NAME_NOISE.has(w))
+const sameName = (a, b) => { const x = nameWords(a), y = nameWords(b); const [s, l] = x.length <= y.length ? [x, y] : [y, x]; return s.length > 0 && s.every((w) => l.includes(w)) }
 const inr = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 })
 const show = (kind, v) => kind === 'date' ? `${v.slice(8, 10)}/${v.slice(5, 7)}/${v.slice(2, 4)}` : (kind === 'num' ? inr.format(v) : String(v))
 const where = (src) => `${LABEL[src.fam]} (${src.file}${src.fam === 'FY' || src.fam === 'IT' || src.fam === 'IT_OD' ? `, row ${src.row}` : ''})`
@@ -213,9 +224,35 @@ function merge(families) {
         found.push({ src, value: p.ok })
         if (rule.kind === 'refund' && !Object.values(REFUND).includes(p.ok)) bump(report.refundKept, p.ok)
       }
+      // the same family in an EARLIER file (last year's tracker, an older copy): it fills the cell only when
+      // no later file has it, and a different figure is kept as a note — never silently dropped. The DEALERS
+      // sheet is left out: it is copied month to month and the latest copy is the record (R2-5).
+      for (const [fam, head] of rule.latestOnly ? [] : rule.from) {
+        if (fam === 'DEALERS') continue
+        const rows = rowsOf[fam] ?? []
+        const last = rows[rows.length - 1]
+        for (let i = rows.length - 2; i >= 0; i--) {
+          const r = rows[i]
+          if (r.file === last.file) continue
+          const cell = r.cells[head]
+          if (!cell) continue
+          const p = parse(rule.kind, cell.v)
+          if (p.empty) continue
+          const src = { fam, file: r.file, row: r.row, cell }
+          if (p.bad) { found.push({ src, bad: true }); continue }
+          found.push({ src, value: p.ok })
+        }
+      }
       const good = found.filter((x) => !x.bad)
       const home = good[0]
       if (home) u[key] = home.value
+      // a fallback source fills an empty column and is never compared (its figure belongs to another column)
+      if (!home && rule.fallback) {
+        for (const [fam, head] of rule.fallback) {
+          const r = latest(fam); const p = r?.cells[head] ? parse(rule.kind, r.cells[head].v) : { empty: true }
+          if (p.ok !== undefined) { u[key] = p.ok; break }
+        }
+      }
       if (rule.history) continue
       // other files' different values, and unreadable ones, kept on the cell
       const others = []
@@ -223,6 +260,7 @@ function merge(families) {
         if (x === home) continue
         if (x.bad) { others.push(`${where(x.src)}: “${String(x.src.cell.v).trim()}” (not readable as a ${rule.kind === 'date' ? 'date' : 'number'})`); continue }
         if (same(rule.kind, x.value, home.value)) continue
+        if (rule.names && sameName(x.value, home.value)) continue
         if (rule.refines) { const a = String(home.value).toUpperCase(), b = String(x.value).toUpperCase(); if (a.includes(b) || b.includes(a)) continue }
         if (others.some((o) => o.endsWith(`: ${show(rule.kind, x.value)}`))) continue
         others.push(`${where(x.src)}: ${show(rule.kind, x.value)}`)
@@ -232,7 +270,8 @@ function merge(families) {
         noteOn(key, `${home ? `Shown: ${where(home.src)}. ` : ''}Other files say — ${others.join(' · ')}`, 'import')
       }
       // a hand-typed formula in the cell the value came from (CTD =2055000/1.28*1.18, AD BLUE =1310*8)
-      if (home?.src.cell.f && !rule.history) noteOn(key, `Excel formula: =${home.src.cell.f}`, 'excel_formula')
+      // (only a formula of typed figures: one that refers to other cells is the sheet's arithmetic, not an input)
+      if (home?.src.cell.f && !rule.history && !/\$?[A-Z]{1,3}\$?\d+/.test(home.src.cell.f)) noteOn(key, `Excel formula: =${home.src.cell.f}`, 'excel_formula')
     }
 
     // Excel comments and flag colours, on whichever file's cell they were, at that column

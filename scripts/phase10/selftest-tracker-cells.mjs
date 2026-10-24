@@ -242,7 +242,7 @@ const mt = mailTable([C('chassis_no'), C('ctc'), C('ptb_invoice_date'), C('al_pa
   { values: ['MB1<X>&1', 1234567, 45843, 'Cash Invoiced'], bgs: [null, '#FFFF00', null, PAID_GREEN] },
   { values: ['MB1\tTAB', null, null, 'IBND'], bgs: [] },
 ])
-ok(mt.text === 'Chassis No\tCTC\tPTB Invoice Date\tAL Payment Status\r\nMB1<X>&1\t12,34,567\t05/07/25\tCash Invoiced\r\nMB1 TAB\t\t\tIBND',
+ok(mt.text === 'Chassis No\tPTB CTC\tPTB Invoice Date\tAL Payment Status\r\nMB1<X>&1\t12,34,567\t05/07/25\tCash Invoiced\r\nMB1 TAB\t\t\tIBND',
   'plain text: header + one line per row, tab-separated, a tab inside a value cannot split a cell', mt.text)
 ok(mt.html.includes('MB1&lt;X&gt;&amp;1') && !mt.html.includes('<X>'), 'html: text is escaped')
 ok(mt.html.includes('background:#FFFF00') && mt.html.includes(`background:${PAID_GREEN}`) && mt.html.includes('>12,34,567<') && mt.html.includes('text-align:right'),
@@ -252,7 +252,7 @@ ok(isPaid(' Fresh Offtake ') && isPaid('CASH INVOICED') && !isPaid('IBND') && !i
 ok(paidRule([C('al_payment_status')], 10).rule.value === `=OR(${PAID_WORDS.map((w) => `LOWER(TRIM(A2))="${w}"`).join(',')})`, 'the grid rule is built from the same list')
 
 const hc = describeChange({ column_key: 'ctc', old_value: '2800000.00', new_value: '2900000', actor_name: 'Staging Admin', source: 'paste', created_at: '2026-10-23T09:05:00Z' }, COLUMN_BY_KEY)
-ok(hc.what === 'CTC' && hc.from === '28,00,000' && hc.to === '29,00,000' && hc.how === 'pasted' && hc.who === 'Staging Admin', 'history: column label, values as on screen, how', hc)
+ok(hc.what === 'PTB CTC' && hc.from === '28,00,000' && hc.to === '29,00,000' && hc.how === 'pasted' && hc.who === 'Staging Admin', 'history: column label, values as on screen, how', hc)
 ok(hc.at.includes('14:35') && /23/.test(hc.at), 'history: the time in IST (09:05 UTC = 14:35 IST)', hc.at)
 const hd = describeChange({ column_key: 'ptb_invoice_date', old_value: null, new_value: '2025-07-05', actor_name: null, source: 'typed', created_at: '2026-10-23T09:05:00Z' }, COLUMN_BY_KEY)
 ok(hd.from === '' && hd.to === '05/07/25' && hd.who === 'someone', 'history: empty before, a date, no name')

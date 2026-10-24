@@ -32,13 +32,14 @@ text (`5K-DSA`), stored as text + a parsed amount and kind · **HID** = hidden f
 | 12 | `oem_gatepass_no` | text | IN | `OEM Gatepass Number` | search by last 6 digits (F5) |
 | 13 | `oem_gatepass_date` | date | IN | `OEM Gatepass Date` | |
 | 14 | `odn_no` | text | IN | `ODN Number` | |
-| 15 | `ctc` | numeric | IN | IT `CTC` (+ RETAIL/FY/RET `CTC`) | 26.5% cross-file conflicts → conflict report |
+| 15 | `ctc` | numeric | IN | sales book / Invoice List / RET-INT `CTC` (stock not yet sold: IT `CTC`) | shown as **PTB CTC** — the internal figure (owner 2026-10-24). The "26.5% conflicts" were two different CTCs, not errors |
+| 15a | `al_ctc` | numeric | IN | RET-AL `CTC` (DBM export `CTC`), then IT `CTC` | **AL CTC** — the CTC told to AL, on which AL pays retention (owner 2026-10-24); blank = same as PTB CTC. Measured: IT = RET-AL on 1,634/1,860, sales = RET-INT on 1,938/2,087; internal higher on 240 of the 275 that differ. Migration `20261024_phase10_tracker_two_ctc.sql` |
 | 16 | `ctd` | numeric | IN | IT `CTD` (+ RETAIL `CTD`, RET `CTD`, AL BS `CTD`) | hand formulas like `2055000/1.28*1.18` → kept as a cell note |
 | 17 | `ctc_basis` | `inclusive` \| `exclusive` | IN | derived once on import (N1) | 530/2050 exclusive |
 | 18 | `amc_to_al` | numeric | IN | IT `AMC/SERVICE` | |
 | 19 | `dsa` | numeric | IN | IT `DSA` | |
 | 20 | `ad_blue` | numeric | IN | IT `AD BLUE` | `1310*8` style → value + cell note |
-| 21 | `retention_dealer` | numeric | DB | IT `Retention` | `IF(ctc=0, 0, ctc − ctd − amc − dsa − ad_blue)` |
+| 21 | `retention_dealer` | numeric | DB | IT `Retention` | `IF(al_ctc=0, 0, al_ctc − ctd − amc − dsa − ad_blue)` — on **AL CTC** (blank AL CTC → PTB CTC) |
 | 22 | `payment_amount` | numeric | DB | IT `Payment Amount` | ⭐ `(ctd + amc_to_al) × qty` — this is the "gross to AL" round 2 could not find |
 | 23 | `tds` | numeric | DB | IT `TDS` | `payment_amount × 0.001` |
 | 24 | `total_payment_to_al` | numeric | DB | IT `TOTAL PAYMENT TO AL` | `payment_amount − tds` |
@@ -71,7 +72,7 @@ text (`5K-DSA`), stored as text + a parsed amount and kind · **HID** = hidden f
 | 43 | `tally_bill` | numeric | IN | RETAIL `TALLY BILL` · FY `CUSTOMER BILL` | |
 | 44 | `amc_charged_to_customer` | text | TXT$ | RETAIL/FY `AMC` | 99% text |
 | 45 | `tcs` | numeric | DB | `TCS` | `tally_bill × 1%` (NOT ctc — R2-14) |
-| 46 | `total` | numeric | DB | `TOTAL` | `ctc + tcs` |
+| 46 | `total` | numeric | DB | `TOTAL` | `ctc + tcs` (PTB CTC) |
 | 47 | `margin_money` | numeric | IN | `MARGIN MONEY` | |
 | 48 | `finance_recd` | numeric | IN | `FINANCE RECD` | |
 | 49 | `finance_paymt_recd_date` | date | IN | `FINANCE PAYMT. RECD DATE` | a DATE — never summed |
@@ -103,9 +104,9 @@ text (`5K-DSA`), stored as text + a parsed amount and kind · **HID** = hidden f
 | 63a | `al_retail_date` | date | IN | RET-AL `DATE OF RETAIL` | AL's retail date on the claim — differs from 63 on 961 of 1,980 trucks (days to weeks); its own column (owner 2026-10-24, "Yes"); migration `20261024_phase10_tracker_al_retail_date.sql` |
 | 64 | `date_of_delivery` | date | IN | RET `DATE OF DELIVERY` | |
 | 65 | `other_deductions` | numeric | IN | RET `Other deductions` | ✅ a separate figure: equals IT amc + dsa + ad_blue on **0 of 167** filled rows |
-| 66 | `retention_internal` | numeric | DB | RET-INT `Retention` = RET-AL `Diff between CTC and CTD` | `ctc − ctd − other_deductions` |
+| 66 | `retention_internal` | numeric | DB | RET-INT `Retention` | `ctc − ctd − other_deductions` (PTB CTC). RET-AL's own `Diff between CTC and CTD` is the same sum on AL CTC |
 | 67 | `retention_al_claim` | numeric | IN | RET-AL `Retention` | negotiated, ₹500 steps — never computed |
-| 68 | `app_amt` | numeric | DB | RET-AL `App Amt` | `retention_al_claim − retention_internal` |
+| 68 | `app_amt` | numeric | DB | RET-AL `App Amt` (DBM export `Adjustment`) | `retention_al_claim − (al_ctc − ctd − other_deductions)` — the AL file's own formula, on AL CTC |
 | 69 | `retention_remarks` | text | IN | RET `Remarks` | |
 | 70 | `sale_category` | text | IN | RET-AL `Sale Category` | |
 | 71 | `al_invoice_no` | text | IN | RET-AL `AL Invoice No.` | |

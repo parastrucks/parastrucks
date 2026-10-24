@@ -42,10 +42,12 @@ Real data passes through these; they print COUNTS ONLY and write their output OU
 |---|---|---|
 | 1 | `import/read.cjs` | Workbooks → rows, each cell with value, formula, comment, fill, number format. A file is recognised by its sheets + headers, never its name |
 | 2 | `import/merge.cjs` | One record per truck: a HOME file per column (`RULES`, measured), every other file's different value kept as a note; comments, flag colours, hand formulas, overrides, incentives, rebill links |
-| — | `import/run.cjs` | `node scripts/phase10/import/run.cjs <scratch folder> [files/folders]` → `import.json` + counts. No files given = the 2025-26 set on this PC |
+| — | `import/run.cjs` | `node scripts/phase10/import/run.cjs <scratch folder> [files/folders]` → `import.json` + counts. No files given = EVERY year on this PC (2022-23 →), ordered by year then month; refuses two copies of one year's purchase/sales book (`ALLOW_OVERLAP=1` overrides) |
 | 3 | `import/sql.cjs` | `node scripts/phase10/import/sql.cjs <scratch folder> <actor uuid>` → `import.sql`: ONE transaction, `recompute = false`, one import batch |
 | 4 | `import/recompute-diff.sql` | Self-aborting: per worked-out column, how many imported rows the database's rules would give another figure |
-| test | `selftest-import-merge.cjs` | The merge rules on made-up rows (28 checks) — `node scripts/phase10/selftest-import-merge.cjs` |
+| 4b | `import/recompute-by-year.sql` | The same, split by financial year — do the rules hold for older years? |
+| test | `selftest-import-merge.cjs` | The merge rules on made-up rows (36 checks) — `node scripts/phase10/selftest-import-merge.cjs` |
+| test | `selftest-import-read.cjs` | The reader on made-up workbooks: the older layouts land in the right families under the newer names (12) |
 
 ## Tests of the tracker itself (Stage 1)
 
@@ -58,6 +60,8 @@ Real data passes through these; they print COUNTS ONLY and write their output OU
 | `probe-rmc-gst.sql` | RMC = 18% on any date; an override still wins (9) | same |
 | `probe-endhan-date.sql` | The Endhan Date column: stored, typed, audited, cleared (6) | same |
 | `probe-mto-advance.sql` | The MTO Advance Yes/No column; the table refuses anything else (6) | same |
+| `probe-al-retail-date.sql` | The AL Retail Date column: stored, typed, audited, cleared; the internal date untouched (6) | same |
+| `probe-two-ctc.sql` | Two CTCs: Retention + App Amt on AL CTC, Total + internal retention on PTB CTC, a blank AL CTC = PTB (9) | same |
 | `selftest-tracker-cells.mjs` | The screen's own logic: grid cell ↔ database value, the save planner, the new-row planner, cell colours, the paid rule, the screen columns, Find, Copy for mail, history text (147) | `node scripts/phase10/selftest-tracker-cells.mjs` |
 | `selftest-vehicle-units.mjs` | The Edge Function's own modules: drift against ALL the tracker migrations (columns added later, the newest allowlist), every person × action, every value check (556) | `node scripts/phase10/selftest-vehicle-units.mjs` (Node 24 strips the types). `AUTHORITY_FILE=<path>` runs it against another authority file (mutants) |
 | `probe-ef-tracker.mjs` | The DEPLOYED functions on staging, as real logins: gate, switch, write path. **Writes dummy data** (see its header) | owner: `$env:PROBE_PASSWORD = '…'; node scripts/phase10/probe-ef-tracker.mjs; Remove-Item Env:\PROBE_PASSWORD` |

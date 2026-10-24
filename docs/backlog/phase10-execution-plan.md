@@ -782,10 +782,51 @@ Also: a phone view (read-only cards) and the local save queue across reloads (E5
   = Cash Invoiced OR Fresh Offtake (one `PAID_WORDS` list) · RMC = 18% GST · Endhan Date column · MTO Advance
   Yes/No column · fixed-list columns take any case · **the first-load importer, rehearsed offline on the real
   files (`0a82d80`, `scripts/phase10/import/`)**.
+- ✅ **2026-10-24 (session 3): two CTCs + ONE CONTINUOUS BOOK of every year.** Owner: "one continuous database
+  that has all details about all vehicles that have moved in and out of our dealership … make a good design
+  judgment call … such that there is no inconsistency", and CTC is TWO figures — **AL CTC** (told to AL; AL
+  pays retention on it) and **PTB CTC** (internal). Built:
+  - **Two CTCs** — migration `20261024_phase10_tracker_two_ctc.sql` on STAGING (`vehicle_units.al_ctc`;
+    `ctc` stays and is labelled "PTB CTC"; `retention_dealer` and `app_amt` now on AL CTC, `total` and
+    `retention_internal` on PTB CTC — each file's OWN formulas checked; a blank AL CTC = the PTB figure).
+    `probe-two-ctc.sql` 9/0 (PGlite + staging); 3 planted mutants each fail (not editable 2 · Retention on PTB
+    CTC 3 · App Amt on PTB CTC 3). Staging prosrc md5: compute `ee1a22a6…`, apply `08ff1a12…` = file. EF
+    redeployed. ⚠️ First draft was named `…_al_ctc.sql` and sorted BEFORE `…_al_retail_date.sql`, which then
+    re-created the apply function without it — the probe caught it; renamed `…_two_ctc.sql`. **Migration
+    file names must sort after the one whose function they extend.**
+  - **The importer reads every year** (`run.cjs` with no files = all of `D:/PTB/Finances/20xx-yy` + the
+    2025-26 lists): the older layouts are read INTO the same families (`read.cjs` `as` + `alias` + `drop`):
+    2022-24 sales books ("Chassis No", Sheet1…7 copies never read) · AL's DBM claim export 2023-10 → 2024-06
+    ("Vin No."; Nett ORC = the claim, Adjustment = App Amt — both checked by formula; its Model is a material
+    code → not read) · the old AL RETENTION SHEET (DBM = AL's view, its RETENTION is CTC − CTD so NOT the claim;
+    TALLY = internal) · old purchase books' "AMC" header. Files are named with their year folder.
+  - **No inconsistency, by design:** one row per chassis for ever (a truck bought in March and sold in April
+    is one row) · files ordered by financial year then month (a year book last in its year) · inside a family
+    the later file wins and **an earlier file's different figure is kept as a note**, never dropped; an
+    earlier file fills a cell no later one has · **two copies of one year's purchase or sales book are
+    REFUSED** (>50% shared trucks, same year — proved on a copy, exit 3; `ALLOW_OVERLAP=1` overrides) ·
+    claim age/interest = latest month only (they grow by design) · "M/S … PVT LTD" = the same customer ·
+    the financial year is never stored (it follows from the dates).
+  - **Rehearsed on all years (offline, PGlite, all 10 tracker migrations): 89 files → 5,974 trucks · 8,425
+    notes (6,258 disagreements) · loads in one transaction (12 MB, ~14 s) · probe-foundation 42/0.**
+    Per year (by PTB invoice date): 2022-23 440 sold · 2023-24 1,226 · 2024-25 1,453 · 2025-26 2,101 ·
+    2026-27 138 · ~470 bought but no invoice date · 149 only in retention files. Purchase data is complete
+    every year; **the sales book is MISSING for 2023-24 (112 of 1,226 have one) and all of 2024-25** — not on
+    this PC. `import/recompute-by-year.sql`: the sheets' formulas are the SAME every year (checked per
+    year: Retention, Payment, Diff, TCS, Total, Full Tax) — 2022-23 Payment left AMC out on 362 rows; old-year
+    differences are inputs (AL CTC from AL's file vs the purchase sheet's own CTC: Retention 250 / 460).
+  - **Found: the DSE incentive.** Every year's sheet adds a **₹1,000 bonus** (retention ≥ ₹60,000 for a
+    tipper, else ≥ ₹40,000) to the slab, and the slab's steps were **<4 / <7 / <11 until 2024-25**, <5 / <9 /
+    <13 from 2025-26. The tracker's screen formula has only today's slab, no bonus (R2-19 read the slab
+    "verbatim" and missed the "+IF"). Not changed — owner question.
+  - Tests: `selftest-import-read` **12/0** (new; 4 mutants caught) · `selftest-import-merge` **36/0** (3 new
+    mutants caught) · `selftest-vehicle-units` **560/0** · `selftest-tracker-cells` **147/0** · deno check ·
+    build clean.
 - **Next, in this order:**
-  1. **When the owner's UPDATED files arrive: run the importer onto STAGING** (the repository/archive):
+  1. **When the owner's UPDATED files arrive: run the importer onto STAGING** (the repository/archive) — now
+     ALL years at once (`run.cjs <scratch>` with no files, or the owner's folders):
      `node scripts/phase10/import/run.cjs <scratch> [files/folders]` → `node scripts/phase10/import/sql.cjs
-     <scratch> <admin uuid>` → rehearse on PGlite (all 9 tracker migrations, then `import.sql`, then
+     <scratch> <admin uuid>` → rehearse on PGlite (all 10 tracker migrations, then `import.sql`, then
      `recompute-diff.sql` + `probe-foundation.sql`) → staging `db query --linked -f <scratch>/import.sql` →
      `recompute-diff.sql` on staging → open `/tracker` and MEASURE how the grid draws ~5,000 notes (only ~10
      so far). ✅ The DEMO rows STAY (owner 2026-10-24) — the real trucks load beside them (their chassis all
@@ -798,8 +839,8 @@ Also: a phone view (read-only cards) and the local save queue across reloads (E5
      (Stage 6).
 - **On staging now (klpnhpnlotcbbovwswmq):** migrations `…_foundation`, `…_supersede`, `…_numeric_before`,
   `…_create_units` (md5 `8f4e051d…`), `…_rmc_gst` (md5 `714d9b5d…`), `…_endhan_date`, `…_mto_advance`,
-  `…_import_notes` (note source 'import'), `…_al_retail_date` (apply-function prosrc md5 `c85b0832…` = file);
-  Edge Functions `admin-vehicle-units` (endhan_date + mto_advance + al_retail_date in its catalogue) and `admin-users` (tracker actions) as in
+  `…_import_notes` (note source 'import'), `…_al_retail_date`, `…_two_ctc` (compute md5 `ee1a22a6…`, apply
+  `08ff1a12…` = file); Edge Functions `admin-vehicle-units` (endhan_date + mto_advance + al_retail_date + al_ctc) and `admin-users` (tracker actions) as in
   this branch. **2,056 tracker rows, all DUMMY** (2,050 `DEMO seed` + `DEMO-PROBE-202610220945` original and
   rebill + `DEMO-NEWROW-0001…0004`). Test edits left on dummy rows: slice 2 (CTC/CTD on a few DEMO trucks,
   Segment → TIPPER on three, "DEMO AFTER SORT" on DEMO-MB1AS0000345, CTC 21,11,111 on DEMO-MB1AT0002049);
@@ -811,9 +852,9 @@ Also: a phone view (read-only cards) and the local save queue across reloads (E5
   DELETED 2026-10-24 (owner: "Sure"; by SQL, by id — so the Delete BUTTON is still unexercised); no layouts
   left. Audit:
   one `tracker_copy` (196 rows × 39 columns). No RMC rows. Nobody has the tracker switch on; admin always has it.
-- **Tests:** `selftest-tracker-cells` **147/0** · `selftest-vehicle-units` **558/0** · `selftest-import-merge`
-  **29/0** · probes foundation 42 · supersede 19 · numeric-before 9 · create-units 18 · rmc-gst 9 · endhan-date 6 ·
-  mto-advance 6 · al-retail-date 6 (all 0 failed, PGlite and staging) · `gst_rmc.cjs` / `al_balance_check.cjs` / `e_sources.cjs`
+- **Tests:** `selftest-tracker-cells` **147/0** · `selftest-vehicle-units` **560/0** · `selftest-import-merge`
+  **36/0** · `selftest-import-read` **12/0** · probes foundation 42 · supersede 19 · numeric-before 9 · create-units 18 · rmc-gst 9 · endhan-date 6 ·
+  mto-advance 6 · al-retail-date 6 · two-ctc 9 (all 0 failed, PGlite and staging) · `gst_rmc.cjs` / `al_balance_check.cjs` / `e_sources.cjs`
   re-measure from the workbooks (counts only). Build + no-undef clean.
 - **Checking in a browser:** the owner's Chrome (Claude in Chrome, tab on `http://localhost:3000/tracker`) is
   signed in as `admin@parastrucks.test`. ⚠️ **The app stops the dev server at the end of each turn** ("stopped
@@ -842,7 +883,7 @@ Also: a phone view (read-only cards) and the local save queue across reloads (E5
   Write tool, or build backslashes with `String.fromCharCode(92)`; check edited files with `cat -A`. A test
   that passes first time is not yet a test: plant the bug and watch it fail (two of this session's
   self-tests let a planted bug through until their data was widened).
-- **Prod: nothing.** The prod rollout, when approved: the **nine** tracker migrations (LF text), both functions
+- **Prod: nothing.** The prod rollout, when approved: the **ten** tracker migrations (LF text), both functions
   (`--no-verify-jwt`; `admin-vehicle-units` joins the key-cutover roster), then the frontend.
 - **Owner questions — answered 2026-10-23:** AL Payment Status green = Cash Invoiced only · only RMC is
   always 18% GST · sandbox = real data on staging first, then the trial on the live site · read-only
@@ -943,6 +984,12 @@ Also: a phone view (read-only cards) and the local save queue across reloads (E5
   archive too — then its lists and retention files are needed as well) · (5) "What is this?" → explained in
   plain words (one value shown, the other file's value pinned to the cell as a note, like an Excel comment)
   and asked again: notes on the cells, or a separate review list. · Test layout deleted · DEMO rows stay.
+  ✅ **Owner, later 10-24:** (4) "one continuous database … all vehicles" → every year, built (above) ·
+  (5) **notes on the cells** · CTC = two figures → built (above).
+  ❓ **Open (end of 10-24):** (a) the DSE incentive bonus + the older slab steps — what should the tracker
+  show (proposal: imported trucks keep the workbook's figure as paid history; new sales = today's slab + the
+  ₹1,000 bonus)? · (b) send the sales books (PAYMENT TRACKER / year sales file) for 2023-24 and 2024-25 ·
+  (c) do the books start in Nov 2022 (the first PAYMENT TRACKER), or is there earlier data?
 - ✅ **10-23: "Endhan Date" column** — migration `20261023_phase10_tracker_endhan_date.sql` on STAGING
   (adds `vehicle_units.endhan_date date`; `tracker_apply_changes` re-created with it on the editable
   list, otherwise byte-identical to numeric_before; staging prosrc md5 `76308fce…` = file, LF) ·

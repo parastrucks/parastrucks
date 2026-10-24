@@ -38,7 +38,8 @@ export const COLUMNS: Record<string, ColSpec> = {
   oem_gatepass_no:          { type: "text", ...E },
   oem_gatepass_date:        { type: "date", ...E },
   odn_no:                   { type: "text", ...E },
-  ctc:                      { type: "numeric", ...E },
+  ctc:                      { type: "numeric", ...E },  // shown as "PTB CTC": the internal figure
+  al_ctc:                   { type: "numeric", ...E },  // the CTC told to AL; blank = same as PTB CTC (owner, 2026-10-24)
   ctd:                      { type: "numeric", ...E },
   ctc_basis:                { type: "text", ...E, oneOf: ["inclusive", "exclusive"] },
   amc_to_al:                { type: "numeric", ...E },
