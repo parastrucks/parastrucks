@@ -844,10 +844,11 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   RTO/Insurance per-unit instead of per-PI, and a DB rule that non-admins need a chassis — both only if asked.
 - **⏸️ Service Payments parked, waiting on HDFC (2026-10-21)** — see the 2026-10-21 block. Its own list
   stays below (items 8–10 + the three go-live gates); do not start it until the owner says so.
-- **💡 Credit release + invoice sending + gate app — PLAN v0.1, not built (2026-10-24):**
-  `docs/backlog/credit-release-plan.md`. Measured: ~2.8 release requests/day, GM approves ~94%, median
-  reply 6 min; SAP invoices are digital (two layouts, read exactly with pdfjs). Six owner questions open
-  (payments schema on prod? · WhatsApp route · guard logins · QR · counter sales · CRM scope).
+- **💡 Credit release + invoice sending + gate app — PLAN v0.2, not built (2026-10-24):**
+  `docs/backlog/credit-release-plan.md`. Owner: standalone (`gate_*` tables, payments DB stays off prod) ·
+  WhatsApp **Business API** (invoice no. + amount + PDF + thank-you) + Gmail (port 465) · one login per guard
+  (⚠️ exempt guards from the brand rule — brands open RLS + ERP sync) · counter sales: send only · CRM later.
+  Waiting on the owner: Meta Business verification + a dedicated number, template wording, the Gmail ID.
 - **⏭️ Owner: file the 45 new October CBNs in Catalog → Triage** (MAV 19, Haulage 9, Oyster
   Staff/Wide shells 12, RMC 3, Ecomet 1215 1, 10x2 Tipper 1). Until then they have no family.
 - **⏭️ Owner: check the TIV detail sheet on a real phone** (PR #125, live). Hard-refresh TIV

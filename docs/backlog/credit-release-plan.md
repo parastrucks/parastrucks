@@ -1,9 +1,12 @@
-# Credit release, invoice sending and the gate app — plan v0.1 (2026-10-24)
+# Credit release, invoice sending and the gate app — plan v0.2 (2026-10-24)
 
-> **Status: idea written up, nothing built.** Owner's proposal of 2026-10-24, extending the Service Payments
-> tool (`docs/backlog/service-payments-plan.md`, parked waiting on HDFC). Every number below was measured from
-> material the owner supplied that day; nothing here is assumed. No customer names, phone numbers, PANs or
-> plates are recorded in this file — the sources stay outside the repo.
+> **Status: planned, nothing built.** Owner's proposal of 2026-10-24, related to the Service Payments tool
+> (`docs/backlog/service-payments-plan.md`, parked waiting on HDFC) but **built and shipped on its own** —
+> the payments database does NOT go to prod for this (owner). Every number below was measured from material
+> the owner supplied that day; nothing here is assumed. No customer names, phone numbers, PANs or plates are
+> recorded in this file — the sources stay outside the repo.
+>
+> v0.1 → v0.2: the owner answered the six open questions (see "Owner decisions"); the design below follows.
 
 ## Part 1 — the story in plain words
 
@@ -15,17 +18,19 @@ and waits for "Ok pls release the vehicle". The guard lets it out. Any promise t
 The new way:
 
 1. **Service uploads the invoice PDF** in the portal. The portal reads the bill number, amount, customer,
-   customer code and vehicle number from the PDF itself — nobody types them.
-2. **The customer receives the invoice** by email (and WhatsApp, once a number is set up).
+   customer code, mobile number and vehicle number from the PDF itself — nobody types them.
+2. **The customer receives the invoice** on WhatsApp and by email: the invoice number, the amount, the PDF
+   attached, and a short thank-you for having their vehicle worked on at our workshop.
 3. **If the vehicle is leaving unpaid, one tap asks for release.** The request already carries the invoice,
-   the amount, the customer's outstanding and their past releases — the questions the GM asks today.
+   the amount, and the customer's earlier credit releases still unpaid.
 4. **The GM or the owner approves or holds**, and on approval may record *"promised by"* and *"who is
    responsible"*.
 5. **The guard checks the vehicle number on a phone:** green "may go" or red "hold". No amounts, no names.
-6. **When a promised date passes unpaid**, it appears on a follow-up list for the GM and the owner.
+6. **When a promised date passes unpaid**, it appears on a follow-up list for the GM and the owner. Accounts
+   marks a release paid when the money arrives.
 
 Paid vehicles do not change: accounts issues their gate pass as today, and the guard does not look at the
-app for them (owner).
+app for them. Counter credit sales get the invoice sent, with no gate step.
 
 ## Owner decisions (2026-10-24)
 
@@ -36,7 +41,12 @@ app for them (owner).
 | Are SAP invoices digital PDFs? | **Yes** — confirmed on three samples (below). |
 | How is email sent? | **The owner's own Gmail ID with an app password**, as the automation reports already are. |
 | What does the guard see? | **"May go / hold" only.** The database needs a way to create security-guard logins. |
-| WhatsApp Business number | **Not decided** — owner to come back. |
+| Payments database on prod for this? | **No.** This feature stands on its own. |
+| WhatsApp route | **WhatsApp Business API** (automatic sending). |
+| Guard logins | **One per guard.** |
+| Customer message | **Invoice number + amount + the invoice PDF attached + a thank-you** for getting the vehicle worked on at our workshop. (No gate-pass QR.) |
+| Counter credit sales (no vehicle) | **Send the invoice; no gate step.** |
+| CRM | **Nothing now** — kept as the future roadmap below. |
 
 ## Measured — the "Vehicle Gate Pass" WhatsApp group (31 Aug → 24 Oct 2026, 593 messages)
 
@@ -55,8 +65,8 @@ app for them (owner).
 | Other traffic | about half the group is payment chasing (proofs, "note down", ledgers) — Service Payments territory |
 
 What this settles: **volume is low and answers are fast**, so one tap from a phone notification is enough — no
-escalation rules. **The value is not the "yes"** (6 minutes today) but the two things the chat loses: the
-outstanding at the moment of approval, and the promise made with it.
+escalation rules. **The value is not the "yes"** (6 minutes today) but the two things the chat loses: what the
+customer already owes at the moment of approval, and the promise made with it.
 
 ## Measured — the SAP invoice PDFs (3 samples, read with the portal's own `pdfjs-dist` 4.10)
 
@@ -80,93 +90,110 @@ Facts that shape the design:
   matches its summary line — a built-in check that the reading was right.
 - **The workshop job has no "payment terms" field.** Cash or credit shows only in the series prefix
   (`LCS`/`PCS` cash, `LCR`/`PCR` credit — the payments plan measured this correlation). One sample was
-  cash-series, one credit-series. **So the release request must be raised by a person, not inferred from
-  the series** — the owner noted credit releases are not always credit-series bills.
+  cash-series, one credit-series. **So the release request is raised by a person, not inferred from the
+  series** — the owner noted credit releases are not always credit-series bills.
 - **Both workshop samples were "Warranty Order" job cards billed to the customer** — the same thing the
   payments plan found (`Split Order Type`, not the job number, decides what is payable).
 - ⭐ **Two different SAP customer codes carried the same PAN and GSTIN** (a counter-sale customer and a
   workshop customer), while the third sample printed its own. **Same PAN/GSTIN under two SAP codes = one
-  legal entity** — a strong hint for the payments tool's customer groups, which today have only weak hints
-  ("shared vehicle registration" measured zero). Worth measuring across the Billing Report.
+  legal entity** — a strong hint for customer grouping (here and in the payments tool, whose only grouping
+  hints today are weak; "shared vehicle registration" measured zero). Worth measuring across the Billing Report.
 
 ## Part 2 — design
 
-### Where it sits
-It is built **on the Service Payments data model**: an uploaded invoice is the same bill the SAP Billing
-Report imports (`payment_invoices`, keyed by bill number), and the customer is the same customer-master row
-(keyed by SAP customer code). The Billing Report stays the master; the PDF is the **document to send** and an
-**early same-day reading** of the same bill. A PDF whose number or amount disagrees with the Billing Report
-row is flagged, never silently trusted.
+### Standalone, but ready to join payments later
+The payments tables stay on staging (owner). This feature gets **its own small set of tables, prefixed
+`gate_`** — the payments migrations already create `customers` and `service_invoices`, so those names must
+stay free or the payments rollout would fail on prod. Each row carries the keys payments uses — **SAP
+customer code** and **bill number** — so when payments does go live, its tables link to these instead of
+duplicating them.
 
-⚠️ **Dependency:** the payments tables exist on staging only (nine migrations, owner: not going live now).
-The credit release needs at least the schema on prod — customers, invoices, receipts — even if the Match
-screen stays hidden. **Decision for the owner** (see Open questions).
+Sketch (to be red-teamed before any migration):
+- `gate_documents` — one uploaded PDF: layout (SAP form name), job card / invoice number, date, SAP customer
+  code, customer name as printed, mobile, PAN/GSTIN, registration number (workshop), every bill with its
+  amount, the grand total, the storage path, who uploaded it and when.
+- `gate_messages` — every send (WhatsApp / email): to whom, which document, the provider's message id,
+  status (sent / delivered / read / failed), error text.
+- `gate_releases` — one request per vehicle exit: the document(s), requested by, status (asked / approved /
+  held), decided by + when, promised-by date, responsible person, note, paid-at + by whom (accounts).
+- Guards read only a narrow view (registration → may go / hold, with the decision time) — never the tables.
+
+What the approval card can show **without** the payments data: the customer's **earlier releases still
+marked unpaid** (count, total, oldest, any broken promise) and their history of releases. It **cannot** show
+Busy's full ledger balance — only what passed through this tool since it started. This is said on the card,
+so nobody mistakes it for the Busy figure.
 
 ### Reading the PDF
-- In the browser with `pdfjs-dist` (already loaded for brochure covers) — the file never has to be sent to a
-  third party to be read.
-- Recognise the layout **by its SAP form name** (in the PDF metadata) and by its labels; an unknown form is
-  refused, not guessed.
-- Read labelled fields, not positions; check labour + parts = summary total and each bill's total; amount
-  in words as a second check on the counter sale.
-- Store the PDF in Supabase Storage (private bucket); links handed to customers are signed and expire.
+- In the browser with `pdfjs-dist` (already loaded for brochure covers) — the file is read before it leaves
+  the device; it is then stored in a **private** Supabase Storage bucket.
+- Recognise the layout **by its SAP form name** (PDF metadata) and its labels; an unknown form is refused,
+  not guessed.
+- Read labelled fields, not positions; check labour + parts = summary total and each bill's own total; amount
+  in words as a second check on the counter sale. A file that fails a check is refused with the reason.
+- The same bill uploaded twice is recognised by its bill number, not stored twice.
 
-### Sending
-- **Email:** an Edge Function sends through Gmail over **SMTPS port 465** with the owner's app password kept
-  as an EF secret. ⚠️ Supabase Edge Functions **block outbound ports 25 and 587** (Supabase docs,
-  *Functions → Limits*), so 465 (or the Gmail API over HTTPS) is the route. Gmail allows ~500 recipients/day
-  (free) or 2,000 (Workspace); volume is ~30 bills/day. Not yet proven live — the first thing to try.
-- **WhatsApp — two options:**
-  (a) **WhatsApp Business API** — fully automatic; needs a Meta-verified business, a number taken off the
-  normal WhatsApp app, approved message templates, a small charge per message. The first paid piece.
-  (b) **Click-to-chat (free, no API):** a "Send on WhatsApp" button opens WhatsApp on the staff phone with the
-  customer's number and a message holding a signed invoice link; the person taps Send. One tap, no cost,
-  no Meta approval — but a human sends each one. **Recommended to start**, moving to (a) if volume or
-  reliability needs it.
-- The customer's mobile is printed on the invoice; the customer master's contact numbers (payments plan)
-  take precedence when set.
+### Sending (WhatsApp Business API + Gmail)
+- **WhatsApp Business API** (owner). One **utility template** with a **document header** (the invoice PDF)
+  and variables: customer name, invoice / job number, amount. Wording along the lines of: *"Thank you for
+  having your vehicle serviced at Paras Trucks and Buses. Please find invoice {no.} for ₹{amount} attached."*
+  — final text to be approved by the owner and then by Meta. Sent from an Edge Function through Meta's Cloud
+  API; delivery and read receipts come back by webhook into `gate_messages`.
+- **Owner-side setup the API needs first:** a **Meta Business account, verified**; a **phone number not used
+  on the normal WhatsApp app** (a new number, or one moved off the app); the template approved by Meta. Meta
+  charges a small amount per message (check the current rate for utility messages in India).
+- **Email:** the same content, PDF attached, sent through the owner's Gmail with an app password kept as an
+  Edge Function secret, over **SMTPS port 465**. ⚠️ Supabase Edge Functions **block outbound ports 25 and
+  587** (Supabase docs, *Functions → Limits*), so 465 is the route. Gmail allows ~500 recipients/day (free) or
+  2,000 (Workspace); volume is ~30 bills/day. Not yet proven live — the first thing to try.
+- Recipient: the mobile and email on the invoice; staff can correct a number before sending, and the
+  correction is remembered for that SAP customer code.
 
 ### Approval
-- A request = vehicle + the job's bills + who asked. The approval card shows: amount, the customer's
-  **outstanding and past releases** (from the payments data), any earlier hold note.
-- Approve / Hold, by the **GM or the owner only** (server-side rule, as `authority.ts` does for payments).
-  Optional on approve: **promised by (date)** and **responsible person**.
-- Notification to the GM and owner (web push from the portal, or a WhatsApp/email ping).
-- Every decision is audited (who, when, the amounts shown at that moment).
+- A request = vehicle + the job's bills + who asked. One tap from the uploaded invoice.
+- Approve / Hold, by the **GM or the owner only** — enforced in the Edge Function, the same way
+  `authority.ts` does for payments (the screen hiding a button is never the control).
+- Optional on approve: **promised by (date)** and **responsible person**. Hold takes a note.
+- The GM and owner are notified (web push from the portal; a WhatsApp ping to them is possible through the
+  same API).
+- Every decision is audited: who, when, and what the card showed at that moment.
 
-### The gate app
-- A **security role**: new guard logins that can open one route only. Users today carry entity +
-  department + designation + permission level (`userShape.js`); a "Security" department (or designation)
-  with an access rule for one route is the smallest change.
-- Screen: type or scan the vehicle number → **green "may go" (released on credit by GM/owner at time …)**
-  or **red "hold — not released"**. No amounts, no customer.
-- Installable on the guard's phone (the portal as a PWA — "Add to Home screen").
-- Option: a **gate-pass QR** in the customer's message that the guard scans — no mistyped plate, no wrong
-  job. Not decided.
+### The gate screen and guard logins
+- **One login per guard** (owner). A new **Security department** (code `security`) with a single route.
+- ⚠️ **Guards must be exempt from the "every user has at least one brand" rule** (`userShape.js` + the
+  `admin-users` shape gate). A brand row is an **authorization input**: it opens the catalog, quotations and
+  proforma invoices to RLS, and the **`hdh` brand would sync the guard into the ERP**. A guard gets an outlet
+  (their gate) and **no brand**; the exemption is written into the shape rule like the Back Office GM one.
+  Check every RLS policy that keys on brand or entity alone before the first guard account exists.
+- Screen: type the vehicle number → **green "may go — released on credit by {GM/owner} at {time}"** or
+  **red "hold — not released"**. No amounts, no customer.
+- Installable on the guard's phone ("Add to Home screen"); large type, works in sunlight.
+- Every lookup is logged (which guard, which vehicle, when) — the record of what left the gate.
 
 ### Follow-up list
-Approved releases with a promise date: overdue first, with the responsible person. Cleared automatically
-when the payments tool matches the money (or marked paid by accounts).
+Approved releases with a promise date: overdue first, with the responsible person. **Accounts marks a release
+paid** when the money arrives (until the payments tool is live and can do it by matching).
 
-## Suggested build order
+## Build order
 
-1. **Invoice upload + reading + email** (no HDFC dependency; useful on its own).
-2. **Release request + approval + gate screen + guard logins.**
-3. **Promises and the follow-up list.**
-4. **WhatsApp** — click-to-chat first; Business API if wanted.
-5. **CRM** beyond the customer master — only once the owner names what it should *do*.
+1. **Invoice upload + reading + email** — useful on its own; proves the reader on real files.
+2. **WhatsApp Business API sending** — as soon as the owner-side Meta setup is done (it can run in parallel).
+3. **Release request + approval + gate screen + guard logins** (with the brand exemption).
+4. **Promises, "mark paid" and the follow-up list.**
 
 Each step: say what it pushes down a screen (TIV lesson); prove on staging; prod only with the owner.
 
-## Open questions for the owner
+## Open — owner-side
 
-1. **Payments schema on prod:** may the payments database (not the Match screen) go to prod so the credit
-   release can show outstanding? Or should the first version run without outstanding?
-2. **WhatsApp:** click-to-chat (free, one tap by staff) first, or straight to the Business API?
-3. **Guard logins:** one login per guard, or one per gate phone?
-4. **Gate-pass QR** for the customer, or vehicle-number lookup only?
-5. **Counter credit sales (`MCI…`) have no vehicle** — send the invoice, but no gate step. Agreed?
-6. **"CRM":** what should it do beyond the customer master (follow-ups, service reminders, contact history)?
+1. **Meta setup for the Business API:** a verified Meta Business account and a dedicated number. (The owner
+   was unsure on 2026-10-24 whether a WhatsApp Business number exists.)
+2. **Template wording** — approve the thank-you text before it goes to Meta.
+3. **The Gmail ID** to send from, and its app password (entered by the owner as a secret, never in chat).
+
+## Future roadmap (owner: nothing now)
+- **CRM:** contact history per customer, follow-ups, service reminders.
+- **Join the payments tool** when it goes live: releases marked paid by matching, the full outstanding on the
+  approval card, and customer groups seeded from shared PAN/GSTIN.
+- Ledger statements to customers on the same WhatsApp/email channel (already planned in the payments tool).
 
 ## Sources (outside the repo, not committed)
 - WhatsApp export "Vehicle Gate Pass" (owner, 2026-10-24) — analysed by a throwaway script; aggregates only.
