@@ -173,16 +173,17 @@ so nobody mistakes it for the Busy figure.
 Approved releases with a promise date: overdue first, with the responsible person. **Accounts marks a release
 paid** when the money arrives (until the payments tool is live and can do it by matching).
 
-## Build order
+## Build order (owner, 2026-10-24: WhatsApp last)
 
 1. **Invoice upload + reading + email** — useful on its own; proves the reader on real files.
-2. **WhatsApp Business API sending** — as soon as the owner-side Meta setup is done (it can run in parallel).
-3. **Release request + approval + gate screen + guard logins** (with the brand exemption).
-4. **Promises, "mark paid" and the follow-up list.**
+2. **Release request + approval + gate screen + guard logins** (with the brand exemption).
+3. **Promises, "mark paid" and the follow-up list.**
+4. **WhatsApp Business API sending — last** (owner). The Meta setup below is only needed by then; until
+   it lands, customers get the invoice by email.
 
 Each step: say what it pushes down a screen (TIV lesson); prove on staging; prod only with the owner.
 
-## Open — owner-side
+## Open — owner-side (items 1–2 only needed for the last step)
 
 1. **Meta setup for the Business API:** a verified Meta Business account and a dedicated number. (The owner
    was unsure on 2026-10-24 whether a WhatsApp Business number exists.)
