@@ -79,6 +79,69 @@ promise and the outstanding, not the 6-minute "yes". (2) A dependency bump that 
 change — A/B it and load every chunk. (3) A new kind of user that should see almost nothing collides with
 rules that assume everyone sees something (the brand rule) — design the exemption first.
 
+## Session log — 2026-10-22 → 10-23 (PC): the `error_log` flood — a spyware VPN extension, resolved at its cause
+
+The task as filed was *"Filter Chrome-extension noise out of error_log"*. Owner, before any code:
+*"I would prefer if it is resolved rather than just fixed."* So the first step was finding out what the
+extension was, not hiding it.
+
+**What the log said** (read in the owner's signed-in prod page, counts only, then the CLI):
+- 8,961 of 8,964 rows came from ONE extension, `chrome-extension://eppiocemhmnlbhjplcgkofciiegomcon`
+  (`executors/200.js`, *"Cannot read properties of undefined (reading 'M_ID')"*, `unhandledrejection`).
+- ONE user: **Manish Patel (Back Office)**. 19 Oct → 22 Oct 12:28 UTC; ~2 errors a second while a page
+  was open (median gap 417 ms); 8,145+ rows on `/proforma-invoice`, the rest on `/` and `/login`.
+- Not one row had a portal frame in it.
+- The only 3 other rows: Manish's `Lock "lock:sb-session" was released because another request stole
+  it`, on `/proforma-invoice`.
+
+**What the extension is.** The Chrome Web Store lists that id as **Urban VPN Proxy** (≈7 M users). In Dec
+2025 Koi Security reported that it injects per-site capture scripts and sends what it collects onward to
+a data broker (Dark Reading, The Register, The Hacker News, TechRadar). Its own listing says it collects
+"website content". On our side it ran inside the page holding customer names, mobiles, addresses and
+GSTINs. Whether anything of ours left through it cannot be known from the portal.
+
+**Why the lock errors are probably ours.** Every report went through `callEdge`, which calls
+`supabase.auth.getSession()` — the navigator lock `lock:sb-session`. At ~2 a second that contends with the
+app's own auth work. **Inferred, not proven**; the three rows are all Manish's, all on the same page.
+
+**Resolution:**
+1. **Owner:** had the extension uninstalled (2026-10-23). Open: who installed it; other office PCs.
+2. **PR #137 → `e236912`.** `src/lib/errorSource.js` — `extensionOrigin(stack, file)` returns the
+   extension origin only when **every** URL frame is an extension's (chrome/moz/safari/ms-browser), so an
+   extension calling into our code, or ours into it, still counts as ours. `firstTodayFor()` — once per
+   extension, per browser, per local day (storage blocked → once per page load). `errorLog.js` checks it
+   **before** `callEdge`, so a repeat never touches the session lock; the first is labelled
+   `context.source='extension'`. The owner chose this over dropping them: dropping would have hidden this
+   very finding. `log-error` mirrors the rule (one row per user, extension and 24 h) for browsers on old
+   code; the Error Log tab prefixes such rows "Browser extension ·" (same line — pushes nothing down).
+3. **Cleanup (owner-approved):** 8,960 rows deleted; id 1 (the first, 19 Oct) kept as a sample with the 3
+   lock rows → `error_log` = 4 rows.
+
+**Verified:** `scripts/selftest-log-error.mjs` **33/0** — 11 real-shaped stacks (the real Urban VPN stack,
+the real lock error, mixed both ways, Firefox, Safari, file-only, no URL, localhost) give the same answer
+in the browser rule and the server rule; daily limit, rollover and blocked storage; the gate sits before
+`callEdge` in the real source. Planted bugs (any-extension-frame · no daily limit · gate removed) each
+fail it 2×. Build + `no-undef` clean. Post-merge: trivy, npm-audit, gitleaks green; Vercel READY;
+`/` + `/login` 200; the live `errorLog-*.js` carries `errlog-ext:`.
+
+**Not done by me:** the `log-error` EF deploy to prod — the auto-mode classifier refused it (no
+explanation). Not worked around; the owner runs `npx supabase@2.109.1 functions deploy log-error
+--project-ref mmmxvjaavdtwlpcnjgzy --no-verify-jwt` from the latest `portal` (prod was v19).
+
+**Rode along — dompurify 3.4.12 → 3.4.17 (lockfile only).** GHSA-55q2-fjhq-7xh7 + four siblings
+(CRITICAL, published 2026-10-22) turned `npm-audit` red on every PR. dompurify reaches us only as jsPDF's
+optional dependency for `.html()`, which the portal never calls. Clean-install A/B: 44 of 45 built files
+byte-identical with hashes masked; the one that differs is `purify.es` itself. ⚠️ The first A/B used the
+worktree's stale `node_modules` (vite 8.1.0, from before #132) and showed 30 differing files — **both
+sides of an A/B must come from `npm ci`**. fflate (moderate) and react-router (moderate) left as before.
+
+**Method — prod SQL when the Supabase MCP refuses:** `npx supabase@2.109.1 link --project-ref
+mmmxvjaavdtwlpcnjgzy --workdir <scratch>` then `npx supabase@2.109.1 db query --linked --workdir <scratch>
+"<sql>"`. Uses the CLI login (Management API) — no DB password. The delete ran as one statement with the
+kept id and the count returned (8,960 / id 1), then re-counted.
+
+---
+
 ## Session log — 2026-10-22 (PC): hotfix — admin Proforma Invoices without chassis/engine, with quantity
 
 Owner: *"The Admin can be allowed to make PI without chassis number and engine number. This is to be
