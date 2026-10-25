@@ -18,7 +18,9 @@ const remember = (id) => { try { if (id) localStorage.setItem(LAYOUT_KEY, id); e
 // grid: the TrackerGrid handle · bookRows(): the rows as the page holds them · say(text, tone)
 // scope: what the grid holds ({ scope: 'working' | 'year' | 'all', year }) · fyStart: this financial year (its
 // April) · onScope(next, goToId): load another scope (the page refuses while saves are waiting)
-export default function TrackerTools({ grid, bookRows, say, scope, fyStart, onScope }) {
+// alOpen / setAlOpen: whether the AL sheet panel is open — held by the page, so it stays open while "Go to truck"
+// loads another year (this toolbar is not drawn while a year loads)
+export default function TrackerTools({ grid, bookRows, say, scope, fyStart, onScope, alOpen = false, setAlOpen = () => {} }) {
   const { isAdmin, profile } = useAuth()
 
   // ── Which year the grid holds ──────────────────────────────────────────────────────────────
@@ -148,8 +150,7 @@ export default function TrackerTools({ grid, bookRows, say, scope, fyStart, onSc
       setHist((h) => h && h.id === cell.id ? { ...h, entries: list ?? [] } : h)
     } catch (e) { setHist((h) => h && { ...h, entries: [], error: e.message }) }
   }
-  // ── The monthly AL Balance Sheet check (a side panel where History opens; one at a time) ──
-  const [alOpen, setAlOpen] = useState(false)
+  // ── The monthly AL Balance Sheet check (a side panel where History opens; one at a time): alOpen ──
 
   const shownEntries = hist?.entries?.filter((e) => !hist.onlyThis || e.column_key === hist.key || e.column_key === '*') ?? []
 

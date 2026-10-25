@@ -218,7 +218,14 @@ const TrackerGrid = forwardRef(function TrackerGrid({ columns, rows, formats, no
       let c = columns.findIndex((col) => col.key === key)
       if (c < 0 || !e.sheet().getSheet().getColVisible(c)) c = 0
       e.sheet().getRange(r, c).activate()
-      e.sheet().scrollToCell(Math.max(1, r - 3), c)
+      // Just after a year is loaded the engine has drawn but its scrolling is not set up yet: scrollToCell
+      // threw "SheetsScrollRenderController not found" (seen 2026-10-25, Find / AL sheet → another year).
+      // The cell is already selected; the scroll is tried again for up to ~3 s.
+      const scroll = (left) => {
+        if (engine.current !== e) return // the grid was rebuilt meanwhile
+        try { e.sheet().scrollToCell(Math.max(1, r - 3), c) } catch { if (left > 0) setTimeout(() => scroll(left - 1), 300) }
+      }
+      scroll(10)
       return 'ok'
     },
 

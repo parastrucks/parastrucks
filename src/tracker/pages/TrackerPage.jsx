@@ -49,6 +49,7 @@ export default function TrackerPage() {
   const fmtBuffer = useRef({ list: [], timer: null })
   const noteTimers = useRef(new Map())  // "unitId|column" → { timer, id, key, text } not yet queued
   const slabBase = useRef(new Map())    // "DSE|yyyy-mm" → that month's trucks NOT in this scope (the server counts them)
+  const [alOpen, setAlOpen] = useState(false) // the AL sheet panel (stays open across a year change)
   const goAfterLoad = useRef(null)      // a truck Find found in another year: go to it once its year is loaded
 
   const say = useCallback((text, tone = 'info', sticky = false) => {
@@ -102,6 +103,10 @@ export default function TrackerPage() {
       return false
     }
     goAfterLoad.current = goToId
+    // loading in the SAME render as the new scope: otherwise one render pairs the new year with the old rows —
+    // the header read "3,688 vehicles · 2022-23" and the grid (keyed by the scope) built a whole engine around
+    // the old rows only to drop it (seen 2026-10-25)
+    setState({ status: 'loading' })
     setScope(next)
     return true
   }, [say])
@@ -391,7 +396,7 @@ export default function TrackerPage() {
         {state.of ? ` ${state.got.toLocaleString('en-IN')} of ${state.of.toLocaleString('en-IN')} vehicles` : ''}</div>}
       {state.status === 'error' && <div className="trk-error" role="alert">Could not load the book: {state.message}</div>}
       {state.status === 'ready' && <TrackerTools grid={grid} bookRows={bookRows} say={say}
-        scope={scope} fyStart={fy} onScope={changeScope} />}
+        scope={scope} fyStart={fy} onScope={changeScope} alOpen={alOpen} setAlOpen={setAlOpen} />}
       {state.status === 'ready' && (
         <TrackerGrid key={scopeKey(scope)} ref={grid} columns={columns} rows={rows} formats={state.formats} notes={state.notes}
           onChanges={onChanges} onFormats={onFormats} onNote={onNote} onRefused={(m) => say(m)} />
