@@ -72,6 +72,13 @@ signature (they vanish if the person edits it), and mail apps don't show SVG —
 anywhere in the message; it also caught one more over-long header line. A workshop and a counter-sale test
 both reached the Inbox.
 
+**Timely payment (later 10-25).** The owner: this tool will mostly carry invoices for vehicles released on credit
+(a vehicle paid before release lands here perhaps 1 time in 10), so the message must ask for timely payment and say
+that without it we cannot keep providing the best of our service. Added after the total, in text and HTML (request in
+bold), with a closing line thanking anyone who has already paid (`b310fa5`). Self-test 79/0; its three new checks
+fail on the old wording. Deployed to staging; a test mail arrived with the paragraph (Gmail put it in the earlier,
+already-deleted test conversation, so it showed under Trash — a threading effect, not a delivery problem).
+
 **Waiting on the owner:** confirm the signature's Mobile number (+91 74969 70321, the dealer number SAP prints);
 a PR when asked; prod only on the owner's command.
 

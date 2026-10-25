@@ -139,9 +139,9 @@ so nobody mistakes it for the Busy figure.
 
 ### Sending (WhatsApp Business API + Gmail)
 - **WhatsApp Business API** (owner). One **utility template** with a **document header** (the invoice PDF)
-  and variables: customer name, invoice / job number, amount. Wording along the lines of: *"Thank you for
-  having your vehicle serviced at Paras Trucks and Buses. Please find invoice {no.} for ₹{amount} attached."*
-  — final text to be approved by the owner and then by Meta. Sent from an Edge Function through Meta's Cloud
+  and variables: customer name, vehicle number, total. Wording follows the email's rules (2026-10-25, see
+  "Step 1 — as built"): no invoice numbers, the plate, one total, and the timely-payment ask — final text to be
+  approved by the owner and then by Meta. Sent from an Edge Function through Meta's Cloud
   API; delivery and read receipts come back by webhook into `gate_messages`.
 - **Owner-side setup the API needs first:** a **Meta Business account, verified**; a **phone number not used
   on the normal WhatsApp app** (a new number, or one moved off the app); the template approved by Meta. Meta
@@ -259,6 +259,11 @@ serviced at our workshop. Please find your invoice attached."* + TOTAL AMOUNT bo
 Counter sale: *"Your invoice from Paras Trucks and Buses"*, *"Thank you for your purchase …"*, attachment *"Invoice
 {date}.pdf"*. SAP's capitals become a proper name ("Dear Shree Hari Bus Services"). HTML + a plain-text twin.
 Seen in the ceo@ inbox 2026-10-25 (Inbox, not Spam).
+**Timely payment — added at the owner's word (2026-10-25):** *"this feature will mostly be used for sending invoices
+for the vehicles that are being released on credit … the message [must contain] information about making timely
+payments, and without them, we won't be able to continue providing the best of services."* So every message (workshop
+and counter sale), right after the total box: *"We request you to kindly make this payment on time. Timely payments are what allow us to keep providing you the best of our service — without them, we will not be able to continue doing so. If you have already paid, thank you, and please ignore this note."* (the first sentence in bold in the HTML). The last sentence is for
+the ~1 in 10 paid vehicles that still come through here. `b310fa5`; three new self-test checks fail on the old wording.
 
 **Database** (`20261024_gate_invoices.sql`, staging): `gate_documents`, `gate_bills`, `gate_contacts`,
 `gate_messages`; money in paise; staff read under RLS (service / accounts / spares of the same company + admin),
@@ -284,6 +289,8 @@ Staging holds those three DEMO invoices (DEMO KRISHNA LOGISTICS / MAHADEV TRAVEL
   `250 2.0.0 OK … gsmtp`, ~4 s inside the function; the address remembered for that SAP code; audited. Inbox, not
   Spam; ₹ and the dash show right.
 - ✅ The owner set the wording (above); rebuilt and re-sent — a workshop and a counter-sale mail both in the Inbox.
+- ✅ Timely-payment paragraph added (`b310fa5`), deployed to staging, a workshop test mail arrived with it (Gmail
+  filed it with the earlier test conversation, which had been deleted — so it showed under Trash, not Spam).
 
 **Not yet done:**
 - ⏭️ Owner: confirm the signature's **Mobile** number (+91 74969 70321 — the dealer number SAP prints on invoices),

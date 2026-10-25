@@ -59,6 +59,10 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
     Buses · Paras logo · Sanathal address · Mobile · "Authorized Dealer -" + AL logo). Logos are embedded
     (`logos.ts`, cid PNGs — the staff signatures link per-user Gmail images and mail apps don't show SVG).
     ⏭️ **Owner to confirm the Mobile line** (+91 74969 70321 = the dealer "Mob No" SAP prints on invoices).
+  - ⭐ **Every message asks for TIMELY PAYMENT (owner, 2026-10-25, `b310fa5`)** — the tool is mostly for vehicles
+    released **on credit** (paid ones rarely come here): after the total, *"We request you to kindly make this payment
+    on time. Timely payments are what allow us to keep providing you the best of our service — without them, we will
+    not be able to continue doing so. If you have already paid, thank you …"* Deployed to staging; test mail arrived.
   - ⭐ **The Gmail connector reads `ceo@parastrucks.in`** — use it to check a test mail arrived (read-only).
   - ⚠️ **Staging `ALLOWED_ORIGINS` now also has `http://localhost:3001`** (owner: "use another port", 10-25) —
     the old value (`:3000,:5173`) was confirmed by its sha256 before the change. Two sessions can now sign in to
@@ -964,7 +968,7 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   the owner's command**; then step 2 (release request + approval + gate + guard logins).
 - **💡 Credit release + invoice sending + gate app — PLAN v0.2 (2026-10-24):**
   `docs/backlog/credit-release-plan.md`. Owner: standalone (`gate_*` tables, payments DB stays off prod) ·
-  WhatsApp **Business API** (invoice no. + amount + PDF + thank-you) + Gmail (port 465) · one login per guard
+  WhatsApp **Business API** (plate + total + PDF + thank-you + timely-payment ask — same rules as the email) + Gmail (port 465) · one login per guard
   (⚠️ exempt guards from the brand rule — brands open RLS + ERP sync) · counter sales: send only · CRM later.
   Build order: upload+read+email → approval + gate → promises → **WhatsApp LAST** (owner). Email from `accounts.guj@parastrucks.in` (Workspace; SPF+DKIM ok).
 - **⏭️ Owner: file the 45 new October CBNs in Catalog → Triage** (MAV 19, Haulage 9, Oyster
