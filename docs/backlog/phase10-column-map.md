@@ -209,7 +209,10 @@ FRESH OFFTAKE 1,482 · IBND 524 · MTO 21. **IBND on the sheet and Cash Invoiced
 truck's normal life, not a discrepancy** (524 such — the sheet records how AL released it, the tracker
 its state now).
 
-**To build (after the first real load — the checks compare against the tracker's real data):** an
+✅ **BUILT on staging 2026-10-25** (`b705bea` → `26eef10`; plan → step 0 / 2) — reader `src/tracker/lib/alSheet.js`,
+migration `20261025_phase10_tracker_al_sheet.sql`, EF `alUpload` / `alReview` / `alSettle`, panel `AlSheetPanel.jsx`;
+the owner's later rules (GST by PTB invoice date; MTO = the truck's Yes/No; kinds from the Offtake Mode word) are in.
+As first written: **To build (after the first real load — the checks compare against the tracker's real data):** an
 "AL balance sheet" upload on `/tracker` (admin + back office), read in the browser like the payments
 import (columns by header, never by position; one month per file; refuses a month already uploaded
 unless replaced on purpose), stores the lines in their own table with the month, and shows the list

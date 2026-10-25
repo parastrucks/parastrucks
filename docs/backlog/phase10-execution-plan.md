@@ -971,22 +971,26 @@ Also: a phone view (read-only cards) and the local save queue across reloads (E5
   1. **When the owner's UPDATED files arrive: run the importer onto STAGING** (the repository/archive) — now
      ALL years at once (`run.cjs <scratch>` with no files, or the owner's folders):
      `node scripts/phase10/import/run.cjs <scratch> [files/folders]` → `node scripts/phase10/import/sql.cjs
-     <scratch> <admin uuid>` → rehearse on PGlite (all 11 tracker migrations, then `import.sql`, then
+     <scratch> <admin uuid>` → rehearse on PGlite (all 12 tracker migrations, then `import.sql`, then
      `recompute-diff.sql` + `probe-foundation.sql`) → staging `db query --linked -f <scratch>/import.sql` →
      `recompute-diff.sql` on staging → open `/tracker` and MEASURE how the grid draws ~5,000 notes (only ~10
      so far). ✅ The DEMO rows STAY (owner 2026-10-24) — the real trucks load beside them (their chassis all
      start `DEMO-`, so nothing clashes). Importer answers: see "Owner, 2026-10-24" below; two still open.
-  2. Then the **AL Balance Sheet monthly upload** (column map → section G "DECIDED"; rehearsal
-     `scripts/phase10/al_balance_check.cjs`; MTO advances reconcile per model against `mto_advance`; the
-     check knows the meaning of each Offtake Mode word — no setting; "settle once, remembered").
+  2. ✅ **AL Balance Sheet monthly upload BUILT on staging 2026-10-25** (see step 0). After the real load: upload the
+     owner's REAL 2025-26 sheets on staging and read the review with him (the 23-Oct rehearsal predicts ~172
+     CTD differences, 43 trucks on no sheet, 51 unfinished splits, 55 spellings — the first month will be long;
+     "It is right" makes it shrink). Staging keeps 3 DUMMY uploads (Sep, Sep v2, Oct 2026) until the owner says.
   3. Not built: phone view (read-only cards) · a save queue that survives reloads (E5) · removing a saved
      note · incentive editing (admin + HR) · layout column ORDER and saved FILTERS · the import wizard/revert
      (Stage 6).
 - **On staging now (klpnhpnlotcbbovwswmq):** migrations `…_foundation`, `…_supersede`, `…_numeric_before`,
   `…_create_units` (md5 `8f4e051d…`), `…_rmc_gst` (md5 `714d9b5d…`), `…_endhan_date`, `…_mto_advance`,
   `…_import_notes` (note source 'import'), `…_al_retail_date`, `…_two_ctc` (compute md5 `ee1a22a6…`, apply
-  `08ff1a12…` = file), `…_working_set` (tracker_book `504093d3…`, tracker_still_open `8d2c7186…` = file); Edge Functions
-  `admin-vehicle-units` (endhan_date + mto_advance + al_retail_date + al_ctc; actions `book` + `find`, BOOK_PAGE 2500) and `admin-users` (tracker actions) as in
+  `08ff1a12…` = file), `…_working_set` (tracker_book `504093d3…`, tracker_still_open `8d2c7186…` = file), `…_al_sheet`
+  (2026-10-25: tracker_al_upload `a1c93d3d…`, tracker_al_review `f28f533b…`, tracker_al_settle `d3833fae…`,
+  tracker_al_mode `8b459ecb…`, tracker_al_kind `45f5974c…` = file; 3 DUMMY uploads, 435 lines, 1 settled line); Edge Functions
+  `admin-vehicle-units` (endhan_date + mto_advance + al_retail_date + al_ctc; actions `book` + `find` + `alUpload` /
+  `alReview` / `alSettle`, BOOK_PAGE 2500) and `admin-users` (tracker actions) as in
   this branch. **2,056 tracker rows, all DUMMY** (2,050 `DEMO seed` + `DEMO-PROBE-202610220945` original and
   rebill + `DEMO-NEWROW-0001…0004`). Test edits left on dummy rows: slice 2 (CTC/CTD on a few DEMO trucks,
   Segment → TIPPER on three, "DEMO AFTER SORT" on DEMO-MB1AS0000345, CTC 21,11,111 on DEMO-MB1AT0002049);
@@ -1029,7 +1033,7 @@ Also: a phone view (read-only cards) and the local save queue across reloads (E5
   Write tool, or build backslashes with `String.fromCharCode(92)`; check edited files with `cat -A`. A test
   that passes first time is not yet a test: plant the bug and watch it fail (two of this session's
   self-tests let a planted bug through until their data was widened).
-- **Prod: nothing.** The prod rollout, when approved: the **eleven** tracker migrations (LF text), both functions
+- **Prod: nothing.** The prod rollout, ONLY on the owner's command (2026-10-25): the **twelve** tracker migrations (LF text, in file-name order — `…_al_sheet` last), both functions
   (`--no-verify-jwt`; `admin-vehicle-units` joins the key-cutover roster), then the frontend.
 - **Owner questions — answered 2026-10-23:** AL Payment Status green = Cash Invoiced only · only RMC is
   always 18% GST · sandbox = real data on staging first, then the trial on the live site · read-only

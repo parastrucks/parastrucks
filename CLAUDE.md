@@ -60,6 +60,10 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   delete only with the owner's yes.** Found on the way: going to a truck in another year threw an uncaught
   Univer error (scroll before the new engine was ready) and one render paired the new year with the old rows
   (wrong header + a wasted engine) — both fixed.
+- ⚠️ **localhost:3000 is shared**: the staging login works only from it, and the credit-release session (invoices)
+  needs it too. This worktree's dev server was stopped for it, then restarted when the owner found localhost
+  down (2026-10-25) — it is RUNNING from `bold-meitner-a9cb2f` now. Stop it (`preview_stop`) if the other session
+  needs the port. The app also stops it at each turn's end (`preview_start {name:"portal"}` again).
 - **Owner, 2026-10-25:** DEMO LOAD x4 rows → **"wait right now"** (keep; don't ask again until the real load) ·
   the 2023-24 + 2024-25 sales books → "in a little while" · AL Balance Sheet upload → agreed · **prod go-live
   ONLY on the owner's command** · on "Credit release / gate app": *"This will come in the second-last position,
