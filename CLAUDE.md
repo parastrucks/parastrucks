@@ -45,11 +45,21 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
     private bucket `gate-invoices`, 18 `/invoices` access rules. `probe-gate-invoices.sql` 13/0 (neg. control 12/1).
   - **EF `gate-invoices`** (staging): company = the invoice's SELLER GSTIN; repeats return the first save;
     conflicts refused. Email = own SMTPS client (`smtp.ts`, port 465 — EFs block 25/587).
-    `selftest-gate-mail.mjs` 60/0 (bundle with esbuild, run from the repo root). ⚠️ The server re-checks but
+    `selftest-gate-mail.mjs` **79/0** (bundle with esbuild, run from the repo root). ⚠️ The server re-checks but
     does NOT re-read the PDF.
   - ✅ **First signed-in run on staging done** (accounts manager, DEMO PDFs) — every save/refusal path as
-    designed; 3 DEMO invoices stay on staging. ⏭️ **Owner:** app password for `accounts.guj@` → staging secret
-    `GATE_SMTP_PASSWORD` (dashboard); approve the email wording. Staging secret `GATE_EMAIL_ONLY_TO=@parastrucks.in`.
+    designed; 3 DEMO invoices stay on staging. Staging secret `GATE_EMAIL_ONLY_TO=@parastrucks.in`.
+  - ✅ **REAL EMAIL WORKS — SMTPS 465 from a Supabase Edge Function is proven.** The owner set the staging secret
+    `GATE_SMTP_PASSWORD` (app password of `accounts.guj@`, via the dashboard, never in chat). Three test mails to
+    `ceo@parastrucks.in`, all in the **Inbox, not Spam** (Gmail `250 2.0.0 OK … gsmtp`, ~4 s in the function).
+  - ⭐ **Email wording = the OWNER'S RULES (2026-10-25), built `3533d79`:** **no invoice / job card / bill numbers
+    anywhere** (subject, body, attachment name `Invoice {plate}.pdf`) — *"the vehicle's registered number is the
+    only thing the customer is concerned about"*; **only the TOTAL, highlighted** (bold, in a box) — no labour /
+    parts split; **signed off like the company's own mails** (Kind regards · Accounts Team · Paras Trucks and
+    Buses · Paras logo · Sanathal address · Mobile · "Authorized Dealer -" + AL logo). Logos are embedded
+    (`logos.ts`, cid PNGs — the staff signatures link per-user Gmail images and mail apps don't show SVG).
+    ⏭️ **Owner to confirm the Mobile line** (+91 74969 70321 = the dealer "Mob No" SAP prints on invoices).
+  - ⭐ **The Gmail connector reads `ceo@parastrucks.in`** — use it to check a test mail arrived (read-only).
   - ⚠️ **Staging `ALLOWED_ORIGINS` now also has `http://localhost:3001`** (owner: "use another port", 10-25) —
     the old value (`:3000,:5173`) was confirmed by its sha256 before the change. Two sessions can now sign in to
     staging at once (3000 + 3001). Prod's list untouched.
@@ -948,7 +958,11 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   RTO/Insurance per-unit instead of per-PI, and a DB rule that non-admins need a chassis — both only if asked.
 - **⏸️ Service Payments parked, waiting on HDFC (2026-10-21)** — see the 2026-10-21 block. Its own list
   stays below (items 8–10 + the three go-live gates); do not start it until the owner says so.
-- **💡 Credit release + invoice sending + gate app — PLAN v0.2, not built (2026-10-24):**
+- **🔨 Credit release STEP 1 ("Send Invoice") BUILT on staging, real email proven (2026-10-25)** — branch
+  `cr1-invoice-send`, see the 2026-10-25 block. ⏭️ Owner: confirm the signature's Mobile number. Then: open a
+  PR when asked; prod (migration + EF + `GATE_SMTP_PASSWORD` on prod + drop `GATE_EMAIL_ONLY_TO` there) **only on
+  the owner's command**; then step 2 (release request + approval + gate + guard logins).
+- **💡 Credit release + invoice sending + gate app — PLAN v0.2 (2026-10-24):**
   `docs/backlog/credit-release-plan.md`. Owner: standalone (`gate_*` tables, payments DB stays off prod) ·
   WhatsApp **Business API** (invoice no. + amount + PDF + thank-you) + Gmail (port 465) · one login per guard
   (⚠️ exempt guards from the brand rule — brands open RLS + ERP sync) · counter sales: send only · CRM later.

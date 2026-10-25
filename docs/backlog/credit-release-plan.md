@@ -277,13 +277,22 @@ invoice / action / malformed reading refused · desktop + phone layouts right, n
 it: a repeat upload showed two messages (`4eb2762`).
 Staging holds those three DEMO invoices (DEMO KRISHNA LOGISTICS / MAHADEV TRAVELS / SHIV SPARES).
 
+**Email — done on staging (2026-10-25):**
+- ✅ The owner turned on the app password for `accounts.guj@parastrucks.in` and added it as the staging secret
+  **`GATE_SMTP_PASSWORD`** (dashboard, never in chat).
+- ✅ **First real email sent**: DEMO job → `ceo@parastrucks.in` from the screen; Gmail answered
+  `250 2.0.0 OK … gsmtp`, ~4 s inside the function; the address remembered for that SAP code; audited. Inbox, not
+  Spam; ₹ and the dash show right.
+- ✅ The owner set the wording (above); rebuilt and re-sent — a workshop and a counter-sale mail both in the Inbox.
+
 **Not yet done:**
-- ⏭️ **Owner:** turn on 2-Step Verification on `accounts.guj@parastrucks.in`, create an app password, and add
-  it as the function secret **`GATE_SMTP_PASSWORD`** on staging (Supabase dashboard → Edge Functions →
-  Secrets) — never in chat. Until then "Save and email" saves and says email is not set up yet.
-- ✅ **First real email sent 2026-10-25** (owner added `GATE_SMTP_PASSWORD` on staging): DEMO job WTY57562627099001 → `ceo@parastrucks.in` from the screen; Gmail answered `250 2.0.0 OK … gsmtp`, 4.3 s inside the function; address remembered for SAP code 900001; audited. ⏭️ Owner: confirm it arrived (inbox, not Spam), the PDF opens, ₹ and — show right.
-- ⏭️ Owner: approve or change the email wording above.
-- Prod: the migration + the function + the secret — **only on the owner's command**.
+- ⏭️ Owner: confirm the signature's **Mobile** number (+91 74969 70321 — the dealer number SAP prints on invoices),
+  or give the accounts desk's number.
+- ⏭️ Open a PR from `cr1-invoice-send` when the owner asks (nothing is on `portal` yet).
+- Prod — **only on the owner's command**: apply `20261024_gate_invoices.sql`, deploy `gate-invoices`
+  (`--no-verify-jwt`), set `GATE_SMTP_PASSWORD` on the prod project, and do NOT set `GATE_EMAIL_ONLY_TO` there
+  (it limits recipients — staging only). Then merge the PR (the screen needs the tables + function first).
+- Then step 2: release request + GM/owner approval + gate screen + guard logins (with the brand exemption).
 
 ## Sources (outside the repo, not committed)
 - WhatsApp export "Vehicle Gate Pass" (owner, 2026-10-24) — analysed by a throwaway script; aggregates only.

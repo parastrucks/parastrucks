@@ -54,8 +54,26 @@ stylesheet so the parked payments branch's `index.css` never conflicts.
 DEMO PDFs: save, the "email not set up yet" answer, the repeat, two refusals, cash + counter saves, PDF links,
 and the locked tables and bucket — all as designed. One fix: a repeat upload showed two messages.
 
-**Waiting on the owner:** the `accounts.guj@` app password as staging secret `GATE_SMTP_PASSWORD`; the email
-wording; prod only on the owner’s command.
+**Real email (later 10-25).** The owner asked for step-by-step help and set `GATE_SMTP_PASSWORD` on staging
+(app password of `accounts.guj@`, entered in the dashboard). The first send from the screen went through:
+Gmail `250 2.0.0 OK … gsmtp`, ~4 s inside the function, the address remembered for that customer — so SMTPS
+on port 465 from a Supabase Edge Function works. It landed in the Inbox, not Spam (checked through the Gmail
+connector, which reads `ceo@parastrucks.in`).
+
+**The owner's wording.** *"Don't write invoice numbers … the vehicle's registered number is the only thing the
+customer is concerned about … mention the total billing amount in bold … no separate labour and parts … improve
+the signing off — check other mails that we use."* Built: no job card / bill numbers anywhere (subject, body,
+attachment `Invoice {plate}.pdf`), the plate in bold, a TOTAL AMOUNT box, HTML + a plain-text twin, SAP's capitals
+turned into a proper name, and the sign-off copied from the company's own mail signatures (read in the ceo@
+mailbox): Kind regards · Accounts Team · Paras Trucks and Buses · Paras logo · Sanathal address · Mobile ·
+"Authorized Dealer -" + Ashok Leyland logo. Those staff signatures link logo images stored in each person's Gmail
+signature (they vanish if the person edits it), and mail apps don't show SVG — so both logos are embedded as PNGs
+(the AL SVG rendered by headless Chrome). The self-test (79/0) now checks that no invoice or bill number appears
+anywhere in the message; it also caught one more over-long header line. A workshop and a counter-sale test
+both reached the Inbox.
+
+**Waiting on the owner:** confirm the signature's Mobile number (+91 74969 70321, the dealer number SAP prints);
+a PR when asked; prod only on the owner's command.
 
 **Lessons.** (1) When the owner asks "what if X changes?", answer with a test that changes X. (2) A test that
 mutates real data must only touch what it claims to (the first "Title Case" mutation also changed customer
