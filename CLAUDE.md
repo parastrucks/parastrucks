@@ -63,6 +63,11 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
     released **on credit** (paid ones rarely come here): after the total, *"We request you to kindly make this payment
     on time. Timely payments are what allow us to keep providing you the best of our service — without them, we will
     not be able to continue doing so. If you have already paid, thank you …"* Deployed to staging; test mail arrived.
+  - 💡 **Owner idea PARKED ("leave it out for now"): "your outstanding is now up to ₹X — please settle it in time".**
+    ⚠️ **The portal has NO true outstanding** — only invoices sent through this screen, no paid status, nothing billed
+    outside it; a wrong figure sent to a customer starts a dispute. Options (plan → "Not yet done"): accounts uploads
+    the Busy/SAP outstanding report (recommended) · a box typed on send · the portal's own sum after step 3
+    (understates). Raise again when step 3 (mark paid) is built; do not build until the owner picks.
   - ⭐ **The Gmail connector reads `ceo@parastrucks.in`** — use it to check a test mail arrived (read-only).
   - ⚠️ **Staging `ALLOWED_ORIGINS` now also has `http://localhost:3001`** (owner: "use another port", 10-25) —
     the old value (`:3000,:5173`) was confirmed by its sha256 before the change. Two sessions can now sign in to
