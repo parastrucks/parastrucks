@@ -24,7 +24,8 @@ import { rateLimit } from "../_shared/rateLimit.ts"
 import { audit } from "../_shared/auditLog.ts"
 import { jsonResponse, preflight } from "../_shared/cors.ts"
 import { checkReading, cleanEmail, mayUse, recipientAllowed, type Reading } from "./check.ts"
-import { invoiceEmail, mimeMessage } from "./mail.ts"
+import { invoiceEmail, mimeMessage, senderFor } from "./mail.ts"
+import { AL_LOGO_PNG_B64, PARAS_LOGO_PNG_B64 } from "./logos.ts"
 import { sendSmtp, SmtpError } from "./smtp.ts"
 
 type Caller = {
@@ -232,21 +233,22 @@ Deno.serve(async (req: Request) => {
           return data ?? { ...msg, ...patch }
         }
         try {
-          const [{ data: file, error: dlErr }, { data: bills }, { data: entity }] = await Promise.all([
+          const [{ data: file, error: dlErr }, { data: entity }] = await Promise.all([
             admin.storage.from("gate-invoices").download(doc.file_path),
-            admin.from("gate_bills").select("bill_no, amount_paise, bill_date").eq("document_id", doc.id).order("bill_no"),
-            admin.from("entities").select("full_name, address").eq("id", doc.entity_id).single(),
+            admin.from("entities").select("code, full_name, address").eq("id", doc.entity_id).single(),
           ])
           if (dlErr || !file) throw new Error("The stored PDF could not be read.")
           const pdf = new Uint8Array(await file.arrayBuffer())
-          const { subject, text } = invoiceEmail(
-            { ...doc, total_paise: Number(doc.total_paise) },
-            (bills ?? []).map((b: { bill_no: string; amount_paise: number }) => ({ bill_no: b.bill_no, amount_paise: Number(b.amount_paise) })),
-            { company: entity?.full_name ?? "Paras Trucks and Buses", addressLine: String(entity?.address ?? "").split("\n")[0] },
-          )
+          const sender = senderFor(entity)
+          const mail = invoiceEmail({ ...doc, total_paise: Number(doc.total_paise) }, sender)
           const message = mimeMessage({
-            fromName: `${entity?.full_name ?? "Paras Trucks and Buses"} — Accounts`, from: user, to, subject, text,
-            attachment: { filename: `${doc.doc_no}.pdf`, bytes: pdf }, messageId: msg.id, date: new Date(),
+            fromName: `${sender.company} – Accounts`, from: user, to,
+            subject: mail.subject, text: mail.text, html: mail.html,
+            images: [
+              { cid: "paras-logo", filename: "paras-logo.png", contentType: "image/png", base64: PARAS_LOGO_PNG_B64 },
+              { cid: "al-logo", filename: "ashok-leyland.png", contentType: "image/png", base64: AL_LOGO_PNG_B64 },
+            ],
+            attachment: { filename: mail.attachmentName, bytes: pdf }, messageId: msg.id, date: new Date(),
           })
           const sent = await sendSmtp(
             { host: "smtp.gmail.com", port: 465, user, pass, from: user, to, message },

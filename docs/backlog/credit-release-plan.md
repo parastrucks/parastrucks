@@ -248,11 +248,17 @@ stored PDF is the record. Reading it on the server too is possible later (pdfjs 
 own (`smtp.ts`; Edge Functions block 25/587). Tested offline against a scripted mail server
 (`selftest-gate-mail.mjs` **60/0**: byte-by-byte replies, wrong password, unknown address, silent server,
 dropped connection; the PDF comes back byte for byte from the message; the password never appears in an error).
-**Draft wording (owner to approve)** — workshop: subject *"Invoice for vehicle {plate} — Paras Trucks And
-Buses"*, body *"Dear {customer}, Thank you for getting your vehicle {plate} worked on at our workshop. Your
-invoice for job card {no.}, dated {date}, is attached:"* + every bill + total + *"If you have any question about
-this invoice, please reply to this email."* Counter sale: *"Thank you for your purchase from …"* + invoice,
-date, amount.
+**Wording — revised to the owner's rules (2026-10-25):** no invoice, job card or bill numbers anywhere (subject, body,
+attachment name) — the vehicle's registration number is what the customer cares about; only the TOTAL, highlighted
+(a large bold amount in a shaded box); no labour / parts split; signed off like the company's own mails (Kind regards ·
+**Accounts Team** · *Paras Trucks and Buses* · the Paras logo · Sanathal address · Mobile +91 74969 70321 (the dealer
+number SAP prints on every invoice — ⏭️ owner to confirm) · "Authorized Dealer -" + the Ashok Leyland logo). Logos are
+embedded in the email (not linked), so they show even where outside images are blocked. Workshop subject: *"Invoice for
+your vehicle GJ01ZZ0001 – Paras Trucks and Buses"*, body *"Dear {Customer}, Thank you for getting your vehicle {plate}
+serviced at our workshop. Please find your invoice attached."* + TOTAL AMOUNT box, attachment *"Invoice {plate}.pdf"*.
+Counter sale: *"Your invoice from Paras Trucks and Buses"*, *"Thank you for your purchase …"*, attachment *"Invoice
+{date}.pdf"*. SAP's capitals become a proper name ("Dear Shree Hari Bus Services"). HTML + a plain-text twin.
+Seen in the ceo@ inbox 2026-10-25 (Inbox, not Spam).
 
 **Database** (`20261024_gate_invoices.sql`, staging): `gate_documents`, `gate_bills`, `gate_contacts`,
 `gate_messages`; money in paise; staff read under RLS (service / accounts / spares of the same company + admin),

@@ -14,7 +14,8 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { sendSmtp, dotStuff, SmtpError } from '../../supabase/functions/gate-invoices/smtp.ts'
-import { invoiceEmail, mimeMessage, encodeHeader, rupees } from '../../supabase/functions/gate-invoices/mail.ts'
+import { invoiceEmail, mimeMessage, encodeHeader, rupees, senderFor, properName } from '../../supabase/functions/gate-invoices/mail.ts'
+import { PARAS_LOGO_PNG_B64, AL_LOGO_PNG_B64 } from '../../supabase/functions/gate-invoices/logos.ts'
 import { checkReading, cleanEmail, recipientAllowed, mayUse } from '../../supabase/functions/gate-invoices/check.ts'
 import { readSapInvoice } from '../../src/invoices/lib/sapInvoice.js'
 import { pdfToLines } from '../../src/invoices/lib/pdfLines.js'
@@ -125,42 +126,71 @@ ok('dotStuff: bare LF becomes CRLF; a leading dot doubles', dotStuff('a\n.b\n') 
 
 // ── the email ────────────────────────────────────────────────────────
 section('email words + MIME')
-const sender = { company: 'Paras Trucks And Buses', addressLine: 'Survey No. 271P, Sp Ring Road, Ahmedabad' }
-const wdoc = { layout: 'workshop', doc_no: 'WTY57562627099001', doc_date: '2026-10-24', customer_name: 'DEMO KRISHNA LOGISTICS', regn_no: 'GJ01ZZ0001', total_paise: 4066500 }
-const wbills = [{ bill_no: 'LCR5756269900001', amount_paise: 708000 }, { bill_no: 'PCR5756269900001', amount_paise: 3358500 }]
+// Owner, 2026-10-25: no invoice / job card / bill numbers; the vehicle number; only the total,
+// highlighted; the company's own sign-off.
+const sender = senderFor({ code: 'PTB', full_name: 'PARAS TRUCKS AND BUSES', address: 'x' })
+const wdoc = { layout: 'workshop', doc_no: 'WTY57562627099001', doc_date: '2026-10-24', customer_name: 'DEMO KRISHNA LOGISTICS PVT LTD', regn_no: 'GJ01ZZ0001', total_paise: 4066500 }
+const NUMBERS = /WTY\d|[LP]C[RS]\d|MCI\d|\d{10,}/
 {
-  const { subject, text } = invoiceEmail(wdoc, wbills, sender)
-  ok('workshop subject names the vehicle and the company', subject === 'Invoice for vehicle GJ01ZZ0001 — Paras Trucks And Buses', subject)
-  ok('workshop text: thank-you for the workshop, job card + date, every bill, the total', /Thank you for getting your vehicle GJ01ZZ0001 worked on at our workshop\./.test(text)
-    && /job card WTY57562627099001, dated 24 Oct 2026/.test(text) && /LCR5756269900001\s+₹7,080\.00/.test(text)
-    && /PCR5756269900001\s+₹33,585\.00/.test(text) && /Total\s+₹40,665\.00/.test(text), text)
-  const c = invoiceEmail({ ...wdoc, layout: 'counter_sale', doc_no: 'MCI5756269900001', customer_name: 'DEMO SHIV SPARES', regn_no: null, total_paise: 3140000 }, [], sender)
-  ok('counter text: invoice no., date, amount, thank-you for the purchase', c.subject === 'Invoice MCI5756269900001 — Paras Trucks And Buses'
-    && /Thank you for your purchase from Paras Trucks And Buses\./.test(c.text) && /Invoice MCI5756269900001, dated 24 Oct 2026, for ₹31,400\.00 is attached\./.test(c.text), c.text)
-  const evil = invoiceEmail({ ...wdoc, customer_name: 'EVIL\r\nBcc: x@y.z\u0000 CO' }, wbills, sender)
-  ok('control characters in a name cannot make a new line', !/\r\nBcc/.test(evil.text) && /Dear EVIL Bcc: x@y\.z CO,/.test(evil.text))
+  const m = invoiceEmail(wdoc, sender)
+  ok('workshop subject: the vehicle number and the company, nothing else', m.subject === 'Invoice for your vehicle GJ01ZZ0001 – Paras Trucks and Buses', m.subject)
+  for (const [k, v] of Object.entries(m)) ok(`no invoice / job card / bill number in the ${k}`, !NUMBERS.test(v), v.match(NUMBERS)?.[0])
+  ok('the attachment is named after the vehicle', m.attachmentName === 'Invoice GJ01ZZ0001.pdf')
+  ok('text: thank-you for servicing the vehicle, the total once', /Thank you for getting your vehicle GJ01ZZ0001 serviced at our workshop\. Please find your invoice attached\./.test(m.text)
+    && (m.text.match(/₹/g) || []).length === 1 && /Total amount: ₹40,665\.00/.test(m.text), m.text)
+  ok('html: the total is the one big bold amount', /font-weight:bold[^>]*>₹40,665\.00</.test(m.html) && (m.html.match(/₹/g) || []).length === 1)
+  ok('html: the vehicle number in bold', /<b>GJ01ZZ0001<\/b>/.test(m.html))
+  ok('no labour / parts split anywhere', !/labour|parts|7,080|33,585/i.test(m.text + m.html))
+  ok("SAP's capitals become a proper name (Pvt Ltd)", /Dear Demo Krishna Logistics Pvt Ltd,/.test(m.text) && /Dear Demo Krishna Logistics Pvt Ltd,/.test(m.html))
+  ok('sign-off like the company mails: Kind regards · Accounts Team · company · address · mobile · Authorized Dealer',
+    /Kind regards\r\nAccounts Team\r\nParas Trucks and Buses\r\n\r\nSurvey No\. 271P, SP Ring Road, Near Concept Motors\r\nSanathal Circle, Sanathal, Ahmedabad - 382210\r\nMobile: \+91 74969 70321\r\n\r\nAuthorized Dealer - Ashok Leyland$/.test(m.text), m.text)
+  ok('html sign-off shows both logos by cid', /src="cid:paras-logo"/.test(m.html) && /src="cid:al-logo"/.test(m.html) && /Authorized Dealer -/.test(m.html))
+  const c = invoiceEmail({ ...wdoc, layout: 'counter_sale', customer_name: 'DEMO SHIV SPARES', regn_no: null, total_paise: 3140000 }, sender)
+  ok('counter sale: no vehicle, no invoice number — "Your invoice from …", total, dated attachment',
+    c.subject === 'Your invoice from Paras Trucks and Buses' && /Thank you for your purchase from Paras Trucks and Buses\./.test(c.text)
+    && /Total amount: ₹31,400\.00/.test(c.text) && c.attachmentName === 'Invoice 24-Oct-2026.pdf' && !NUMBERS.test(c.subject + c.text + c.html), JSON.stringify(c.subject))
+  const noRegn = invoiceEmail({ ...wdoc, regn_no: null }, sender)
+  ok('a workshop job without a plate still reads right', noRegn.subject === 'Your invoice from Paras Trucks and Buses' && /Thank you for getting your vehicle serviced/.test(noRegn.text))
+  const evil = invoiceEmail({ ...wdoc, customer_name: 'EVIL <script>alert(1)</script>\r\nBcc: x@y.z\u0000 & CO' }, sender)
+  ok('a name cannot inject HTML or a new line', !/<script>/i.test(evil.html) && /&lt;script&gt;/.test(evil.html) && !/\r\nBcc/.test(evil.text) && /&amp; CO/.test(evil.html), evil.html.slice(0, 300))
+  ok('properName keeps mixed case and LLP / M/S', properName('Shree Hari Bus') === 'Shree Hari Bus' && properName('M/S RAM TRANSPORT LLP') === 'M/S Ram Transport LLP' && properName('A.K. ROADLINES') === 'A.K. Roadlines')
+  const other = senderFor({ code: 'PT', full_name: 'Paras Trucks', address: 'Line one\nLine two' })
+  ok('another company signs with its own name and address, no borrowed phone', other.company === 'Paras Trucks' && other.addressLines.join('|') === 'Line one|Line two' && other.phone === null)
   ok('rupees: Indian grouping', rupees(12345678) === '₹1,23,456.78' && rupees(5) === '₹0.05')
 }
 {
   const pdf = demoWorkshop()
-  const { subject, text } = invoiceEmail(wdoc, wbills, sender)
-  const m = mimeMessage({ fromName: 'Paras Trucks And Buses — Accounts', from: 'accounts.guj@parastrucks.in', to: 'demo.customer@example.com',
-    subject, text, attachment: { filename: 'WTY57562627099001.pdf', bytes: pdf }, messageId: '0b9c7c9e-1111-4222-8333-944445555666', date: new Date(Date.UTC(2026, 9, 24, 12)) })
+  const mail = invoiceEmail(wdoc, sender)
+  const images = [{ cid: 'paras-logo', filename: 'paras-logo.png', contentType: 'image/png', base64: PARAS_LOGO_PNG_B64 },
+    { cid: 'al-logo', filename: 'ashok-leyland.png', contentType: 'image/png', base64: AL_LOGO_PNG_B64 }]
+  const m = mimeMessage({ fromName: 'Paras Trucks and Buses – Accounts', from: 'accounts.guj@parastrucks.in', to: 'demo.customer@example.com',
+    subject: mail.subject, text: mail.text, html: mail.html, images, attachment: { filename: mail.attachmentName, bytes: pdf },
+    messageId: '0b9c7c9e-1111-4222-8333-944445555666', date: new Date(Date.UTC(2026, 9, 24, 12)) })
   const lines = m.split('\r\n')
   ok('every line ≤ 78 characters, CRLF only', lines.every((l) => l.length <= 78) && !/[^\r]\n/.test(m), String(Math.max(...lines.map((l) => l.length))))
-  ok('headers: From, To, Reply-To, Date, Message-ID, multipart', /^From: =\?UTF-8\?B\?.+\?=\r\n <accounts\.guj@parastrucks\.in>$/m.test(m) && /^To: <demo\.customer@example\.com>$/m.test(m)
+  ok('headers: From, To, Reply-To, Date, Message-ID, multipart/mixed', /^From: =\?UTF-8\?B\?.+\?=\r\n <accounts\.guj@parastrucks\.in>$/m.test(m) && /^To: <demo\.customer@example\.com>$/m.test(m)
     && /^Reply-To: <accounts\.guj@parastrucks\.in>$/m.test(m) && /^Date: Sat, 24 Oct 2026 12:00:00 \+0000$/m.test(m)
-    && /^Message-ID: <0b9c7c9e-1111-4222-8333-944445555666@parastrucks\.in>$/m.test(m) && /^Content-Type: multipart\/mixed; boundary="gate-/m.test(m))
+    && /^Message-ID: <0b9c7c9e-1111-4222-8333-944445555666@parastrucks\.in>$/m.test(m) && /^Content-Type: multipart\/mixed; boundary="mix-/m.test(m))
   const subjHeader = /^Subject: (.*(?:\r\n .*)*)/m.exec(m)?.[1] ?? ''
   const words = [...subjHeader.matchAll(/=\?UTF-8\?B\?([^?]+)\?=/g)].map((w) => Buffer.from(w[1], 'base64'))
-  ok('Subject is UTF-8 encoded, folded over lines, and decodes back (the — survives)', words.length > 1 && Buffer.concat(words).toString() === subject, subjHeader)
-  const boundary = /boundary="([^"]+)"/.exec(m)[1]
-  const parts = m.split(`--${boundary}`)
-  const body = (p) => Buffer.from(p.split('\r\n\r\n').slice(1).join('').replace(/\r\n/g, ''), 'base64')
-  ok('the text part decodes to the email text (₹ intact)', body(parts[1]).toString() === text)
-  ok('the attachment decodes to the PDF byte for byte', Buffer.compare(body(parts[2]), Buffer.from(pdf)) === 0)
-  ok('the attachment is named after the job card', /filename="WTY57562627099001\.pdf"/.test(parts[2]))
-  ok('message closes the boundary', m.trimEnd().endsWith(`--${boundary}--`))
+  ok('Subject is UTF-8 encoded, folded over lines, and decodes back (the – survives)', words.length > 1 && Buffer.concat(words).toString() === mail.subject, subjHeader)
+  // Walk the MIME tree: every leaf with its headers and decoded body.
+  const leaves = []
+  const walk = (raw) => {
+    const [head, ...rest] = raw.split('\r\n\r\n'); const body = rest.join('\r\n\r\n')
+    const b = /boundary="([^"]+)"/.exec(head)?.[1]
+    if (!b) { leaves.push({ head, body: Buffer.from(body.replace(/\r\n/g, ''), 'base64'), type: /Content-Type: ([^;\r]+)/.exec(head)?.[1] }); return }
+    ok(`multipart ${/Content-Type: (multipart\/\w+)/.exec(head)[1]} closes its boundary`, body.includes(`--${b}--`))
+    body.split(`--${b}`).slice(1, -1).map((p) => p.replace(/^\r\n/, '').replace(/\r\n$/, '')).forEach(walk)
+  }
+  walk(m)
+  ok('structure: text, html, two inline logos, the PDF — in that order', leaves.map((l) => l.type).join(',') === 'text/plain,text/html,image/png,image/png,application/pdf', leaves.map((l) => l.type).join(','))
+  ok('the text part decodes to the email text (₹ intact)', leaves[0]?.body.toString() === mail.text)
+  ok('the html part decodes to the email html', leaves[1]?.body.toString() === mail.html)
+  ok('the logos are real PNGs with the cids the html uses', leaves.slice(2, 4).every((l) => l.body.subarray(1, 4).toString() === 'PNG')
+    && /Content-ID: <paras-logo>/.test(leaves[2]?.head) && /Content-ID: <al-logo>/.test(leaves[3]?.head) && /inline/.test(leaves[2]?.head))
+  ok('the attachment decodes to the PDF byte for byte, named after the vehicle', leaves[4] && Buffer.compare(leaves[4].body, Buffer.from(pdf)) === 0 && /filename="Invoice GJ01ZZ0001\.pdf"/.test(leaves[4].head))
+  ok('nothing in the whole message carries the job card or bill numbers', !/WTY57562627099001|LCR5756269900001|PCR5756269900001/.test(m + leaves.slice(0, 2).map((l) => l.body.toString()).join('')))
   ok('encodeHeader leaves plain ASCII alone', encodeHeader('Invoice 1') === 'Invoice 1')
   // and through the client: the whole message survives the SMTP path unchanged
   const s = fakeServer()
