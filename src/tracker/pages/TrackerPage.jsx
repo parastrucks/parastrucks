@@ -27,6 +27,9 @@ const NOTE_SETTLE_MS = 2500 // Univer reports a note while it is typed (after ea
 
 // what the grid holds (owner, 2026-10-24: "current year only"): this financial year + every older truck still
 // open, or one past year, or all of them; Find reaches the rest. A 4× test of the whole book took minutes.
+// a.push(...b) passes every item as an argument and overflows the stack past ~100k — an undo of a sort
+// reported the whole book's formats at once (seen 2026-10-25). A big paste or colouring could too.
+const append = (a, b) => { for (const x of b) a.push(x) }
 const scopeKey = (s) => s.scope === 'year' ? `year-${s.year}` : s.scope
 
 export default function TrackerPage() {
@@ -301,8 +304,8 @@ export default function TrackerPage() {
   // One user action can arrive as several reports (a fill blanks, then writes): gather them and
   // decide once, after the action has finished.
   const onChanges = useCallback((cells, source, fresh = []) => {
-    buffer.current.cells.push(...cells)
-    buffer.current.fresh.push(...fresh)
+    append(buffer.current.cells, cells)
+    append(buffer.current.fresh, fresh)
     buffer.current.source = source
     if (!buffer.current.timer) buffer.current.timer = setTimeout(flush, 0)
   }, [flush])
@@ -310,7 +313,7 @@ export default function TrackerPage() {
   // Formatting the grid reports (after any change, undo included): only what differs from what was
   // saved goes out. Gathered for a tick, so a new row's create is queued ahead of its colours.
   const onFormats = useCallback((list) => {
-    fmtBuffer.current.list.push(...list)
+    append(fmtBuffer.current.list, list)
     if (fmtBuffer.current.timer) return
     fmtBuffer.current.timer = setTimeout(() => {
       const { list: all } = fmtBuffer.current

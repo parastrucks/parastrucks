@@ -36,13 +36,17 @@ export default function TrackerTools({ grid, bookRows, say, scope, fyStart, onSc
     const hits = findRows(bookRows(), q)
     setFind({ q, hits, at: -1, note: q.trim().length < MIN_FIND ? '' : hits.length ? `${hits.length} found` : 'not in this view', elsewhere: null })
   }
-  // not among the rows the grid holds → look in every year on the server
+  // look in every year on the server for trucks the grid does not hold — also when some here match the
+  // same digits (two chassis can end alike; seen with the test copies, 2026-10-25)
   const findElsewhere = async () => {
     setFind((f) => ({ ...f, note: 'searching all years…' }))
     try {
       const here = new Set(bookRows().map((r) => r.id))
       const hits = (await findAnywhere(find.q)).filter((h) => !h.superseded_at && !here.has(h.id))
-      setFind((f) => ({ ...f, elsewhere: hits, note: hits.length ? `${hits.length} in other years` : 'not found in any year' }))
+      setFind((f) => {
+        const other = hits.length ? `${hits.length} in other years` : f.hits.length ? 'none in other years' : 'not found in any year'
+        return { ...f, elsewhere: hits, note: f.hits.length ? `${f.hits.length} here · ${other}` : other }
+      })
     } catch (e) { setFind((f) => ({ ...f, note: `could not search: ${e.message}` })) }
   }
   const openElsewhere = (h) => {
@@ -153,7 +157,7 @@ export default function TrackerTools({ grid, bookRows, say, scope, fyStart, onSc
             onChange={(e) => onFind(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); nextHit() } }} />
           {find.note && <span className="trk-find-note">{find.note}{find.hits.length > 0 && find.at < 0 ? ' — Enter to go' : ''}</span>}
-          {!find.hits.length && find.q.trim().length >= MIN_FIND && find.elsewhere === null && find.note === 'not in this view' && (
+          {find.q.trim().length >= MIN_FIND && find.elsewhere === null && !find.note.startsWith('searching') && (
             <button type="button" className="btn btn-sm btn-secondary" onClick={findElsewhere}>Search all years</button>
           )}
         </label>

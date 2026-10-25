@@ -15,7 +15,7 @@
 //   * fill blanks each target before writing — savePlan judges each cell's LAST value.
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
 import { createUniver, LocaleType, merge, CommandType } from '@univerjs/presets'
-import { UniverSheetsCorePreset } from '@univerjs/preset-sheets-core'
+import { UniverSheetsCorePreset, TriggerCalculationController } from '@univerjs/preset-sheets-core'
 import coreEnUS from '@univerjs/preset-sheets-core/locales/en-US'
 import { UniverSheetsFilterPreset } from '@univerjs/preset-sheets-filter'
 import filterEnUS from '@univerjs/preset-sheets-filter/locales/en-US'
@@ -300,6 +300,7 @@ const TrackerGrid = forwardRef(function TrackerGrid({ columns, rows, formats, no
     const idCol = columns.length
     const sheet = () => univerAPI.getWorkbook(ourId).getActiveSheet()   // our own book, not "the active one"
     const readIds = () => {
+      if (!univerAPI.getWorkbook(ourId)) return // a timer that outlived the grid
       rowIds.current = sheet().getRange(0, idCol, sheet().getMaxRows(), 1).getRawValues().map((r) => r[0])
     }
     readIds()
@@ -330,6 +331,7 @@ const TrackerGrid = forwardRef(function TrackerGrid({ columns, rows, formats, no
     let drawingNotes = false
     const noteMutation = (id, args) => univerAPI.syncExecuteCommand(id, { unitId: workbook.getId(), sheetId: sheet().getSheetId(), silent: true, ...args })
     const drawNotes = () => {
+      if (!univerAPI.getWorkbook(ourId)) return
       drawingNotes = true
       try {
         for (const n of sheet().getNotes()) noteMutation('sheet.mutation.remove-note', { row: n.row, col: n.col })
@@ -359,7 +361,7 @@ const TrackerGrid = forwardRef(function TrackerGrid({ columns, rows, formats, no
     const cfIds = () => ({ unitId: workbook.getId(), subUnitId: sheet().getSheetId() })
     let sortPrepared = false
     const finishSort = () => {
-      if (!sortPrepared) return
+      if (!sortPrepared || !univerAPI.getWorkbook(ourId)) return
       sortPrepared = false
       if (paid) univerAPI.syncExecuteCommand('sheet.mutation.add-conditional-rule', { ...cfIds(), rule: paid })
       readIds()
@@ -551,9 +553,19 @@ const TrackerGrid = forwardRef(function TrackerGrid({ columns, rows, formats, no
       subs.forEach((s) => s?.dispose?.())
       writeRef.current = null
       engine.current = null
-      univer.dispose()
-      // removed after the engine's own React root has finished unmounting
-      setTimeout(() => host.remove(), 0)
+      // Disposed a tick LATER (seen switching the year, 2026-10-25): this cleanup runs while React is
+      // unmounting the page, and dispose() unmounts the engine's own React root — synchronously, that
+      // warned "synchronously unmount a root while React was already rendering" and a render then missed
+      // SheetsScrollRenderController. And every formula calculation (the paid rule's, on each redraw)
+      // starts a 1 s progress timer that dispose() never clears; firing into the disposed engine it threw
+      // "Locale not initialized". Waiting does not help (a new one starts on each redraw), so the dying
+      // engine's progress callback is switched off first (internal API — guarded; the bar is only a
+      // progress display). Our listeners are already off; the element goes last.
+      setTimeout(() => {
+        try { univer.__getInjector().get(TriggerCalculationController)._startProgress = () => {} } catch { /* Univer changed */ }
+        univer.dispose()
+        host.remove()
+      }, 0)
       api.current = null
       if (import.meta.env.DEV) delete window.__trackerUniver
     }

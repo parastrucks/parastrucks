@@ -269,5 +269,19 @@ ok(fyOfTruck({ ptb_invoice_date: '2026-03-31' }) === 2025 && fyOfTruck({ ptb_inv
 ok(fyOfTruck({ date_of_retail: '2024-07-01', oem_gatepass_date: '2023-01-01' }) === 2024 && fyOfTruck({ oem_gatepass_date: '2023-01-01' }) === 2022, 'invoice, else retail, else gatepass date')
 ok(fyOfTruck({}) === null && fyLabel(2025) === '2025-26', 'no date → null · label 2025-26')
 
+// 2026-10-25: a.push(...b) / Math.max(...b) pass every item as an argument and overflow the stack on a
+// long list — an undo of a sort reported the whole book's formats and crashed the formats path. The
+// tracker's code must append in a loop (source contract: reads every file under src/tracker).
+{
+  const fs = await import('node:fs'), path = await import('node:path')
+  const root = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')), '../../src/tracker')
+  const files = fs.readdirSync(root, { recursive: true }).filter((f) => /\.(js|jsx)$/.test(f))
+  const spread = files.flatMap((f) => fs.readFileSync(path.join(root, f), 'utf8').split('\n')
+    .map((line, i) => [line, i]).filter(([line]) => /\.push\(\s*\.\.\.|Math\.(max|min)\(\s*\.\.\./.test(line.replace(/\/\/.*$/, '')))
+    .map(([, i]) => `${f}:${i + 1}`))
+  ok(files.length > 10, 'source contract reads the tracker files', files.length)
+  ok(spread.length === 0, 'no push(...list) / Math.max(...list) in src/tracker (stack overflow on a long list)', spread)
+}
+
 console.log(`selftest-tracker-cells: ${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

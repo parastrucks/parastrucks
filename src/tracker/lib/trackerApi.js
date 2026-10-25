@@ -11,7 +11,7 @@ export async function listAll(columns, { includeSuperseded = false } = {}) {
   let hidden = []
   for (;;) {
     const r = await callEdge(FN, 'list', { columns, offset, includeSuperseded })
-    rows.push(...r.rows)
+    for (const row of r.rows) rows.push(row) // not push(...): a long list overflows the stack
     hidden = r.hidden ?? hidden
     if (r.nextOffset == null) break
     offset = r.nextOffset
@@ -48,14 +48,16 @@ export async function loadBook(columns, { scope = 'working', year, ids } = {}, o
   onProgress?.(Math.min(BOOK_PAGE, count), count)
   for (let i = 0; i < offsets.length; i += AT_ONCE) {
     const got = await Promise.all(offsets.slice(i, i + AT_ONCE).map(page))
-    pages.push(...got)
+    for (const p of got) pages.push(p)
     done += got.length
     onProgress?.(Math.min(done * BOOK_PAGE, count), count)
   }
   const rows = [], notes = [], formats = [], dseCounts = {}
   for (const b of pages) {
     for (const row of b.rows ?? []) { const full = {}; for (const k of columns) full[k] = null; rows.push(Object.assign(full, row)) }
-    notes.push(...(b.notes ?? [])); formats.push(...(b.formats ?? [])); Object.assign(dseCounts, b.dse_counts ?? {})
+    for (const n of b.notes ?? []) notes.push(n)
+    for (const f of b.formats ?? []) formats.push(f)
+    Object.assign(dseCounts, b.dse_counts ?? {})
   }
   return { rows, hidden: first.hidden ?? [], notes, formats, dseCounts, fyStart: first.fy_start ?? null, total: first.total ?? rows.length }
 }
