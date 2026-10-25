@@ -53,6 +53,9 @@ const SPARE = 250
 // pasted 12,34,567 lands in a lakh-formatted cell
 const blankLine = (columns) => Object.fromEntries(columns.map((c, ci) => [ci, { s: styleKey(c) }]))
 
+// The "paid" rule reaches past the spare rows so rows added later (ensureSpare) are covered too.
+const paidFor = (columns, rows) => paidRule(columns, rows.length + SPARE + 5000)
+
 // formats: Map "unitId|column" → the person's saved formatting for that cell
 function buildWorkbook(columns, rows, formats) {
   const idCol = columns.length
@@ -75,9 +78,8 @@ function buildWorkbook(columns, rows, formats) {
   columns.forEach((c, ci) => { columnData[ci] = { w: c.width } })
   columnData[idCol] = { w: 40, hd: 1 }
   // The "paid" rule ships in the workbook's own data (as Univer saves rules), so it is part of the
-  // book from the start — not a command the person could Ctrl+Z away. It reaches past the spare rows
-  // so rows added later (ensureSpare) are covered too.
-  const paid = paidRule(columns, rows.length + SPARE + 5000)
+  // book from the start — not a command the person could Ctrl+Z away.
+  const paid = paidFor(columns, rows)
   return {
     id: BOOK_ID, name: 'Vehicle Tracker', sheetOrder: ['book'], styles: STYLES,
     resources: paid ? [{ name: 'SHEET_CONDITIONAL_FORMATTING_PLUGIN', data: JSON.stringify({ book: [paid] }) }] : [],
@@ -346,6 +348,32 @@ const TrackerGrid = forwardRef(function TrackerGrid({ columns, rows, formats, no
     noteText.current = new Map(notes)
     drawNotes()
 
+    // A SORT, made fast (measured 2026-10-25, 3,688 trucks × 98 columns): Univer moves every rule range and
+    // every note row by row through the sort's order — the paid rule alone cost 6–19 s (its column range is
+    // cut against each sorted row), 3,000 notes another ~18 s. Neither needs moving: the rule covers the
+    // whole column whatever the order, and the notes are redrawn on their trucks after every sort anyway.
+    // So both are taken off, silently (off the undo stack), just before the sort and put back after it.
+    // Undo/redo replay the reorder mutation only, so they never take the slow path. The restore also runs
+    // on a timer, in case the sort is refused and never reports done.
+    const paid = paidFor(columns, rows)
+    const cfIds = () => ({ unitId: workbook.getId(), subUnitId: sheet().getSheetId() })
+    let sortPrepared = false
+    const finishSort = () => {
+      if (!sortPrepared) return
+      sortPrepared = false
+      if (paid) univerAPI.syncExecuteCommand('sheet.mutation.add-conditional-rule', { ...cfIds(), rule: paid })
+      readIds()
+      drawNotes()
+    }
+    const prepareSort = () => {
+      sortPrepared = true
+      drawingNotes = true
+      try { for (const n of sheet().getNotes()) noteMutation('sheet.mutation.remove-note', { row: n.row, col: n.col }) }
+      finally { drawingNotes = false }
+      if (paid) univerAPI.syncExecuteCommand('sheet.mutation.delete-conditional-rule', { ...cfIds(), cfId: paid.cfId })
+      setTimeout(finishSort, 0)
+    }
+
     // A cell's STORED style. ⚠️ Never getCellStyleData()/getCellData() for this: conditional formatting
     // hooks into those reads, so a paid truck's AL Payment Status reads green as if someone had painted
     // it — and would be saved as their colour (measured 2026-10-23). The raw cell has only what is stored.
@@ -402,13 +430,16 @@ const TrackerGrid = forwardRef(function TrackerGrid({ columns, rows, formats, no
           return
         }
         if (p?.type === CommandType.COMMAND) lastCmd = p.id
+        if (p.id === 'sheet.command.reorder-range') prepareSort()
       }),
       univerAPI.addEvent(univerAPI.Event.CommandExecuted, (p) => {
         if (!mine(p)) return
         if (p?.type === CommandType.COMMAND) lastCmd = ''
         // sorting moves whole rows (the id column with them): read the new order — and put the notes
-        // back on their trucks, since Univer leaves them where they were
-        if (/sort|reorder/.test(p.id)) { readIds(); drawNotes() }
+        // back on their trucks, since Univer leaves them where they were (a sort's rule and notes: finishSort)
+        // — once: the reorder MUTATION inside a sort waits for finishSort; on its own it is an undo/redo
+        if (p.id === 'sheet.command.reorder-range') finishSort()
+        else if (p.id === 'sheet.mutation.reorder-range' && !sortPrepared) { readIds(); drawNotes() }
       }),
       // ── Notes: one per cell, as in Excel. Each saved version is kept on the server (add-only). ──
       univerAPI.addEvent(univerAPI.Event.BeforeSheetNoteAdd, (p) => {
@@ -459,7 +490,8 @@ const TrackerGrid = forwardRef(function TrackerGrid({ columns, rows, formats, no
         // A sort moves whole rows (the id column with them): no truck's value or look changed, so nothing is
         // checked here — the new order is read when the command ends (CommandExecuted). Checking every
         // cell of the book as an edit took 31 s for 3,688 trucks (measured 2026-10-24).
-        if (/sort|reorder/i.test(lastCmd)) return
+        // An undo/redo of a sort replays the reorder mutation with no command around it — the same rule.
+        if (/sort|reorder/i.test(lastCmd) || p?.payload?.id === 'sheet.mutation.reorder-range') return
         const cells = [], fresh = [], repair = []
         for (const range of ourRanges(p)) {
           const r0 = range.getRow(), c0 = range.getColumn()
