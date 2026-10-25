@@ -1,0 +1,70 @@
+/* Send Invoice (/invoices) — credit release step 1.
+   Kept out of index.css on purpose: the parked payments branch adds ~470 lines there,
+   and a separate file means the two never conflict. Uses the shared tokens only. */
+
+.inv-page { max-width: 760px; }
+.inv-upload { margin-bottom: 28px; }
+
+.inv-drop {
+  width: 100%;
+  display: flex; align-items: center; justify-content: center; gap: 14px;
+  min-height: 112px; padding: 20px;
+  border: 1.5px dashed var(--border-strong); background: var(--paper);
+  color: var(--ink); font: inherit; font-size: 15px; text-align: left; line-height: 1.4;
+  cursor: pointer;
+}
+.inv-drop span:not(.spinner) { color: var(--text-secondary); font-size: 13px; }
+.inv-drop strong { color: var(--ink); font-size: 15px; }
+.inv-drop:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-wash); }
+.inv-drop:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--accent-ring); }
+
+.inv-refused { display: flex; gap: 12px; padding: 14px; background: var(--red-light); color: var(--red); }
+.inv-refused strong { display: block; margin-bottom: 4px; }
+.inv-refused p { margin: 0 0 8px; color: var(--gray-800); }
+.inv-file { font-size: 12px; color: var(--text-secondary) !important; word-break: break-all; }
+
+.inv-read-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.inv-customer { font-size: 18px; font-weight: 700; color: var(--ink); line-height: 1.2; }
+.inv-vehicle {
+  flex: 0 0 auto; padding: 4px 8px; border: 1px solid var(--ink);
+  font-weight: 700; letter-spacing: .04em; font-size: 14px;
+}
+.inv-meta { font-size: 13px; color: var(--text-secondary); margin-top: 3px; overflow-wrap: anywhere; }
+
+.inv-bills { width: 100%; border-collapse: collapse; margin: 14px 0 8px; font-size: 14px; }
+.inv-bills td { padding: 7px 0; border-bottom: 1px solid var(--border-faint); }
+.inv-bills td:first-child { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.inv-bills td:nth-child(2) { padding: 0 8px; }
+.inv-bills .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.inv-total td { font-weight: 700; border-bottom: 2px solid var(--ink); }
+.inv-checks { display: flex; gap: 6px; align-items: flex-start; font-size: 12px; color: var(--green); margin: 0 0 16px; }
+.inv-checks svg { margin-top: 2px; }
+
+.inv-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.inv-cancel { margin-left: auto; }
+
+.inv-h2 {
+  font-size: 11px; font-weight: 700; letter-spacing: var(--tracking-label);
+  text-transform: uppercase; color: var(--text-secondary); margin: 0 0 10px;
+}
+.inv-empty { padding: 24px 0; color: var(--text-secondary); font-size: 14px; }
+
+.inv-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--border-default); }
+.inv-row {
+  display: grid; grid-template-columns: 1fr auto; gap: 6px 16px;
+  padding: 12px 0; border-bottom: 1px solid var(--border-default);
+}
+.inv-row-name { font-weight: 700; color: var(--ink); overflow-wrap: anywhere; }
+.inv-row-side { text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.inv-amount { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.inv-row-actions { grid-column: 1 / -1; display: flex; gap: 8px; }
+.inv-fail { font-size: 13px; color: var(--red); margin-top: 3px; overflow-wrap: anywhere; }
+.inv-send { grid-column: 1 / -1; display: flex; gap: 8px; align-items: center; }
+.inv-send .form-input { flex: 1 1 auto; min-width: 0; }
+
+@media (max-width: 480px) {
+  .inv-cancel { margin-left: 0; }
+  .inv-actions .btn { flex: 1 1 auto; }
+  .inv-send { flex-wrap: wrap; }
+  .inv-send .form-input { flex-basis: 100%; }
+}
