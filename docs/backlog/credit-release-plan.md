@@ -275,7 +275,7 @@ Staging holds those three DEMO invoices (DEMO KRISHNA LOGISTICS / MAHADEV TRAVEL
 - ⏭️ **Owner:** turn on 2-Step Verification on `accounts.guj@parastrucks.in`, create an app password, and add
   it as the function secret **`GATE_SMTP_PASSWORD`** on staging (Supabase dashboard → Edge Functions →
   Secrets) — never in chat. Until then "Save and email" saves and says email is not set up yet.
-- ⏭️ Then a real send to a `@parastrucks.in` address (the only addresses staging may mail).
+- ✅ **First real email sent 2026-10-25** (owner added `GATE_SMTP_PASSWORD` on staging): DEMO job WTY57562627099001 → `ceo@parastrucks.in` from the screen; Gmail answered `250 2.0.0 OK … gsmtp`, 4.3 s inside the function; address remembered for SAP code 900001; audited. ⏭️ Owner: confirm it arrived (inbox, not Spam), the PDF opens, ₹ and — show right.
 - ⏭️ Owner: approve or change the email wording above.
 - Prod: the migration + the function + the secret — **only on the owner's command**.
 
