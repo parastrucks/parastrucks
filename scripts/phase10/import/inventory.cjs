@@ -42,9 +42,13 @@ function nameHints(rel) {
   return { fy: fy ? fy[0].slice(0, 7) : null, month: mon ?? (mmyy ? MONTHS[Number(mmyy[1]) - 1] : null), mmyy: mmyy ? `${mmyy[1]}/${mmyy[2]}` : null }
 }
 
+// the sorted copy lives INSIDE the source folder (owner, 2026-10-25: "a subfolder within the backup data folder"):
+// never read it back as part of the pile
+const SORTED_DIR = '_Sorted'
 function walk(d, acc = []) {
   for (const e of fs.readdirSync(d, { withFileTypes: true })) {
     const p = path.join(d, e.name)
+    if (e.isDirectory() && d === src && e.name === SORTED_DIR) continue
     if (e.isDirectory()) walk(p, acc)
     else acc.push(p)
   }
