@@ -232,7 +232,8 @@ with cur as (
     from joined where chassis_no is not null and not in_tracker
   union all
   select 'typed_credit', mk, mk || '|' || chassis_no, chassis_no, unit_id, row_no, 'Credit typed as a number, not CTD × 0.999'
-    from joined where chassis_no is not null and credit_is_formula = false
+    -- (a chassis the tracker does not know is already listed as such)
+    from joined where chassis_no is not null and in_tracker and credit_is_formula = false
   -- truck lines
   union all
   select 'twice', mk, mk || '|' || chassis_no, chassis_no, min(unit_id::text)::uuid, min(row_no), 'Truck line ' || count(*) || ' times in one month'

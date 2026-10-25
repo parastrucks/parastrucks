@@ -51,7 +51,7 @@ begin
                 (17, 'MB1PROBEAL01', 'WHATEVER',      100,  100,    true,  null),
                 (18, 'MB1PROBEAL01', null,            100,  100,    true,  null),
                 (19, null,           'AMC',           300,  300,    true,  null),
-                (20, 'MB1PROBEALXX', 'FRESH OFFTAKE', 1000, 999,    true,  null)
+                (20, 'MB1PROBEALXX', 'FRESH OFFTAKE', 1000, 999,    false, null)   -- typed too: listed once, as not in the tracker
               ) x(rn, ch, mode, ctd, cr, f, cbn) loop
     jan := jan || jsonb_build_array(jsonb_strip_nulls(ln));
   end loop;
