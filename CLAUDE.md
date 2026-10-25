@@ -48,9 +48,11 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   not the rule. Record: plan → "THE WORKING SET".
 - **Owner, 2026-10-25:** DEMO LOAD x4 rows → **"wait right now"** (keep; don't ask again until the real load) ·
   the 2023-24 + 2024-25 sales books → "in a little while" · AL Balance Sheet upload → agreed · **prod go-live
-  ONLY on the owner's command** · **credit release / gate app = SECOND-LAST in the roadmap, just before the
-  WhatsApp integration (last)** · **Service Payments waits for the HDFC API itself** (not just a reply) — nothing
-  on the payment side until it arrives.
+  ONLY on the owner's command** · on "Credit release / gate app": *"This will come in the second-last position,
+  before WhatsApp integration"* — read as the plan's build order (the release approval + gate app step second-last,
+  WhatsApp last); the invoice upload/read/email step is being built by another session the same day (`gate_*` on
+  staging, `/invoices`) — this note does NOT stop it · **Service Payments waits for the HDFC API itself** (not just
+  a reply) — nothing on the payment side until it arrives.
 
 ## Current state (2026-10-24)
 
@@ -1053,8 +1055,8 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   RTO/Insurance per-unit instead of per-PI, and a DB rule that non-admins need a chassis — both only if asked.
 - **⏸️ Service Payments parked until the HDFC API itself arrives (owner, 2026-10-25)** — see the 2026-10-21 block. Its own list
   stays below (items 8–10 + the three go-live gates); do not start it until the owner says so.
-- **💡 Credit release + invoice sending + gate app — PLAN v0.2, not built (2026-10-24); SECOND-LAST in the
-  roadmap, just before WhatsApp (owner, 2026-10-25) — do not start it before then:**
+- **💡 Credit release + invoice sending + gate app — PLAN v0.2 (2026-10-24); the invoice step under way in another
+  session (2026-10-25); owner: the gate app comes "second-last, before WhatsApp integration":**
   `docs/backlog/credit-release-plan.md`. Owner: standalone (`gate_*` tables, payments DB stays off prod) ·
   WhatsApp **Business API** (invoice no. + amount + PDF + thank-you) + Gmail (port 465) · one login per guard
   (⚠️ exempt guards from the brand rule — brands open RLS + ERP sync) · counter sales: send only · CRM later.

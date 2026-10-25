@@ -957,6 +957,8 @@ Also: a phone view (read-only cards) and the local save queue across reloads (E5
      **the 2023-24 + 2024-25 sales books: "we'll share in a little while"** · the AL Balance Sheet upload: agreed ·
      **prod: "we will go live when I give the command"** — never propose a date, wait for the command.
      Left, optional: re-measure steady + pessimistic open times on a quiet instance.
+     ⚠️ The staging login works only from `localhost:3000` — another session (credit release / invoices) needs it
+     too: stop this worktree's dev server (`preview_stop`) when a tracker check is done.
   1. **When the owner's UPDATED files arrive: run the importer onto STAGING** (the repository/archive) — now
      ALL years at once (`run.cjs <scratch>` with no files, or the owner's folders):
      `node scripts/phase10/import/run.cjs <scratch> [files/folders]` → `node scripts/phase10/import/sql.cjs

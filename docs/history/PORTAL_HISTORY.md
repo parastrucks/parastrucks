@@ -49,7 +49,9 @@
   ⭐ Lesson: errors in the console from a test run can come from the bug the test is about to fix — date each
   error against the test that ran, before blaming new code.
 - **Owner decisions:** DEMO LOAD x4 rows wait · sales books coming · AL Balance Sheet upload agreed · prod only
-  on his command · credit release second-last (before WhatsApp, last) · payments wait for the HDFC API itself.
+  on his command · on the credit release / gate app: "This will come in the second-last position, before WhatsApp
+  integration" (read as the plan's build order; the invoice step is another session's, under way) · payments wait
+  for the HDFC API itself.
 
 ## Session log — 2026-10-21 → 10-24 (PC): vite live and checked signed in, and the credit-release plan
 
