@@ -261,13 +261,23 @@ user); with the read rule opened to everyone it fails (12/1).
 
 **Staging guard:** `GATE_EMAIL_ONLY_TO=@parastrucks.in` — on staging, mail can only go to our own addresses.
 
+**✅ First signed-in run on staging (2026-10-25, browser pane, the accounts-manager test login, DEMO PDFs):**
+read → "Save and email" saved the job (PTB, 2 bills, PDF stored at its exact size, one audit row) and said
+email is not set up yet (no message row — the check comes before anything is recorded) · the same file again
+→ "saved before", no second row · same job card with one amount changed → refused, nothing saved · a bill
+already on another job → refused naming that job · a workshop cash job and a counter sale → saved · each PDF
+link returns the same bytes · a signed-in user cannot write the tables or read the bucket directly · unknown
+invoice / action / malformed reading refused · desktop + phone layouts right, no script errors. One fix from
+it: a repeat upload showed two messages (`4eb2762`).
+Staging holds those three DEMO invoices (DEMO KRISHNA LOGISTICS / MAHADEV TRAVELS / SHIV SPARES).
+
 **Not yet done:**
 - ⏭️ **Owner:** turn on 2-Step Verification on `accounts.guj@parastrucks.in`, create an app password, and add
   it as the function secret **`GATE_SMTP_PASSWORD`** on staging (Supabase dashboard → Edge Functions →
   Secrets) — never in chat. Until then "Save and email" saves and says email is not set up yet.
-- ⏭️ The first signed-in run on staging (needs `localhost:3000`, see CLAUDE.md), then a real send to a
-  `@parastrucks.in` address.
-- Prod: the migration + the function + the secret, owner-approved, after the staging run.
+- ⏭️ Then a real send to a `@parastrucks.in` address (the only addresses staging may mail).
+- ⏭️ Owner: approve or change the email wording above.
+- Prod: the migration + the function + the secret — **only on the owner's command**.
 
 ## Sources (outside the repo, not committed)
 - WhatsApp export "Vehicle Gate Pass" (owner, 2026-10-24) — analysed by a throwaway script; aggregates only.

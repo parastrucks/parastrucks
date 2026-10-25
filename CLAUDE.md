@@ -30,6 +30,34 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ---
 
+## Current state (2026-10-25)
+
+- **🔨 CREDIT RELEASE STEP 1 — "Send Invoice" BUILT, STAGING ONLY** (branch `cr1-invoice-send`, pushed, no PR
+  yet; prod untouched). ⭐ **Record: `docs/backlog/credit-release-plan.md` → "Step 1 — as built".** Service /
+  spares / accounts upload the SAP PDF at `/invoices` → read in the browser → saved → emailed to the customer.
+  - **Reader** `src/invoices/lib/sapInvoice.js`: by label, never position; refuses an unknown form, a scan or a
+    failed cross-check. `scripts/invoices/selftest-sap-invoice.mjs` **120/0** (add `--real <main checkout docs/>`):
+    restyled copies read the same, renamed labels / missing bills refused, 428 one-digit changes never gave
+    different money, 9 planted bugs caught. ⭐ It found a real gap (customer code checked on a bill's first page
+    only). ⭐ Workshop bill pages DO print CASH BILL / CREDIT BILL (plan corrected).
+  - **DB** `20261024_gate_invoices.sql` (staging): `gate_documents/gate_bills/gate_contacts/gate_messages`, paise,
+    RPC `gate_record_document` (service_role only), RLS read service/accounts/spares same company + admin,
+    private bucket `gate-invoices`, 18 `/invoices` access rules. `probe-gate-invoices.sql` 13/0 (neg. control 12/1).
+  - **EF `gate-invoices`** (staging): company = the invoice's SELLER GSTIN; repeats return the first save;
+    conflicts refused. Email = own SMTPS client (`smtp.ts`, port 465 — EFs block 25/587).
+    `selftest-gate-mail.mjs` 60/0 (bundle with esbuild, run from the repo root). ⚠️ The server re-checks but
+    does NOT re-read the PDF.
+  - ✅ **First signed-in run on staging done** (accounts manager, DEMO PDFs) — every save/refusal path as
+    designed; 3 DEMO invoices stay on staging. ⏭️ **Owner:** app password for `accounts.guj@` → staging secret
+    `GATE_SMTP_PASSWORD` (dashboard); approve the email wording. Staging secret `GATE_EMAIL_ONLY_TO=@parastrucks.in`.
+  - ⚠️ **Staging `ALLOWED_ORIGINS` now also has `http://localhost:3001`** (owner: "use another port", 10-25) —
+    the old value (`:3000,:5173`) was confirmed by its sha256 before the change. Two sessions can now sign in to
+    staging at once (3000 + 3001). Prod's list untouched.
+  - Owner asked about "a bot on this using an MCP server" → not as the reader; a read-only question-asking
+    assistant is on the plan's roadmap (after step 3).
+  - DEMO PDFs for staging: `node scripts/invoices/write-demo-invoices.mjs node_modules/invoice-demo-files`
+    (`npm ci` wipes them; they regenerate).
+
 ## Current state (2026-10-24)
 
 - **💡 CREDIT RELEASE + INVOICE SENDING + GATE APP — PLAN v0.2, NOTHING BUILT** (owner's idea 2026-10-24;

@@ -26,6 +26,41 @@
 
 ---
 
+## Session log — 2026-10-24 → 10-25 (PC): credit release step 1 — read, save and email SAP invoices (staging)
+
+The owner said "start working". Built on branch `cr1-invoice-send` from `portal` `2b03626`; **staging only**.
+
+**The reader first, on the real files.** The three SAP PDFs were re-read; every value is taken by its printed
+label, then cross-checked (bills = summary total; each bill's own pages total the same, in figures and words, for
+the same customer code; counter total = amount in words). Mid-build the owner asked *"what if the invoice is not
+exactly as you have received it?"* — answered by making it a test, not an argument: altered copies of the real
+invoices must read identically (case, colons, spacing, extra lines) or be refused (renamed labels, missing bill,
+other form), and changing any one printed amount must never yield different money (428 tried: never). Label
+matching was loosened for it, and the test found a real gap — a multi-page bill's customer code was checked on
+its first page only. Nine planted bugs each fail the test. Then the owner asked about "a bot on this using an MCP
+server": an AI reader was advised against for money (silent misreads, customer PAN/GSTIN to an outside service,
+per-call cost); a read-only question-asking assistant went on the roadmap. Owner: "go".
+
+**Database, function, screen.** Standalone `gate_*` tables (the payments tables stay off prod), paise, one atomic
+write function only the server may call; RLS read for service / accounts / spares of the same company. Probe 13/0
+as every staging user; opening the read rule fails it. The Edge Function picks the company from the invoice's
+seller GSTIN, treats a repeat as the first save, refuses conflicting job cards and bills, and emails through an
+SMTP client of our own on port 465 (Edge Functions block 25/587) — tested offline against a scripted mail server
+(60/0; seven planted bugs caught; two real header-length bugs fixed on the way). The screen has its own
+stylesheet so the parked payments branch's `index.css` never conflicts.
+
+**Seen signed in.** Port 3000 was held by the tracker session; the owner said "use another port", so staging's
+`ALLOWED_ORIGINS` gained `localhost:3001` (old value confirmed by its sha256 first). As the accounts manager, with
+DEMO PDFs: save, the "email not set up yet" answer, the repeat, two refusals, cash + counter saves, PDF links,
+and the locked tables and bucket — all as designed. One fix: a repeat upload showed two messages.
+
+**Waiting on the owner:** the `accounts.guj@` app password as staging secret `GATE_SMTP_PASSWORD`; the email
+wording; prod only on the owner’s command.
+
+**Lessons.** (1) When the owner asks "what if X changes?", answer with a test that changes X. (2) A test that
+mutates real data must only touch what it claims to (the first "Title Case" mutation also changed customer
+names and failed for the wrong reason). (3) Git Bash `sed -i` turned a CRLF doc into LF again — check `file`.
+
 ## Session log — 2026-10-21 → 10-24 (PC): vite live and checked signed in, and the credit-release plan
 
 One session (the payments session, worktree `id-login-issue-logs-8810c0`), after payments was parked.
