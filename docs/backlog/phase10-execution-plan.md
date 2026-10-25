@@ -966,8 +966,10 @@ Also: a phone view (read-only cards) and the local save queue across reloads (E5
      Tests: al-sheet 25/0 (+--real 47/0) · probe-al-sheet 21/0 (5 mutants) · vehicle-units 653/0 · review 0.48 s for a year.
      ⚠️ Staging keeps the 3 DUMMY uploads (al_sheet_*) — deleting needs owner approval. Not live-tested: Go to truck
      for a truck in another year (same path as Search all years).
-     ⚠️ The staging login works only from `localhost:3000` — another session (credit release / invoices) needs it
-     too: stop this worktree's dev server (`preview_stop`) when a tracker check is done.
+     Ports: staging also allows `localhost:3001` since 2026-10-25 — tracker on :3000, invoices on :3001, both sign in.
+  0b. ⏭️ **The team's file pile** (2026-10-25): `D:PTBFinancesBackup data` (~4.6 lakh files, 129 GB) → `inventory.cjs` →
+     owner checks → copy into `Backup data_Sorted` by kind + year (see CLAUDE.md 2026-10-25 "THE TEAM'S FILE PILE"). The
+     sorted purchase / sales / retention / AL books then feed step 1. Only that folder may be read.
   1. **When the owner's UPDATED files arrive: run the importer onto STAGING** (the repository/archive) — now
      ALL years at once (`run.cjs <scratch>` with no files, or the owner's folders):
      `node scripts/phase10/import/run.cjs <scratch> [files/folders]` → `node scripts/phase10/import/sql.cjs

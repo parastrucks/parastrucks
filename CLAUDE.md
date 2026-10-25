@@ -60,10 +60,27 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   delete only with the owner's yes.** Found on the way: going to a truck in another year threw an uncaught
   Univer error (scroll before the new engine was ready) and one render paired the new year with the old rows
   (wrong header + a wasted engine) — both fixed.
-- ⚠️ **localhost:3000 is shared**: the staging login works only from it, and the credit-release session (invoices)
-  needs it too. This worktree's dev server was stopped for it, then restarted when the owner found localhost
-  down (2026-10-25) — it is RUNNING from `bold-meitner-a9cb2f` now. Stop it (`preview_stop`) if the other session
-  needs the port. The app also stops it at each turn's end (`preview_start {name:"portal"}` again).
+- **🗂️ THE TEAM'S FILE PILE (owner, 2026-10-25): every file from the back-office PCs is being copied to
+  `D:PTBFinancesBackup data` — ~4,63,967 files, 129 GB, unsorted (copy started ~16:15, ~1.5 h).** Owner chose:
+  Claude sorts it (not a CoWork session, NOT the repo — real data never goes in the repo). Plan: (1) read-only
+  inventory → (2) owner checks the summary → (3) Claude COPIES (never moves) into **`Backup data_Sorted`** (a
+  SUBFOLDER of the source — owner's choice; no new parent folder) by kind and financial year; the inventory
+  (`inventory.csv` + `summary.txt`) goes in `_Sorted` too. The originals stay exactly as given.
+  - **`scripts/phase10/import/inventory.cjs <source> <out>`** (`3b4e9e3`): workbooks recognised by their HEADERS
+    with the importer's own FAMILIES + the AL sheet; year from the dates inside vs the folder/name (disagreement
+    flagged); exact duplicates by SHA-256 (only same-size files hashed; the original-looking name kept, not
+    "copy/old/(1)"); copies of one book paired by shared chassis (fuller/newer named); damaged .xlsx caught (no
+    "PK"); non-spreadsheets listed unopened; skips `_Sorted`; refuses an output inside the repo; console = counts.
+    Tested on MADE-UP files only (12-file pile; 50,000 files in 251 s → ~40 min for the pile + spreadsheets).
+  - A background watcher counts the folder every 5 min (stops when ≥ 4,63,967 and steady, or 15 min unchanged).
+    ⏭️ When the copy is done: run the inventory on `Backup data` ONLY → report → owner checks → copy into `_Sorted`
+    → then the all-years load onto staging (and see whether the 2023-24 / 2024-25 sales books are in the pile).
+  - ⛔ **Owner, 2026-10-25: "Why are you running tests on files that you are not authorized to see?"** — I had
+    tried to trial the scanner on ALL of `D:PTBFinances` (rejected; nothing read). **Rule: read/scan ONLY the
+    paths the owner named; test on made-up data; ask before any other folder** (memory `feedback_only_named_folders`).
+- **Ports (2026-10-25):** staging now also allows `http://localhost:3001` (owner: "use another port", done by the
+  invoices session) — the tracker session keeps **:3000**, the invoices session **:3001**, both can sign in. The
+  app stops this worktree's dev server at each turn's end (`preview_start {name:"portal"}` again).
 - **Owner, 2026-10-25:** DEMO LOAD x4 rows → **"wait right now"** (keep; don't ask again until the real load) ·
   the 2023-24 + 2024-25 sales books → "in a little while" · AL Balance Sheet upload → agreed · **prod go-live
   ONLY on the owner's command** · on "Credit release / gate app": *"This will come in the second-last position,

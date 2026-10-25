@@ -56,6 +56,12 @@
   credited") — a review list must not snowball, so a truck already listed for its credit line skips the %
   checks; the same rule later for a typed credit on an unknown chassis. ⭐ Method: every check in the panel has a
   plain-English line, and a source contract proves the panel names exactly the checks the SQL can return.
+- **The team's file pile** (later 10-25): ~4.6 lakh files / 129 GB from the back-office PCs, copied to `D:PTBFinancesBackup
+  data`. Owner asked repo vs CoWork session → neither: a read-only inventory by content (`inventory.cjs`), the owner checks it,
+  then a COPY into `Backup data_Sorted` (his choice: a subfolder, not a new parent). ⛔ I tried to trial the scanner on all of
+  `D:PTBFinances`; the owner stopped it ("files that you are not authorized to see") — nothing was read; rule saved: only the
+  named paths, test on made-up data. The scanner was then tested on made-up piles only (found two of its own slips: it kept
+  "copy of …" as the original, and read a damaged .xlsx as text).
 - **Owner decisions:** DEMO LOAD x4 rows wait · sales books coming · AL Balance Sheet upload agreed · prod only
   on his command · on the credit release / gate app: "This will come in the second-last position, before WhatsApp
   integration" (read as the plan's build order; the invoice step is another session's, under way) · payments wait
