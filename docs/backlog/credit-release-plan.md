@@ -295,6 +295,11 @@ Staging holds those three DEMO invoices (DEMO KRISHNA LOGISTICS / MAHADEV TRAVEL
 **Not yet done:**
 - ⏭️ Owner: confirm the signature's **Mobile** number (+91 74969 70321 — the dealer number SAP prints on invoices),
   or give the accounts desk's number.
+- 💡 **Owner idea (2026-10-25): add "your outstanding is now up to ₹X — please settle the entire amount in time".**
+  Parked by the owner ("leave it out for now"): the portal does not know a customer's outstanding — it sees only the
+  invoices sent through this screen, not which are paid, older dues or bills raised outside it, and a wrong figure
+  sent to a customer starts a dispute. Options put to the owner: accounts uploads the Busy/SAP outstanding report
+  ("as per our books on {date}") · an optional box typed when sending · the portal's own sum after step 3 (understates).
 - ⏭️ Open a PR from `cr1-invoice-send` when the owner asks (nothing is on `portal` yet).
 - Prod — **only on the owner's command**: apply `20261024_gate_invoices.sql`, deploy `gate-invoices`
   (`--no-verify-jwt`), set `GATE_SMTP_PASSWORD` on the prod project, and do NOT set `GATE_EMAIL_ONLY_TO` there
