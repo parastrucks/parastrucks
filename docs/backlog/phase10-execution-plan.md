@@ -957,6 +957,15 @@ Also: a phone view (read-only cards) and the local save queue across reloads (E5
      **the 2023-24 + 2024-25 sales books: "we'll share in a little while"** · the AL Balance Sheet upload: agreed ·
      **prod: "we will go live when I give the command"** — never propose a date, wait for the command.
      Left, optional: re-measure steady + pessimistic open times on a quiet instance.
+     ✅ **2026-10-25 — the monthly AL Balance Sheet check BUILT on staging (10g, `b705bea` → this commit):** reader
+     (`src/tracker/lib/alSheet.js`, 12 real sheets read: every month ties, carry-over chains) · migration
+     `20261025_phase10_tracker_al_sheet.sql` on STAGING (**twelve** tracker migrations for prod; LF) · EF actions
+     alUpload/alReview/alSettle (staging) · "AL sheet" panel on /tracker. Browser-checked with DUMMY Sep + Oct 2026
+     sheets (`scripts/phase10/write-demo-al-sheets.mjs`): every planted problem listed, nothing else; Go to truck;
+     It is right + reason remembered across a replace; same file again = no-op; tracker untouched (0 audit rows).
+     Tests: al-sheet 25/0 (+--real 47/0) · probe-al-sheet 21/0 (5 mutants) · vehicle-units 653/0 · review 0.48 s for a year.
+     ⚠️ Staging keeps the 3 DUMMY uploads (al_sheet_*) — deleting needs owner approval. Not live-tested: Go to truck
+     for a truck in another year (same path as Search all years).
      ⚠️ The staging login works only from `localhost:3000` — another session (credit release / invoices) needs it
      too: stop this worktree's dev server (`preview_stop`) when a tracker check is done.
   1. **When the owner's UPDATED files arrive: run the importer onto STAGING** (the repository/archive) — now

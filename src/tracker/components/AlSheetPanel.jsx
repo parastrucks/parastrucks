@@ -9,7 +9,8 @@ import { readAlWorkbook, sheetTotals, monthLabel } from '../lib/alSheet'
 import { groupIssues } from '../lib/alChecks'
 import { fyOfTruck } from '../lib/bookYear'
 
-const rupees = (v) => (v == null ? '—' : `₹${Math.round(v).toLocaleString('en-IN')}`)
+// −₹1,42,05,424, not ₹-1,42,05,424
+const rupees = (v) => (v == null ? '—' : `${v < 0 ? '−' : ''}₹${Math.abs(Math.round(v)).toLocaleString('en-IN')}`)
 const label = (mk) => (mk ? monthLabel(`${mk}-01`) : '')
 const when = (iso) => (iso ? new Date(iso).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '')
 async function sha256(buf) {
