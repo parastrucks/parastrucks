@@ -113,7 +113,7 @@ for (const [name, c] of Object.entries(people)) {
   ok(auth.gate('dropTable', c).ok === false && auth.gate('dropTable', c).status === 400, `${name} → unknown action refused`)
 }
 ok(eqSet([...auth.ACTIONS], ['list','book','find','history','listNotes','listFormats','listViews','applyChanges','createUnit','createUnits',
-  'supersedeUnit','addNote','setFormats','saveView','deleteView','logExport']), 'the action list is the planned one')
+  'supersedeUnit','addNote','setFormats','saveView','deleteView','logExport','alUpload','alReview','alSettle']), 'the action list is the planned one')
 
 // hasTrackerAccess on its own (gate() checks is_active first; this keeps the second line honest)
 for (const [name, c] of Object.entries(people)) ok(auth.hasTrackerAccess(c) === opens.includes(name), `${name} hasTrackerAccess`)
@@ -248,6 +248,33 @@ ok(!val.validateFormats([{ unit_id: u1, column_key: 'ctc', format: { x: 'y'.repe
 ok(!val.validateFormats([{ unit_id: u1, column_key: 'ctc', format: {} }, { unit_id: u1, column_key: 'ctc', format: {} }]).ok, 'same cell twice refused')
 ok(val.requestKey('A', 'req-12345') === 'A:req-12345' && val.requestKey('B', 'req-12345') === 'B:req-12345', 'request ids namespaced per person')
 ok(val.requestKey('A', 'short') === null && val.requestKey('A', 7) === null && val.requestKey('A', 'x'.repeat(101)) === null, 'bad request ids refused')
+
+// ── 5. The monthly AL Balance Sheet upload (alUpload / alSettle) ──
+{
+  const good = { month: '2026-03-01', file_name: ' AL Balance Sheet -0326.xlsx ', sha256: 'A'.repeat(64), lines: [
+    { row_no: 2, line_date: '2026-02-28', details: 'CARRY OVER', debit: 1000.004 },
+    { row_no: 3, line_date: '2026-03-02', details: ' x ', credit: 999, chassis_no: 'MB1', ctd: 1000, offtake_mode: 'IBND', credit_is_formula: true, cbn: null, engine_no: '' }] }
+  let a = val.validateAlUpload(good)
+  ok(a.ok && a.month === '2026-03-01' && a.file_name === 'AL Balance Sheet -0326.xlsx' && a.sha256 === 'a'.repeat(64) && a.replace === false, 'AL upload: a good month passes, name trimmed, hash lower case')
+  ok(a.ok && a.lines[0].debit === 1000 && a.lines[0].credit === null && a.lines[0].credit_is_formula === null && a.lines[1].details === 'x' && a.lines[1].engine_no === null, 'AL upload: money to the paisa, empty text → null, missing fields → null')
+  ok(val.validateAlUpload({ ...good, replace: true }).replace === true && val.validateAlUpload({ ...good, replace: 'yes' }).replace === false, 'AL upload: replace only when exactly true')
+  const bad = (patch, label) => ok(!val.validateAlUpload({ ...good, ...patch }).ok, `AL upload refused: ${label}`)
+  bad({ month: '2026-03-15' }, 'mid-month'); bad({ month: '2026-13-01' }, 'month 13'); bad({ month: 202603 }, 'a number month')
+  bad({ file_name: '  ' }, 'no file name'); bad({ sha256: 'x' }, 'bad hash'); bad({ lines: [] }, 'no lines'); bad({ lines: 'x' }, 'lines not a list')
+  bad({ lines: Array.from({ length: 2001 }, (_, i) => ({ row_no: i + 1 })) }, '2,001 lines')
+  bad({ lines: [{ row_no: 2 }, { row_no: 2 }] }, 'the same row twice'); bad({ lines: [{ row_no: 0 }] }, 'row 0'); bad({ lines: [{ row_no: 2.5 }] }, 'row 2.5')
+  bad({ lines: [{ row_no: 2, credit: '999' }] }, 'money as text'); bad({ lines: [{ row_no: 2, credit: 1e13 }] }, 'an absurd amount'); bad({ lines: [{ row_no: 2, debit: NaN }] }, 'NaN')
+  bad({ lines: [{ row_no: 2, line_date: '05/03/26' }] }, 'a date not ISO'); bad({ lines: [{ row_no: 2, chassis_no: 7 }] }, 'chassis as a number')
+  bad({ lines: [{ row_no: 2, details: 'x'.repeat(301) }] }, 'text over 300'); bad({ lines: [{ row_no: 2, unit_id: 'x' }] }, 'an unknown field')
+  bad({ lines: [{ row_no: 2, credit_is_formula: 'yes' }] }, 'formula flag not a boolean'); bad({ lines: [null] }, 'a null line')
+  ok(val.validateAlUpload({ ...good, lines: Array.from({ length: 2000 }, (_, i) => ({ row_no: i + 1 })) }).ok, 'AL upload: 2,000 lines allowed')
+  const mig = readFileSync(new URL('../../supabase/migrations/20261025_phase10_tracker_al_sheet.sql', import.meta.url), 'utf8')
+  ok(val.MAX_AL_LINES === 2000 && /line_count between 1 and 2000/.test(mig) && /n < 1 or n > 2000/.test(mig), 'AL line cap: the function, the table and the database agree (2,000)')
+  let s = val.validateAlSettle({ check: 'ctd_diff', subject: ' 2026-03|MB1 ', reason: ' AL corrected it ' })
+  ok(s.ok && s.subject === '2026-03|MB1' && s.reason === 'AL corrected it', 'AL settle: trimmed')
+  ok(!val.validateAlSettle({ check: 'ctd_diff', subject: 'x', reason: '  ' }).ok && !val.validateAlSettle({ check: 'DROP TABLE', subject: 'x', reason: 'r' }).ok
+     && !val.validateAlSettle({ check: 'ctd_diff', subject: '', reason: 'r' }).ok && !val.validateAlSettle({ check: 'ctd_diff', subject: 'x', reason: 'r'.repeat(501) }).ok, 'AL settle: reason, check and subject required')
+}
 
 console.log(`selftest-vehicle-units: ${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

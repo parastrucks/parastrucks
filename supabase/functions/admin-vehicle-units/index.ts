@@ -24,7 +24,7 @@ import { type Caller, gate, canSeeIncentives, canExport, canManageSharedViews, c
 import { INCENTIVE_COLUMNS, isIncentive } from "./columns.ts"
 import {
   EDIT_SOURCES, isUuid, isKnownColumn, planRead, requestKey,
-  validateChanges, validateFormats, validateLayoutColumns, validateNewRows, validateValues,
+  validateAlSettle, validateAlUpload, validateChanges, validateFormats, validateLayoutColumns, validateNewRows, validateValues,
 } from "./validate.ts"
 
 const PAGE = 1000          // PostgREST's row cap; `list` pages at it
@@ -437,6 +437,35 @@ Deno.serve(async (req: Request) => {
           after: { rows, columns: cols, incentives: cols.some((k) => (INCENTIVE_COLUMNS as readonly string[]).includes(k as string)) },
         })
         return json({ ok: true })
+      }
+
+      // ── The monthly AL Balance Sheet check: store the month's lines; list what disagrees ─
+      // (nothing in the tracker is changed — the team's Excel file stays the record of the AL account)
+      case "alUpload": {
+        const v = validateAlUpload(payload)
+        if (!v.ok) return json({ error: v.error }, 400)
+        const { data, error } = await admin.rpc("tracker_al_upload", {
+          p_actor: caller.id, p_month: v.month, p_file_name: v.file_name, p_sha256: v.sha256, p_replace: v.replace, p_lines: v.lines,
+        })
+        if (error) { const d = dbError(error); return json({ error: d.error }, d.status) }
+        const r = data as { ok: boolean; reason?: string }
+        // the month already has a file: the page asks whether to replace it
+        if (!r.ok && r.reason === "exists") return json({ ...r, error: "This month is already uploaded" }, 409)
+        return json(r)
+      }
+      case "alReview": {
+        const { data, error } = await admin.rpc("tracker_al_review")
+        if (error) { const d = dbError(error); return json({ error: d.error }, d.status) }
+        return json({ ok: true, review: data })
+      }
+      case "alSettle": {
+        const v = validateAlSettle(payload)
+        if (!v.ok) return json({ error: v.error }, 400)
+        const { data, error } = await admin.rpc("tracker_al_settle", {
+          p_actor: caller.id, p_check: v.check, p_subject: v.subject, p_reason: v.reason,
+        })
+        if (error) { const d = dbError(error); return json({ error: d.error }, d.status) }
+        return json(data as Record<string, unknown>)
       }
     }
     return json({ error: `Unknown action: ${action}` }, 400)

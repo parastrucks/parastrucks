@@ -32,7 +32,7 @@ export const canManageSharedViews = (c: Caller) => isAdmin(c)
 export const ACTIONS = [
   "list", "book", "find", "history", "listNotes", "listFormats", "listViews",
   "applyChanges", "createUnit", "createUnits", "supersedeUnit", "addNote", "setFormats",
-  "saveView", "deleteView", "logExport",
+  "saveView", "deleteView", "logExport", "alUpload", "alReview", "alSettle",
 ] as const
 export type Action = typeof ACTIONS[number]
 
@@ -53,6 +53,10 @@ export const ROLE_GATES: Record<Action, (c: Caller) => boolean> = {
   saveView:      hasTrackerAccess,   // shared → canManageSharedViews, checked with the payload
   deleteView:    hasTrackerAccess,   // owner, or admin for a shared one
   logExport:     hasTrackerAccess,   // kind 'export' → canExport, checked with the payload
+  // the monthly AL Balance Sheet check (owner, 2026-10-23): the back office's own file; changes nothing in the tracker
+  alUpload:      hasTrackerAccess,
+  alReview:      hasTrackerAccess,
+  alSettle:      hasTrackerAccess,
 }
 
 export function gate(action: string, c: Caller): { ok: true } | { ok: false; status: number; error: string } {

@@ -143,6 +143,68 @@ export function validateFormats(formats: unknown):
   return { ok: true, clean: out }
 }
 
+// alUpload: one month of the AL Balance Sheet as the browser read it (src/tracker/lib/alSheet.js).
+// The database stores the lines and runs the checks; this only makes sure what reaches it is plain data.
+export const MAX_AL_LINES = 2000
+const AL_TEXT = ["details", "cbn", "chassis_no", "engine_no", "offtake_mode"] as const
+const AL_MONEY = ["debit", "credit", "ctd"] as const
+const AL_FIELDS = new Set<string>(["row_no", "line_date", "credit_is_formula", ...AL_TEXT, ...AL_MONEY])
+export type AlLine = Record<string, string | number | boolean | null>
+export function validateAlUpload(p: Record<string, unknown>):
+  { ok: true; month: string; file_name: string; sha256: string; replace: boolean; lines: AlLine[] } | { ok: false; error: string } {
+  const month = p.month
+  if (typeof month !== "string" || !/^\d{4}-(0[1-9]|1[0-2])-01$/.test(month)) return { ok: false, error: "month must be YYYY-MM-01" }
+  const file_name = typeof p.file_name === "string" ? p.file_name.trim() : ""
+  if (!file_name || file_name.length > 200) return { ok: false, error: "file name required (at most 200 characters)" }
+  const sha256 = typeof p.sha256 === "string" ? p.sha256.toLowerCase() : ""
+  if (!/^[0-9a-f]{64}$/.test(sha256)) return { ok: false, error: "sha256 required" }
+  if (!Array.isArray(p.lines) || p.lines.length === 0) return { ok: false, error: "lines must be a non-empty list" }
+  if (p.lines.length > MAX_AL_LINES) return { ok: false, error: `at most ${MAX_AL_LINES} lines in one month` }
+  const lines: AlLine[] = []
+  const rows = new Set<number>()
+  for (const raw of p.lines) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return { ok: false, error: "each line must be an object" }
+    const l = raw as Record<string, unknown>
+    const extra = Object.keys(l).find((k) => !AL_FIELDS.has(k))
+    if (extra) return { ok: false, error: `unknown field: ${extra}` }
+    const row_no = l.row_no
+    if (!Number.isInteger(row_no) || (row_no as number) < 1 || (row_no as number) > 100000) return { ok: false, error: "row_no must be a sheet row number" }
+    if (rows.has(row_no as number)) return { ok: false, error: `row ${row_no} twice` }
+    rows.add(row_no as number)
+    const out: AlLine = { row_no: row_no as number }
+    if (l.line_date != null) {
+      if (typeof l.line_date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(l.line_date) || Number.isNaN(Date.parse(l.line_date))) return { ok: false, error: `row ${row_no}: bad date` }
+      out.line_date = l.line_date
+    } else out.line_date = null
+    for (const k of AL_TEXT) {
+      const v = l[k]
+      if (v != null && (typeof v !== "string" || v.length > 300)) return { ok: false, error: `row ${row_no}: ${k} must be text (at most 300 characters)` }
+      out[k] = v == null || (v as string).trim() === "" ? null : (v as string).trim()
+    }
+    for (const k of AL_MONEY) {
+      const v = l[k]
+      if (v != null && (typeof v !== "number" || !Number.isFinite(v) || Math.abs(v) >= 1e12)) return { ok: false, error: `row ${row_no}: ${k} must be an amount` }
+      out[k] = v == null ? null : Math.round((v as number) * 100) / 100
+    }
+    if (l.credit_is_formula != null && typeof l.credit_is_formula !== "boolean") return { ok: false, error: `row ${row_no}: credit_is_formula must be true or false` }
+    out.credit_is_formula = (l.credit_is_formula as boolean | undefined) ?? null
+    lines.push(out)
+  }
+  return { ok: true, month, file_name, sha256, replace: p.replace === true, lines }
+}
+
+// alSettle: "this line is right" — check key and subject as the review gave them, and the person's reason.
+export function validateAlSettle(p: Record<string, unknown>):
+  { ok: true; check: string; subject: string; reason: string } | { ok: false; error: string } {
+  const check = p.check, subject = typeof p.subject === "string" ? p.subject.trim() : ""
+  const reason = typeof p.reason === "string" ? p.reason.trim() : ""
+  if (typeof check !== "string" || !/^[a-z_0-9]{2,40}$/.test(check)) return { ok: false, error: "check required" }
+  if (!subject || subject.length > 200) return { ok: false, error: "subject required" }
+  if (!reason) return { ok: false, error: "Say why it is right — a reason is needed" }
+  if (reason.length > 500) return { ok: false, error: "reason: at most 500 characters" }
+  return { ok: true, check, subject, reason }
+}
+
 // The request id is namespaced by the caller, so one person's id can never replay (or block)
 // another person's save.
 export function requestKey(callerId: string, clientRequestId: unknown): string | null {
