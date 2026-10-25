@@ -252,7 +252,7 @@ dropped connection; the PDF comes back byte for byte from the message; the passw
 attachment name) — the vehicle's registration number is what the customer cares about; only the TOTAL, highlighted
 (a large bold amount in a shaded box); no labour / parts split; signed off like the company's own mails (Kind regards ·
 **Accounts Team** · *Paras Trucks and Buses* · the Paras logo · Sanathal address · Mobile +91 74969 70321 (the dealer
-number SAP prints on every invoice — ⏭️ owner to confirm) · "Authorized Dealer -" + the Ashok Leyland logo). Logos are
+number SAP prints on every invoice — ✅ confirmed by the owner) · "Authorized Dealer -" + the Ashok Leyland logo). Logos are
 embedded in the email (not linked), so they show even where outside images are blocked. Workshop subject: *"Invoice for
 your vehicle GJ01ZZ0001 – Paras Trucks and Buses"*, body *"Dear {Customer}, Thank you for getting your vehicle {plate}
 serviced at our workshop. Please find your invoice attached."* + TOTAL AMOUNT box, attachment *"Invoice {plate}.pdf"*.
@@ -293,8 +293,7 @@ Staging holds those three DEMO invoices (DEMO KRISHNA LOGISTICS / MAHADEV TRAVEL
   filed it with the earlier test conversation, which had been deleted — so it showed under Trash, not Spam).
 
 **Not yet done:**
-- ⏭️ Owner: confirm the signature's **Mobile** number (+91 74969 70321 — the dealer number SAP prints on invoices),
-  or give the accounts desk's number.
+- ✅ Signature **Mobile** +91 74969 70321 (the dealer number SAP prints on invoices) — confirmed by the owner 2026-10-25.
 - 💡 **Owner idea (2026-10-25): add "your outstanding is now up to ₹X — please settle the entire amount in time".**
   Parked by the owner ("leave it out for now"): the portal does not know a customer's outstanding — it sees only the
   invoices sent through this screen, not which are paid, older dues or bills raised outside it, and a wrong figure

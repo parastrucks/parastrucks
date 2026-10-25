@@ -58,7 +58,7 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
     parts split; **signed off like the company's own mails** (Kind regards · Accounts Team · Paras Trucks and
     Buses · Paras logo · Sanathal address · Mobile · "Authorized Dealer -" + AL logo). Logos are embedded
     (`logos.ts`, cid PNGs — the staff signatures link per-user Gmail images and mail apps don't show SVG).
-    ⏭️ **Owner to confirm the Mobile line** (+91 74969 70321 = the dealer "Mob No" SAP prints on invoices).
+    ✅ **Mobile line confirmed by the owner** (+91 74969 70321 = the dealer "Mob No" SAP prints on invoices).
   - ⭐ **Every message asks for TIMELY PAYMENT (owner, 2026-10-25, `b310fa5`)** — the tool is mostly for vehicles
     released **on credit** (paid ones rarely come here): after the total, *"We request you to kindly make this payment
     on time. Timely payments are what allow us to keep providing you the best of our service — without them, we will
@@ -963,7 +963,7 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 - **⏸️ Service Payments parked, waiting on HDFC (2026-10-21)** — see the 2026-10-21 block. Its own list
   stays below (items 8–10 + the three go-live gates); do not start it until the owner says so.
 - **🔨 Credit release STEP 1 ("Send Invoice") BUILT on staging, real email proven (2026-10-25)** — branch
-  `cr1-invoice-send`, see the 2026-10-25 block. ⏭️ Owner: confirm the signature's Mobile number. Then: open a
+  `cr1-invoice-send`, see the 2026-10-25 block. ✅ Signature Mobile confirmed. Next: open a
   PR when asked; prod (migration + EF + `GATE_SMTP_PASSWORD` on prod + drop `GATE_EMAIL_ONLY_TO` there) **only on
   the owner's command**; then step 2 (release request + approval + gate + guard logins).
 - **💡 Credit release + invoice sending + gate app — PLAN v0.2 (2026-10-24):**

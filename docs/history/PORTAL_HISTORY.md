@@ -79,8 +79,9 @@ bold), with a closing line thanking anyone who has already paid (`b310fa5`). Sel
 fail on the old wording. Deployed to staging; a test mail arrived with the paragraph (Gmail put it in the earlier,
 already-deleted test conversation, so it showed under Trash — a threading effect, not a delivery problem).
 
-**Waiting on the owner:** confirm the signature's Mobile number (+91 74969 70321, the dealer number SAP prints);
-a PR when asked; prod only on the owner's command.
+The owner then confirmed the signature's Mobile number (+91 74969 70321, the dealer number SAP prints).
+
+**Waiting on the owner:** a PR when asked; prod only on the owner's command.
 
 **Lessons.** (1) When the owner asks "what if X changes?", answer with a test that changes X. (2) A test that
 mutates real data must only touch what it claims to (the first "Title Case" mutation also changed customer

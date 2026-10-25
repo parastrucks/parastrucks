@@ -31,7 +31,7 @@ export type Email = { subject: string; text: string; html: string; attachmentNam
 
 // The sign-off. PTB's lines are the ones the company's own mail signatures use (info.guj@,
 // ceo@ — read 2026-10-25); the number is the one SAP prints as the dealer's "Mob No" on every
-// invoice. ⏭️ Owner to confirm the number. Another company falls back to its entities row.
+// invoice — confirmed by the owner 2026-10-25. Another company falls back to its entities row.
 const SIGNATURES: Record<string, Omit<Sender, "team">> = {
   PTB: {
     company: "Paras Trucks and Buses",
