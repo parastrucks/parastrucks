@@ -1,5 +1,5 @@
 // Phase 10 — the toolbar above the grid (slice 5): find a vehicle, layouts, Copy for mail, a row's history,
-// and which year the grid holds (2026-10-24). One line, so the grid gives up one line of height for all of
+// which year the grid holds (2026-10-24) and the monthly AL Balance Sheet check (2026-10-25). One line, so the grid gives up one line of height for all of
 // them. Everything here reads the grid or the server; nothing writes a cell.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
@@ -9,6 +9,7 @@ import { mailTable, BIG_COPY } from '../lib/mailTable'
 import { describeChange } from '../lib/historyText'
 import { COLUMN_BY_KEY } from '../lib/columnMeta'
 import { FIRST_YEAR, fyLabel, fyOfTruck } from '../lib/bookYear'
+import AlSheetPanel from './AlSheetPanel'
 
 const LAYOUT_KEY = 'trk-layout' // the layout last chosen, per browser
 const remembered = () => { try { return localStorage.getItem(LAYOUT_KEY) ?? '' } catch { return '' } }
@@ -140,12 +141,16 @@ export default function TrackerTools({ grid, bookRows, say, scope, fyStart, onSc
     const cell = grid.current?.activeCell()
     if (!cell) { say('Click a cell in a vehicle’s row first, then History.'); return }
     const chassis = bookRows().find((r) => r.id === cell.id)?.chassis_no ?? ''
+    setAlOpen(false)
     setHist({ ...cell, chassis, entries: null, onlyThis: false })
     try {
       const { history: list } = await history(cell.id)
       setHist((h) => h && h.id === cell.id ? { ...h, entries: list ?? [] } : h)
     } catch (e) { setHist((h) => h && { ...h, entries: [], error: e.message }) }
   }
+  // ── The monthly AL Balance Sheet check (a side panel where History opens; one at a time) ──
+  const [alOpen, setAlOpen] = useState(false)
+
   const shownEntries = hist?.entries?.filter((e) => !hist.onlyThis || e.column_key === hist.key || e.column_key === '*') ?? []
 
   return (
@@ -203,6 +208,8 @@ export default function TrackerTools({ grid, bookRows, say, scope, fyStart, onSc
           title="Copies the rows your filter shows × the columns not hidden, as a table for a mail">Copy for mail</button>
         <button type="button" className="btn btn-sm btn-secondary" onClick={openHistory}
           title="Every change to the selected vehicle — who, when, what">History</button>
+        <button type="button" className="btn btn-sm btn-secondary" onClick={() => { setHist(null); setAlOpen(!alOpen) }}
+          title="Upload the month’s final AL Balance Sheet and see what disagrees with the tracker">AL sheet</button>
       </div>
 
       {form && (
@@ -249,6 +256,8 @@ export default function TrackerTools({ grid, bookRows, say, scope, fyStart, onSc
           {hist.entries?.length === 200 && <p className="trk-history-empty">Showing the latest 200 changes.</p>}
         </aside>
       )}
+
+      {alOpen && <AlSheetPanel grid={grid} bookRows={bookRows} fyStart={fyStart} onScope={onScope} say={say} onClose={() => setAlOpen(false)} />}
     </>
   )
 }

@@ -448,10 +448,9 @@ Deno.serve(async (req: Request) => {
           p_actor: caller.id, p_month: v.month, p_file_name: v.file_name, p_sha256: v.sha256, p_replace: v.replace, p_lines: v.lines,
         })
         if (error) { const d = dbError(error); return json({ error: d.error }, d.status) }
-        const r = data as { ok: boolean; reason?: string }
-        // the month already has a file: the page asks whether to replace it
-        if (!r.ok && r.reason === "exists") return json({ ...r, error: "This month is already uploaded" }, 409)
-        return json(r)
+        // { ok: false, reason: 'exists', file_name, uploaded_at } when the month already has a file: an answer,
+        // not an error — the page shows which file and asks whether to replace it
+        return json(data as Record<string, unknown>)
       }
       case "alReview": {
         const { data, error } = await admin.rpc("tracker_al_review")

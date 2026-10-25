@@ -78,3 +78,9 @@ export const listViews = () => callEdge(FN, 'listViews')
 export const saveView = (view) => callEdge(FN, 'saveView', view)
 export const deleteView = (id) => callEdge(FN, 'deleteView', { id })
 export const logExport = (kind, rows, columns) => callEdge(FN, 'logExport', { kind, rows, columns })
+
+// The monthly AL Balance Sheet check (nothing in the tracker is changed by any of these)
+// → { ok, upload_id, lines, replayed, replaced } | { ok: false, reason: 'exists', file_name, uploaded_at }
+export const alUpload = (upload) => callEdge(FN, 'alUpload', upload)
+export const alReview = () => callEdge(FN, 'alReview').then((r) => r.review ?? { months: [], issues: [], explained: {} })
+export const alSettle = (check, subject, reason) => callEdge(FN, 'alSettle', { check, subject, reason })

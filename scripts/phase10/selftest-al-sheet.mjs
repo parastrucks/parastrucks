@@ -91,6 +91,20 @@ const march = [
   ok(monthFromFileName('AL Balance Sheet -0326.xlsx') === '2026-03-01' && monthFromFileName('AL Balance Sheet -1325.xlsx') === null && monthFromFileName('notes.xlsx') === null, 'file name → month (13 is not a month)')
 }
 
+// ── every check the database can return has a line in the panel, and every line is a real check
+{
+  const { AL_CHECKS, groupIssues } = await import('../../src/tracker/lib/alChecks.js')
+  const mig = fs.readFileSync(new URL('../../supabase/migrations/20261025_phase10_tracker_al_sheet.sql', import.meta.url), 'utf8')
+  const body = mig.slice(mig.indexOf('), issues as ('), mig.indexOf('select jsonb_build_object(\n  \'months\''))
+  const inDb = [...body.matchAll(/select '([a-z_0-9]+)'/g)].map((m) => m[1]).sort()
+  const inPanel = AL_CHECKS.map((c) => c.key).sort()
+  ok(inDb.length >= 19 && JSON.stringify(inDb) === JSON.stringify(inPanel), 'the panel names exactly the checks the database runs', { inDb, inPanel })
+  ok(AL_CHECKS.every((c) => c.title && c.hint), 'every check has a title and a hint')
+  const g = groupIssues([{ check: 'no_mode', subject: 'a' }, { check: 'net_not_tie', subject: 'b' }, { check: 'no_mode', subject: 'c', settled: { reason: 'r' } }, { check: 'zzz', subject: 'd' }])
+  ok(g.map((x) => x.check.key).join() === 'net_not_tie,no_mode,zzz' && g[1].open.length === 1 && g[1].settled.length === 1 && g[2].check.title === 'zzz',
+    'grouped in the panel order, settled apart, an unknown check last under its own name')
+}
+
 // ── the real files (counts only)
 const ri = process.argv.indexOf('--real')
 if (ri > 0) {

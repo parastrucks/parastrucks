@@ -120,3 +120,25 @@
   .trk-phone-note { display: block; font-size: 14px; color: var(--text-secondary); padding: 12px 0; }
   .trk-grid, .trk-loading, .trk-tools { display: none; }
 }
+
+/* The monthly AL Balance Sheet check — a side panel where History opens, a little wider */
+.trk-al { width: 440px; gap: 8px; }
+.trk-al-upload { display: flex; flex-direction: column; gap: 6px; }
+.trk-al-file { align-self: flex-start; cursor: pointer; }
+.trk-al-preview { border: 1px solid var(--border, #D1D5DB); border-radius: 6px; padding: 8px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.trk-al-ok { color: #166534; }
+.trk-al-bad { color: #92400E; }
+.trk-al-months { display: flex; flex-wrap: wrap; gap: 4px; }
+.trk-al-month { font-size: 12px; padding: 2px 6px; border-radius: 10px; background: var(--gray-100, #F3F4F6); }
+.trk-al-month--bad { background: #FEF3C7; color: #92400E; }
+.trk-al-summary { font-size: 13px; color: var(--text-secondary); margin: 0; }
+.trk-al-link { background: none; border: 0; padding: 0; color: var(--primary, #1D4ED8); text-decoration: underline; cursor: pointer; font: inherit; }
+.trk-al-list { overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 6px; }
+.trk-al-group { border: 1px solid var(--gray-100, #F3F4F6); border-radius: 6px; }
+.trk-al-group-head { width: 100%; display: flex; justify-content: space-between; gap: 8px; padding: 7px 8px; background: none; border: 0; text-align: left; cursor: pointer; font: inherit; font-weight: 600; }
+.trk-al-count { min-width: 22px; text-align: center; border-radius: 10px; background: #FEF3C7; color: #92400E; font-size: 12px; padding: 1px 6px; }
+.trk-al-hint { margin: 0 8px 4px; font-size: 12px; color: var(--text-secondary); }
+.trk-al-group .trk-history-list { padding: 0 8px; }
+.trk-al-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; align-items: center; }
+.trk-al-actions input { flex: 1; min-width: 180px; }
+.trk-al-settled { font-size: 12px; color: #166534; margin-top: 2px; }
