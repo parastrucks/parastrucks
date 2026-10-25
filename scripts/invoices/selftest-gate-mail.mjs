@@ -141,6 +141,11 @@ const NUMBERS = /WTY\d|[LP]C[RS]\d|MCI\d|\d{10,}/
   ok('html: the total is the one big bold amount', /font-weight:bold[^>]*>₹40,665\.00</.test(m.html) && (m.html.match(/₹/g) || []).length === 1)
   ok('html: the vehicle number in bold', /<b>GJ01ZZ0001<\/b>/.test(m.html))
   ok('no labour / parts split anywhere', !/labour|parts|7,080|33,585/i.test(m.text + m.html))
+  // Owner, 2026-10-25: these invoices are mostly for vehicles released on credit.
+  const PAY = /We request you to kindly make this payment on time\. Timely payments are what allow us to keep providing you the best of our service — without them, we will not be able to continue doing so\. If you have already paid, thank you, and please ignore this note\./
+  ok('text: the timely-payment ask, right after the total', PAY.test(m.text) && m.text.indexOf('Total amount') < m.text.search(PAY), m.text)
+  ok('html: the timely-payment ask (the request in bold), after the total box', /<b>We request you to kindly make this payment on time\.<\/b> Timely payments/.test(m.html)
+    && m.html.indexOf('Total amount') < m.html.indexOf('make this payment on time'), m.html)
   ok("SAP's capitals become a proper name (Pvt Ltd)", /Dear Demo Krishna Logistics Pvt Ltd,/.test(m.text) && /Dear Demo Krishna Logistics Pvt Ltd,/.test(m.html))
   ok('sign-off like the company mails: Kind regards · Accounts Team · company · address · mobile · Authorized Dealer',
     /Kind regards\r\nAccounts Team\r\nParas Trucks and Buses\r\n\r\nSurvey No\. 271P, SP Ring Road, Near Concept Motors\r\nSanathal Circle, Sanathal, Ahmedabad - 382210\r\nMobile: \+91 74969 70321\r\n\r\nAuthorized Dealer - Ashok Leyland$/.test(m.text), m.text)
@@ -149,6 +154,7 @@ const NUMBERS = /WTY\d|[LP]C[RS]\d|MCI\d|\d{10,}/
   ok('counter sale: no vehicle, no invoice number — "Your invoice from …", total, dated attachment',
     c.subject === 'Your invoice from Paras Trucks and Buses' && /Thank you for your purchase from Paras Trucks and Buses\./.test(c.text)
     && /Total amount: ₹31,400\.00/.test(c.text) && c.attachmentName === 'Invoice 24-Oct-2026.pdf' && !NUMBERS.test(c.subject + c.text + c.html), JSON.stringify(c.subject))
+  ok('counter sale also asks for timely payment', PAY.test(c.text) && /make this payment on time/.test(c.html))
   const noRegn = invoiceEmail({ ...wdoc, regn_no: null }, sender)
   ok('a workshop job without a plate still reads right', noRegn.subject === 'Your invoice from Paras Trucks and Buses' && /Thank you for getting your vehicle serviced/.test(noRegn.text))
   const evil = invoiceEmail({ ...wdoc, customer_name: 'EVIL <script>alert(1)</script>\r\nBcc: x@y.z\u0000 & CO' }, sender)

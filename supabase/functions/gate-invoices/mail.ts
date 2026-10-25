@@ -6,6 +6,9 @@
 //   - only the TOTAL billed amount, highlighted — not labour and parts separately;
 //   - sign off like the company's own mails: "Kind regards", name + role, the Paras logo,
 //     the address, a phone number, "Authorized Dealer -" + the Ashok Leyland logo.
+//   - most of these invoices are for vehicles released ON CREDIT (a vehicle paid before release
+//     rarely comes through here), so every message asks for timely payment and says why: without
+//     it we cannot keep providing the best of our service. One line thanks anyone who has paid.
 // HTML for the highlight and the logos (embedded, cid:), with a plain-text twin for mail
 // apps that show text only.
 //
@@ -84,6 +87,9 @@ export function invoiceEmail(doc: MailDoc, sender: Sender): Email {
     ? `Thank you for getting your vehicle${regn ? ` ${regn}` : ""} serviced at our workshop.`
     : `Thank you for your purchase from ${company}.`
   const attachmentName = regn ? `Invoice ${regn}.pdf` : `Invoice ${longDate(doc.doc_date).replace(/ /g, "-")}.pdf`
+  const payAsk = "We request you to kindly make this payment on time."
+  const payWhy = "Timely payments are what allow us to keep providing you the best of our service — without them, we will not be able to continue doing so."
+  const paid = "If you have already paid, thank you, and please ignore this note."
 
   const signText = [
     "Kind regards",
@@ -102,6 +108,8 @@ export function invoiceEmail(doc: MailDoc, sender: Sender): Email {
     "",
     `Total amount: ${total}`,
     "",
+    `${payAsk} ${payWhy} ${paid}`,
+    "",
     "If you have any questions about this invoice, simply reply to this email.",
     "",
     ...signText,
@@ -118,6 +126,7 @@ export function invoiceEmail(doc: MailDoc, sender: Sender): Email {
 <div style="font-size:12px;letter-spacing:1px;text-transform:uppercase;color:#555555">Total amount</div>
 <div style="font-size:26px;font-weight:bold;color:#000000;line-height:1.25">${esc(total)}</div>
 </td></tr></table>
+<p style="margin:0 0 14px"><b>${esc(payAsk)}</b> ${esc(payWhy)} ${esc(paid)}</p>
 <p style="margin:0 0 22px">If you have any questions about this invoice, simply reply to this email.</p>
 <div style="color:#222222">Kind regards</div>
 <div style="color:#222222"><b>${esc(sender.team)}</b></div>
