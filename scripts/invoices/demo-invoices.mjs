@@ -3,8 +3,7 @@
 // selftest-sap-invoice.mjs and for staging, where the owner chose dummy data: no real
 // customer invoice is ever uploaded there.
 //
-// Write the files:  node scripts/invoices/demo-invoices.mjs <out-dir>
-// (from the repo root; it uses the portal's own jsPDF.)
+// Write the files:  node scripts/invoices/write-demo-invoices.mjs <out-dir>
 
 import { jsPDF } from 'jspdf'
 
@@ -121,26 +120,4 @@ export function demoCounter({
     [676, [[40, 'AMOUNT IN WORDS'], [120, `: ${wordsOverride ?? amountWords(total, true)}`]]],
   ])
   return new Uint8Array(doc.output('arraybuffer'))
-}
-
-import { pathToFileURL } from 'node:url'
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const out = process.argv[2]
-  if (!out) console.log('usage: node scripts/invoices/demo-invoices.mjs <out-dir>')
-  else {
-    const fs = await import('node:fs')
-    const path = await import('node:path')
-    fs.mkdirSync(out, { recursive: true })
-    const files = {
-      'DEMO workshop credit GJ01ZZ0001.pdf': demoWorkshop(),
-      'DEMO workshop cash GJ01ZZ0002.pdf': demoWorkshop({
-        jobCard: 'WTY57562627099002', order: '2039100002', customer: 'DEMO MAHADEV TRAVELS', code: '900003',
-        mobile: '9000000003', regn: 'GJ01ZZ0002', pan: 'AAAPZ7777Z', gstin: '24AAAPZ7777Z1Z1', credit: false,
-        bills: [{ no: 'LCS5756269900002', amount: 1534000, exTax: 1300000 }, { no: 'PCS5756269900002', amount: 455000, exTax: 385600 }],
-      }),
-      'DEMO counter credit MCI5756269900001.pdf': demoCounter(),
-    }
-    for (const [name, bytes] of Object.entries(files)) fs.writeFileSync(path.join(out, name), bytes)
-    console.log(`wrote ${Object.keys(files).length} DEMO invoices to ${out}`)
-  }
 }
