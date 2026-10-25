@@ -26,6 +26,31 @@
 
 ---
 
+## Session log — 2026-10-25 (PC): log-error on prod; the tracker's sort fixed inside Univer; the working set browser-checked
+
+- **`log-error` v20 deployed to prod** on the owner's "you do it" (he suggested Claude in Chrome; the CLI deploy
+  went through this time). Downloaded back: all 5 files = repo; unauthenticated POST → 401.
+- **Sort ~31 s → 1.9–2.3 s** (3,688 trucks, branch `10b-foundation`, `6303234`). Method worth reusing: a
+  THROWAWAY bench page under the dev server (same Univer presets, column styles and rule on made-up rows — no
+  login, no data) with each ingredient switchable by URL, then a per-command timer (`BeforeCommandExecute` /
+  `CommandExecuted`). It showed the sort's own data move = 0.26 s while `sheet.command.reorder-range` = 19 s: the
+  time is in the interceptors. Univer moves every conditional-format range through the sort's order row by row
+  (`handleReorderRangeCommon` → `Rectangle.subtractMulti`) — formula and text rules alike — and the notes plugin
+  moves each note. The grid removes the paid rule and the notes silently before the reorder command and restores
+  them after (they never needed moving). Real page: colours right on every row after sort/undo/redo, every note
+  on its truck, nothing saved. ⚠️ A hidden browser pane gets no animation frames — a timing harness that waits on
+  `requestAnimationFrame` never ends there; fall back to a timer.
+- **Browser check of the working set** (owner's Chrome, signed in to staging; `eb198a6`): year counts = the DB;
+  "Search all years" opens a 2022-23 truck in its year; "All years" at 4× 47 s. Found and fixed: ⭐ **an undo of a
+  sort crashed the formats path** — `push(...list)` with the whole book's cells overflows the stack (every spread
+  push in `src/tracker` → loop; source-contract test) · year switching threw inside Univer (dispose inside React's
+  unmount; the formula engine's 1 s progress timer, never cleared by dispose) · "Search all years" hidden when
+  any truck here matched. `selftest-load-book` (new, 19/0, three planted bugs caught) covers the client paging.
+  ⭐ Lesson: errors in the console from a test run can come from the bug the test is about to fix — date each
+  error against the test that ran, before blaming new code.
+- **Owner decisions:** DEMO LOAD x4 rows wait · sales books coming · AL Balance Sheet upload agreed · prod only
+  on his command · credit release second-last (before WhatsApp, last) · payments wait for the HDFC API itself.
+
 ## Session log — 2026-10-21 → 10-24 (PC): vite live and checked signed in, and the credit-release plan
 
 One session (the payments session, worktree `id-login-issue-logs-8810c0`), after payments was parked.

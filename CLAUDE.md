@@ -30,6 +30,28 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ---
 
+## Current state (2026-10-25)
+
+- **✅ `log-error` v20 LIVE ON PROD** (the owner said "you do it"; the CLI deploy went through this time):
+  downloaded back = repo (5 files incl. `_shared`), unauthenticated POST 401. PR #137's server half is done.
+- **✅ Phase 10 tracker — the sort is fixed and the working set is browser-checked (staging, `10b-foundation`,
+  `6303234` · `eb198a6` · `4aa826c`).** Sort ~31 s → **1.9–2.3 s** at 3,688 trucks (undo 2.0 s). ⭐ Cause in
+  UNIVER, found on a throwaway bench by switching each ingredient off: on a sort it moves every conditional-format
+  range row by row (`handleReorderRangeCommon` → `Rectangle.subtractMulti` per sorted row; the paid rule alone
+  6–19 s, formula or text rule alike) and every note (3,000 notes ~18 s). The grid now takes the rule and the
+  notes off silently just before `sheet.command.reorder-range` and puts them back after. ⭐ Also found and fixed:
+  **an undo of a sort crashed the formats path** (`push(...list)` → stack overflow; every spread push in
+  `src/tracker` is now a loop, with a source-contract test) · year switching threw inside Univer (dispose inside
+  React's unmount; the formula engine's uncleared 1 s progress timer) · "Search all years" now offered even when
+  some here match. Year picker = DB counts; "All years" at 4× opens in 47 s (was 100–270 s). Tests:
+  tracker-cells 155 · vehicle-units 587 · **load-book 19 (new)** · build + no-undef clean. Edit freeze is Univer's,
+  not the rule. Record: plan → "THE WORKING SET".
+- **Owner, 2026-10-25:** DEMO LOAD x4 rows → **"wait right now"** (keep; don't ask again until the real load) ·
+  the 2023-24 + 2024-25 sales books → "in a little while" · AL Balance Sheet upload → agreed · **prod go-live
+  ONLY on the owner's command** · **credit release / gate app = SECOND-LAST in the roadmap, just before the
+  WhatsApp integration (last)** · **Service Payments waits for the HDFC API itself** (not just a reply) — nothing
+  on the payment side until it arrives.
+
 ## Current state (2026-10-24)
 
 - **💡 CREDIT RELEASE + INVOICE SENDING + GATE APP — PLAN v0.2, NOTHING BUILT** (owner's idea 2026-10-24;
@@ -1024,14 +1046,15 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ## Next actions
 
-- **⏭️ Owner: deploy `log-error` to prod** (command in the 2026-10-23 block — the classifier refused it
-  for me), and ask who installed Urban VPN on Manish Patel's PC + check the other office PCs.
+- ✅ `log-error` deployed to prod 2026-10-25 (v20, = repo). ⏭️ Owner: ask who installed Urban VPN on Manish
+  Patel's PC + check the other office PCs.
   Extension noise itself is ✅ resolved (PR #137, extension uninstalled, 8,960 rows cleared).
 - ✅ Test PI `PI-PTB-2026-0983` stays (owner, 2026-10-22) — do not re-raise. PI no-chassis hotfix: Optional:
   RTO/Insurance per-unit instead of per-PI, and a DB rule that non-admins need a chassis — both only if asked.
-- **⏸️ Service Payments parked, waiting on HDFC (2026-10-21)** — see the 2026-10-21 block. Its own list
+- **⏸️ Service Payments parked until the HDFC API itself arrives (owner, 2026-10-25)** — see the 2026-10-21 block. Its own list
   stays below (items 8–10 + the three go-live gates); do not start it until the owner says so.
-- **💡 Credit release + invoice sending + gate app — PLAN v0.2, not built (2026-10-24):**
+- **💡 Credit release + invoice sending + gate app — PLAN v0.2, not built (2026-10-24); SECOND-LAST in the
+  roadmap, just before WhatsApp (owner, 2026-10-25) — do not start it before then:**
   `docs/backlog/credit-release-plan.md`. Owner: standalone (`gate_*` tables, payments DB stays off prod) ·
   WhatsApp **Business API** (invoice no. + amount + PDF + thank-you) + Gmail (port 465) · one login per guard
   (⚠️ exempt guards from the brand rule — brands open RLS + ERP sync) · counter sales: send only · CRM later.

@@ -904,19 +904,45 @@ Also: a phone view (read-only cards) and the local save queue across reloads (E5
     check, profile, rate limit). The instance's speed varies a lot under sustained load (the same page 1.9 s,
     later 12 s) — re-measure on a quiet instance. Supabase docs (2026-10-24): EF 256 MB, 2 s CPU/request, 150 s
     wall; egress 5 GB uncached/month free; DB 500 MB (staging 53 MB at 4×).
-  - ⚠️ **OPEN — sorting:** at 3,688 trucks a full-width sort froze the page **~31 s**: our handlers 2.3 s
-    (re-reading ids + redrawing ~2,000 notes, ~0.9 ms a note), **Univer ~28 s**. The same values in a PLAIN
-    workbook in the same engine sort in **0.39 s** (all 102 columns; 12 columns 0.19 s) → something on the
-    tracker's sheet makes Univer's sort slow. Suspect: the one conditional-format rule (paid green, a FORMULA rule
-    over AL Payment Status for rows + 5,000 spare). The test with the rule removed was interrupted by the
-    compaction — **re-run it first**: load /tracker, `ws.deleteConditionalFormattingRule` for each rule, sort
-    (set a timer; read `window.__sortMs` after), then try data validation / styles if it is still slow.
-    Possible fixes: a range-limited rule, the colour applied as a style instead of a rule, or sort through our
-    own row order (sort the rows array and rebuild the sheet).
-  - ⚠️ **OPEN — the edit freeze** (0.18 s at 3,688, 0.8 s at 9,074) grows with rows and is not in our handlers
-    (nothing scans the sheet) — most likely the same CF rule recalculating; check with the sort test.
-  - Not done yet: a planted-bug test for the client paging/retry; the browser check of Year switching and
-    "Search all years" (built, build + lint clean, not clicked through); 'all' years at 4×.
+  - ✅ **2026-10-25 — SORTING FIXED (`6303234`): ~31 s → 1.9–2.3 s at 3,688 trucks** (undo 2.0 s, redo 1.7 s).
+    Found on a throwaway bench (the same presets, column styles and paid rule on made-up rows, no login) by
+    switching each ingredient off: the paid rule alone = 6–19 s, column styles / freeze / other plugins ≈ 0.
+    Not the formula — a plain TEXT rule was as slow. Cause, in Univer's own code: on a sort every
+    conditional-format range is moved row by row (`sheets` `handleReorderRangeCommon` →
+    `Rectangle.subtractMulti` of the rule's range against EACH sorted row), and the notes plugin moves every
+    note (3,000 notes another ~18 s). Neither needs moving: the rule covers the whole column whatever the order,
+    and our grid redraws notes on their trucks after every sort anyway. So `TrackerGrid` takes the rule and the
+    notes off SILENTLY (mutations, off the undo stack) in `BeforeCommandExecute` of `sheet.command.reorder-range`
+    and puts them back after it (a timer too, in case a sort is refused). Undo/redo replay only the reorder
+    mutation, so they never take the slow path. Also fixed on the way: notes were redrawn THREE times per sort
+    (the generic `/sort|reorder/` match fired for the command, its mutation and the outer sort-range) → once;
+    and an undo of a sort (a bare mutation, no command) went through the change check as an edit of every cell
+    → skipped like a sort. Checked on the real page (owner's Chrome, staging): colours right on all 3,688 rows
+    after sort, undo and redo (1,383 green); all 2,053 notes on their trucks; nothing sent to the server.
+    "All years" at 4× (24,605): a sort 28 s (it never finished before) — rare, labelled slow.
+  - ✅ **The edit freeze is NOT the rule** (bench at 9,074 rows: 0.45–0.83 s with it, 0.35–0.83 s without) —
+    Univer's own redraw; 0.18 s steady. Left as is.
+  - ✅ **2026-10-25 — browser check of the working set (`eb198a6`):** Year picker 2024-25 = 2,050 trucks (= the
+    database's count; every one dated in that year), back to 3,688. "Search all years" found a closed 2022-23
+    truck and opened it in its year with the cursor on it. "All years" at 4×: **47 s** to open (was 100–270 s),
+    20 s worst freeze, 760 MB. It found three defects, all fixed and re-checked (0 errors over 5 switches,
+    including sort + switch at once):
+    - ⭐ **an undo of a sort CRASHED the formats path** (`Maximum call stack size exceeded` in `onFormats`):
+      `list.push(...list)` passes every item as an argument. Every `push(...)` / `Math.max(...)` in `src/tracker`
+      is now a loop (a big paste or colouring could hit it too) — `selftest-tracker-cells` checks the source
+      (155/0; the planted old line fails it). Nothing had been sent (it crashed before).
+    - **switching the year threw inside Univer**: `dispose()` ran inside React's unmount ("synchronously unmount a
+      root", `SheetsScrollRenderController` not found), and the formula engine's 1 s progress timer — never
+      cleared by `dispose()`, restarted by every calculation, so waiting does not help — fired into the dead
+      engine ("Locale not initialized"). Disposal now waits a tick and first switches the dying engine's
+      `TriggerCalculationController._startProgress` off (internal API, guarded). On prod each would have reached
+      the Error Log.
+    - **"Search all years" only showed when nothing here matched** — two chassis can end alike → offered whenever
+      the search is long enough ("2 here · 10 in other years").
+    An edit still saves (`applyChanges`, audit rows "typed", value put back on a DEMO truck).
+  - ✅ **`selftest-load-book` 19/0** (`4aa826c`): the pages in order, one at a time, merged (empty cells → null,
+    notes, colours, DSE counts), progress, retry after 1.5 s then 3 s, the third failure reported. Planted bugs
+    (three at once · no retry · one page too many) fail it 2 / 6 / 1.
   - Tests: `selftest-tracker-cells` **153/0** (+6: slab base, fyOfTruck) · `selftest-vehicle-units` **587/0** (+the
     still-open rule's paid words = PAID_WORDS; a planted "cash invoiced only" fails it) · import-merge 39/0 ·
     import-read 12/0 · probe-working-set 16/0 · deno check · build · no-undef lint clean.
@@ -926,9 +952,11 @@ Also: a phone view (read-only cards) and the local save queue across reloads (E5
     page through its own rows. Univer events are ENGINE-wide. Measure the DB alone, the EF alone and the page
     to find where time goes — each had a different bottleneck.
 - **Next, in this order:**
-  0. **Finish the working set:** re-run the sort test with the conditional-format rule removed (see above) and fix
-     the sort; click through Year switching + "Search all years"; re-measure steady + pessimistic on a quiet
-     instance; then ask the owner whether the DEMO LOAD x4 rows may go (delete needs approval; script kept).
+  0. ✅ **Working set finished 2026-10-25** (sort fixed, browser-checked, paging test). Owner answers the same day:
+     **DEMO LOAD x4 rows: "wait right now"** — they stay on staging, do not ask again until the real load ·
+     **the 2023-24 + 2024-25 sales books: "we'll share in a little while"** · the AL Balance Sheet upload: agreed ·
+     **prod: "we will go live when I give the command"** — never propose a date, wait for the command.
+     Left, optional: re-measure steady + pessimistic open times on a quiet instance.
   1. **When the owner's UPDATED files arrive: run the importer onto STAGING** (the repository/archive) — now
      ALL years at once (`run.cjs <scratch>` with no files, or the owner's folders):
      `node scripts/phase10/import/run.cjs <scratch> [files/folders]` → `node scripts/phase10/import/sql.cjs
