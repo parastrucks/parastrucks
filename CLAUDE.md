@@ -46,6 +46,20 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   some here match. Year picker = DB counts; "All years" at 4× opens in 47 s (was 100–270 s). Tests:
   tracker-cells 155 · vehicle-units 587 · **load-book 19 (new)** · build + no-undef clean. Edit freeze is Univer's,
   not the rule. Record: plan → "THE WORKING SET".
+- **✅ The monthly AL Balance Sheet check BUILT on staging (10g, `b705bea` → `26eef10`)** — owner's option D: the
+  team's Excel stays the record; the month's final sheet is uploaded and the portal lists what disagrees. "AL sheet"
+  button on /tracker → side panel: upload (read in the browser by header, month from the dated lines, preview with
+  the sheet's own Net Balance, same file = no-op, another file for the month = "Replace?") · the review in plain
+  words (19 checks from the 23-Oct measurement + the GST-by-invoice-date and MTO Yes/No rules) · Go to truck (any
+  year) · "It is right" + reason, remembered across a replace. **Changes nothing in the tracker.** Migration
+  `20261025_phase10_tracker_al_sheet.sql` on STAGING → **twelve** tracker migrations for prod (LF). Tests:
+  al-sheet 25/0 (+ `--real` 47/0 on the 12 real 2025-26 sheets: every month ties, every carry-over chains) ·
+  probe-al-sheet 21/0, 5 mutants · vehicle-units 653/0 · review 0.48 s for a year at 4×. Browser-checked with
+  DUMMY Sep + Oct 2026 sheets (`write-demo-al-sheets.mjs` → `node_modules/al-sheet-demo-files/`): every planted
+  problem listed, nothing else; 0 tracker audit rows. ⚠️ **3 dummy uploads stay on staging (`al_sheet_*`) —
+  delete only with the owner's yes.** Found on the way: going to a truck in another year threw an uncaught
+  Univer error (scroll before the new engine was ready) and one render paired the new year with the old rows
+  (wrong header + a wasted engine) — both fixed.
 - **Owner, 2026-10-25:** DEMO LOAD x4 rows → **"wait right now"** (keep; don't ask again until the real load) ·
   the 2023-24 + 2024-25 sales books → "in a little while" · AL Balance Sheet upload → agreed · **prod go-live
   ONLY on the owner's command** · on "Credit release / gate app": *"This will come in the second-last position,

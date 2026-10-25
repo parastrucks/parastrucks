@@ -48,6 +48,14 @@
   any truck here matched. `selftest-load-book` (new, 19/0, three planted bugs caught) covers the client paging.
   ⭐ Lesson: errors in the console from a test run can come from the bug the test is about to fix — date each
   error against the test that ran, before blaming new code.
+- **The monthly AL Balance Sheet check, built on staging (10g, `b705bea` → `26eef10`)** after the owner's "you keep
+  working": reader → migration (uploads / lines / settled; `tracker_al_review` runs every check in one SQL
+  statement) → three EF actions → the "AL sheet" panel → a browser run with dummy September/October sheets. The
+  probe caught two of its own design slips before staging: an empty MTO Advance made the "under 100%" test NULL
+  (the truck vanished from the list), and one bad credit was reported twice (as "not a split" and as "78%
+  credited") — a review list must not snowball, so a truck already listed for its credit line skips the %
+  checks; the same rule later for a typed credit on an unknown chassis. ⭐ Method: every check in the panel has a
+  plain-English line, and a source contract proves the panel names exactly the checks the SQL can return.
 - **Owner decisions:** DEMO LOAD x4 rows wait · sales books coming · AL Balance Sheet upload agreed · prod only
   on his command · on the credit release / gate app: "This will come in the second-last position, before WhatsApp
   integration" (read as the plan's build order; the invoice step is another session's, under way) · payments wait
