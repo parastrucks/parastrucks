@@ -32,7 +32,14 @@ const hashFile = (p) => new Promise((resolve) => {
 })
 
 async function main() {
-  const moved = parseCsv(fs.readFileSync(path.join(BIN, '_moved.csv'), 'utf8').replace(/^﻿/, '')).slice(1)
+  const all = parseCsv(fs.readFileSync(path.join(BIN, '_moved.csv'), 'utf8').replace(/^﻿/, '')).slice(1)
+  // files already proven identical by an earlier, interrupted run are not read again (a crash cost a run once)
+  const DONE = path.join(BIN, '_verify-done.txt')
+  const proven = new Set(fs.existsSync(DONE) ? fs.readFileSync(DONE, 'utf8').split('\n').filter(Boolean) : [])
+  const moved = all.filter(([rel]) => !proven.has(rel))
+  if (proven.size) console.log(`${proven.size} files already proven by an earlier run; ${moved.length} left`)
+  let fresh = []
+  const save = () => { if (fresh.length) { fs.appendFileSync(DONE, fresh.join('\n') + '\n'); fresh = [] } }
   const problems = []
   const keptHash = new Map() // each kept copy is read once, however many duplicates rely on it
   let checked = 0, bytes = 0, next = 0
@@ -47,18 +54,21 @@ async function main() {
     if (!fs.existsSync(kp)) { problems.push([rel, 'its kept copy is missing']); return }
     if (!keptHash.has(kept)) keptHash.set(kept, hashFile(kp))
     const [a, b] = await Promise.all([hashFile(p), keptHash.get(kept)])
-    if (a !== b || a.startsWith('error')) problems.push([rel, `bytes differ from its kept copy (${a.slice(0, 12)} vs ${b.slice(0, 12)})`])
+    if (a !== b || a.startsWith('error')) { problems.push([rel, `bytes differ from its kept copy (${a.slice(0, 12)} vs ${b.slice(0, 12)})`]); return }
     bytes += Number(size)
+    fresh.push(rel)
   }
   // 8 files at a time: the disk, not the processor, sets the pace
   await Promise.all(Array.from({ length: 8 }, async () => {
     while (next < moved.length) {
       await one(moved[next++])
-      if (++checked % 10000 === 0) console.log(`  … ${checked.toLocaleString('en-IN')} of ${moved.length.toLocaleString('en-IN')} · ${(bytes / 2 ** 30).toFixed(1)} GB · ${Math.round((Date.now() - t0) / 1000)} s`)
+      if (++checked % 1000 === 0) save()
+      if (checked % 10000 === 0) console.log(`  … ${checked.toLocaleString('en-IN')} of ${moved.length.toLocaleString('en-IN')} · ${(bytes / 2 ** 30).toFixed(1)} GB · ${Math.round((Date.now() - t0) / 1000)} s`)
     }
   }))
-  const csv = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
+  save()
+  const csv =(v) => `"${String(v ?? '').replace(/"/g, '""')}"`
   if (problems.length) fs.writeFileSync(path.join(BIN, '_verify-problems.csv'), '﻿' + ['file,problem', ...problems.map((x) => x.map(csv).join(','))].join('\r\n'))
-  console.log(`Checked ${moved.length} moved files (${keptHash.size} kept copies re-read) in ${Math.round((Date.now() - t0) / 1000)} s: ${problems.length} problems${problems.length ? ' — see _verify-problems.csv' : ''}`)
+  console.log(`Checked ${all.length} moved files (${proven.size} proven earlier, ${moved.length} now; ${keptHash.size} kept copies re-read) in ${Math.round((Date.now() - t0) / 1000)} s: ${problems.length} problems${problems.length ? ' — see _verify-problems.csv' : ''}`)
 }
 main()
