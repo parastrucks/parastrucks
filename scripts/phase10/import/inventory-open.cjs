@@ -13,7 +13,10 @@ function recognise(wb) {
   for (const sheet of wb.SheetNames) {
     const ws = wb.Sheets[sheet]
     if (!ws?.['!ref']) continue
-    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true, blankrows: false })
+    // rows built from the cells that exist, not by walking the sheet's range: 78 workbooks in the owner's pile
+    // have a stray cell near row 10 lakh / column 16,000 (a range of over 10 crore cells), and walking that
+    // range is what never finished
+    const rows = sparseRows(ws)
     if (!rows.length) continue
     // the header is usually row 1; the AL sheet allows it within the first ten rows
     const head = new Set((rows[0] ?? []).map(H))
@@ -47,6 +50,20 @@ function recognise(wb) {
       firstHeaders: header.filter(Boolean).slice(0, 8).join(' | ') })
   }
   return found
+}
+
+// what sheet_to_json({ header: 1, defval: null, raw: true, blankrows: false }) gives, counted from the range's
+// first column, without visiting the empty cells in between
+function sparseRows(ws) {
+  const c0 = XLSX.utils.decode_range(ws['!ref']).s.c
+  const byRow = new Map()
+  for (const k in ws) {
+    if (k[0] === '!' || ws[k].v == null || ws[k].t === 'e') continue // an error cell (#REF! …) reads as empty, as there
+    const a = XLSX.utils.decode_cell(k)
+    if (!byRow.has(a.r)) byRow.set(a.r, [])
+    byRow.get(a.r)[a.c - c0] = ws[k].v
+  }
+  return [...byRow.keys()].sort((a, b) => a - b).map((r) => Array.from(byRow.get(r), (v) => v ?? null))
 }
 
 function openBook(p) {

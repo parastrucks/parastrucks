@@ -77,6 +77,22 @@ function openInReader(p) {
   })
 }
 
+// the inventory.csv this script writes (quoted fields, "" inside)
+function parseCsv(t) {
+  const rows = []
+  let row = [], f = '', q = false
+  for (let i = 0; i < t.length; i++) {
+    const c = t[i]
+    if (q) { if (c === '"') { if (t[i + 1] === '"') { f += '"'; i++ } else q = false } else f += c }
+    else if (c === '"') q = true
+    else if (c === ',') { row.push(f); f = '' }
+    else if (c === '\n') { row.push(f.replace(/\r$/, '')); rows.push(row); row = []; f = '' }
+    else f += c
+  }
+  if (f || row.length) { row.push(f); rows.push(row) }
+  return rows
+}
+
 // SHA-256 read in 8 MB pieces (a file of several GB never sits in memory)
 function sha256File(p) {
   const h = crypto.createHash('sha256'), buf = Buffer.alloc(8 << 20), fd = fs.openSync(p, 'r')
@@ -93,11 +109,20 @@ const files = walk(src)
 const stats = files.map((p) => { try { return fs.statSync(p) } catch { return null } })
 const sizeCount = new Map()
 for (const st of stats) if (st && st.size > 0) sizeCount.set(st.size, (sizeCount.get(st.size) ?? 0) + 1)
+// a fingerprint from the last run's inventory.csv is reused when the file's path, size and time are unchanged
+// (the owner's pile: 82 GB of duplicates took most of a 5.5-hour run to hash)
+const known = new Map()
+try {
+  const rows = parseCsv(fs.readFileSync(path.join(out, 'inventory.csv'), 'utf8').replace(/^\uFEFF/, ''))
+  const h = rows.shift(), at = (c) => h.indexOf(c)
+  for (const r of rows) if (r[at('sha')]) known.set(`${r[at('rel')]}|${r[at('size')]}|${r[at('mtime')]}`, r[at('sha')])
+} catch { /* no earlier run */ }
+let reused = 0
 const items = []
 let n = 0, opened = 0, slow = 0, lastShown = 0
 // progress.txt (in the output folder) names the file being read, so a stall can be seen while it runs
 const show = (rel) => {
-  const s = `${new Date().toTimeString().slice(0, 8)}  ${n.toLocaleString('en-IN')} of ${files.length.toLocaleString('en-IN')} files · ${opened} spreadsheets opened · ${slow} too slow`
+  const s = `${new Date().toTimeString().slice(0, 8)}  ${n.toLocaleString('en-IN')} of ${files.length.toLocaleString('en-IN')} files · ${opened} spreadsheets opened · ${slow} too slow · ${reused} fingerprints reused`
   fs.writeFileSync(path.join(out, 'progress.txt'), `${s}\r\nnow: ${rel}\r\n`)
   if (n % 10000 === 0 || n === files.length) console.log(`  … ${s}`)
 }
@@ -111,7 +136,9 @@ for (const [k, p] of files.entries()) {
   if (Date.now() - lastShown > 5000 || n % 10000 === 0) { lastShown = Date.now(); show(rel) }
   if (!st) { it.kind = 'could not read'; items.push(it); continue }
   if (base.startsWith('~$')) { it.kind = 'Excel lock file (skip)'; items.push(it); continue }
-  if (st.size > 0 && sizeCount.get(st.size) > 1) { try { it.sha = sha256File(p) } catch (e) { it.note = `could not read: ${e.code ?? e.message}` } }
+  const prior = known.get(`${rel}|${it.size}|${it.mtime}`)
+  if (prior && sizeCount.get(st.size) > 1) { it.sha = prior; reused++ }
+  else if (st.size > 0 && sizeCount.get(st.size) > 1) { try { it.sha = sha256File(p) } catch (e) { it.note = `could not read: ${e.code ?? e.message}` } }
   const hint = nameHints(rel)
   if (SHEETS.test(base) && st.size > MAX_SHEET_BYTES) {
     it.kind = 'spreadsheet — too big to open here'
