@@ -23,6 +23,7 @@ export const NAV_SECTIONS = [
     label: 'Service Tools',
     items: [
       { type: 'link', to: '/vendor-jobs', icon: 'wrench',   label: 'Vendor Jobs' },
+      { type: 'link', to: '/invoices',    icon: 'mail',     label: 'Send Invoice' },
       { type: 'erp',                      icon: 'landmark', label: 'HD Hyundai ERP', external: true },
     ],
   },
@@ -63,6 +64,7 @@ export const CREATE_ACTIONS = [
   { to: '/proforma-invoice', icon: 'files',    label: 'New Proforma',    desc: 'Proforma invoice for physical vehicles' },
   { to: '/financier-copy',   icon: 'landmark', label: 'New Copy',        desc: "Financier's copy (Tax Invoice)" },
   { to: '/vendor-jobs',      icon: 'wrench',   label: 'New Vendor Job',  desc: 'Outside-workshop / ancillary repair job', openNew: true },
+  { to: '/invoices',         icon: 'mail',     label: 'Send Invoice',    desc: 'Email the SAP invoice PDF to the customer' },
 ]
 
 /* Is a nav item reachable for this user? Groups need ≥1 accessible child.

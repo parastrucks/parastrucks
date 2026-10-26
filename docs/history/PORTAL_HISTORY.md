@@ -26,6 +26,74 @@
 
 ---
 
+## Session log — 2026-10-24 → 10-25 (PC): credit release step 1 — read, save and email SAP invoices (staging)
+
+The owner said "start working". Built on branch `cr1-invoice-send` from `portal` `2b03626`; **staging only**.
+
+**The reader first, on the real files.** The three SAP PDFs were re-read; every value is taken by its printed
+label, then cross-checked (bills = summary total; each bill's own pages total the same, in figures and words, for
+the same customer code; counter total = amount in words). Mid-build the owner asked *"what if the invoice is not
+exactly as you have received it?"* — answered by making it a test, not an argument: altered copies of the real
+invoices must read identically (case, colons, spacing, extra lines) or be refused (renamed labels, missing bill,
+other form), and changing any one printed amount must never yield different money (428 tried: never). Label
+matching was loosened for it, and the test found a real gap — a multi-page bill's customer code was checked on
+its first page only. Nine planted bugs each fail the test. Then the owner asked about "a bot on this using an MCP
+server": an AI reader was advised against for money (silent misreads, customer PAN/GSTIN to an outside service,
+per-call cost); a read-only question-asking assistant went on the roadmap. Owner: "go".
+
+**Database, function, screen.** Standalone `gate_*` tables (the payments tables stay off prod), paise, one atomic
+write function only the server may call; RLS read for service / accounts / spares of the same company. Probe 13/0
+as every staging user; opening the read rule fails it. The Edge Function picks the company from the invoice's
+seller GSTIN, treats a repeat as the first save, refuses conflicting job cards and bills, and emails through an
+SMTP client of our own on port 465 (Edge Functions block 25/587) — tested offline against a scripted mail server
+(60/0; seven planted bugs caught; two real header-length bugs fixed on the way). The screen has its own
+stylesheet so the parked payments branch's `index.css` never conflicts.
+
+**Seen signed in.** Port 3000 was held by the tracker session; the owner said "use another port", so staging's
+`ALLOWED_ORIGINS` gained `localhost:3001` (old value confirmed by its sha256 first). As the accounts manager, with
+DEMO PDFs: save, the "email not set up yet" answer, the repeat, two refusals, cash + counter saves, PDF links,
+and the locked tables and bucket — all as designed. One fix: a repeat upload showed two messages.
+
+**Real email (later 10-25).** The owner asked for step-by-step help and set `GATE_SMTP_PASSWORD` on staging
+(app password of `accounts.guj@`, entered in the dashboard). The first send from the screen went through:
+Gmail `250 2.0.0 OK … gsmtp`, ~4 s inside the function, the address remembered for that customer — so SMTPS
+on port 465 from a Supabase Edge Function works. It landed in the Inbox, not Spam (checked through the Gmail
+connector, which reads `ceo@parastrucks.in`).
+
+**The owner's wording.** *"Don't write invoice numbers … the vehicle's registered number is the only thing the
+customer is concerned about … mention the total billing amount in bold … no separate labour and parts … improve
+the signing off — check other mails that we use."* Built: no job card / bill numbers anywhere (subject, body,
+attachment `Invoice {plate}.pdf`), the plate in bold, a TOTAL AMOUNT box, HTML + a plain-text twin, SAP's capitals
+turned into a proper name, and the sign-off copied from the company's own mail signatures (read in the ceo@
+mailbox): Kind regards · Accounts Team · Paras Trucks and Buses · Paras logo · Sanathal address · Mobile ·
+"Authorized Dealer -" + Ashok Leyland logo. Those staff signatures link logo images stored in each person's Gmail
+signature (they vanish if the person edits it), and mail apps don't show SVG — so both logos are embedded as PNGs
+(the AL SVG rendered by headless Chrome). The self-test (79/0) now checks that no invoice or bill number appears
+anywhere in the message; it also caught one more over-long header line. A workshop and a counter-sale test
+both reached the Inbox.
+
+**Timely payment (later 10-25).** The owner: this tool will mostly carry invoices for vehicles released on credit
+(a vehicle paid before release lands here perhaps 1 time in 10), so the message must ask for timely payment and say
+that without it we cannot keep providing the best of our service. Added after the total, in text and HTML (request in
+bold), with a closing line thanking anyone who has already paid (`b310fa5`). Self-test 79/0; its three new checks
+fail on the old wording. Deployed to staging; a test mail arrived with the paragraph (Gmail put it in the earlier,
+already-deleted test conversation, so it showed under Trash — a threading effect, not a delivery problem).
+
+**Outstanding amount — asked, then parked.** The owner suggested adding "your outstanding is now up to ₹X, please settle
+the entire value in time", assuming the portal keeps each customer's outstanding. It does not: it holds only the
+invoices sent through this screen, with no paid status, and nothing billed outside it (paid vehicles, older dues). A
+wrong "you owe" sent to a customer would start a dispute, so the source was put to the owner (accounts' Busy/SAP
+outstanding report · typed on send · the portal's own sum after step 3). Owner: **leave it out for now.** Recorded in
+the plan's "Not yet done".
+
+The owner then confirmed the signature's Mobile number (+91 74969 70321, the dealer number SAP prints).
+
+**Waiting on the owner:** a PR when asked; prod only on the owner's command.
+
+**Lessons.** (1) When the owner asks "what if X changes?", answer with a test that changes X. (2) A test that
+mutates real data must only touch what it claims to (the first "Title Case" mutation also changed customer
+names and failed for the wrong reason). (3) Git Bash `sed -i` turned a CRLF doc into LF again — check `file`.
+
 ## Session log — 2026-10-21 → 10-24 (PC): vite live and checked signed in, and the credit-release plan
 
 One session (the payments session, worktree `id-login-issue-logs-8810c0`), after payments was parked.

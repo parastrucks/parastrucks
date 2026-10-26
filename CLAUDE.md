@@ -30,6 +30,53 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ---
 
+## Current state (2026-10-25)
+
+- **🔨 CREDIT RELEASE STEP 1 — "Send Invoice" BUILT, STAGING ONLY** (branch `cr1-invoice-send`, **PR #140**
+  open 2026-10-26, CI 9/9 green, Auto-fix on, NOT merged; prod untouched). ⭐ **Record: `docs/backlog/credit-release-plan.md` → "Step 1 — as built".** Service /
+  spares / accounts upload the SAP PDF at `/invoices` → read in the browser → saved → emailed to the customer.
+  - **Reader** `src/invoices/lib/sapInvoice.js`: by label, never position; refuses an unknown form, a scan or a
+    failed cross-check. `scripts/invoices/selftest-sap-invoice.mjs` **120/0** (add `--real <main checkout docs/>`):
+    restyled copies read the same, renamed labels / missing bills refused, 428 one-digit changes never gave
+    different money, 9 planted bugs caught. ⭐ It found a real gap (customer code checked on a bill's first page
+    only). ⭐ Workshop bill pages DO print CASH BILL / CREDIT BILL (plan corrected).
+  - **DB** `20261024_gate_invoices.sql` (staging): `gate_documents/gate_bills/gate_contacts/gate_messages`, paise,
+    RPC `gate_record_document` (service_role only), RLS read service/accounts/spares same company + admin,
+    private bucket `gate-invoices`, 18 `/invoices` access rules. `probe-gate-invoices.sql` 13/0 (neg. control 12/1).
+  - **EF `gate-invoices`** (staging): company = the invoice's SELLER GSTIN; repeats return the first save;
+    conflicts refused. Email = own SMTPS client (`smtp.ts`, port 465 — EFs block 25/587).
+    `selftest-gate-mail.mjs` **79/0** (bundle with esbuild, run from the repo root). ⚠️ The server re-checks but
+    does NOT re-read the PDF.
+  - ✅ **First signed-in run on staging done** (accounts manager, DEMO PDFs) — every save/refusal path as
+    designed; 3 DEMO invoices stay on staging. Staging secret `GATE_EMAIL_ONLY_TO=@parastrucks.in`.
+  - ✅ **REAL EMAIL WORKS — SMTPS 465 from a Supabase Edge Function is proven.** The owner set the staging secret
+    `GATE_SMTP_PASSWORD` (app password of `accounts.guj@`, via the dashboard, never in chat). Three test mails to
+    `ceo@parastrucks.in`, all in the **Inbox, not Spam** (Gmail `250 2.0.0 OK … gsmtp`, ~4 s in the function).
+  - ⭐ **Email wording = the OWNER'S RULES (2026-10-25), built `3533d79`:** **no invoice / job card / bill numbers
+    anywhere** (subject, body, attachment name `Invoice {plate}.pdf`) — *"the vehicle's registered number is the
+    only thing the customer is concerned about"*; **only the TOTAL, highlighted** (bold, in a box) — no labour /
+    parts split; **signed off like the company's own mails** (Kind regards · Accounts Team · Paras Trucks and
+    Buses · Paras logo · Sanathal address · Mobile · "Authorized Dealer -" + AL logo). Logos are embedded
+    (`logos.ts`, cid PNGs — the staff signatures link per-user Gmail images and mail apps don't show SVG).
+    ✅ **Mobile line confirmed by the owner** (+91 74969 70321 = the dealer "Mob No" SAP prints on invoices).
+  - ⭐ **Every message asks for TIMELY PAYMENT (owner, 2026-10-25, `b310fa5`)** — the tool is mostly for vehicles
+    released **on credit** (paid ones rarely come here): after the total, *"We request you to kindly make this payment
+    on time. Timely payments are what allow us to keep providing you the best of our service — without them, we will
+    not be able to continue doing so. If you have already paid, thank you …"* Deployed to staging; test mail arrived.
+  - 💡 **Owner idea PARKED ("leave it out for now"): "your outstanding is now up to ₹X — please settle it in time".**
+    ⚠️ **The portal has NO true outstanding** — only invoices sent through this screen, no paid status, nothing billed
+    outside it; a wrong figure sent to a customer starts a dispute. Options (plan → "Not yet done"): accounts uploads
+    the Busy/SAP outstanding report (recommended) · a box typed on send · the portal's own sum after step 3
+    (understates). Raise again when step 3 (mark paid) is built; do not build until the owner picks.
+  - ⭐ **The Gmail connector reads `ceo@parastrucks.in`** — use it to check a test mail arrived (read-only).
+  - ⚠️ **Staging `ALLOWED_ORIGINS` now also has `http://localhost:3001`** (owner: "use another port", 10-25) —
+    the old value (`:3000,:5173`) was confirmed by its sha256 before the change. Two sessions can now sign in to
+    staging at once (3000 + 3001). Prod's list untouched.
+  - Owner asked about "a bot on this using an MCP server" → not as the reader; a read-only question-asking
+    assistant is on the plan's roadmap (after step 3).
+  - DEMO PDFs for staging: `node scripts/invoices/write-demo-invoices.mjs node_modules/invoice-demo-files`
+    (`npm ci` wipes them; they regenerate).
+
 ## Current state (2026-10-24)
 
 - **💡 CREDIT RELEASE + INVOICE SENDING + GATE APP — PLAN v0.2, NOTHING BUILT** (owner's idea 2026-10-24;
@@ -92,9 +139,8 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
     Not dropped — dropping would have hidden this very finding. `log-error` mirrors the rule (one row per
     user, extension and 24 h) for browsers on old code; the Error Log tab prefixes such rows "Browser
     extension ·". `selftest-log-error` **33/0**; three planted bugs each fail it.
-    ⏭️ **`log-error` EF deploy to prod is PENDING — the auto-mode classifier refused it; the owner runs it**
-    (from latest `portal`): `npx supabase@2.109.1 functions deploy log-error --project-ref
-    mmmxvjaavdtwlpcnjgzy --no-verify-jwt` (prod v19 before it). The browser side alone already stops the flood.
+    ✅ **`log-error` is LIVE on prod as v20** (deployed 2026-10-24 18:35 IST; checked 2026-10-26: downloaded source
+    = `portal` `e236912` file for file, unauthenticated POST → 401). Nothing pending.
   - **Rode along: dompurify 3.4.12 → 3.4.17 (lockfile).** A CRITICAL advisory (GHSA-55q2-fjhq-7xh7 + 4)
     turned `npm-audit` red on every PR on 2026-10-22. dompurify is only jsPDF's optional dep for `.html()`,
     which we never call. Clean-install A/B: **44/45 built files byte-identical** (hashes masked); the one
@@ -461,7 +507,7 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   `f98b99e`; CI green pre- and post-merge, Vercel `portal` READY, prod CSS verified). The sheet was
   `bottom: 0` under the `z-index: 100` nav; now lifted by `--bottom-nav-h` + inset, height capped
   so its × stays below the top bar in landscape. `selftest-detail-sheet` 25/25 evaluates the CSS
-  cascade. ⏭️ **Owner phone check pending.** ⭐ Record: `PORTAL_HISTORY.md` 2026-09-26 entry.
+  cascade. ✅ **Owner checked it on a real phone 2026-10-26.** ⭐ Record: `PORTAL_HISTORY.md` 2026-09-26 entry.
 - ⚠️ **Any `position: fixed; bottom: 0` element under 760px collides with the bottom nav — and
   lifting one moves its TOP edge under the top bar (`--topbar-h`, z-index 95).** Check both edges.
 - ✅ Dead `.tiv-detail*` CSS (unused since #120) **deleted** (PR #127) — proven inert by an A/B
@@ -913,23 +959,25 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ## Next actions
 
-- **⏭️ Owner: deploy `log-error` to prod** (command in the 2026-10-23 block — the classifier refused it
-  for me), and ask who installed Urban VPN on Manish Patel's PC + check the other office PCs.
+- ✅ `log-error` live on prod (v20 = `portal`, checked 2026-10-26). **⏭️ Owner:** ask who installed Urban VPN on
+  Manish Patel's PC + check the other office PCs.
   Extension noise itself is ✅ resolved (PR #137, extension uninstalled, 8,960 rows cleared).
 - ✅ Test PI `PI-PTB-2026-0983` stays (owner, 2026-10-22) — do not re-raise. PI no-chassis hotfix: Optional:
   RTO/Insurance per-unit instead of per-PI, and a DB rule that non-admins need a chassis — both only if asked.
 - **⏸️ Service Payments parked, waiting on HDFC (2026-10-21)** — see the 2026-10-21 block. Its own list
   stays below (items 8–10 + the three go-live gates); do not start it until the owner says so.
-- **💡 Credit release + invoice sending + gate app — PLAN v0.2, not built (2026-10-24):**
+- **🔨 Credit release STEP 1 ("Send Invoice") BUILT on staging, real email proven (2026-10-25)** — branch
+  `cr1-invoice-send`, see the 2026-10-25 block. ✅ Signature Mobile confirmed. **PR #140 open
+  (2026-10-26) — do NOT merge before the prod migration + EF**; prod (migration + EF + `GATE_SMTP_PASSWORD` on prod + drop `GATE_EMAIL_ONLY_TO` there) **only on
+  the owner's command**; then step 2 (release request + approval + gate + guard logins).
+- **💡 Credit release + invoice sending + gate app — PLAN v0.2 (2026-10-24):**
   `docs/backlog/credit-release-plan.md`. Owner: standalone (`gate_*` tables, payments DB stays off prod) ·
-  WhatsApp **Business API** (invoice no. + amount + PDF + thank-you) + Gmail (port 465) · one login per guard
+  WhatsApp **Business API** (plate + total + PDF + thank-you + timely-payment ask — same rules as the email) + Gmail (port 465) · one login per guard
   (⚠️ exempt guards from the brand rule — brands open RLS + ERP sync) · counter sales: send only · CRM later.
   Build order: upload+read+email → approval + gate → promises → **WhatsApp LAST** (owner). Email from `accounts.guj@parastrucks.in` (Workspace; SPF+DKIM ok).
-- **⏭️ Owner: file the 45 new October CBNs in Catalog → Triage** (MAV 19, Haulage 9, Oyster
+- **⏭️ Owner: file the 45 new October CBNs in Catalog → Triage** (owner 2026-10-26: "later") (MAV 19, Haulage 9, Oyster
   Staff/Wide shells 12, RMC 3, Ecomet 1215 1, 10x2 Tipper 1). Until then they have no family.
-- **⏭️ Owner: check the TIV detail sheet on a real phone** (PR #125, live). Hard-refresh TIV
-  Forecast → tap a number → scroll the sheet to the end: last line fully above the bottom nav →
-  rotate to landscape: × fully below the top bar. First render on a device; nothing else pending.
+- ✅ **TIV detail sheet checked on a real phone by the owner (2026-10-26)** — PR #125 closed out.
 - **⏭️ SERVICE PAYMENTS — next build steps** (read `docs/backlog/service-payments-plan.md` first —
   it encodes several bugs already caught by measurement that are easy to reintroduce from first
   principles, including the ⭐ CORRECTION that a number in a payment note is a **number plate**,
