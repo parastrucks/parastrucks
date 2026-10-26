@@ -139,9 +139,8 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
     Not dropped — dropping would have hidden this very finding. `log-error` mirrors the rule (one row per
     user, extension and 24 h) for browsers on old code; the Error Log tab prefixes such rows "Browser
     extension ·". `selftest-log-error` **33/0**; three planted bugs each fail it.
-    ⏭️ **`log-error` EF deploy to prod is PENDING — the auto-mode classifier refused it; the owner runs it**
-    (from latest `portal`): `npx supabase@2.109.1 functions deploy log-error --project-ref
-    mmmxvjaavdtwlpcnjgzy --no-verify-jwt` (prod v19 before it). The browser side alone already stops the flood.
+    ✅ **`log-error` is LIVE on prod as v20** (deployed 2026-10-24 18:35 IST; checked 2026-10-26: downloaded source
+    = `portal` `e236912` file for file, unauthenticated POST → 401). Nothing pending.
   - **Rode along: dompurify 3.4.12 → 3.4.17 (lockfile).** A CRITICAL advisory (GHSA-55q2-fjhq-7xh7 + 4)
     turned `npm-audit` red on every PR on 2026-10-22. dompurify is only jsPDF's optional dep for `.html()`,
     which we never call. Clean-install A/B: **44/45 built files byte-identical** (hashes masked); the one
@@ -508,7 +507,7 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   `f98b99e`; CI green pre- and post-merge, Vercel `portal` READY, prod CSS verified). The sheet was
   `bottom: 0` under the `z-index: 100` nav; now lifted by `--bottom-nav-h` + inset, height capped
   so its × stays below the top bar in landscape. `selftest-detail-sheet` 25/25 evaluates the CSS
-  cascade. ⏭️ **Owner phone check pending.** ⭐ Record: `PORTAL_HISTORY.md` 2026-09-26 entry.
+  cascade. ✅ **Owner checked it on a real phone 2026-10-26.** ⭐ Record: `PORTAL_HISTORY.md` 2026-09-26 entry.
 - ⚠️ **Any `position: fixed; bottom: 0` element under 760px collides with the bottom nav — and
   lifting one moves its TOP edge under the top bar (`--topbar-h`, z-index 95).** Check both edges.
 - ✅ Dead `.tiv-detail*` CSS (unused since #120) **deleted** (PR #127) — proven inert by an A/B
@@ -960,8 +959,8 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ## Next actions
 
-- **⏭️ Owner: deploy `log-error` to prod** (command in the 2026-10-23 block — the classifier refused it
-  for me), and ask who installed Urban VPN on Manish Patel's PC + check the other office PCs.
+- ✅ `log-error` live on prod (v20 = `portal`, checked 2026-10-26). **⏭️ Owner:** ask who installed Urban VPN on
+  Manish Patel's PC + check the other office PCs.
   Extension noise itself is ✅ resolved (PR #137, extension uninstalled, 8,960 rows cleared).
 - ✅ Test PI `PI-PTB-2026-0983` stays (owner, 2026-10-22) — do not re-raise. PI no-chassis hotfix: Optional:
   RTO/Insurance per-unit instead of per-PI, and a DB rule that non-admins need a chassis — both only if asked.
@@ -976,11 +975,9 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   WhatsApp **Business API** (plate + total + PDF + thank-you + timely-payment ask — same rules as the email) + Gmail (port 465) · one login per guard
   (⚠️ exempt guards from the brand rule — brands open RLS + ERP sync) · counter sales: send only · CRM later.
   Build order: upload+read+email → approval + gate → promises → **WhatsApp LAST** (owner). Email from `accounts.guj@parastrucks.in` (Workspace; SPF+DKIM ok).
-- **⏭️ Owner: file the 45 new October CBNs in Catalog → Triage** (MAV 19, Haulage 9, Oyster
+- **⏭️ Owner: file the 45 new October CBNs in Catalog → Triage** (owner 2026-10-26: "later") (MAV 19, Haulage 9, Oyster
   Staff/Wide shells 12, RMC 3, Ecomet 1215 1, 10x2 Tipper 1). Until then they have no family.
-- **⏭️ Owner: check the TIV detail sheet on a real phone** (PR #125, live). Hard-refresh TIV
-  Forecast → tap a number → scroll the sheet to the end: last line fully above the bottom nav →
-  rotate to landscape: × fully below the top bar. First render on a device; nothing else pending.
+- ✅ **TIV detail sheet checked on a real phone by the owner (2026-10-26)** — PR #125 closed out.
 - **⏭️ SERVICE PAYMENTS — next build steps** (read `docs/backlog/service-payments-plan.md` first —
   it encodes several bugs already caught by measurement that are easy to reintroduce from first
   principles, including the ⭐ CORRECTION that a number in a payment note is a **number plate**,
