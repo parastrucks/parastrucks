@@ -15,6 +15,7 @@
 
 export const DEPT_SALES       = "sales"
 export const DEPT_BACK_OFFICE = "back_office"
+export const DEPT_SECURITY    = "security"
 
 export const SLOT_PRIMARY_OUTLET = "primary_outlet_id"
 export const SLOT_BRANDS         = "brand_ids"
@@ -29,8 +30,11 @@ export function isRequired(slot: string, deptCode: string | null, permissionLeve
     // quotations_select, proforma/financier/tiv_forecast_* and ERP scope), so
     // "no brand" is not an empty field — it is an invisible denial.
     case SLOT_PRIMARY_OUTLET:
-    case SLOT_BRANDS:
       return true
+    // Gate guards get NO brand: a brand would open its catalog/quotations/PIs and
+    // the hdh brand would sync them into the ERP (credit release step 2).
+    case SLOT_BRANDS:
+      return deptCode !== DEPT_SECURITY
     case SLOT_VERTICALS:
       return deptCode === DEPT_SALES
     case SLOT_SUBDEPT:

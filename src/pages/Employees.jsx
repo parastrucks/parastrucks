@@ -897,6 +897,7 @@ function EmployeeFormModal({
   // Applicability for the two conditional slots, resolved ONCE from the shared
   // shape and used by both the label and the control — so what is rendered and
   // what is sent can never disagree.
+  const brandReq   = requirementFor(SLOT.BRANDS,    deptCode, form.permission_level)
   const vertReq    = requirementFor(SLOT.VERTICALS, deptCode, form.permission_level)
   const subdeptReq = requirementFor(SLOT.SUBDEPT,   deptCode, form.permission_level)
   const F = (field) => ({
@@ -1061,9 +1062,10 @@ function EmployeeFormModal({
 
                   <MultiCheckbox
                     id="emp-brands"
-                    label="Brands *"
-                    items={refBrands}
-                    selected={form.brand_ids}
+                    label={`Brands${brandReq.requirement === REQUIRED ? ' *' : ''}`}
+                    items={brandReq.requirement === REQUIRED ? refBrands : []}
+                    selected={brandReq.requirement === REQUIRED ? form.brand_ids : []}
+                    notApplicable={brandReq.reason}
                     onToggle={id => {
                       setErrorField(f => f === 'brand_ids' ? null : f)
                       setForm(f => {

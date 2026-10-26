@@ -32,6 +32,7 @@ export const DEPT = {
   HR:          'hr',
   BACK_OFFICE: 'back_office',
   PDI:         'pdi',
+  SECURITY:    'security', // gate guards (credit release step 2) — outlet yes, brand NO
   ADMIN:       'admin',   // inactive department; never selectable in the form
 }
 
@@ -62,8 +63,16 @@ export function requirementFor(slot, deptCode, permissionLevel) {
     // quotations_select, proforma_invoices_select, financier_copies_select and
     // all seven tiv_forecast_*_select policies, plus ERP entitlement.
     case SLOT.PRIMARY_OUTLET:
-    case SLOT.BRANDS:
       return { requirement: REQUIRED, reason: null }
+
+    // The one exemption: a gate guard. Because a brand IS an authorization grant
+    // (above), giving a guard one would open that brand's catalog, quotations and
+    // proforma invoices to them, and the hdh brand would sync them into the ERP.
+    // A guard needs only the gate screen, so the slot is shown with this reason.
+    case SLOT.BRANDS:
+      return deptCode === DEPT.SECURITY
+        ? { requirement: NOT_APPLICABLE, reason: 'Security guards see only the gate screen; a brand would open its catalog, quotations and the ERP to them.' }
+        : { requirement: REQUIRED, reason: null }
 
     // Verticals are brand-scoped product lines (Tipper, Buses, Excavators…).
     // Asking a mechanic or an accountant to name one would be manufacturing

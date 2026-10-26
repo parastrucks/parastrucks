@@ -57,6 +57,7 @@ policy(dept_code, attribute, requirement) as (
          case
            when a.attribute = 'sales_verticals' and d.dept_code <> 'sales'       then 'not_applicable'
            when a.attribute = 'subdept'         and d.dept_code <> 'back_office' then 'not_applicable'
+           when a.attribute = 'brands'          and d.dept_code =  'security'    then 'not_applicable'  -- gate guards: a brand is an access grant
            else 'required'
          end
   from dept_codes d cross join attrs a
@@ -156,7 +157,7 @@ gaps as (
           when 'designation'      then u.designation_id    is null
           when 'permission_level' then u.permission_level  is null
           when 'primary_outlet'   then u.primary_outlet_id is null
-          when 'brands'           then u.n_brands    = 0
+          when 'brands'           then u.n_brands    = 0 and u.dept_code is distinct from 'security'
           when 'sales_verticals'  then u.n_verticals = 0 and u.dept_code = 'sales'
           when 'subdept'          then u.subdept_id  is null and u.dept_code = 'back_office'
         end

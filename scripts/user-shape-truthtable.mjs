@@ -24,7 +24,9 @@ const here = dirname(fileURLToPath(import.meta.url))
 const { SLOT, requirementFor, validateSlots, buildSlotPayload } =
   await import(pathToFileURL(join(here, '..', 'src', 'lib', 'userShape.js')).href)
 
-const DEPTS = ['sales', 'service', 'spares', 'accounts', 'hr', 'back_office', 'pdi', 'admin']
+const DEPTS = ['sales', 'service', 'spares', 'accounts', 'hr', 'back_office', 'pdi', 'security', 'admin']
+// The ONLY department exempt from brands: gate guards (a brand is an access grant).
+const NO_BRAND = new Set(['security'])
 const TIERS = ['gm', 'manager', 'executive']
 const EMPTY    = { primary_outlet_id: '', subdept_id: '', brand_ids: [], sales_vertical_ids: [] }
 const COMPLETE = { primary_outlet_id: 'o1', subdept_id: 's1', brand_ids: ['b1'], sales_vertical_ids: ['v1'] }
@@ -39,13 +41,14 @@ for (const d of DEPTS) {
     console.log(`  ${d.padEnd(12)} ${t.padEnd(10)} ${r(SLOT.PRIMARY_OUTLET)} | ${r(SLOT.BRANDS)} | ${r(SLOT.VERTICALS)} | ${r(SLOT.SUBDEPT)}`)
     // (1) the two universals, asserted rather than eyeballed
     if (requirementFor(SLOT.PRIMARY_OUTLET, d, t).requirement !== 'required') fail(`${d}/${t}: outlet not required`)
-    if (requirementFor(SLOT.BRANDS, d, t).requirement !== 'required') fail(`${d}/${t}: brands not required`)
+    const brandReq = requirementFor(SLOT.BRANDS, d, t).requirement
+    if (NO_BRAND.has(d) ? brandReq !== 'not_applicable' : brandReq !== 'required') fail(`${d}/${t}: brands ${brandReq}`)
     // (2) + (3)
     if (!validateSlots({ ...EMPTY, permission_level: t }, d)) fail(`${d}/${t}: an EMPTY form was accepted`)
     const e = validateSlots({ ...COMPLETE, permission_level: t }, d)
     if (e) fail(`${d}/${t}: a COMPLETE form was rejected (${e.message})`)
     // every not-applicable slot must state a reason the user can read
-    for (const s of [SLOT.VERTICALS, SLOT.SUBDEPT]) {
+    for (const s of [SLOT.BRANDS, SLOT.VERTICALS, SLOT.SUBDEPT]) {
       const req = requirementFor(s, d, t)
       if (req.requirement === 'not_applicable' && !req.reason) fail(`${d}/${t}: ${s} is N/A with no reason given`)
     }
@@ -65,6 +68,13 @@ if (gmPayload.sales_vertical_ids.length !== 0) fail('back_office still submits s
 const acctPayload = buildSlotPayload({ ...staleForm, permission_level: 'executive' }, 'accounts')
 if (acctPayload.sales_vertical_ids.length !== 0) fail('accounts still submits sales verticals')
 if (acctPayload.brand_ids.length !== 1) fail('accounts dropped its brands — they are required')
+
+// (6) a gate guard: outlet required, NO brand — and a stale brand is never sent
+const guard = (f) => validateSlots({ ...f, permission_level: 'executive' }, 'security')
+if (guard({ ...COMPLETE, brand_ids: [] })) fail('security guard with an outlet and no brand should PASS')
+if (!guard({ ...COMPLETE, primary_outlet_id: '', brand_ids: [] })) fail('security guard with no outlet should FAIL')
+if (buildSlotPayload({ ...staleForm, permission_level: 'executive' }, 'security').brand_ids.length !== 0)
+  fail('security still submits a brand — that would open catalog/quotations/ERP to a guard')
 
 console.log(failures === 0
   ? `\nOK — ${DEPTS.length * TIERS.length} combinations, no holes.`
