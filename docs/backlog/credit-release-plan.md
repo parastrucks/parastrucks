@@ -1,7 +1,8 @@
 # Credit release, invoice sending and the gate app — plan v0.2 (2026-10-24)
 
-> **Status (2026-10-25): step 1 BUILT on branch `cr1-invoice-send`, STAGING only** — see "Step 1 — as
-> built" below. Steps 2–4 not started. Owner's proposal of 2026-10-24, related to the Service Payments tool
+> **Status (2026-10-26): step 1 BUILT (branch `cr1-invoice-send`, PR #140 open, not merged) and step 2 BUILT
+> (branch `cr2-release-gate`), both STAGING only** — see "Step 1 — as built" and "Step 2 — as built" below.
+> Steps 3–4 not started. Owner's proposal of 2026-10-24, related to the Service Payments tool
 > (`docs/backlog/service-payments-plan.md`, parked waiting on HDFC) but **built and shipped on its own** —
 > the payments database does NOT go to prod for this (owner). Every number below was measured from material
 > the owner supplied that day; nothing here is assumed. No customer names, phone numbers, PANs or plates are
@@ -299,11 +300,89 @@ Staging holds those three DEMO invoices (DEMO KRISHNA LOGISTICS / MAHADEV TRAVEL
   invoices sent through this screen, not which are paid, older dues or bills raised outside it, and a wrong figure
   sent to a customer starts a dispute. Options put to the owner: accounts uploads the Busy/SAP outstanding report
   ("as per our books on {date}") · an optional box typed when sending · the portal's own sum after step 3 (understates).
-- ⏭️ Open a PR from `cr1-invoice-send` when the owner asks (nothing is on `portal` yet).
+- ✅ PR #140 opened 2026-10-26 (CI 9/9 green, Auto-fix on) — NOT merged; nothing is on `portal` yet.
 - Prod — **only on the owner's command**: apply `20261024_gate_invoices.sql`, deploy `gate-invoices`
   (`--no-verify-jwt`), set `GATE_SMTP_PASSWORD` on the prod project, and do NOT set `GATE_EMAIL_ONLY_TO` there
   (it limits recipients — staging only). Then merge the PR (the screen needs the tables + function first).
-- Then step 2: release request + GM/owner approval + gate screen + guard logins (with the brand exemption).
+- ✅ Step 2 built 2026-10-26 — see below.
+
+## Step 2 — as built (2026-10-26, branch `cr2-release-gate`, staging only)
+
+Stacked on `cr1-invoice-send` (it needs step 1's tables and Edge Function), so PR #140 merges first.
+
+**Owner decisions (2026-10-26):**
+| Question | Decision |
+|---|---|
+| Who may approve or hold? | **Only the Service GM of the invoice's company, or the admin (owner).** No other GM. |
+| How do approvers hear of a request? | **Phone notification** (web push), turned on once per phone. |
+| How long does an approval let the vehicle out? | **48 hours**, no tap needed. Then the gate shows "hold" again. |
+| Who creates guard logins? | **HR, on the Employees screen**, in a new Security department. |
+
+**Guard logins.** New department `security` ("Security") with designation `security_guard` (executive). The
+user-shape rule now says brands are **not applicable** for Security, with the reason on the form ("a brand would
+open its catalog, quotations and the ERP to them"), in `src/lib/userShape.js`, the Deno mirror
+`supabase/functions/_shared/userShape.ts` and `scripts/user-shape-audit.sql`. A guard keeps an outlet (their gate).
+Without a brand the ERP sync's `!inner` brand join never picks a guard up. Measured on the schema snapshot: a guard
+reads only what every staff member reads (colleague list, outlets, vendors, reference tables). The staging probe
+moved a real user into Security (rolled back) and proved they read no catalog, quotation, PI, financier copy or
+gate row. `user-shape-truthtable` 27/0 (the old rule fails 5 of the new checks); the JS and Deno copies agree on
+all 120 slot × department × tier cases.
+
+**Database** — `supabase/migrations/20261026_gate_releases.sql` (applied to STAGING):
+- `gate_releases`: one per vehicle exit — `asked` → `approved` (with `valid_until` = decision + 48 h) / `held`
+  (note required) / `withdrawn`; never two open requests for one invoice (partial unique index); `card` keeps
+  what the approver was shown; `client_request_id` makes a double tap return the first request.
+- `gate_checks`: every guard lookup (guard, plate as typed, may go / hold, the release it matched).
+- `gate_push_subscriptions`: the approvers' phones — reachable by the service role only (no client grant).
+- RLS: releases and checks read like the step-1 tables (service / accounts / spares of the company + admin);
+  guards read nothing — the gate screen asks the Edge Function.
+- 6 `/gate` access rules (Security × executive/manager/gm × PT/PTB).
+- `scripts/invoices/probe-gate-releases.sql` **16/0** on staging (self-aborting; refuses a database whose `users`
+  table calls out over HTTP). ⭐ It caught a real defect first: **a CHECK that evaluates to NULL passes**, and
+  `valid_until > decided_at` is NULL when `valid_until` is missing — an approval with no expiry was accepted. Now
+  `check (coalesce(case … end, false))`; against the old constraint the probe fails exactly that check. Each
+  "must be refused" test now undoes an accepted row itself, so one failure cannot mask the next.
+
+**Edge Function `gate-invoices`** (deployed to STAGING):
+- `authority.ts`: the one table of who may do what, asked before any payload is read; the screens import it.
+  Upload / send / PDF / ask / withdraw = service, accounts, spares + admin · decide + phone alerts = Service GM
+  (own company) + admin · gate check = Security + admin. `scripts/invoices/selftest-gate-authority.mjs` **221/0**
+  (20 people × 10 actions + the own-company rule, written by hand from the decisions); 7 planted bugs fail it.
+- `requestRelease`: workshop jobs with a vehicle number only; refuses while an approval is still valid; wakes the
+  approvers' phones (Service GMs of that company + admin) and returns how many were reached — never failing the
+  request. `decideRelease`: approve (48 h) or hold (reason); a second decision is refused naming who decided first.
+  `gateCheck`: plate typed any way (spaces / dashes ignored) → may go (who released it, until when) or hold (and
+  whether a request is waiting), in the guard's own company; logged.
+- `push.ts`: Web Push with the platform's WebCrypto — RFC 8291 (aes128gcm, encrypted to the phone's key) + RFC
+  8292 (VAPID, ES256-signed). Only the browsers' push services are contacted (Google FCM, Mozilla, Apple, Microsoft),
+  because the endpoint comes from a browser. `scripts/invoices/selftest-web-push.mjs` **44/0**: RFC 8291 Appendix A
+  byte for byte; a random-key message decrypts like a phone; the JWT verifies with our key only; 15 crafted
+  endpoints refused; 7 planted bugs fail it.
+- Keys: `GATE_VAPID_PUBLIC_KEY` + `GATE_VAPID_PRIVATE_KEY`, made by `scripts/invoices/make-vapid-keys.mjs <ref>`
+  (straight into the function secrets; the private key is never printed). Set on staging 2026-10-26.
+- `admin-users` redeployed to staging (it imports `_shared/userShape.ts`).
+
+**Screens:**
+- Send Invoice gets two tabs — **Invoices** (as before, plus "Ask to release" with an optional note on workshop
+  rows that carry a plate, and the release state on each row) and **Credit releases** (waiting first; Approve /
+  Hold only for the deciders). What it pushes down: the upload card moves down by one tab row.
+- The approval card shows the customer's earlier credit releases **through the portal** (count, total, last) and
+  says plainly it is not their Busy balance (no paid status until step 3).
+- Approvers get a "Turn on alerts" line (Android Chrome: in the browser; iPhone: only from the Home-Screen app,
+  iOS 16.4+, so the portal now has `manifest.webmanifest`, icons and `apple-touch-icon`). `public/sw.js` handles
+  push + click only — **no fetch handler, nothing cached**, so the portal still loads straight from the network.
+- `/gate`: one box, one button, a full-width **MAY GO** (green) or **HOLD** (red); no amount, no customer. Guards
+  land there after sign-in; their phone bar is Gate + Profile.
+- Build clean; the throwaway `no-undef` pass clean over `src`.
+
+**Not yet done:**
+- ⏭️ **Seen in a browser** — needs the owner to sign in on localhost:3000 (staging): make a test guard on Employees
+  → ask on a DEMO invoice → approve → gate shows MAY GO; hold another → HOLD; alerts in desktop Chrome.
+- ⏭️ **A real phone alert** — a phone cannot reach localhost; test at go-live, or from an https test origin.
+- Promised-by date, responsible person, "mark paid" and the follow-up list = **step 3** (the design above lists
+  promised-by on approve; it was left for step 3 with the rest of the promise tracking).
+- Prod — **only on the owner's command, after #140**: apply `20261026_gate_releases.sql`, deploy `gate-invoices` and
+  `admin-users` (from `portal`), run `make-vapid-keys.mjs mmmxvjaavdtwlpcnjgzy`, then merge.
 
 ## Sources (outside the repo, not committed)
 - WhatsApp export "Vehicle Gate Pass" (owner, 2026-10-24) — analysed by a throwaway script; aggregates only.

@@ -30,6 +30,51 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ---
 
+## Current state (2026-10-26)
+
+- **🔨 CREDIT RELEASE STEP 2 — release request + GM/owner approval + gate screen + guard logins — BUILT, STAGING
+  ONLY, NOT YET SEEN IN A BROWSER** (branch `cr2-release-gate`, pushed, no PR; **stacked on `cr1-invoice-send`**
+  because it needs step 1's tables and function — #140 merges first). ⭐ **Record: plan → "Step 2 — as built".**
+  - **Owner decisions (2026-10-26):** approve / hold = ONLY the **Service GM of the invoice's company**, or the admin
+    (no Sales / Back Office GM) · approvers get a **phone notification** (web push) · an approval lets the vehicle
+    out for **48 hours** (no tap needed) · guard logins are made by **HR on Employees** (new **Security** department,
+    designation Security Guard; outlet yes, **brand NO**).
+  - **Guards carry no brand** — `requirementFor(BRANDS, 'security')` = not applicable, with the reason shown on the
+    form; same rule in the Deno mirror and `user-shape-audit.sql`. `user-shape-truthtable` 27/0 (old rule fails 5);
+    JS and Deno copies agree on all 120 cases. The probe proved a real user moved into Security (rolled back) reads
+    no catalog, quotation, PI, financier copy or gate row.
+  - **DB `20261026_gate_releases.sql` (STAGING):** `gate_releases` (asked / approved / held / withdrawn; one open
+    request per invoice; approval carries `valid_until`; hold needs a note; `card` = what the approver saw) ·
+    `gate_checks` (every guard lookup) · `gate_push_subscriptions` (service role only) · Security dept + designation
+    · 6 `/gate` access rules. `probe-gate-releases.sql` **16/0**. ⭐ **It caught a real defect: a CHECK that
+    evaluates to NULL PASSES** — `valid_until > decided_at` is NULL when `valid_until` is missing, so an approval
+    with no expiry was accepted. Now `check (coalesce(case … end, false))`; the staging constraint was swapped (table
+    empty). ⚠️ The CLI does not return NOTICEs — the probe carries its failures in the final message.
+  - **EF `gate-invoices` (STAGING):** `authority.ts` = the one who-may-do-what table, asked before any payload is
+    read (an unknown action → 400 before the caller is looked up). New actions: requestRelease · withdrawRelease ·
+    decideRelease · pushKey / pushSubscribe / pushUnsubscribe · gateCheck. `selftest-gate-authority` **221/0** (20
+    people × 10 actions, written by hand from the decisions; 7 planted bugs fail it). Step-1 mail test still 79/0.
+    `admin-users` redeployed to staging (it shares `_shared/userShape.ts`).
+  - **Phone alerts = Web Push written with WebCrypto** (`push.ts`, RFC 8291 + 8292, no library); only the browsers'
+    own push hosts are ever contacted. `selftest-web-push` **44/0** — RFC 8291 Appendix A reproduced byte for byte;
+    7 planted bugs fail it. Staging secrets `GATE_VAPID_PUBLIC_KEY` / `GATE_VAPID_PRIVATE_KEY` set by
+    `scripts/invoices/make-vapid-keys.mjs <ref>` (private key never printed). ⚠️ **iPhone shows web push only from the
+    Home-Screen app (iOS 16.4+)** → `public/manifest.webmanifest` + icons + `public/sw.js` (push + click ONLY, no
+    fetch handler, caches nothing).
+  - **Screens:** Send Invoice gets tabs **Invoices | Credit releases** (pushes the upload card down one tab row) ·
+    "Ask to release" on workshop rows with a plate (counter sales: none) · Approve / Hold only for the deciders ·
+    the card shows earlier releases through the portal and says it is NOT the Busy balance · alerts switch for
+    approvers · `/gate`: big MAY GO (who, until when) / HOLD ("waiting for the GM" when asked) · guards land on
+    /gate; phone bar Gate + Profile. Build + no-undef clean.
+  - ⏭️ **Next: the owner signs in on localhost:3000 (staging)** → a test guard on Employees → ask → approve → gate
+    MAY GO; hold → HOLD; alerts in desktop Chrome. A real phone cannot reach localhost — phone test at go-live or
+    from an https test origin. **Prod ONLY on the owner's command, after #140:** migration → EF → VAPID keys
+    (`make-vapid-keys.mjs mmmxvjaavdtwlpcnjgzy`) → `admin-users` from `portal` → merge.
+  - ⚠️ **A prod read (active GMs by department) was refused by the classifier ("Production Reads")** — not
+    retried; the owner named the approvers instead.
+  - **Also 10-26:** PR **#140** (step 1) opened — CI 9/9 green, Auto-fix on, NOT merged. `log-error` found already
+    live on prod as v20 (= `portal`). The owner checked the TIV sheet on a real phone. 45 new CBNs → "later".
+
 ## Current state (2026-10-25)
 
 - **🔨 CREDIT RELEASE STEP 1 — "Send Invoice" BUILT, STAGING ONLY** (branch `cr1-invoice-send`, **PR #140**
@@ -969,7 +1014,8 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 - **🔨 Credit release STEP 1 ("Send Invoice") BUILT on staging, real email proven (2026-10-25)** — branch
   `cr1-invoice-send`, see the 2026-10-25 block. ✅ Signature Mobile confirmed. **PR #140 open
   (2026-10-26) — do NOT merge before the prod migration + EF**; prod (migration + EF + `GATE_SMTP_PASSWORD` on prod + drop `GATE_EMAIL_ONLY_TO` there) **only on
-  the owner's command**; then step 2 (release request + approval + gate + guard logins).
+  the owner's command**. ✅ **Step 2 BUILT on staging** (branch `cr2-release-gate`, see the 2026-10-26 block) — next:
+  the owner signs in on localhost:3000 for the browser check.
 - **💡 Credit release + invoice sending + gate app — PLAN v0.2 (2026-10-24):**
   `docs/backlog/credit-release-plan.md`. Owner: standalone (`gate_*` tables, payments DB stays off prod) ·
   WhatsApp **Business API** (plate + total + PDF + thank-you + timely-payment ask — same rules as the email) + Gmail (port 465) · one login per guard

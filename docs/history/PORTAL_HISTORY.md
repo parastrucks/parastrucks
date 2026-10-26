@@ -26,6 +26,52 @@
 
 ---
 
+## Session log — 2026-10-26 → 10-27 (PC): credit release step 2 — release request, approval, gate screen, guard logins (staging)
+
+**Housekeeping first (10-26).** The owner's replies: deploy `log-error` — **already live on prod as v20**, deployed
+24 Oct 18:35 IST by another session; the downloaded source matched `portal` `e236912` file for file and an
+unauthenticated call got 401, so nothing was redeployed. The TIV detail sheet was checked on a real phone by the
+owner (PR #125 closed out). The 45 new CBNs: "later". Asked whether opening the step-1 PR would block other
+deployments: no — a PR changes nothing live, other fixes still merge on their own, and only a conflict in the top
+of CLAUDE.md / history might need a merge later. **PR #140** opened (`cr1-invoice-send` → `portal`): CI 9/9 green,
+Auto-fix on at the owner's word, NOT merged; its body says not to merge before the prod migration + EF. Vercel's
+bot comment on the PR was preview-build status, nothing to fix.
+
+**Step 2 — decisions.** The owner said "go"; asked which, they chose step 2 on staging. A prod read of active GMs by
+department was refused by the classifier ("Production Reads") and not retried, so the approver rule was put to
+the owner with three other questions: **only the Service GM of the invoice's company + the owner** approve ·
+approvers get a **phone notification** · an approval lasts **48 hours** (the owner typed it in place of the offered
+options) · **HR** creates guard logins. Branch `cr2-release-gate` is stacked on `cr1-invoice-send` because it needs
+step 1's tables and function.
+
+**Built (5 commits `01af744` → `1e18041`, pushed; then a merge of the #140 docs note):**
+1. **Guards carry no brand** — the brand slot is not applicable for the new `security` department, with its
+   reason on the form, in the screen rule, the Deno mirror and the audit SQL. Truth table 27/0 (old rule fails 5);
+   the two code copies agree on 120 cases.
+2. **Migration `20261026_gate_releases.sql` on staging** — `gate_releases`, `gate_checks`, `gate_push_subscriptions`,
+   the Security department + designation, 6 `/gate` rules. The probe (16/0 at the end) **caught a real defect on its
+   first run: a CHECK that evaluates to NULL passes in SQL**, and `valid_until > decided_at` is NULL when
+   `valid_until` is missing — an approval with no expiry was accepted. Fixed with `coalesce(…, false)`; the staging
+   constraint was swapped while the table was empty. The probe's second "failure" was the first one's row leaking
+   into the next test, so every refusal test now undoes an accepted row itself; against the old constraint the
+   probe then fails exactly one check. The CLI returns no NOTICEs, so failures ride in the final exception text.
+3. **Web Push with WebCrypto** (`push.ts`, no library): RFC 8291 Appendix A reproduced byte for byte (the RFC
+   text was downloaded and its test vector copied), VAPID verified, only the browsers' push hosts allowed; 44/0,
+   7 planted bugs caught. `make-vapid-keys.mjs` sets the staging keys without printing the private one.
+4. **`gate-invoices` actions** — ask / withdraw / decide / phone alerts / gate check behind `authority.ts` (221/0, 7
+   planted bugs caught; step-1 mail test still 79/0). Deployed to staging with `admin-users`; the smoke test gave
+   401 with no sign-in and 400 for an unknown action.
+5. **Screens** — Invoices | Credit releases tabs, Ask to release, Approve / Hold, earlier releases on the card (not
+   the Busy balance — said so), alerts switch, `/gate` MAY GO / HOLD, guards land on /gate. App icons rendered from
+   the favicon with headless Chrome; manifest + `sw.js` (no fetch handler). Build + no-undef clean.
+
+**Not yet:** seen in a browser — the pane is signed out of staging and the owner signs in (localhost:3000). A real
+phone alert needs an https origin the phone can reach. Prod for both steps only on the owner's command.
+
+**Tooling notes.** `supabase db query -f` resolves a relative path against `--workdir`, so give absolute paths. A
+backslash inside a Bash heredoc can be eaten before it reaches the file — write such scripts with the Write tool
+(or build the character with `String.fromCharCode(92)`).
+
 ## Session log — 2026-10-24 → 10-25 (PC): credit release step 1 — read, save and email SAP invoices (staging)
 
 The owner said "start working". Built on branch `cr1-invoice-send` from `portal` `2b03626`; **staging only**.
