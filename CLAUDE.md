@@ -75,6 +75,17 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   - A background watcher counts the folder every 5 min (stops when ≥ 4,63,967 and steady, or 15 min unchanged).
     ⏭️ When the copy is done: run the inventory on `Backup data` ONLY → report → owner checks → copy into `_Sorted`
     → then the all-years load onto staging (and see whether the 2023-24 / 2024-25 sales books are in the pile).
+  - ✅ **2026-10-26 DONE:** copy complete (4,26,046 files + 37,921 folders = Windows' 4,63,967 "items"). Inventory
+    (`018a2f1` → `1f2158d`: each workbook in its own process with a time limit — 78 had a stray cell near row 10
+    lakh/col 16,000 and hung the reader 9 h; rows now built from existing cells; ⭐ `sheet_to_json` shifts
+    `cellDates` dates 5.5 h back → 1 April fell in the year before — the importer/AL reader use serials, unaffected;
+    a rerun reuses fingerprints: 24 min vs 5.5 h). Unique 1,50,010 files / 52 GB; **2,76,036 exact duplicates = 82 GB**
+    (PDF 66.6 GB). **Owner: "only the tracker books" → `sort-copy.cjs` (`5046617`) copied 943 books into
+    `_Sorted\<kind>\<year>\` (+ "Older copies"), all 943 byte-identical, dates kept** (list `_Inventory\sorted.csv`).
+    ⭐ **Sales books: `ASHOK PRAJAPATI\PAYMENT TRACKER FROM NOV22 ONWARDS.xlsx` (saved 2025-07-28, one version only)
+    is a cumulative master** — sheets NOV23MARCH24 (1,716 trucks) · 2024 TO 25 (1,908) · 2025-26 (435, to Jul-25);
+    it holds 533/539 of the 2022-23 and 1,253/1,258 of the 2023-24 monthly files' trucks and all 2024-25 monthly
+    files' but 2 → the final 2023-24 + 2024-25 sales book (the 11 stray trucks to show the owner).
   - ⛔ **Owner, 2026-10-25: "Why are you running tests on files that you are not authorized to see?"** — I had
     tried to trial the scanner on ALL of `D:PTBFinances` (rejected; nothing read). **Rule: read/scan ONLY the
     paths the owner named; test on made-up data; ask before any other folder** (memory `feedback_only_named_folders`).
