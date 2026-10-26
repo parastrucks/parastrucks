@@ -6,9 +6,16 @@
 //   saveDocument { file_b64, reading }              → { ok, document_id, already? }
 //   sendEmail    { document_id, to, client_request_id } → { ok, message }
 //   pdfUrl       { document_id }                    → { ok, url }   (5-minute signed link)
+// Step 2 (2026-10-26):
+//   requestRelease  { document_id, note?, client_request_id } → { ok, release, alerted }
+//   withdrawRelease { release_id }                            → { ok, release }
+//   decideRelease   { release_id, decision: approve|hold, note? } → { ok, release }
+//   pushKey / pushSubscribe { endpoint, p256dh, auth } / pushUnsubscribe { endpoint }
+//   gateCheck       { regn_no }                               → { ok, result: may_go|hold, … }
 //
-// Who: the admin, or service / accounts / spares staff of the invoice's own company
-// (same departments as the /invoices access rules and the gate_* read policies).
+// Who: authority.ts — ONE table, asked before any payload is read. Upload / send / ask:
+// service, accounts, spares of the invoice's company + admin. Approve / hold: ONLY the
+// Service GM of that company, or the admin. Gate check: Security guards (+ admin).
 // The company is decided by the SELLER GSTIN printed on the invoice, never by the caller.
 //
 // Email goes from GATE_SMTP_USER (accounts.guj@parastrucks.in) through smtp.gmail.com:465
@@ -23,8 +30,10 @@ import { secretKey, publishableKey } from "../_shared/keys.ts"
 import { rateLimit } from "../_shared/rateLimit.ts"
 import { audit } from "../_shared/auditLog.ts"
 import { jsonResponse, preflight } from "../_shared/cors.ts"
-import { checkReading, cleanEmail, mayUse, recipientAllowed, type Reading } from "./check.ts"
-import { invoiceEmail, mimeMessage, senderFor } from "./mail.ts"
+import { checkReading, cleanEmail, recipientAllowed, type Reading } from "./check.ts"
+import { ACTION_GATES, isAdmin, mayDecideFor, mayDo, RELEASE_HOURS } from "./authority.ts"
+import { pushEndpointAllowed, sendPush, type Vapid } from "./push.ts"
+import { invoiceEmail, mimeMessage, properName, rupees, senderFor } from "./mail.ts"
 import { AL_LOGO_PNG_B64, PARAS_LOGO_PNG_B64 } from "./logos.ts"
 import { sendSmtp, SmtpError } from "./smtp.ts"
 
@@ -36,8 +45,6 @@ type Caller = {
   department_code: string | null
 }
 type VerifyResult = { err: Response } | { caller: Caller; admin: SupabaseClient }
-
-const isAdmin = (c: Caller) => c.permission_level === "admin"
 
 const MAX_PDF_BYTES = 5 * 1024 * 1024
 const SAME_RECIPIENT_GAP_MS = 2 * 60 * 1000
@@ -76,7 +83,6 @@ async function verify(req: Request): Promise<VerifyResult> {
     entity_id: prof.entity_id,
     department_code: prof.departments?.code ?? null,
   }
-  if (!mayUse(caller)) return { err: jsonResponse(req, { error: "Forbidden" }, 403) }
   return { caller, admin }
 }
 
@@ -92,6 +98,25 @@ function fromBase64(s: string): Uint8Array | null {
     return out
   } catch { return null }
 }
+/** A free-text note: trimmed, printable, ≤300 — null when empty, false when too long. */
+function cleanNote(s: unknown): string | null | false {
+  if (s === undefined || s === null) return null
+  if (typeof s !== "string") return false
+  const t = s.replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim()
+  if (!t) return null
+  return t.length > 300 ? false : t
+}
+/** "26 Oct, 4:30 pm" in India time — the time a guard or approver reads. */
+const istTime = (iso: string) => new Date(iso).toLocaleString("en-IN", {
+  timeZone: "Asia/Kolkata", day: "numeric", month: "short", hour: "numeric", minute: "2-digit", hour12: true,
+})
+function vapid(): Vapid | null {
+  const publicKey = Deno.env.get("GATE_VAPID_PUBLIC_KEY"), privateKey = Deno.env.get("GATE_VAPID_PRIVATE_KEY")
+  if (!publicKey || !privateKey) return null
+  return { publicKey, privateKey, subject: `mailto:${Deno.env.get("GATE_SMTP_USER") ?? "accounts.guj@parastrucks.in"}` }
+}
+const PUSH_TIMEOUT_MS = 5000
+
 const sameBills = (a: { bill_no: string; amount_paise: number }[], b: { bill_no: string; amount_paise: number }[]) =>
   JSON.stringify([...a].map((x) => [x.bill_no, Number(x.amount_paise)]).sort()) ===
   JSON.stringify([...b].map((x) => [x.bill_no, Number(x.amount_paise)]).sort())
@@ -106,9 +131,12 @@ Deno.serve(async (req: Request) => {
   const action = body.action
   const payload = body.payload ?? {}
 
+  if (typeof action !== "string" || !Object.hasOwn(ACTION_GATES, action)) return json({ error: `Unknown action: ${action}` }, 400)
   const auth = await verify(req)
   if ("err" in auth) return auth.err
   const { caller, admin } = auth
+  // The one role check — before any payload is read (authority.ts).
+  if (!mayDo(action, caller)) return json({ error: "Forbidden" }, 403)
 
   const rl = await rateLimit(admin, caller.id, "gate-invoices", 30, 60)
   if (!rl.allowed) return json({ ok: false, error: "rate_limited", retry_after_s: rl.retry_after_s }, 429)
@@ -121,6 +149,50 @@ Deno.serve(async (req: Request) => {
     if (!doc) return { err: json({ error: "Invoice not found" }, 404) }
     if (!isAdmin(caller) && doc.entity_id !== caller.entity_id) return { err: json({ error: "Forbidden" }, 403) }
     return { doc }
+  }
+
+  // The same chokepoint for a release. A Service GM's own-company rule is applied by the
+  // decide action (mayDecideFor); everyone but the admin stays inside their own company.
+  async function loadRelease(id: unknown) {
+    if (typeof id !== "string" || !UUID.test(id)) return { err: json({ error: "release_id required" }, 400) }
+    const { data: rel, error } = await admin.from("gate_releases").select("*").eq("id", id).maybeSingle()
+    if (error) return { err: json({ error: "backend_unavailable" }, 503) }
+    if (!rel) return { err: json({ error: "Release request not found" }, 404) }
+    if (!isAdmin(caller) && rel.entity_id !== caller.entity_id) return { err: json({ error: "Forbidden" }, 403) }
+    return { rel }
+  }
+
+  // Wake the phones of everyone who may decide: the Service GMs of the invoice's company
+  // and the admin. Never fails the request — the release is saved either way, and the
+  // screen says how many phones were reached so nobody assumes the GM knows.
+  async function alertApprovers(doc: Record<string, unknown>, rel: { id: string; regn_no: string }) {
+    const v = vapid()
+    if (!v) return { approvers: 0, phones: 0, sent: 0, set_up: false }
+    const { data: svc } = await admin.from("departments").select("id").eq("code", "service").single()
+    const { data: people } = await admin.from("users").select("id").eq("is_active", true)
+      .or(`permission_level.eq.admin,and(permission_level.eq.gm,department_id.eq.${svc?.id},entity_id.eq.${doc.entity_id})`)
+    const ids = (people ?? []).map((p: { id: string }) => p.id)
+    if (ids.length === 0) return { approvers: 0, phones: 0, sent: 0, set_up: true }
+    const { data: subs } = await admin.from("gate_push_subscriptions").select("id, endpoint, p256dh, auth, failures").in("user_id", ids)
+    const message = {
+      title: `Release asked: ${rel.regn_no}`,
+      body: `${properName(String(doc.customer_name))} · ${rupees(Number(doc.total_paise))} — tap to approve or hold`,
+      url: `/invoices?tab=releases&release=${rel.id}`,
+      tag: `release-${rel.id}`,
+    }
+    const timed: typeof fetch = (url, init) => fetch(url, { ...init, signal: AbortSignal.timeout(PUSH_TIMEOUT_MS) })
+    let sent = 0
+    await Promise.all((subs ?? []).map(async (s: { id: string; endpoint: string; p256dh: string; auth: string; failures: number }) => {
+      try {
+        const res = await sendPush(s, message, v, timed)
+        if (res.ok) { sent++; await admin.from("gate_push_subscriptions").update({ last_ok_at: new Date().toISOString(), failures: 0, last_error: null }).eq("id", s.id) }
+        else if (res.gone) await admin.from("gate_push_subscriptions").delete().eq("id", s.id)
+        else await admin.from("gate_push_subscriptions").update({ failures: s.failures + 1, last_error: res.error ?? null }).eq("id", s.id)
+      } catch (e) {
+        await admin.from("gate_push_subscriptions").update({ failures: s.failures + 1, last_error: String((e as Error).message).slice(0, 200) }).eq("id", s.id)
+      }
+    }))
+    return { approvers: ids.length, phones: subs?.length ?? 0, sent, set_up: true }
   }
 
   try {
@@ -274,6 +346,160 @@ Deno.serve(async (req: Request) => {
         const { data, error } = await admin.storage.from("gate-invoices").createSignedUrl(r.doc.file_path, 300)
         if (error || !data) return json({ error: "The PDF could not be opened." }, 503)
         return json({ ok: true, url: data.signedUrl })
+      }
+
+      // ── Step 2: ask for a credit release ──
+      case "requestRelease": {
+        const reqId = payload.client_request_id
+        if (typeof reqId !== "string" || !UUID.test(reqId)) return json({ error: "client_request_id required" }, 400)
+        const note = cleanNote(payload.note)
+        if (note === false) return json({ error: "The note is longer than 300 characters." }, 400)
+        const r = await loadDocument(payload.document_id); if ("err" in r) return r.err
+        const doc = r.doc
+        if (doc.layout !== "workshop") return json({ error: "A counter sale has no gate step — only workshop jobs are released at the gate." }, 400)
+        if (!doc.regn_no) return json({ error: "This job card carries no vehicle number, so the guard could not check it." }, 400)
+
+        const { data: prior } = await admin.from("gate_releases").select("*").eq("client_request_id", reqId).maybeSingle()
+        if (prior) {
+          if (prior.document_id !== doc.id) return json({ error: "client_request_id reused" }, 409)
+          return json({ ok: true, release: prior, repeated: true })
+        }
+        const { data: live } = await admin.from("gate_releases").select("*").eq("document_id", doc.id)
+          .or(`status.eq.asked,and(status.eq.approved,valid_until.gt.${new Date().toISOString()})`)
+          .order("requested_at", { ascending: false }).limit(1).maybeSingle()
+        if (live?.status === "asked") return json({ ok: true, release: live, already: true })
+        if (live?.status === "approved") return json({ error: `Already released — the guard will let ${doc.regn_no} out until ${istTime(live.valid_until)}.` }, 409)
+
+        const { data: rel, error } = await admin.from("gate_releases").insert({
+          entity_id: doc.entity_id, document_id: doc.id, regn_no: doc.regn_no, request_note: note,
+          requested_by: caller.id, client_request_id: reqId,
+        }).select("*").single()
+        if (error) {
+          // Two people asking at once: the one-open-request index lets one in; answer with it.
+          const { data: open } = await admin.from("gate_releases").select("*").eq("document_id", doc.id).eq("status", "asked").maybeSingle()
+          if (open) return json({ ok: true, release: open, already: true })
+          console.error("requestRelease:", error.message)
+          return json({ error: "The request could not be saved." }, 500)
+        }
+        await audit(admin, { actorId: caller.id, action: "gate_release_asked", targetId: rel.id,
+          after: { document_id: doc.id, regn_no: doc.regn_no, total_paise: doc.total_paise } })
+        const alerted = await alertApprovers(doc, rel)
+        return json({ ok: true, release: rel, alerted })
+      }
+
+      case "withdrawRelease": {
+        const r = await loadRelease(payload.release_id); if ("err" in r) return r.err
+        const { data, error } = await admin.from("gate_releases")
+          .update({ status: "withdrawn", decided_by: caller.id, decided_at: new Date().toISOString() })
+          .eq("id", r.rel.id).eq("status", "asked").select("*").maybeSingle()
+        if (error) return json({ error: "The request could not be withdrawn." }, 500)
+        if (!data) return json({ error: "This request was already answered." }, 409)
+        await audit(admin, { actorId: caller.id, action: "gate_release_withdrawn", targetId: data.id })
+        return json({ ok: true, release: data })
+      }
+
+      // ── Step 2: approve or hold — the Service GM of that company, or the admin ──
+      case "decideRelease": {
+        const decision = payload.decision
+        if (decision !== "approve" && decision !== "hold") return json({ error: "decision must be approve or hold" }, 400)
+        const note = cleanNote(payload.note)
+        if (note === false) return json({ error: "The note is longer than 300 characters." }, 400)
+        if (decision === "hold" && !note) return json({ error: "Say why it is held — the service team sees the note." }, 400)
+        const r = await loadRelease(payload.release_id); if ("err" in r) return r.err
+        const rel = r.rel
+        if (!mayDecideFor(caller, rel.entity_id)) return json({ error: "Only the Service GM of this company or the owner can approve or hold." }, 403)
+
+        // What the card showed: this customer's earlier releases through this tool. (No paid
+        // status until step 3, and nothing billed outside the tool — so it is a count, not a
+        // balance; the screen says so.)
+        const { data: doc } = await admin.from("gate_documents").select("sap_customer_code, total_paise, regn_no").eq("id", rel.document_id).single()
+        const { data: earlier } = await admin.from("gate_releases")
+          .select("id, decided_at, gate_documents!inner(sap_customer_code, total_paise)")
+          .eq("entity_id", rel.entity_id).eq("status", "approved").neq("id", rel.id)
+          .eq("gate_documents.sap_customer_code", doc?.sap_customer_code ?? "") as unknown as
+          { data: { id: string; decided_at: string; gate_documents: { total_paise: number } }[] | null }
+        const card = {
+          regn_no: doc?.regn_no, total_paise: Number(doc?.total_paise ?? 0),
+          earlier_releases: earlier?.length ?? 0,
+          earlier_total_paise: (earlier ?? []).reduce((s, e) => s + Number(e.gate_documents.total_paise), 0),
+        }
+        const now = new Date()
+        const patch = decision === "approve"
+          ? { status: "approved", valid_until: new Date(now.getTime() + RELEASE_HOURS * 3600_000).toISOString() }
+          : { status: "held" }
+        const { data, error } = await admin.from("gate_releases")
+          .update({ ...patch, decided_by: caller.id, decided_at: now.toISOString(), decision_note: note, card })
+          .eq("id", rel.id).eq("status", "asked").select("*").maybeSingle()
+        if (error) { console.error("decideRelease:", error.message); return json({ error: "The decision could not be saved." }, 500) }
+        if (!data) {
+          const { data: cur } = await admin.from("gate_releases").select("status, decided_at, users:decided_by(full_name)").eq("id", rel.id).single() as unknown as
+            { data: { status: string; decided_at: string | null; users: { full_name: string } | null } }
+          return json({ error: `Already ${cur.status === "approved" ? "approved" : cur.status === "held" ? "held" : cur.status} by ${cur.users?.full_name ?? "someone"}${cur.decided_at ? ` at ${istTime(cur.decided_at)}` : ""}.` }, 409)
+        }
+        await audit(admin, { actorId: caller.id, action: decision === "approve" ? "gate_release_approved" : "gate_release_held",
+          targetId: data.id, after: { regn_no: data.regn_no, valid_until: data.valid_until, note, card } })
+        return json({ ok: true, release: data })
+      }
+
+      // ── Step 2: the approvers' phone alerts ──
+      case "pushKey": {
+        const v = vapid()
+        if (!v) return json({ error: "Phone alerts are not set up on the server yet." }, 503)
+        return json({ ok: true, publicKey: v.publicKey })
+      }
+
+      case "pushSubscribe": {
+        const { endpoint, p256dh, auth: authKey } = payload as Record<string, unknown>
+        if (!pushEndpointAllowed(endpoint)) return json({ error: "This browser's push service is not one we send to." }, 400)
+        if (typeof p256dh !== "string" || !/^[A-Za-z0-9_-]{80,100}$/.test(p256dh) || typeof authKey !== "string" || !/^[A-Za-z0-9_-]{16,32}$/.test(authKey)) {
+          return json({ error: "The browser's subscription keys look wrong." }, 400)
+        }
+        const ua = typeof payload.user_agent === "string" ? payload.user_agent.slice(0, 300) : null
+        // The endpoint is the phone: if it was someone else's before, it is now this user's.
+        const { error } = await admin.from("gate_push_subscriptions").upsert(
+          { user_id: caller.id, endpoint, p256dh, auth: authKey, user_agent: ua, failures: 0, last_error: null },
+          { onConflict: "endpoint" })
+        if (error) { console.error("pushSubscribe:", error.message); return json({ error: "Alerts could not be turned on." }, 500) }
+        await audit(admin, { actorId: caller.id, action: "gate_push_subscribed", after: { host: new URL(endpoint as string).hostname } })
+        return json({ ok: true })
+      }
+
+      case "pushUnsubscribe": {
+        if (typeof payload.endpoint !== "string") return json({ error: "endpoint required" }, 400)
+        await admin.from("gate_push_subscriptions").delete().eq("endpoint", payload.endpoint).eq("user_id", caller.id)
+        return json({ ok: true })
+      }
+
+      // ── Step 2: the guard's check — "may go" or "hold", nothing else ──
+      case "gateCheck": {
+        const typed = typeof payload.regn_no === "string" ? payload.regn_no : ""
+        const regn = typed.toUpperCase().replace(/[^A-Z0-9]/g, "")
+        if (!/^[A-Z0-9]{6,12}$/.test(regn)) return json({ error: "Type the full vehicle number, e.g. GJ01AB1234." }, 400)
+        if (!isAdmin(caller) && !caller.entity_id) return json({ error: "Your login has no company set — ask HR." }, 403)
+        const nowIso = new Date().toISOString()
+        let q = admin.from("gate_releases")
+          .select("id, entity_id, decided_at, valid_until, users:decided_by(full_name)")
+          .eq("regn_no", regn).eq("status", "approved").gt("valid_until", nowIso)
+          .order("valid_until", { ascending: false }).limit(1)
+        if (!isAdmin(caller)) q = q.eq("entity_id", caller.entity_id)
+        const { data: hit, error } = await q.maybeSingle() as unknown as
+          { data: { id: string; entity_id: string; decided_at: string; valid_until: string; users: { full_name: string } | null } | null; error: { message: string } | null }
+        if (error) return json({ error: "The check could not be made. Try again." }, 503)
+
+        let waiting = false
+        if (!hit) {
+          let w = admin.from("gate_releases").select("id").eq("regn_no", regn).eq("status", "asked").limit(1)
+          if (!isAdmin(caller)) w = w.eq("entity_id", caller.entity_id)
+          waiting = !!(await w.maybeSingle()).data
+        }
+        const entityId = hit?.entity_id ?? caller.entity_id
+        if (entityId) {
+          await admin.from("gate_checks").insert({ entity_id: entityId, guard_id: caller.id, regn_query: regn,
+            result: hit ? "may_go" : "hold", release_id: hit?.id ?? null })
+        }
+        return json(hit
+          ? { ok: true, result: "may_go", regn_no: regn, decided_by: hit.users?.full_name ?? null, decided_at: hit.decided_at, valid_until: hit.valid_until }
+          : { ok: true, result: "hold", regn_no: regn, waiting })
       }
 
       default:

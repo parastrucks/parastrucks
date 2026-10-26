@@ -21,11 +21,8 @@ export type Reading = {
   total_paise: number
 }
 
-// Who may upload and send — the same departments as the /invoices access rules and the
-// gate_* read policies (migration 20261024_gate_invoices.sql). The screen imports this too.
-export const GATE_DEPARTMENTS = ["service", "accounts", "spares"]
-export const mayUse = (c: { permission_level: string | null; department_code: string | null }) =>
-  c.permission_level === "admin" || GATE_DEPARTMENTS.includes(c.department_code ?? "")
+// Who may upload and send now lives with every other rule in authority.ts (step 2).
+export { GATE_DEPARTMENTS, mayUse } from "./authority.ts"
 
 const FORMS: Record<string, Reading["layout"]> = {
   ZSF_RETAIL_INVOICE_GST_NEW: "counter_sale",
