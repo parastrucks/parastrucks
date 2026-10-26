@@ -41,11 +41,11 @@ function nameHints(rel) {
 
 // the sorted copy lives INSIDE the source folder (owner, 2026-10-25: "a subfolder within the backup data folder"):
 // never read it back as part of the pile
-const SORTED_DIR = '_Sorted'
+const SORTED_DIR = '_Sorted', BIN_DIR = '_To delete' // and what move-to-delete.cjs set aside
 function walk(d, acc = []) {
   for (const e of fs.readdirSync(d, { withFileTypes: true })) {
     const p = path.join(d, e.name)
-    if (e.isDirectory() && d === src && e.name === SORTED_DIR) continue
+    if (e.isDirectory() && d === src && (e.name === SORTED_DIR || e.name === BIN_DIR)) continue
     if (e.isDirectory()) walk(p, acc)
     else acc.push(p)
   }
