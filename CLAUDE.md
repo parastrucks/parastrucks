@@ -61,9 +61,9 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   Univer error (scroll before the new engine was ready) and one render paired the new year with the old rows
   (wrong header + a wasted engine) — both fixed.
 - **🗂️ THE TEAM'S FILE PILE (owner, 2026-10-25): every file from the back-office PCs is being copied to
-  `D:PTBFinancesBackup data` — ~4,63,967 files, 129 GB, unsorted (copy started ~16:15, ~1.5 h).** Owner chose:
+  `D:\PTB\Finances\Backup data` — ~4,63,967 files, 129 GB, unsorted (copy started ~16:15, ~1.5 h).** Owner chose:
   Claude sorts it (not a CoWork session, NOT the repo — real data never goes in the repo). Plan: (1) read-only
-  inventory → (2) owner checks the summary → (3) Claude COPIES (never moves) into **`Backup data_Sorted`** (a
+  inventory → (2) owner checks the summary → (3) Claude COPIES (never moves) into **`Backup data\_Sorted`** (a
   SUBFOLDER of the source — owner's choice; no new parent folder) by kind and financial year; the inventory
   (`inventory.csv` + `summary.txt`) goes in `_Sorted` too. The originals stay exactly as given.
   - **`scripts/phase10/import/inventory.cjs <source> <out>`** (`3b4e9e3`): workbooks recognised by their HEADERS
@@ -72,9 +72,10 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
     "copy/old/(1)"); copies of one book paired by shared chassis (fuller/newer named); damaged .xlsx caught (no
     "PK"); non-spreadsheets listed unopened; skips `_Sorted`; refuses an output inside the repo; console = counts.
     Tested on MADE-UP files only (12-file pile; 50,000 files in 251 s → ~40 min for the pile + spreadsheets).
-  - A background watcher counts the folder every 5 min (stops when ≥ 4,63,967 and steady, or 15 min unchanged).
-    ⏭️ When the copy is done: run the inventory on `Backup data` ONLY → report → owner checks → copy into `_Sorted`
-    → then the all-years load onto staging (and see whether the 2023-24 / 2024-25 sales books are in the pile).
+  - ✅ All steps below DONE 2026-10-26/27. ⚠️ Windows' copy "items" = files + folders (the watcher counted files only
+    and reported a false stall). ⏭️ **NEXT: the all-years load onto staging** (plan → step 1) with the sorted books +
+    the master sales book; the owner deletes `_To delete` himself (Shift+Delete — 85.8 GB is too big for the bin).
+    Owner's team to confirm the yard handles AL/other dealers' stock (the 330 stock-register-only trucks).
   - ✅ **2026-10-26 DONE:** copy complete (4,26,046 files + 37,921 folders = Windows' 4,63,967 "items"). Inventory
     (`018a2f1` → `1f2158d`: each workbook in its own process with a time limit — 78 had a stray cell near row 10
     lakh/col 16,000 and hung the reader 9 h; rows now built from existing cells; ⭐ `sheet_to_json` shifts
@@ -99,7 +100,7 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
     to confirm) · paperwork (subvention e-mails, PDFs, docs) the rest. Not readable: 15 password-protected xlsx,
     15,725 scanned PDFs, 53,520 images (OCR not run). Lists: `_Sorted\_Inventory\vehicle-check\`.
   - ⛔ **Owner, 2026-10-25: "Why are you running tests on files that you are not authorized to see?"** — I had
-    tried to trial the scanner on ALL of `D:PTBFinances` (rejected; nothing read). **Rule: read/scan ONLY the
+    tried to trial the scanner on ALL of `D:\PTB\Finances` (rejected; nothing read). **Rule: read/scan ONLY the
     paths the owner named; test on made-up data; ask before any other folder** (memory `feedback_only_named_folders`).
 - **Ports (2026-10-25):** staging now also allows `http://localhost:3001` (owner: "use another port", done by the
   invoices session) — the tracker session keeps **:3000**, the invoices session **:3001**, both can sign in. The
@@ -1414,6 +1415,9 @@ tagged `[FREE]` / `[PAID]` / `[FREE-ALT]` in the history archive.
 - A **git worktree has no `.env`** (only `.env.example`) — copy the main checkout's `.env` in, or
   `npm run dev`/preview boots blank (the Supabase client throws on undefined `VITE_SUPABASE_URL`).
 - Python is **not installed** — use Node.js or PowerShell for scripting.
+- ⚠️ **The Bash tool mangles backslashes inside heredocs and `node -e "…"`** (`'\\'` became `'\'`; regexes and
+  Windows paths lost their `\` — two shipped regex bugs and mangled doc paths, 2026-10-25/26). Write scripts and
+  multi-line text with the **Write/Edit tools**, then check the escapes landed.
 
 **Backend gotchas (see `memory/project_edge_function_auth.md`):**
 - All **9** Edge Functions deploy with **`verify_jwt: false`** (each runs its own stricter `verify()`). The nine: `verify-login`, `admin-users`, `admin-access-rules`, `admin-catalog`, `admin-tiv`, `log-error`, `service-jobs`, `erp-sso`, `sync-erp-users` — docs previously said 7/8; deploying fewer than all nine breaks the missed one at the key cutover.

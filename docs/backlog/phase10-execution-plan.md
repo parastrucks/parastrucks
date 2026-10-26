@@ -967,9 +967,14 @@ Also: a phone view (read-only cards) and the local save queue across reloads (E5
      ⚠️ Staging keeps the 3 DUMMY uploads (al_sheet_*) — deleting needs owner approval. Not live-tested: Go to truck
      for a truck in another year (same path as Search all years).
      Ports: staging also allows `localhost:3001` since 2026-10-25 — tracker on :3000, invoices on :3001, both sign in.
-  0b. ⏭️ **The team's file pile** (2026-10-25): `D:PTBFinancesBackup data` (~4.6 lakh files, 129 GB) → `inventory.cjs` →
-     owner checks → copy into `Backup data_Sorted` by kind + year (see CLAUDE.md 2026-10-25 "THE TEAM'S FILE PILE"). The
-     sorted purchase / sales / retention / AL books then feed step 1. Only that folder may be read.
+  0b. ✅ **The team's file pile** (2026-10-25 → 10-27): `D:\PTB\Finances\Backup data` (4,26,046 files, 134 GB) →
+     `inventory.cjs` → owner checked → `sort-copy.cjs` copied the **943 tracker books** into `Backup data\_Sorted\<kind>\<year>\`
+     (+ "Older copies"; list `_Sorted\_Inventory\sorted.csv`). ⭐ **The final 2022-23 → 2025-26 (to Jul-25) sales book is
+     `ASHOK PRAJAPATI\PAYMENT TRACKER FROM NOV22 ONWARDS.xlsx`** (one version; sheets NOV23MARCH24 1,716 · 2024 TO 25 1,908 ·
+     2025-26 435) — it holds all but 11 of the monthly "Payment Tracker" files' trucks (6 of 2022-23, 5 of 2023-24; the
+     monthly files are snapshots). Exact duplicates (2,76,020) + installers moved to `Backup data\_To delete` (85.8 GB),
+     byte-verified 0 problems → the owner deletes it. Vehicle check: 8,906 trucks in the pile, 7,387 in the sorted books,
+     the 1,519 others explained (CLAUDE.md 2026-10-25 block). The sorted books feed step 1. Only that folder may be read.
   1. **When the owner's UPDATED files arrive: run the importer onto STAGING** (the repository/archive) — now
      ALL years at once (`run.cjs <scratch>` with no files, or the owner's folders):
      `node scripts/phase10/import/run.cjs <scratch> [files/folders]` → `node scripts/phase10/import/sql.cjs

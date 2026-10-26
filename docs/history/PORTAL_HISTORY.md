@@ -26,6 +26,46 @@
 
 ---
 
+## Session log — 2026-10-26 → 10-27 (PC): the team's file pile inventoried, sorted, de-duplicated and checked end to end
+
+Same session and branch (`10b-foundation`, worktree `bold-meitner-a9cb2f`). **Nothing on staging or prod changed.** Only
+`D:\PTB\Finances\Backup data` was read (owner's rule). Real data stayed outside the repo; the console showed counts only.
+
+- **The copy finished** — 4,26,046 files + 37,921 folders = the 4,63,967 "items" Windows showed (its count includes
+  folders; my watcher counted files and wrongly reported a stall at 92 %).
+- **The inventory hung for 9 hours on one spreadsheet** (2.4 GB). Fixes (`018a2f1` → `1f2158d`): each workbook opens in its
+  own process (`inventory-open.cjs`) with a 120 s limit and a 2 GB cap; 78 workbooks had a stray cell near row 10 lakh /
+  column 16,000 (over 10 crore cells in range) and the reader walked every empty cell — rows are now built from the cells
+  that exist. ⭐ Comparing the new reader with `sheet_to_json` on 300 real workbooks found that **`sheet_to_json` with
+  `cellDates` moves each date 5.5 h back** (1 April 2025 → 31 Mar 18:30 UTC → wrong financial year/month); 285/300 equal,
+  the other 15 only by that. The importer and the AL reader take serial numbers in UTC — unaffected. Two regexes had also
+  lost their backslashes (the duplicate keeper took any name with a "d" as a copy). A rerun reuses fingerprints: 24 min vs
+  5.5 h. Result: 1,50,010 unique files (52 GB); **2,76,036 exact duplicates (82 GB, PDF 66.6 GB)**; 112 sets of copies of
+  one book; 100 workbooks whose folder/name year ≠ the dates inside.
+- **Sorted (owner: "only the tracker books")** — `sort-copy.cjs` (`5046617`): 943 books into `_Sorted\<kind>\<year>\`
+  (older copies apart, duplicates once); all 943 byte-identical, dates kept; never moves/overwrites; a rerun skips what
+  is there.
+- **The final sales book (owner: "you analyse and find out")**: `PAYMENT TRACKER FROM NOV22 ONWARDS.xlsx` (Ashok
+  Prajapati's PC, one version) is cumulative; the monthly "Payment Tracker -MONTH" files are working snapshots it contains
+  (2022-23 533/539, 2023-24 1,253/1,258, 2024-25 all but 2).
+- **Space (owner: "what can I delete")** → `move-to-delete.cjs` (`b9b2459`, `--undo`): 2,76,574 files / 85.8 GB into
+  `Backup data\_To delete\<same path>` — extra copies of exact duplicates + installers/lock/temp files; a guard refused to
+  move a kept copy a duplicate relies on (it fired on 12 installer groups; all-not-data groups now move together).
+- **End-to-end check before deleting (owner's request — "a swarm of agents or a complete end-to-end check")**:
+  (1) `verify-to-delete.cjs` re-read every moved duplicate and its kept copy from disk: **0 problems in 2,76,020** (7,101 s;
+  resumable after an app crash cost a run — `e166db9`). (2) `vehicle-scan.cjs` + worker (`0644c9e`, `822c384`): 18
+  processes read every cell, PDF text layer, Word/CSV/text/e-mail → **8,906 trucks in the pile, 7,387 in the sorted books**.
+  (3) An independent agent wrote its own counter without seeing mine: **identical** (7,387 · 8,624 in spreadsheets · 1,237
+  outside the books · 15 password-protected). The 1,519 outside the books are not missing PTB sales: AL's billing export
+  for 13 dealer codes (541) · DMS "dealer credit order / proforma billing done" (99) + returns (2) · AL direct billing (55)
+  · yard stock-register-only (330 — ⭐ deciding test: 673/797 of 2025-26 in-book yard receipts are on AL's "Invoice List
+  2025-26", **0/51** of the missing ones; earlier years inferred, owner's team to confirm) · paperwork. Not readable: 15
+  password-protected workbooks, 15,725 scanned PDFs, 53,520 images (no OCR). ⭐ A swarm here = worker processes (same
+  rules on every file) + one independent recount, not many AI agents reading lakhs of files.
+- ⭐ **Tooling lessons:** the Bash tool mangles backslashes inside heredocs/`node -e` (`'\\'` → `'\'`; paths lost their
+  `\`) — write scripts with the Write tool; a worker that dies after answering must be replaced and its file retried, and a
+  lost answer on a BOOK makes its trucks look "missing" (31 false flags in a test) — the scan now warns.
+
 ## Session log — 2026-10-25 (PC): log-error on prod; the tracker's sort fixed inside Univer; the working set browser-checked
 
 - **`log-error` v20 deployed to prod** on the owner's "you do it" (he suggested Claude in Chrome; the CLI deploy
@@ -56,10 +96,10 @@
   credited") — a review list must not snowball, so a truck already listed for its credit line skips the %
   checks; the same rule later for a typed credit on an unknown chassis. ⭐ Method: every check in the panel has a
   plain-English line, and a source contract proves the panel names exactly the checks the SQL can return.
-- **The team's file pile** (later 10-25): ~4.6 lakh files / 129 GB from the back-office PCs, copied to `D:PTBFinancesBackup
+- **The team's file pile** (later 10-25): ~4.6 lakh files / 129 GB from the back-office PCs, copied to `D:\PTB\Finances\Backup
   data`. Owner asked repo vs CoWork session → neither: a read-only inventory by content (`inventory.cjs`), the owner checks it,
-  then a COPY into `Backup data_Sorted` (his choice: a subfolder, not a new parent). ⛔ I tried to trial the scanner on all of
-  `D:PTBFinances`; the owner stopped it ("files that you are not authorized to see") — nothing was read; rule saved: only the
+  then a COPY into `Backup data\_Sorted` (his choice: a subfolder, not a new parent). ⛔ I tried to trial the scanner on all of
+  `D:\PTB\Finances`; the owner stopped it ("files that you are not authorized to see") — nothing was read; rule saved: only the
   named paths, test on made-up data. The scanner was then tested on made-up piles only (found two of its own slips: it kept
   "copy of …" as the original, and read a damaged .xlsx as text).
 - **Owner decisions:** DEMO LOAD x4 rows wait · sales books coming · AL Balance Sheet upload agreed · prod only
