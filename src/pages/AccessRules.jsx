@@ -21,6 +21,7 @@ const ALL_ROUTES = [
   { route: '/bus-calculator', label: 'Bus Calculator'  },
   { route: '/tiv-forecast',   label: 'TIV Forecast'    },
   { route: '/invoices',       label: 'Send Invoice'    },
+  { route: '/gate',           label: 'Gate Check'      },
 ]
 
 /* ══════════════════════════════════════════════════════════════

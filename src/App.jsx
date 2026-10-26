@@ -32,6 +32,7 @@ const MyFinancierCopies = lazy(() => import('./pages/MyFinancierCopies'))
 const FinancierCopyLog = lazy(() => import('./pages/FinancierCopyLog'))
 const ServiceJobs      = lazy(() => import('./pages/ServiceJobs'))
 const InvoicesPage     = lazy(() => import('./invoices/pages/InvoicesPage'))
+const GatePage         = lazy(() => import('./invoices/pages/GatePage'))
 
 // Placeholder for pages not yet built
 const Soon = ({ name }) => (
@@ -113,6 +114,7 @@ export default function App() {
             <Route path="/financier-copy-log"   element={<ProtectedRoute><FinancierCopyLog /></ProtectedRoute>} />
             <Route path="/vendor-jobs"          element={<ProtectedRoute><ServiceJobs /></ProtectedRoute>} />
             <Route path="/invoices"             element={<ProtectedRoute><InvoicesPage /></ProtectedRoute>} />
+            <Route path="/gate"                 element={<ProtectedRoute><GatePage /></ProtectedRoute>} />
 
             {/* Access rules — always admin-only (hardcoded safety net) */}
             <Route

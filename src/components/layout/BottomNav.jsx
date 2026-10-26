@@ -36,6 +36,11 @@ const DEPT_TABS = {
     { to: '/vendor-jobs', icon: 'wrench',    label: 'Jobs' },
     { to: '/profile',     icon: 'user',      label: 'Profile' },
   ],
+  // Gate guards have one screen (credit release step 2).
+  security: [
+    { to: '/gate',    icon: 'shield', label: 'Gate' },
+    { to: '/profile', icon: 'user',   label: 'Profile' },
+  ],
 }
 
 // 4 icons + the raised center Create (+) = 5 slots. "Quote" is omitted here

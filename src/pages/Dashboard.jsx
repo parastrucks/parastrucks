@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useErp, useErpVisible } from '../lib/erp'
 import Icon from '../components/Icon'
@@ -166,6 +166,9 @@ export default function Dashboard() {
   const { profile, canAccess } = useAuth()
   const erpVisible = useErpVisible()
   if (!profile) return null
+  // A gate guard has one job: open the gate screen straight away. Only the Security
+  // department holds /gate, so canAccess decides it with no extra lookup.
+  if (profile.permission_level !== 'admin' && canAccess('/gate')) return <Navigate to="/gate" replace />
 
   const firstName = profile.full_name?.split(' ')?.[0] || 'there'
   const tierLabel = PERM_LABEL[profile.permission_level] || '—'

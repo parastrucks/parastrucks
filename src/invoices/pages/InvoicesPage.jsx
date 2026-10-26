@@ -4,12 +4,16 @@
 // emails it to the customer. Reads are direct under RLS (gate_* tables); every write goes
 // through the gate-invoices Edge Function. Plan: docs/backlog/credit-release-plan.md.
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import Icon from '../../components/Icon'
+import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
 import { supabase } from '../../lib/supabase'
 import { callEdge } from '../../lib/api'
 import { formatRupees } from '../lib/sapInvoice'
 import { readInvoiceFile, toBase64 } from '../lib/readInvoiceFile'
+import { istTime, latestRelease, mayUse, releaseState, useDeptCode, whoFrom } from '../lib/releases'
+import ReleasesPanel from '../components/ReleasesPanel'
 import '../invoices.css'
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -38,8 +42,26 @@ function SendStatus({ msg }) {
   return <span className="badge badge-amber">{stuck ? 'Not confirmed — send again' : 'Sending…'}</span>
 }
 
+// The release line on an invoice row (step 2): its state, or the button to ask.
+function ReleaseLine({ rel }) {
+  const s = releaseState(rel)
+  if (s === 'waiting') return <span className="badge badge-amber">Release asked</span>
+  if (s === 'released') return <span className="badge badge-green">Released until {istTime(rel.valid_until)}</span>
+  if (s === 'held') return <span className="badge badge-red">Release held</span>
+  return null
+}
+
 export default function InvoicesPage() {
   const toast = useToast()
+  const { profile } = useAuth()
+  const deptCode = useDeptCode(profile)
+  const who = whoFrom(profile, deptCode)
+  const [params, setParams] = useSearchParams()
+  const tab = params.get('tab') === 'releases' ? 'releases' : 'invoices'
+  const focusRelease = params.get('release')
+  const setTab = (t) => setParams(t === 'releases' ? { tab: 'releases' } : {}, { replace: true })
+  const [waiting, setWaiting] = useState(0)
+  const [askFor, setAskFor] = useState(null)      // { id, note } — the inline "ask to release" row
   const fileRef = useRef(null)
   const [busy, setBusy] = useState(null)          // 'reading' | 'saving' | null
   const [picked, setPicked] = useState(null)      // { name, bytes, reading }
@@ -51,13 +73,30 @@ export default function InvoicesPage() {
   const load = useCallback(async () => {
     const { data, error } = await supabase
       .from('gate_documents')
-      .select('id, entity_id, layout, doc_no, doc_date, customer_name, sap_customer_code, regn_no, total_paise, created_at, gate_messages(status, recipient, error, created_at, finished_at)')
+      .select('id, entity_id, layout, doc_no, doc_date, customer_name, sap_customer_code, regn_no, total_paise, created_at, gate_messages(status, recipient, error, created_at, finished_at), gate_releases(id, status, valid_until, requested_at)')
       .order('created_at', { ascending: false })
       .limit(30)
     if (error) { setLoadErr(error.message); return }
     setLoadErr(null)
     setDocs(data)
+    const { count } = await supabase.from('gate_releases').select('id', { count: 'exact', head: true }).eq('status', 'asked')
+    setWaiting(count ?? 0)
   }, [])
+
+  async function askRelease(doc) {
+    setBusy('saving')
+    try {
+      const r = await callEdge('gate-invoices', 'requestRelease', {
+        document_id: doc.id, note: askFor?.note ?? '', client_request_id: crypto.randomUUID(),
+      })
+      const a = r.alerted
+      if (r.already) toast.success(`A release for ${doc.regn_no} was already asked — waiting for the GM.`)
+      else if (a && a.sent > 0) toast.success(`Asked. The GM was alerted on ${a.sent} phone${a.sent === 1 ? '' : 's'}.`)
+      else toast.success('Asked. No approver has phone alerts turned on — tell the GM it is waiting.')
+      setAskFor(null)
+    } catch (err) { toast.error(err.message) }
+    finally { setBusy(null); await load() }
+  }
   useEffect(() => { load() }, [load])
 
   async function onFile(e) {
@@ -126,6 +165,16 @@ export default function InvoicesPage() {
         </div>
       </div>
 
+      <div className="inv-tabs" role="tablist">
+        <button className="inv-tab" role="tab" aria-selected={tab === 'invoices'} onClick={() => setTab('invoices')}>Invoices</button>
+        <button className="inv-tab" role="tab" aria-selected={tab === 'releases'} onClick={() => setTab('releases')}>
+          Credit releases{waiting > 0 && <span className="badge badge-amber">{waiting} waiting</span>}
+        </button>
+      </div>
+
+      {tab === 'releases' && <ReleasesPanel who={who} focusId={focusRelease} onChanged={load} />}
+
+      {tab === 'invoices' && <>
       <section className="card inv-upload">
         <input ref={fileRef} type="file" accept="application/pdf,.pdf" onChange={onFile} hidden />
         {!picked && (
@@ -200,6 +249,10 @@ export default function InvoicesPage() {
         <ul className="inv-list">
           {docs.map((d) => {
             const last = latestMessage(d)
+            const rel = latestRelease(d.gate_releases)
+            const relState = releaseState(rel)
+            // Only workshop jobs with a vehicle number reach the gate; counter sales are send-only.
+            const canAsk = d.layout === 'workshop' && d.regn_no && mayUse(who) && !['waiting', 'released'].includes(relState)
             return (
               <li key={d.id} className="inv-row">
                 <div className="inv-row-main">
@@ -213,11 +266,22 @@ export default function InvoicesPage() {
                 <div className="inv-row-side">
                   <div className="inv-amount">{formatRupees(Number(d.total_paise))}</div>
                   <SendStatus msg={last} />
+                  <ReleaseLine rel={rel} />
                 </div>
                 <div className="inv-row-actions">
                   <button className="btn btn-sm btn-secondary" onClick={() => openPdf(d.id)}><Icon name="file" size={14} /> PDF</button>
                   <button className="btn btn-sm btn-secondary" onClick={() => startSend(d)}><Icon name="mail" size={14} /> {last?.status === 'sent' ? 'Send again' : 'Email'}</button>
+                  {canAsk && <button className="btn btn-sm btn-secondary" onClick={() => setAskFor({ id: d.id, note: '' })}><Icon name="shield" size={14} /> {relState === 'held' || relState === 'expired' ? 'Ask again' : 'Ask to release'}</button>}
                 </div>
+                {askFor?.id === d.id && (
+                  <form className="inv-release-form" onSubmit={(e) => { e.preventDefault(); askRelease(d) }}>
+                    <input className="form-input" maxLength={300} autoFocus aria-label="Note for the GM (optional)"
+                      placeholder="Note for the GM (optional) — e.g. cheque promised Friday" value={askFor.note}
+                      onChange={(e) => setAskFor({ ...askFor, note: e.target.value })} />
+                    <button className="btn btn-sm btn-primary" type="submit" disabled={!!busy}>{busy === 'saving' ? 'Asking…' : `Ask GM to release ${d.regn_no}`}</button>
+                    <button className="btn btn-sm btn-secondary" type="button" onClick={() => setAskFor(null)}>Cancel</button>
+                  </form>
+                )}
                 {sendFor?.id === d.id && (
                   <form className="inv-send" onSubmit={async (e) => {
                     e.preventDefault()
@@ -239,6 +303,7 @@ export default function InvoicesPage() {
           })}
         </ul>
       )}
+      </>}
     </div>
   )
 }

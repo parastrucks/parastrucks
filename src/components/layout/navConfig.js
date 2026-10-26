@@ -24,6 +24,7 @@ export const NAV_SECTIONS = [
     items: [
       { type: 'link', to: '/vendor-jobs', icon: 'wrench',   label: 'Vendor Jobs' },
       { type: 'link', to: '/invoices',    icon: 'mail',     label: 'Send Invoice' },
+      { type: 'link', to: '/gate',        icon: 'shield',   label: 'Gate Check' },
       { type: 'erp',                      icon: 'landmark', label: 'HD Hyundai ERP', external: true },
     ],
   },

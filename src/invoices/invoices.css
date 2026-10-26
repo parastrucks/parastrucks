@@ -68,3 +68,51 @@
   .inv-send { flex-wrap: wrap; }
   .inv-send .form-input { flex-basis: 100%; }
 }
+
+/* ── Step 2: tabs, release requests, the gate screen ── */
+.inv-tabs { display: flex; gap: 4px; margin: 0 0 18px; border-bottom: 1px solid var(--border-default); }
+.inv-tab {
+  padding: 9px 14px; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  background: none; font: inherit; font-size: 14px; font-weight: 600; color: var(--text-secondary); cursor: pointer;
+}
+.inv-tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+.inv-tab:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--accent-ring); }
+.inv-tab .badge { margin-left: 6px; }
+
+.rel-alerts {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px;
+  padding: 10px 12px; margin-bottom: 14px; background: var(--paper); font-size: 13px; color: var(--gray-800);
+}
+.rel-alerts .btn { margin-left: auto; }
+.rel-plate { font-size: 17px; font-weight: 800; letter-spacing: .04em; color: var(--ink); }
+.rel-note { font-size: 13px; color: var(--gray-800); margin-top: 4px; overflow-wrap: anywhere; }
+.rel-earlier { font-size: 13px; color: var(--gray-800); margin-top: 6px; padding: 6px 8px; background: var(--amber-light); }
+.rel-earlier-note { color: var(--text-secondary); }
+.rel-focus { box-shadow: inset 3px 0 0 var(--accent); padding-left: 10px; }
+.btn.rel-approve { background: var(--green); border-color: var(--green); color: #fff; }
+.btn.rel-approve:hover:not(:disabled) { filter: brightness(.92); }
+.inv-release-form { grid-column: 1 / -1; display: flex; gap: 8px; align-items: center; }
+.inv-release-form .form-input { flex: 1 1 auto; min-width: 0; }
+
+/* The guard's screen: large type, works in sunlight, one thing at a time. */
+.gate-page { max-width: 520px; margin: 0 auto; }
+.gate-form { display: flex; flex-direction: column; gap: 12px; }
+.gate-input {
+  font-size: 28px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; text-align: center;
+  padding: 16px 12px; border: 2px solid var(--ink); background: #fff; color: var(--ink); width: 100%;
+}
+.gate-input:focus { outline: none; box-shadow: 0 0 0 4px var(--accent-ring); }
+.gate-check { font-size: 20px; font-weight: 700; padding: 16px; }
+.gate-result { padding: 28px 20px; text-align: center; color: #fff; margin-top: 4px; }
+.gate-result.go { background: var(--green); }
+.gate-result.hold { background: var(--red); }
+.gate-word { font-size: 44px; font-weight: 800; line-height: 1.05; letter-spacing: .02em; }
+.gate-plate { font-size: 24px; font-weight: 800; letter-spacing: .06em; margin: 10px 0 6px; }
+.gate-detail { font-size: 17px; line-height: 1.4; }
+.gate-hint { font-size: 14px; color: var(--text-secondary); text-align: center; margin-top: 10px; }
+
+@media (max-width: 480px) {
+  .rel-alerts .btn { margin-left: 0; }
+  .inv-release-form { flex-wrap: wrap; }
+  .inv-release-form .form-input { flex-basis: 100%; }
+}
