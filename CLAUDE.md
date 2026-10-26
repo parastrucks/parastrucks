@@ -32,8 +32,8 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ## Current state (2026-10-25)
 
-- **🔨 CREDIT RELEASE STEP 1 — "Send Invoice" BUILT, STAGING ONLY** (branch `cr1-invoice-send`, pushed, no PR
-  yet; prod untouched). ⭐ **Record: `docs/backlog/credit-release-plan.md` → "Step 1 — as built".** Service /
+- **🔨 CREDIT RELEASE STEP 1 — "Send Invoice" BUILT, STAGING ONLY** (branch `cr1-invoice-send`, **PR #140**
+  open 2026-10-26, CI 9/9 green, Auto-fix on, NOT merged; prod untouched). ⭐ **Record: `docs/backlog/credit-release-plan.md` → "Step 1 — as built".** Service /
   spares / accounts upload the SAP PDF at `/invoices` → read in the browser → saved → emailed to the customer.
   - **Reader** `src/invoices/lib/sapInvoice.js`: by label, never position; refuses an unknown form, a scan or a
     failed cross-check. `scripts/invoices/selftest-sap-invoice.mjs` **120/0** (add `--real <main checkout docs/>`):
@@ -967,8 +967,8 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 - **⏸️ Service Payments parked, waiting on HDFC (2026-10-21)** — see the 2026-10-21 block. Its own list
   stays below (items 8–10 + the three go-live gates); do not start it until the owner says so.
 - **🔨 Credit release STEP 1 ("Send Invoice") BUILT on staging, real email proven (2026-10-25)** — branch
-  `cr1-invoice-send`, see the 2026-10-25 block. ✅ Signature Mobile confirmed. Next: open a
-  PR when asked; prod (migration + EF + `GATE_SMTP_PASSWORD` on prod + drop `GATE_EMAIL_ONLY_TO` there) **only on
+  `cr1-invoice-send`, see the 2026-10-25 block. ✅ Signature Mobile confirmed. **PR #140 open
+  (2026-10-26) — do NOT merge before the prod migration + EF**; prod (migration + EF + `GATE_SMTP_PASSWORD` on prod + drop `GATE_EMAIL_ONLY_TO` there) **only on
   the owner's command**; then step 2 (release request + approval + gate + guard logins).
 - **💡 Credit release + invoice sending + gate app — PLAN v0.2 (2026-10-24):**
   `docs/backlog/credit-release-plan.md`. Owner: standalone (`gate_*` tables, payments DB stays off prod) ·
