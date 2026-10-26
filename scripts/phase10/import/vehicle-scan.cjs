@@ -40,21 +40,25 @@ function pool(n) {
   const spawn = () => {
     const w = { child: fork(path.join(__dirname, 'vehicle-scan-worker.cjs'), [], { execArgv: ['--max-old-space-size=2048'], stdio: ['ignore', 'ignore', 'ignore', 'ipc'] }), done: null }
     w.child.on('message', (m) => { const d = w.done; w.done = null; if (d) d(m) })
-    w.child.on('exit', () => { const d = w.done; w.done = null; if (d) d({ how: 'error', error: 'the reader crashed or ran out of memory' }) })
+    w.child.on('exit', () => { w.dead = true; const d = w.done; w.done = null; if (d) d({ how: 'retry' }) }) // crashed or out of memory: tried again on a fresh worker
+    // a worker that died while idle makes the next send fail: that file is retried on a fresh worker
+    w.child.on('error', () => { w.dead = true; const d = w.done; w.done = null; if (d) d({ how: 'retry' }) })
     return w
   }
   for (let i = 0; i < n; i++) idle.push(spawn())
   const get = () => (idle.length ? Promise.resolve(idle.pop()) : new Promise((r) => waiting.push(r)))
   const put = (w) => (waiting.length ? waiting.shift()(w) : idle.push(w))
   return {
-    async run(p) {
-      const w = await get()
+    async run(p, tries = 2) {
+      let w = await get()
+      if (w.dead || !w.child.connected) w = spawn()
       const res = await new Promise((resolve) => {
-        const timer = setTimeout(() => { w.done = null; w.child.kill(); resolve({ how: 'error', error: `over ${LIMIT_MS / 1000} s`, dead: true }) }, LIMIT_MS)
+        const timer = setTimeout(() => { w.done = null; w.dead = true; w.child.kill(); resolve({ how: 'error', error: `over ${LIMIT_MS / 1000} s` }) }, LIMIT_MS)
         w.done = (m) => { clearTimeout(timer); resolve(m) }
-        w.child.send({ p, re: reSrc })
+        try { w.child.send({ p, re: reSrc }) } catch { w.dead = true; w.done = null; clearTimeout(timer); resolve({ how: 'retry' }) }
       })
-      put(res.dead || !w.child.connected ? spawn() : w)
+      put(w.dead || !w.child.connected ? spawn() : w)
+      if (res.how === 'retry') return tries > 1 ? this.run(p, tries - 1) : { how: 'error', error: 'the reader crashed or ran out of memory, twice' }
       return res
     },
     stop() { for (const w of idle) w.child.kill() },
@@ -72,7 +76,7 @@ async function main() {
   const where = new Map() // chassis → { files: [], kinds: Set }
   const tally = new Map()
   const errors = []
-  let done = 0, last = 0
+  let done = 0, last = 0, bookErrors = 0
   const all = [...books.map((p) => ({ p, book: true })), ...toRead.map((p) => ({ p, book: false }))]
   let next = 0
   await Promise.all(Array.from({ length: WORKERS }, async () => {
@@ -81,7 +85,7 @@ async function main() {
       const r = await P.run(p)
       const kind = `${path.extname(p).toLowerCase()} ${r.how === 'error' ? 'could not read' : r.hasText ? 'read' : 'no text inside'}`
       if (!book) tally.set(kind, (tally.get(kind) ?? 0) + 1)
-      if (r.how === 'error') errors.push([path.relative(src, p), r.error])
+      if (r.how === 'error') { errors.push([path.relative(src, p), r.error]); if (book) bookErrors++ }
       for (const c of r.chassis ?? []) {
         if (book) { inBooks.add(c); continue }
         const w = where.get(c) ?? where.set(c, { files: [], kinds: new Set() }).get(c)
@@ -108,7 +112,7 @@ async function main() {
   const lines = []
   const say = (s = '') => { lines.push(s); console.log(s) }
   say(`Vehicle check of ${src} — ${Math.round((Date.now() - t0) / 1000)} s, ${WORKERS} workers, chassis pattern /${reSrc}/`)
-  say(`Sorted books: ${books.length} files, ${inBooks.size} distinct chassis`)
+  say(`Sorted books: ${books.length} files, ${inBooks.size} distinct chassis${bookErrors ? ` — ⚠ ${bookErrors} books could NOT be read, so some "not in the books" below may be false` : ""}`)
   say(`The pile: ${toRead.length} readable files, ${where.size} distinct chassis found in them`)
   say(`  in the sorted books too: ${where.size - missing.length}`)
   say(`  NOT in the sorted books: ${missing.length}`)

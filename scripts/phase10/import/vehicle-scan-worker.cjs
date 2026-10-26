@@ -62,6 +62,9 @@ function chassisIn(text, re) {
 module.exports = { textOf, chassisIn }
 
 if (require.main === module) {
+  // the PDF reader can throw after a file is done (a font or worker clean-up); that must not end this worker
+  process.on('uncaughtException', () => {})
+  process.on('unhandledRejection', () => {})
   process.on('message', async ({ p, re }) => {
     try {
       const { how, text } = await textOf(p)
