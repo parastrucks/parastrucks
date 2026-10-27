@@ -66,6 +66,29 @@ ok(one('IT', A)?.cells['AMC/SERVICE']?.v === 2, 'old purchase book: AMC → AMC/
 ok(one('IT_OD', B)?.cells.AMC?.v === 3, 'OTHER DEALER keeps its AMC header (the rules read it as AMC)')
 ok(seen.filter((s) => s.family).length === 7, 'seven sheets recognised', seen)
 
+// a stray cell at Excel's last row and column (the team's pile had 78 such books): read from the cells that
+// exist — walking the range (over 1,700 crore cells) never finishes
+{
+  const wb = XLSX.utils.book_new()
+  const ws = XLSX.utils.aoa_to_sheet([['SRNO', 'Chassis No', 'CTC', 'CTD', 'AL Payment Status'], [1, A, 90, 80, 'Paid']])
+  XLSX.utils.book_append_sheet(wb, ws, 'INVOICE TRACKER')
+  const f = path.join(root, 'far/INVOICE TRACKER.xlsx'); fs.mkdirSync(path.dirname(f), { recursive: true }); XLSX.writeFile(wb, f)
+  // the writer would walk the range too, so the stray cell goes straight into the sheet's XML
+  const zip = XLSX.CFB.read(fs.readFileSync(f), { type: 'buffer' })
+  const entry = zip.FileIndex[zip.FullPaths.findIndex((p) => p.endsWith('/xl/worksheets/sheet1.xml'))]
+  const xml = Buffer.from(entry.content).toString('utf8')
+    .replace(/<dimension ref="[^"]*"\/>/, '<dimension ref="A1:XFD1048576"/>')
+    .replace('</sheetData>', '<row r="1048576"><c r="XFD1048576" t="inlineStr"><is><t>stray</t></is></c></row></sheetData>')
+  entry.content = Buffer.from(xml); entry.size = entry.content.length
+  fs.writeFileSync(f, XLSX.CFB.write(zip, { type: 'buffer', fileType: 'zip' }))
+  const t0 = Date.now()
+  const far = readAll([{ path: f, fy: '2026-27' }])
+  const secs = (Date.now() - t0) / 1000
+  ok(secs < 5 && far.families.IT.length === 2, `a far-off stray cell: read in ${secs.toFixed(2)} s, the truck + the stray row`, far.families.IT.length)
+  ok(far.families.IT[0].file === '2026-27 INVOICE TRACKER.xlsx', 'a file given with its year is named by it')
+  ok(far.families.IT.find((r) => r.row === 1048576)?.cells['#XFD']?.v === 'stray', 'the stray cell keeps its column letter')
+}
+
 fs.rmSync(root, { recursive: true, force: true })
 console.log(`selftest-import-read: ${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

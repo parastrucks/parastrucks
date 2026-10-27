@@ -49,20 +49,32 @@ const FAMILIES = {
     alias: { 'NAME OF THE CUSTOMER': 'NAME', 'V PART NUMBER': 'CBN NO.' } },
 }
 
-function cellAt(ws, r, c) { return ws[XLSX.utils.encode_cell({ r, c })] }
+// the cells that EXIST, by row, each row's cells in column order — never a walk of the sheet's range: in the
+// team's file pile (2026-10-26) 78 workbooks carry a stray cell near row 10 lakh / column 16,000, a range of
+// over 10 crore cells, and walking it hung the reader for hours
+function cellsByRow(ws) {
+  const range = XLSX.utils.decode_range(ws['!ref'])
+  const byRow = new Map()
+  for (const k of Object.keys(ws)) {
+    if (k[0] === '!') continue
+    const { r, c } = XLSX.utils.decode_cell(k)
+    if (r < range.s.r || r > range.e.r || c < range.s.c || c > range.e.c) continue
+    if (!byRow.has(r)) byRow.set(r, [])
+    byRow.get(r).push([c, ws[k]])
+  }
+  for (const list of byRow.values()) list.sort((a, b) => a[0] - b[0])
+  return byRow
+}
 
 // one sheet → { headers: [...], rows: [{ row, cells: { HEADER: { v, f, note, bg, col } } }] }
-function readSheet(ws) {
-  const range = XLSX.utils.decode_range(ws['!ref'])
+function readSheet(ws, byRow = cellsByRow(ws)) {
   const headers = []
-  for (let c = range.s.c; c <= range.e.c; c++) headers[c] = H(cellAt(ws, 0, c)?.v)
+  for (const [c, cell] of byRow.get(0) ?? []) headers[c] = H(cell?.v)
   const rows = []
-  for (let r = 1; r <= range.e.r; r++) {
+  for (const r of [...byRow.keys()].filter((r) => r >= 1).sort((a, b) => a - b)) {
     const cells = {}
     let any = false
-    for (let c = range.s.c; c <= range.e.c; c++) {
-      const cell = cellAt(ws, r, c)
-      if (!cell) continue
+    for (const [c, cell] of byRow.get(r)) {
       const head = headers[c] || `#${XLSX.utils.encode_col(c)}` // a stray cell keeps its column letter
       const fill = cell.s?.patternType === 'solid' ? cell.s.fgColor?.rgb : null
       const out = {
@@ -86,22 +98,25 @@ function readSheet(ws) {
 function readAll(files) {
   const out = Object.fromEntries([...new Set(Object.entries(FAMILIES).map(([k, f]) => f.as ?? k))].map((k) => [k, []]))
   const seen = []
-  for (const file of files) {
+  for (const given of files) {
+    // a file is a path, or { path, fy } when the caller knows its year better than its folder does (run.cjs --list)
+    const file = typeof given === 'string' ? given : given.path
     const wb = XLSX.readFile(file, { cellFormula: true, cellComments: true, cellStyles: true })
     // a file is named with its financial-year folder (two years hold files of the same name)
-    const fy = /[\\/](20\d\d-\d\d)[\\/]/.exec(file)?.[1]
+    const fy = (typeof given === 'string' ? null : given.fy) ?? /[\\/](20\d\d-\d\d)[\\/]/.exec(file)?.[1]
     const name = fy && !path.basename(file).includes(fy) ? `${fy} ${path.basename(file)}` : path.basename(file)
     for (const sheet of wb.SheetNames) {
       const ws = wb.Sheets[sheet]
       if (!ws['!ref']) continue
-      const head = new Set((XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, range: 0 })[0] ?? []).map(H))
+      const byRow = cellsByRow(ws)
+      const head = new Set((byRow.get(0) ?? []).map(([, cell]) => H(cell?.v)))
       const fam = Object.entries(FAMILIES).find(([, spec]) =>
         (!spec.sheet || H(spec.sheet) === H(sheet)) && !(spec.notSheet && spec.notSheet.test(sheet)) && spec.must.every((h) => head.has(h)) &&
         (!spec.notInBookWith || !wb.SheetNames.some((n) => H(n) === H(spec.notInBookWith))))?.[0]
       const spec = FAMILIES[fam]
       seen.push({ file: name, sheet, family: fam ? (spec.as ?? fam) : null, layout: fam ?? null })
       if (!fam) continue
-      const { rows } = readSheet(ws)
+      const { rows } = readSheet(ws, byRow)
       for (const r of rows) {
         const cells = r.cells
         for (const h of spec.drop ?? []) delete cells[h]

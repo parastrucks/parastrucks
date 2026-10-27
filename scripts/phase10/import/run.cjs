@@ -44,8 +44,21 @@ const allYears = () => {
   if (fs.existsSync(DL)) out.push(DL + '2025-26.xlsx', ...findFiles([DL]).filter((f) => /INVOICE LIST/i.test(f)))
   return out
 }
-let files = given.length ? given.flatMap((g) => fs.statSync(g).isDirectory() ? findFiles([g]) : [g]) : allYears()
-files = files.sort((a, b) => orderOf(a) - orderOf(b))
+// --list <file>: the books to load, one per line "fy | month | path" (month APR…MAR, or blank for a year book —
+// it comes last in its year). For a sorted pile whose year folders follow the dates inside a file, not its
+// name: the list says each file's year and month, and that order is the one used ("later file wins").
+let files
+if (given[0] === '--list') {
+  files = fs.readFileSync(given[1], 'utf8').split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !l.startsWith('#')).map((l) => {
+    const [fy, mon, p] = l.split('|').map((s) => s.trim())
+    if (!/^20\d\d-\d\d$/.test(fy) || (mon && !MONTHS.includes(mon.toUpperCase())) || !fs.existsSync(p)) { console.error(`refused: bad line in the list: ${l.slice(0, 120)}`); process.exit(2) }
+    return { path: p, fy, order: Number(fy.slice(0, 4)) * 13 + (mon ? MONTHS.indexOf(mon.toUpperCase()) : 12) }
+  })
+  files = files.map((f, i) => ({ ...f, i })).sort((a, b) => a.order - b.order || a.i - b.i)
+} else {
+  files = given.length ? given.flatMap((g) => fs.statSync(g).isDirectory() ? findFiles([g]) : [g]) : allYears()
+  files = files.sort((a, b) => orderOf(a) - orderOf(b))
+}
 
 const t0 = Date.now()
 const { families, seen } = readAll(files)
@@ -73,7 +86,7 @@ fs.mkdirSync(out, { recursive: true })
 fs.writeFileSync(path.join(out, 'import.json'), JSON.stringify(res))
 
 const r = res.report
-console.log('files by year:', Object.entries(Object.groupBy(files, fyOf)).map(([y, v]) => `${y} ${v.length}`).join(' · '))
+console.log('files by year:', Object.entries(Object.groupBy(files, (f) => f.fy ?? fyOf(f))).map(([y, v]) => `${y} ${v.length}`).join(' · '))
 console.log('books shared between files:', overlaps.length ? '\n  ' + overlaps.join('\n  ') : 'none')
 console.log(`read ${files.length} files in ${((Date.now() - t0) / 1000).toFixed(1)} s · sheets recognised: ` +
   Object.entries(Object.groupBy(seen.filter((s) => s.family), (s) => s.family)).map(([k, v]) => `${k} ${v.length}`).join(' · '))
