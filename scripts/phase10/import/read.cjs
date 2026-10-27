@@ -94,6 +94,52 @@ function readSheet(ws, byRow = cellsByRow(ws)) {
   return { headers: headers.filter(Boolean), rows }
 }
 
+// a workbook whose sheet XML is huge, made small before SheetJS parses it: the 2023-24 purchase book's INVOICE
+// TRACKER sheet is formatted down to Excel's last row — 2.2 crore empty cells (422 MB of XML) around 39,000
+// values — and parsing it ran for over an hour. A cell with no value and no formula is written as
+// `<c r=".." s=".."/>`. SheetJS skips such a cell UNLESS its style has a fill (with cellStyles it keeps a coloured
+// empty cell, and the importer keeps that colour — a flag on an empty cell): so an empty cell is dropped only when its
+// style has no solid fill. Measured: the read is identical with and without this on every sorted book. Rows left
+// empty go too. The file on disk is never touched. Small workbooks are read as they are.
+const BIG_PART = Number(process.env.READ_SLIM_BYTES) || 30e6 // READ_SLIM_BYTES=1 slims every sheet (to test it)
+const EMPTY_CELL = /<c [^>]*\/>|<c [^>]*><\/c>/g
+const EMPTY_ROW = /<row [^>]*\/>|<row [^>]*><\/row>/g
+// style index → does it paint the cell? (xl/styles.xml: cellXfs[i].fillId → fills[fillId] patternType)
+function filledStyles(zip) {
+  const i = zip.FullPaths.findIndex((p) => p.endsWith('/xl/styles.xml'))
+  if (i < 0) return new Set()
+  const xml = Buffer.from(zip.FileIndex[i].content).toString('utf8')
+  const fills = [...(/<fills[^>]*>([\s\S]*?)<\/fills>/.exec(xml)?.[1] ?? '').matchAll(/<fill>([\s\S]*?)<\/fill>|<fill\/>/g)]
+    .map((m) => /patternType="(?!none")[^"]+"/.test(m[1] ?? ''))
+  const xfs = [...(/<cellXfs[^>]*>([\s\S]*?)<\/cellXfs>/.exec(xml)?.[1] ?? '').matchAll(/<xf\b[^>]*>/g)]
+  const out = new Set()
+  xfs.forEach((m, n) => { const f = Number(/fillId="(\d+)"/.exec(m[0])?.[1] ?? 0); if (fills[f]) out.add(String(n)) })
+  return out
+}
+function slimBook(file) {
+  const buf = fs.readFileSync(file)
+  if (buf[0] !== 0x50 || buf[1] !== 0x4b) return null // not a zip (an old .xls) — SheetJS reads it as it is
+  const zip = XLSX.CFB.read(buf, { type: 'buffer' })
+  let slimmed = false
+  let painted = null
+  const dropEmpty = (cell) => { painted ??= filledStyles(zip); const s = /\ss="(\d+)"/.exec(cell)?.[1]; return s && painted.has(s) ? cell : '' }
+  zip.FullPaths.forEach((p, i) => {
+    const e = zip.FileIndex[i]
+    if (!/\/xl\/worksheets\/sheet\d+\.xml$/.test(p) || !e.content || e.content.length < BIG_PART) return
+    // in pieces cut at a row's end, so no string grows near V8's limit
+    const src = Buffer.from(e.content), parts = []
+    for (let at = 0; at < src.length;) {
+      let end = at + 64e6 >= src.length ? src.length : src.indexOf('</row>', at + 64e6)
+      end = end < 0 ? src.length : (end === src.length ? end : end + 6)
+      parts.push(Buffer.from(src.subarray(at, end).toString('utf8').replace(EMPTY_CELL, dropEmpty).replace(EMPTY_ROW, ''), 'utf8'))
+      at = end
+    }
+    e.content = Buffer.concat(parts); e.size = e.content.length
+    slimmed = true
+  })
+  return slimmed ? XLSX.CFB.write(zip, { type: 'buffer', fileType: 'zip' }) : null
+}
+
 // files: paths to .xlsx → { [family]: [{ file, sheet, row, cells }] }, plus what was not recognised
 function readAll(files) {
   const out = Object.fromEntries([...new Set(Object.entries(FAMILIES).map(([k, f]) => f.as ?? k))].map((k) => [k, []]))
@@ -101,7 +147,9 @@ function readAll(files) {
   for (const given of files) {
     // a file is a path, or { path, fy } when the caller knows its year better than its folder does (run.cjs --list)
     const file = typeof given === 'string' ? given : given.path
-    const wb = XLSX.readFile(file, { cellFormula: true, cellComments: true, cellStyles: true })
+    const opts = { cellFormula: true, cellComments: true, cellStyles: true }
+    const slim = slimBook(file)
+    const wb = slim ? XLSX.read(slim, { ...opts, type: 'buffer' }) : XLSX.readFile(file, opts)
     // a file is named with its financial-year folder (two years hold files of the same name)
     const fy = (typeof given === 'string' ? null : given.fy) ?? /[\\/](20\d\d-\d\d)[\\/]/.exec(file)?.[1]
     const name = fy && !path.basename(file).includes(fy) ? `${fy} ${path.basename(file)}` : path.basename(file)
@@ -114,8 +162,10 @@ function readAll(files) {
         (!spec.sheet || H(spec.sheet) === H(sheet)) && !(spec.notSheet && spec.notSheet.test(sheet)) && spec.must.every((h) => head.has(h)) &&
         (!spec.notInBookWith || !wb.SheetNames.some((n) => H(n) === H(spec.notInBookWith))))?.[0]
       const spec = FAMILIES[fam]
-      seen.push({ file: name, sheet, family: fam ? (spec.as ?? fam) : null, layout: fam ?? null })
-      if (!fam) continue
+      // { only: [families] } reads just those of the book's sheets (a monthly file's OTHER DEALER sheet, say)
+      const left = fam && given.only && !given.only.includes(spec.as ?? fam)
+      seen.push({ file: name, sheet, family: fam && !left ? (spec.as ?? fam) : null, layout: fam ?? null, ...(left ? { leftOut: true } : {}) })
+      if (!fam || left) continue
       const { rows } = readSheet(ws, byRow)
       for (const r of rows) {
         const cells = r.cells

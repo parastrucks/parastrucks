@@ -9,7 +9,7 @@
 // prints COUNTS ONLY. Refuses an output folder inside the repository.
 const path = require('path')
 const fs = require('fs')
-const { readAll, findFiles } = require('./read.cjs')
+const { readAll, findFiles, FAMILIES } = require('./read.cjs')
 const { merge } = require('./merge.cjs')
 
 const [out, ...given] = process.argv.slice(2)
@@ -44,15 +44,18 @@ const allYears = () => {
   if (fs.existsSync(DL)) out.push(DL + '2025-26.xlsx', ...findFiles([DL]).filter((f) => /INVOICE LIST/i.test(f)))
   return out
 }
-// --list <file>: the books to load, one per line "fy | month | path" (month APR…MAR, or blank for a year book —
-// it comes last in its year). For a sorted pile whose year folders follow the dates inside a file, not its
-// name: the list says each file's year and month, and that order is the one used ("later file wins").
+// --list <file>: the books to load, one per line "fy | month | path [| families]" (month APR…MAR, or blank for a
+// year book — it comes last in its year; families e.g. "LIST_OD" = read only those of its sheets). For a sorted
+// pile whose year folders follow the dates inside a file, not its name: the list says each file's year and
+// month, and that order is the one used ("later file wins").
 let files
 if (given[0] === '--list') {
+  const known = new Set(Object.values(FAMILIES).map((f, i) => f.as ?? Object.keys(FAMILIES)[i]))
   files = fs.readFileSync(given[1], 'utf8').split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !l.startsWith('#')).map((l) => {
-    const [fy, mon, p] = l.split('|').map((s) => s.trim())
-    if (!/^20\d\d-\d\d$/.test(fy) || (mon && !MONTHS.includes(mon.toUpperCase())) || !fs.existsSync(p)) { console.error(`refused: bad line in the list: ${l.slice(0, 120)}`); process.exit(2) }
-    return { path: p, fy, order: Number(fy.slice(0, 4)) * 13 + (mon ? MONTHS.indexOf(mon.toUpperCase()) : 12) }
+    const [fy, mon, p, fams] = l.split('|').map((s) => s.trim())
+    const only = fams ? fams.split(/[\s,]+/).filter(Boolean) : null
+    if (!/^20\d\d-\d\d$/.test(fy) || (mon && !MONTHS.includes(mon.toUpperCase())) || !fs.existsSync(p) || only?.some((f) => !known.has(f))) { console.error(`refused: bad line in the list: ${l.slice(0, 160)}`); process.exit(2) }
+    return { path: p, fy, only, order: Number(fy.slice(0, 4)) * 13 + (mon ? MONTHS.indexOf(mon.toUpperCase()) : 12) }
   })
   files = files.map((f, i) => ({ ...f, i })).sort((a, b) => a.order - b.order || a.i - b.i)
 } else {
@@ -99,5 +102,5 @@ console.log('refund statuses kept as typed:', Object.keys(r.refundKept).length ?
 const filled = (k) => res.units.filter((u) => u[k] !== undefined && u[k] !== null).length
 console.log(`overrides: gst_rate ${filled('gst_rate_override')} · full tax ${filled('full_tax_override')} · road tax 0% ${res.units.filter((u) => u.road_tax_pct === 0).length}, 8% ${res.units.filter((u) => u.road_tax_pct === 8).length} · endhan_date ${filled('endhan_date')}`)
 console.log(`purchase: al ${res.units.filter((u) => u.purchase_source === 'al').length} · other dealer ${res.units.filter((u) => u.purchase_source === 'other_dealer').length} · ctc_basis exclusive ${res.units.filter((u) => u.ctc_basis === 'exclusive').length}`)
-const unknown = seen.filter((s) => !s.family).length
-console.log(`sheets not recognised (left out): ${unknown}`)
+const unknown = seen.filter((s) => !s.family && !s.leftOut).length, leftOut = seen.filter((s) => s.leftOut).length
+console.log(`sheets not recognised (left out): ${unknown}${leftOut ? ` · recognised but not asked for by the list: ${leftOut}` : ''}`)
