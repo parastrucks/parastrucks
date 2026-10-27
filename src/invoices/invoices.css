@@ -93,6 +93,11 @@
 .btn.rel-approve:hover:not(:disabled) { filter: brightness(.92); }
 .inv-release-form { grid-column: 1 / -1; display: flex; gap: 8px; align-items: center; }
 .inv-release-form .form-input { flex: 1 1 auto; min-width: 0; }
+/* An inline form scrolled into view stops above the phone's bottom bar, below the top bar. */
+.inv-release-form, .inv-release-form .form-input, .inv-send, .inv-send .form-input {
+  scroll-margin-bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px) + 16px);
+  scroll-margin-top: calc(var(--topbar-h) + 8px);
+}
 
 /* The guard's screen: large type, works in sunlight, one thing at a time. */
 .gate-page { max-width: 520px; margin: 0 auto; }
@@ -110,6 +115,29 @@
 .gate-plate { font-size: 24px; font-weight: 800; letter-spacing: .06em; margin: 10px 0 6px; }
 .gate-detail { font-size: 17px; line-height: 1.4; }
 .gate-hint { font-size: 14px; color: var(--text-secondary); text-align: center; margin-top: 10px; }
+.gate-customer { font-size: 19px; font-weight: 700; margin-bottom: 8px; }
+
+/* The guard's list (2026-10-27): one big tappable row per vehicle. */
+.gate-section { margin-top: 20px; }
+.gate-section-title {
+  font-size: 15px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em;
+  padding: 0 0 6px; margin: 0 0 8px; border-bottom: 3px solid var(--green); color: var(--ink);
+}
+.gate-section-title.wait { border-bottom-color: var(--amber); }
+.gate-count { font-weight: 700; color: var(--text-secondary); margin-left: 4px; }
+.gate-row {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%;
+  padding: 12px 14px; margin-bottom: 8px; text-align: left; cursor: pointer; font: inherit;
+  background: var(--green-light); border: 0; border-left: 6px solid var(--green); color: var(--ink);
+}
+.gate-row.wait { background: var(--amber-light); border-left-color: var(--amber); }
+.gate-row:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--accent-ring); }
+.gate-row:disabled { opacity: .6; cursor: default; }
+.gate-row-plate { font-size: 22px; font-weight: 800; letter-spacing: .06em; }
+.gate-row-customer { font-size: 16px; font-weight: 600; }
+.gate-row-line { font-size: 14px; color: var(--gray-800); }
+.gate-nomatch { margin-top: 16px; padding: 14px; background: var(--red-light); border-left: 6px solid var(--red); font-size: 16px; color: var(--ink); }
+.gate-refresh { border: 0; background: none; padding: 0; font: inherit; color: var(--accent); text-decoration: underline; cursor: pointer; }
 
 @media (max-width: 480px) {
   .rel-alerts .btn { margin-left: 0; }

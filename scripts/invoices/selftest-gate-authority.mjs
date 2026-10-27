@@ -5,6 +5,7 @@
 //   2026-10-26  approve / hold (+ the phone alerts that serve it): ONLY the Service GM of the
 //               invoice's company, or the admin. Not a Sales GM, not a Back Office GM.
 //   2026-10-26  the gate check: Security guards, and the admin.
+//   2026-10-27  the gate LIST (released + waiting vehicles, with a search): the same people.
 // Bundle first (from the repo root):
 //   npx --yes esbuild supabase/functions/gate-invoices/authority.ts --format=esm --outfile=<tmp>/auth.mjs
 //   node scripts/invoices/selftest-gate-authority.mjs <tmp>/auth.mjs
@@ -43,7 +44,7 @@ const PEOPLE = {
 const ACTIONS = {
   saveDocument: 'U', sendEmail: 'U', pdfUrl: 'U', requestRelease: 'U', withdrawRelease: 'U',
   decideRelease: 'D', pushKey: 'D', pushSubscribe: 'D', pushUnsubscribe: 'D',
-  gateCheck: 'G',
+  gateCheck: 'G', gateList: 'G',
 }
 
 for (const [name, [who, may]] of Object.entries(PEOPLE)) {

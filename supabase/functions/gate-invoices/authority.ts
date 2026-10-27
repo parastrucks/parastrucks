@@ -8,6 +8,8 @@
 //   2026-10-26  approve or hold a credit release: ONLY the Service GM of that company, or the
 //               admin (the owner). No other GM — Sales, Back Office … — may approve.
 //   2026-10-26  the gate check: Security guards (one login each), and the admin for testing.
+//   2026-10-27  the guard sees a LIST of released vehicles with a search, not only a check
+//               box — the same people as the gate check.
 
 export type Who = {
   permission_level: string | null
@@ -45,6 +47,7 @@ export const ACTION_GATES: Record<string, (c: Who) => boolean> = {
   pushSubscribe: isApprover,
   pushUnsubscribe: isApprover,
   gateCheck: mayCheckGate,
+  gateList: mayCheckGate,
 }
 
 export const mayDo = (action: unknown, c: Who) =>

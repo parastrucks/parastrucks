@@ -12,7 +12,7 @@ import { supabase } from '../../lib/supabase'
 import { callEdge } from '../../lib/api'
 import { formatRupees } from '../lib/sapInvoice'
 import { readInvoiceFile, toBase64 } from '../lib/readInvoiceFile'
-import { istTime, latestRelease, mayUse, releaseState, useDeptCode, whoFrom } from '../lib/releases'
+import { istTime, latestRelease, mayUse, releaseState, revealForm, useDeptCode, whoFrom } from '../lib/releases'
 import ReleasesPanel from '../components/ReleasesPanel'
 import '../invoices.css'
 
@@ -274,7 +274,7 @@ export default function InvoicesPage() {
                   {canAsk && <button className="btn btn-sm btn-secondary" onClick={() => setAskFor({ id: d.id, note: '' })}><Icon name="shield" size={14} /> {relState === 'held' || relState === 'expired' ? 'Ask again' : 'Ask to release'}</button>}
                 </div>
                 {askFor?.id === d.id && (
-                  <form className="inv-release-form" onSubmit={(e) => { e.preventDefault(); askRelease(d) }}>
+                  <form className="inv-release-form" ref={revealForm} onSubmit={(e) => { e.preventDefault(); askRelease(d) }}>
                     <input className="form-input" maxLength={300} autoFocus aria-label="Note for the GM (optional)"
                       placeholder="Note for the GM (optional) — e.g. cheque promised Friday" value={askFor.note}
                       onChange={(e) => setAskFor({ ...askFor, note: e.target.value })} />

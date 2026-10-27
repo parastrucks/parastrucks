@@ -8,7 +8,7 @@ import { useToast } from '../../context/ToastContext'
 import { supabase } from '../../lib/supabase'
 import { callEdge } from '../../lib/api'
 import { formatRupees } from '../lib/sapInvoice'
-import { istTime, isApprover, mayDecideFor, RELEASE_HOURS, releaseState } from '../lib/releases'
+import { istTime, isApprover, mayDecideFor, RELEASE_HOURS, releaseState, revealForm } from '../lib/releases'
 import { alertStatus, turnAlertsOff, turnAlertsOn } from '../lib/pushAlerts'
 
 const SELECT = `id, entity_id, document_id, regn_no, status, request_note, requested_at, requested_by, decided_at,
@@ -146,7 +146,7 @@ export default function ReleasesPanel({ who, focusId, onChanged }) {
                           onClick={() => act(r, 'decideRelease', { decision: 'approve' }, `${r.regn_no} released for ${RELEASE_HOURS} hours.`)}>
                           <Icon name="check" size={14} /> Approve
                         </button>
-                        <button className="btn btn-sm btn-secondary" disabled={busy === r.id} onClick={() => setHoldFor({ id: r.id, note: '' })}>Hold</button>
+                        {holdFor?.id !== r.id && <button className="btn btn-sm btn-secondary" disabled={busy === r.id} onClick={() => setHoldFor({ id: r.id, note: '' })}>Hold</button>}
                       </>
                     )}
                     {(r.requested_by === who.id || who.permission_level === 'admin') && !decide && (
@@ -156,7 +156,7 @@ export default function ReleasesPanel({ who, focusId, onChanged }) {
                   </div>
                 )}
                 {holdFor?.id === r.id && (
-                  <form className="inv-send" onSubmit={(e) => {
+                  <form className="inv-send" ref={revealForm} onSubmit={(e) => {
                     e.preventDefault()
                     if (!holdFor.note.trim()) { toast.error('Say why it is held — the service team sees it.'); return }
                     act(r, 'decideRelease', { decision: 'hold', note: holdFor.note }, `${r.regn_no} held.`)
@@ -164,7 +164,7 @@ export default function ReleasesPanel({ who, focusId, onChanged }) {
                     <input className="form-input" maxLength={300} autoFocus aria-label="Why is it held?"
                       placeholder="Why is it held? e.g. clear the old outstanding first" value={holdFor.note}
                       onChange={(e) => setHoldFor({ ...holdFor, note: e.target.value })} />
-                    <button className="btn btn-sm btn-danger" type="submit" disabled={busy === r.id}>Hold</button>
+                    <button className="btn btn-sm btn-danger" type="submit" disabled={busy === r.id}>{busy === r.id ? 'Holding…' : `Hold ${r.regn_no}`}</button>
                     <button className="btn btn-sm btn-secondary" type="button" onClick={() => setHoldFor(null)}>Cancel</button>
                   </form>
                 )}

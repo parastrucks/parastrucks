@@ -33,8 +33,18 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 ## Current state (2026-10-26)
 
 - **🔨 CREDIT RELEASE STEP 2 — release request + GM/owner approval + gate screen + guard logins — BUILT, STAGING
-  ONLY, NOT YET SEEN IN A BROWSER** (branch `cr2-release-gate`, pushed, no PR; **stacked on `cr1-invoice-send`**
-  because it needs step 1's tables and function — #140 merges first). ⭐ **Record: plan → "Step 2 — as built".**
+  ONLY, ✅ SEEN WORKING IN THE BROWSER 2026-10-27** (branch `cr2-release-gate`, pushed, no PR; **stacked on
+  `cr1-invoice-send`** because it needs step 1's tables and function — #140 merges first). ⭐ **Record: plan →
+  "Step 2 — as built".**
+  - ✅ **2026-10-27 browser run (owner signed in as staging admin):** ask → approve → gate MAY GO (plate typed
+    `gj 01 zz-0001`) · never asked / waiting / held → HOLD with the right words · hold without a reason refused.
+    **Owner then decided:** ⭐ **the gate screen is a LIST with a search** (May go + Waiting for the GM; rows =
+    plate + **customer name** + until when — revises "no names"); new EF action `gateList` (Security + admin;
+    authority test **241/0**), deployed to staging and seen working. ⭐ **Credit used + credit limit on the approval
+    card: wanted, but nothing holds them today → they come with the full Service Payments module. Do not build or
+    placeholder them now.** Fixed from the run: an inline form now scrolls above the phone's bottom bar; the hold
+    button reads "Hold {plate}". ⏭️ Left: a test guard login (owner types the password) · alerts in the owner's
+    own Chrome (the pane blocks notifications).
   - **Owner decisions (2026-10-26):** approve / hold = ONLY the **Service GM of the invoice's company**, or the admin
     (no Sales / Back Office GM) · approvers get a **phone notification** (web push) · an approval lets the vehicle
     out for **48 hours** (no tap needed) · guard logins are made by **HR on Employees** (new **Security** department,
@@ -66,9 +76,8 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
     the card shows earlier releases through the portal and says it is NOT the Busy balance · alerts switch for
     approvers · `/gate`: big MAY GO (who, until when) / HOLD ("waiting for the GM" when asked) · guards land on
     /gate; phone bar Gate + Profile. Build + no-undef clean.
-  - ⏭️ **Next: the owner signs in on localhost:3000 (staging)** → a test guard on Employees → ask → approve → gate
-    MAY GO; hold → HOLD; alerts in desktop Chrome. A real phone cannot reach localhost — phone test at go-live or
-    from an https test origin. **Prod ONLY on the owner's command, after #140:** migration → EF → VAPID keys
+  - ⏭️ **Next: a test guard on Employees (owner types the password) → sign in as the guard; alerts in the owner's
+    Chrome.** A real phone cannot reach localhost — phone test at go-live or from an https test origin. **Prod ONLY on the owner's command, after #140:** migration → EF → VAPID keys
     (`make-vapid-keys.mjs mmmxvjaavdtwlpcnjgzy`) → `admin-users` from `portal` → merge.
   - ⚠️ **A prod read (active GMs by department) was refused by the classifier ("Production Reads")** — not
     retried; the owner named the approvers instead.
@@ -1014,8 +1023,9 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 - **🔨 Credit release STEP 1 ("Send Invoice") BUILT on staging, real email proven (2026-10-25)** — branch
   `cr1-invoice-send`, see the 2026-10-25 block. ✅ Signature Mobile confirmed. **PR #140 open
   (2026-10-26) — do NOT merge before the prod migration + EF**; prod (migration + EF + `GATE_SMTP_PASSWORD` on prod + drop `GATE_EMAIL_ONLY_TO` there) **only on
-  the owner's command**. ✅ **Step 2 BUILT on staging** (branch `cr2-release-gate`, see the 2026-10-26 block) — next:
-  the owner signs in on localhost:3000 for the browser check.
+  the owner's command**. ✅ **Step 2 BUILT on staging and seen working 2026-10-27** (branch `cr2-release-gate`, see the
+  2026-10-26 block; gate = list + search, owner) — next: a test guard login + alerts in the owner's Chrome.
+  Credit limit / used on the approval card waits for Service Payments (owner).
 - **💡 Credit release + invoice sending + gate app — PLAN v0.2 (2026-10-24):**
   `docs/backlog/credit-release-plan.md`. Owner: standalone (`gate_*` tables, payments DB stays off prod) ·
   WhatsApp **Business API** (plate + total + PDF + thank-you + timely-payment ask — same rules as the email) + Gmail (port 465) · one login per guard

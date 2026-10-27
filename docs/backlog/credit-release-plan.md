@@ -2,6 +2,7 @@
 
 > **Status (2026-10-26): step 1 BUILT (branch `cr1-invoice-send`, PR #140 open, not merged) and step 2 BUILT
 > (branch `cr2-release-gate`), both STAGING only** — see "Step 1 — as built" and "Step 2 — as built" below.
+> 2026-10-27: step 2 seen working in the browser; the gate screen became a list with a search (owner).
 > Steps 3–4 not started. Owner's proposal of 2026-10-24, related to the Service Payments tool
 > (`docs/backlog/service-payments-plan.md`, parked waiting on HDFC) but **built and shipped on its own** —
 > the payments database does NOT go to prod for this (owner). Every number below was measured from material
@@ -27,7 +28,8 @@ The new way:
    the amount, and the customer's earlier credit releases still unpaid.
 4. **The GM or the owner approves or holds**, and on approval may record *"promised by"* and *"who is
    responsible"*.
-5. **The guard checks the vehicle number on a phone:** green "may go" or red "hold". No amounts, no names.
+5. **The guard's phone shows a list of the vehicles that may go**, with a search: vehicle number, customer name,
+   until when (owner, 2026-10-27). Tap one, or type the number → green "may go" or red "hold". No amounts.
 6. **When a promised date passes unpaid**, it appears on a follow-up list for the GM and the owner. Accounts
    marks a release paid when the money arrives.
 
@@ -175,7 +177,9 @@ so nobody mistakes it for the Busy figure.
   (their gate) and **no brand**; the exemption is written into the shape rule like the Back Office GM one.
   Check every RLS policy that keys on brand or entity alone before the first guard account exists.
 - Screen: type the vehicle number → **green "may go — released on credit by {GM/owner} at {time}"** or
-  **red "hold — not released"**. No amounts, no customer.
+  **red "hold — not released"**. No amounts. *(2026-10-27, owner: the screen leads with a **list** of the
+  vehicles that may go and those waiting for the GM, with a search — "easier for the guards" — and each row
+  carries the **customer name**. See "Step 2 — as built".)*
 - Installable on the guard's phone ("Add to Home screen"); large type, works in sunlight.
 - Every lookup is logged (which guard, which vehicle, when) — the record of what left the gate.
 
@@ -348,11 +352,15 @@ all 120 slot × department × tier cases.
   Upload / send / PDF / ask / withdraw = service, accounts, spares + admin · decide + phone alerts = Service GM
   (own company) + admin · gate check = Security + admin. `scripts/invoices/selftest-gate-authority.mjs` **221/0**
   (20 people × 10 actions + the own-company rule, written by hand from the decisions); 7 planted bugs fail it.
+  2026-10-27: + `gateList` (Security + admin) → **241/0**; opening it to service/accounts/spares fails it 12×.
 - `requestRelease`: workshop jobs with a vehicle number only; refuses while an approval is still valid; wakes the
   approvers' phones (Service GMs of that company + admin) and returns how many were reached — never failing the
   request. `decideRelease`: approve (48 h) or hold (reason); a second decision is refused naming who decided first.
   `gateCheck`: plate typed any way (spaces / dashes ignored) → may go (who released it, until when) or hold (and
-  whether a request is waiting), in the guard's own company; logged.
+  whether a request is waiting), in the guard's own company; logged. 2026-10-27: it also returns the customer
+  name, and **`gateList`** returns every vehicle that may go now (one row per plate, the later expiry) and every
+  one waiting for the GM — plate, customer name, until when / asked when; no amounts, notes or hold reasons. The
+  list is not logged; a tap on a row runs `gateCheck`, which is.
 - `push.ts`: Web Push with the platform's WebCrypto — RFC 8291 (aes128gcm, encrypted to the phone's key) + RFC
   8292 (VAPID, ES256-signed). Only the browsers' push services are contacted (Google FCM, Mozilla, Apple, Microsoft),
   because the endpoint comes from a browser. `scripts/invoices/selftest-web-push.mjs` **44/0**: RFC 8291 Appendix A
@@ -371,13 +379,42 @@ all 120 slot × department × tier cases.
 - Approvers get a "Turn on alerts" line (Android Chrome: in the browser; iPhone: only from the Home-Screen app,
   iOS 16.4+, so the portal now has `manifest.webmanifest`, icons and `apple-touch-icon`). `public/sw.js` handles
   push + click only — **no fetch handler, nothing cached**, so the portal still loads straight from the network.
-- `/gate`: one box, one button, a full-width **MAY GO** (green) or **HOLD** (red); no amount, no customer. Guards
-  land there after sign-in; their phone bar is Gate + Profile.
+- `/gate`: one box, one button, a full-width **MAY GO** (green) or **HOLD** (red); no amount. Guards land there
+  after sign-in; their phone bar is Gate + Profile. **2026-10-27 (owner): a list with a search.** Under the box:
+  **May go** (green rows) and **Waiting for the GM** (amber rows) — plate, customer name, "Until 29 Oct, 9:59 pm ·
+  by …" / "Asked … — not yet". Typing filters by any part of the plate or the customer's name; Enter on a part
+  that leaves one vehicle checks that vehicle; nothing left → **"Not in the list — HOLD"**. A tap on a row → the
+  big card (now with the customer name). The list refreshes every minute while in front and when the phone wakes;
+  "Updated … · Refresh" under it. The box no longer grabs focus on open (the keyboard would cover the list).
 - Build clean; the throwaway `no-undef` pass clean over `src`.
 
+**Seen in the browser pane, 2026-10-27 (owner signed in as the staging admin, phone width):** every path as
+designed — "Ask to release" only on workshop rows with a plate · ask → "RELEASE ASKED", button gone · with no
+approver phone set up the toast says *"No approver has phone alerts turned on — tell the GM it is waiting."* ·
+Credit releases "1 WAITING", the card, the note, "No earlier credit release…" · approve → "Released until 29 Oct,
+9:59 PM" (48 h) · gate: `gj 01 zz-0001` → MAY GO (who, when, until) · never asked → HOLD "Not released on credit" ·
+asked → HOLD "waiting for the GM's answer" · hold with no reason refused ("Say why it is held — the service team
+sees it") · hold with reason → HELD, reason shown, gate HOLD. Then the list: MAY GO 1 · `0001` + Enter → MAY GO
+with the customer · `0002` (held) → "Not in the list — HOLD" · `krish` finds the customer · asked again → WAITING
+FOR THE GM 1 → tap → HOLD waiting · held again.
+**Two screen fixes from that run:** the "ask" form on the last row opened under the phone's bottom bar → an inline
+form now scrolls itself into view, stopping above the bar (`revealForm` + `scroll-margin`; measured form bottom
+588 px, bar top 604 px); and the hold form showed two "Hold" buttons → the opener hides and the send button reads
+**"Hold GJ01ZZ0002"**. Staging now: GJ01ZZ0001 released until 29 Oct; GJ01ZZ0002 held twice (all DEMO).
+
+**Owner decisions (2026-10-27, after that run):**
+| Question | Decision |
+|---|---|
+| The gate screen | **A list with a search** — easier for the guards. |
+| What each row shows the guard | **Plate + customer name** (+ until when, who approved). No amounts. Revises "no names" of 2026-10-24. |
+| Credit used and credit limit on the approval card | Wanted — but **nothing holds them today**; they come **when the full Service Payments module runs** (its customer master and outstanding). Nothing to build now; no placeholder on the card. |
+
 **Not yet done:**
-- ⏭️ **Seen in a browser** — needs the owner to sign in on localhost:3000 (staging): make a test guard on Employees
-  → ask on a DEMO invoice → approve → gate shows MAY GO; hold another → HOLD; alerts in desktop Chrome.
+- ⏭️ **A test guard login** (Employees → Security, outlet, no brand; the owner types the password) → the guard lands
+  on /gate, phone bar Gate + Profile, other pages closed; the first sign-in also exercises the forced password
+  change. The form was filled and read right on 2026-10-27 (brand "Not applicable — …") but not saved.
+- ⏭️ **Alerts in a desktop browser** — the pane blocks notifications; needs the owner's own Chrome.
+- ⏭️ **Credit used / limit on the approval card** — after Service Payments is live (owner, 2026-10-27).
 - ⏭️ **A real phone alert** — a phone cannot reach localhost; test at go-live, or from an https test origin.
 - Promised-by date, responsible person, "mark paid" and the follow-up list = **step 3** (the design above lists
   promised-by on approve; it was left for step 3 with the rest of the promise tracking).

@@ -12,6 +12,8 @@
 //   decideRelease   { release_id, decision: approve|hold, note? } → { ok, release }
 //   pushKey / pushSubscribe { endpoint, p256dh, auth } / pushUnsubscribe { endpoint }
 //   gateCheck       { regn_no }                               → { ok, result: may_go|hold, … }
+// 2026-10-27:
+//   gateList        {}                                        → { ok, as_of, released[], waiting[] }
 //
 // Who: authority.ts — ONE table, asked before any payload is read. Upload / send / ask:
 // service, accounts, spares of the invoice's company + admin. Approve / hold: ONLY the
@@ -116,6 +118,8 @@ function vapid(): Vapid | null {
   return { publicKey, privateKey, subject: `mailto:${Deno.env.get("GATE_SMTP_USER") ?? "accounts.guj@parastrucks.in"}` }
 }
 const PUSH_TIMEOUT_MS = 5000
+/** The customer's name as the guard reads it (owner, 2026-10-27: plate + customer name). */
+const customerOf = (d: { customer_name: string } | null) => d?.customer_name ? properName(d.customer_name) : null
 
 const sameBills = (a: { bill_no: string; amount_paise: number }[], b: { bill_no: string; amount_paise: number }[]) =>
   JSON.stringify([...a].map((x) => [x.bill_no, Number(x.amount_paise)]).sort()) ===
@@ -478,12 +482,12 @@ Deno.serve(async (req: Request) => {
         if (!isAdmin(caller) && !caller.entity_id) return json({ error: "Your login has no company set — ask HR." }, 403)
         const nowIso = new Date().toISOString()
         let q = admin.from("gate_releases")
-          .select("id, entity_id, decided_at, valid_until, users:decided_by(full_name)")
+          .select("id, entity_id, decided_at, valid_until, users:decided_by(full_name), gate_documents(customer_name)")
           .eq("regn_no", regn).eq("status", "approved").gt("valid_until", nowIso)
           .order("valid_until", { ascending: false }).limit(1)
         if (!isAdmin(caller)) q = q.eq("entity_id", caller.entity_id)
         const { data: hit, error } = await q.maybeSingle() as unknown as
-          { data: { id: string; entity_id: string; decided_at: string; valid_until: string; users: { full_name: string } | null } | null; error: { message: string } | null }
+          { data: { id: string; entity_id: string; decided_at: string; valid_until: string; users: { full_name: string } | null; gate_documents: { customer_name: string } | null } | null; error: { message: string } | null }
         if (error) return json({ error: "The check could not be made. Try again." }, 503)
 
         let waiting = false
@@ -498,8 +502,47 @@ Deno.serve(async (req: Request) => {
             result: hit ? "may_go" : "hold", release_id: hit?.id ?? null })
         }
         return json(hit
-          ? { ok: true, result: "may_go", regn_no: regn, decided_by: hit.users?.full_name ?? null, decided_at: hit.decided_at, valid_until: hit.valid_until }
+          ? { ok: true, result: "may_go", regn_no: regn, customer: customerOf(hit.gate_documents),
+              decided_by: hit.users?.full_name ?? null, decided_at: hit.decided_at, valid_until: hit.valid_until }
           : { ok: true, result: "hold", regn_no: regn, waiting })
+      }
+
+      // ── The guard's list (owner, 2026-10-27): every vehicle that may go now, and every one
+      // waiting for the GM — plate, customer name, until when. No amounts, no notes, no held
+      // reasons: anything not in the "may go" list is HOLD. Not logged as a check — a tap on a
+      // row runs gateCheck, which is.
+      case "gateList": {
+        if (!isAdmin(caller) && !caller.entity_id) return json({ error: "Your login has no company set — ask HR." }, 403)
+        const nowIso = new Date().toISOString()
+        let r = admin.from("gate_releases")
+          .select("id, regn_no, decided_at, valid_until, users:decided_by(full_name), gate_documents(customer_name)")
+          .eq("status", "approved").gt("valid_until", nowIso)
+          .order("decided_at", { ascending: false }).limit(300)
+        let w = admin.from("gate_releases")
+          .select("id, regn_no, requested_at, gate_documents(customer_name)")
+          .eq("status", "asked")
+          .order("requested_at", { ascending: true }).limit(200)
+        if (!isAdmin(caller)) { r = r.eq("entity_id", caller.entity_id); w = w.eq("entity_id", caller.entity_id) }
+        const [rel, wait] = await Promise.all([r, w]) as unknown as [
+          { data: { id: string; regn_no: string; decided_at: string; valid_until: string; users: { full_name: string } | null; gate_documents: { customer_name: string } | null }[] | null; error: unknown },
+          { data: { id: string; regn_no: string; requested_at: string; gate_documents: { customer_name: string } | null }[] | null; error: unknown },
+        ]
+        if (rel.error || wait.error) return json({ error: "The list could not be loaded. Try again." }, 503)
+        // One row per plate: two invoices for one truck show once, with the later expiry —
+        // the same answer gateCheck gives. A plate that may go is not also listed as waiting.
+        const released = new Map<string, Record<string, unknown>>()
+        for (const x of rel.data ?? []) {
+          const prev = released.get(x.regn_no)
+          if (prev && String(prev.valid_until) >= x.valid_until) continue
+          released.set(x.regn_no, { id: x.id, regn_no: x.regn_no, customer: customerOf(x.gate_documents),
+            decided_by: x.users?.full_name ?? null, decided_at: x.decided_at, valid_until: x.valid_until })
+        }
+        const waiting = new Map<string, Record<string, unknown>>()
+        for (const x of wait.data ?? []) {
+          if (released.has(x.regn_no) || waiting.has(x.regn_no)) continue
+          waiting.set(x.regn_no, { id: x.id, regn_no: x.regn_no, customer: customerOf(x.gate_documents), requested_at: x.requested_at })
+        }
+        return json({ ok: true, as_of: nowIso, released: [...released.values()], waiting: [...waiting.values()] })
       }
 
       default:

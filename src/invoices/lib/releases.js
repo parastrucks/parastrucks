@@ -35,7 +35,12 @@ export function releaseState(rel, now = Date.now()) {
 }
 
 /** The release that matters for an invoice row: the newest one. */
-export const latestRelease = (rels) => [...(rels ?? [])].sort((a, b) => b.requested_at.localeCompare(a.requested_at))[0] ?? null
+// A ref for an inline form that opens under a row: bring it into view once, when it appears.
+// On a phone the last row's form otherwise opens under the bottom bar (seen 2026-10-27);
+// the CSS scroll-margin keeps it above the bar. Module-level, so React calls it only on attach.
+export const revealForm = (el) => el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+
+export const latestRelease =(rels) => [...(rels ?? [])].sort((a, b) => b.requested_at.localeCompare(a.requested_at))[0] ?? null
 
 export const istTime = (iso) => new Date(iso).toLocaleString('en-IN', {
   timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true,
