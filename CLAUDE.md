@@ -43,8 +43,14 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
     authority test **241/0**), deployed to staging and seen working. ⭐ **Credit used + credit limit on the approval
     card: wanted, but nothing holds them today → they come with the full Service Payments module. Do not build or
     placeholder them now.** Fixed from the run: an inline form now scrolls above the phone's bottom bar; the hold
-    button reads "Hold {plate}". ⏭️ Left: a test guard login (owner types the password) · alerts in the owner's
-    own Chrome (the pane blocks notifications).
+    button reads "Hold {plate}". ⭐ **Owner: the guard reads only TWO words — "RELEASE" and "HOLD"** (cards and
+    list headings; a waiting vehicle sits under Hold, "Waiting for the GM · asked …"). Internal values stay
+    `may_go`/`hold`.
+  - ✅ **Test guard `guard@parastrucks.test` (staging) seen working:** made on Employees (brand "Not applicable",
+    saved with 0 brands) → forced to choose a password on first sign-in → lands on /gate, phone bar Gate +
+    Profile, every other page bounces to /gate · with the guard's own token: approve / ask / PDF / alerts →
+    "Forbidden", and 0 rows from gate_*, catalog, quotations, PIs (push table: permission denied) · a tap logged
+    in `gate_checks`. ⏭️ Left: alerts in the owner's own Chrome (the pane blocks notifications).
   - **Owner decisions (2026-10-26):** approve / hold = ONLY the **Service GM of the invoice's company**, or the admin
     (no Sales / Back Office GM) · approvers get a **phone notification** (web push) · an approval lets the vehicle
     out for **48 hours** (no tap needed) · guard logins are made by **HR on Employees** (new **Security** department,
@@ -76,8 +82,8 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
     the card shows earlier releases through the portal and says it is NOT the Busy balance · alerts switch for
     approvers · `/gate`: big MAY GO (who, until when) / HOLD ("waiting for the GM" when asked) · guards land on
     /gate; phone bar Gate + Profile. Build + no-undef clean.
-  - ⏭️ **Next: a test guard on Employees (owner types the password) → sign in as the guard; alerts in the owner's
-    Chrome.** A real phone cannot reach localhost — phone test at go-live or from an https test origin. **Prod ONLY on the owner's command, after #140:** migration → EF → VAPID keys
+  - ⏭️ **Next: alerts in the owner's Chrome.** A real phone cannot reach localhost — phone test at go-live or from
+    an https test origin. **Prod ONLY on the owner's command, after #140:** migration → EF → VAPID keys
     (`make-vapid-keys.mjs mmmxvjaavdtwlpcnjgzy`) → `admin-users` from `portal` → merge.
   - ⚠️ **A prod read (active GMs by department) was refused by the classifier ("Production Reads")** — not
     retried; the owner named the approvers instead.
@@ -1024,7 +1030,8 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   `cr1-invoice-send`, see the 2026-10-25 block. ✅ Signature Mobile confirmed. **PR #140 open
   (2026-10-26) — do NOT merge before the prod migration + EF**; prod (migration + EF + `GATE_SMTP_PASSWORD` on prod + drop `GATE_EMAIL_ONLY_TO` there) **only on
   the owner's command**. ✅ **Step 2 BUILT on staging and seen working 2026-10-27** (branch `cr2-release-gate`, see the
-  2026-10-26 block; gate = list + search, owner) — next: a test guard login + alerts in the owner's Chrome.
+  2026-10-26 block; gate = list + search, words RELEASE / HOLD, owner; test guard login ✅) — next: alerts in
+  the owner's Chrome.
   Credit limit / used on the approval card waits for Service Payments (owner).
 - **💡 Credit release + invoice sending + gate app — PLAN v0.2 (2026-10-24):**
   `docs/backlog/credit-release-plan.md`. Owner: standalone (`gate_*` tables, payments DB stays off prod) ·
@@ -1199,7 +1206,9 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   correctly hidden. `al_actuals` holds 52 rows, all with data.
 - **⏭️ Owner: run the forced-password-change loop once** with a throwaway user (reset → login →
   land on `/change-password` → every other route bounces → set new password → released → sign
-  out/in, not prompted again). Untested end-to-end; staging is down.
+  out/in, not prompted again). ✅ **Half done 2026-10-27 on staging:** a NEW user (the test guard) signed in
+  with the HR-set password → landed on "Choose your password" → set their own → released to their home page;
+  `must_change_password` now false. Not yet: the **reset** path, the route bounce while trapped, sign out/in.
 - **⏭️ Owner: Ashok Prajapati's sub-department.** Decision taken (2026-08-07): *waiver — a Back
   Office GM heads EDP, RTO and CRM*, so `subdept` stays NULL and that is **correct by policy**,
   not an open gap. No table needed; the rule is encoded in `userShape.js`.

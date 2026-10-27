@@ -29,7 +29,7 @@ The new way:
 4. **The GM or the owner approves or holds**, and on approval may record *"promised by"* and *"who is
    responsible"*.
 5. **The guard's phone shows a list of the vehicles that may go**, with a search: vehicle number, customer name,
-   until when (owner, 2026-10-27). Tap one, or type the number → green "may go" or red "hold". No amounts.
+   until when (owner, 2026-10-27). Tap one, or type the number → green "RELEASE" or red "HOLD" — the only two words. No amounts.
 6. **When a promised date passes unpaid**, it appears on a follow-up list for the GM and the owner. Accounts
    marks a release paid when the money arrives.
 
@@ -408,11 +408,18 @@ form now scrolls itself into view, stopping above the bar (`revealForm` + `scrol
 | The gate screen | **A list with a search** — easier for the guards. |
 | What each row shows the guard | **Plate + customer name** (+ until when, who approved). No amounts. Revises "no names" of 2026-10-24. |
 | Credit used and credit limit on the approval card | Wanted — but **nothing holds them today**; they come **when the full Service Payments module runs** (its customer master and outstanding). Nothing to build now; no placeholder on the card. |
+| The words a guard reads | **Only two: "RELEASE" and "HOLD"** — the big cards and the list headings. A vehicle waiting for the GM sits under **Hold** ("Waiting for the GM · asked …"). The stored values stay `may_go` / `hold`. |
+
+**The test guard, 2026-10-27 (staging, `guard@parastrucks.test`):** made on Employees by the admin — the brand slot
+read "Not applicable — Security guards see only the gate screen…", and the server saved the guard with **0 brands**.
+First sign-in → "Choose your password" (the forced password change, run end to end for the first time) → own
+password → straight to /gate: **RELEASE 1**, phone bar **Gate + Profile**, and /invoices, /catalog, /employees,
+/quotation, /tiv-forecast all bounce back to /gate. With the guard's own sign-in, the server refused approve, ask,
+PDF and phone alerts ("Forbidden"), and direct reads returned **0 rows** from `gate_releases`, `gate_checks`,
+`gate_documents`, `gate_bills`, `vehicle_catalog`, `quotations` and `proforma_invoices` (`gate_push_subscriptions`:
+permission denied). The guard's tap is in `gate_checks`.
 
 **Not yet done:**
-- ⏭️ **A test guard login** (Employees → Security, outlet, no brand; the owner types the password) → the guard lands
-  on /gate, phone bar Gate + Profile, other pages closed; the first sign-in also exercises the forced password
-  change. The form was filled and read right on 2026-10-27 (brand "Not applicable — …") but not saved.
 - ⏭️ **Alerts in a desktop browser** — the pane blocks notifications; needs the owner's own Chrome.
 - ⏭️ **Credit used / limit on the approval card** — after Service Payments is live (owner, 2026-10-27).
 - ⏭️ **A real phone alert** — a phone cannot reach localhost; test at go-live, or from an https test origin.

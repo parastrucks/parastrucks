@@ -2,7 +2,8 @@
 // A LIST of the vehicles that may go now and those waiting for the GM, with a search box
 // (owner, 2026-10-27: "a list with a search option is easier for the guards"). Each row:
 // plate, customer name, until when — no amounts, no notes. Tap a row (or type a number and
-// press Check) → the big green "MAY GO" or red "HOLD". The Edge Function answers and logs
+// press Check) → the big green "RELEASE" or red "HOLD" — the only two words a guard has to
+// read, on the cards and the list headings alike (owner, 2026-10-27). The Edge Function answers and logs
 // every check; a guard reads nothing from the database directly.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { callEdge } from '../../lib/api'
@@ -79,7 +80,7 @@ export default function GatePage() {
 
       {res?.result === 'may_go' && (
         <div className="gate-result go" role="status">
-          <div className="gate-word">MAY GO</div>
+          <div className="gate-word">RELEASE</div>
           <div className="gate-plate">{res.regn_no}</div>
           {res.customer && <div className="gate-customer">{res.customer}</div>}
           <div className="gate-detail">
@@ -106,11 +107,11 @@ export default function GatePage() {
           {!list && !listErr && <p className="gate-hint">Loading the list…</p>}
           {list && (
             <>
-              <GateSection title="May go" tone="go" rows={released} busy={busy} onPick={check}
+              <GateSection title="Release" tone="go" rows={released} busy={busy} onPick={check}
                 line={(r) => `Until ${istTime(r.valid_until)}${r.decided_by ? ` · by ${r.decided_by}` : ''}`}
                 empty={words ? null : 'No vehicle is released on credit right now.'} />
-              <GateSection title="Waiting for the GM" tone="wait" rows={waiting} busy={busy} onPick={check}
-                line={(r) => `Asked ${istTime(r.requested_at)} — not yet`} empty={null} />
+              <GateSection title="Hold" tone="wait" rows={waiting} busy={busy} onPick={check}
+                line={(r) => `Waiting for the GM · asked ${istTime(r.requested_at)}`} empty={null} />
               {words && released.length === 0 && waiting.length === 0 && (
                 <div className="gate-nomatch" role="status">
                   <strong>Not in the list — HOLD.</strong> If accounts gave a paid gate pass, follow that.
