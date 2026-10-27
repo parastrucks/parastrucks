@@ -30,6 +30,33 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ---
 
+## Current state (2026-10-27)
+
+- **✅ Phase 10: ALL YEARS OF REAL BOOKS LOADED ONTO STAGING** (owner: "go"; `10b-foundation`, `361e74a` → `3ccbf5c`).
+  **136 books → 7,259 trucks** (Nov 2022 → Sep 2026) · 15,785 notes · 1,857 colours · 3,847 incentive rows · 4 rebill
+  links · one import batch (`first load 2026-10-27`), beside the 24,606 DEMO trucks (kept, owner). Per FY: 458 · 1,263 ·
+  1,914 · 2,108 · 1,507 (2026-27 to Sep). Rehearsed on PGlite first (all 12 tracker migrations; probe-foundation 42/0,
+  working-set 16/0); staging = PGlite to the row; recompute-diff identical. Load list:
+  `Backup data\_Sorted\_Inventory\load-list-2026-10-27.txt`.
+  - ⭐ **Books picked from EVERY copy by `pile-analysis/pick-books.cjs`** — the latest-saved copy per year (purchase) /
+    month (lists, retention; retention month from the SHEET name), the master sales book + the 2025-26 year book. The
+    sort's "Older copies" held the NEWEST 2026-27 purchase book (saved 23 Oct) — it went by truck count. Year books are
+    cut back when the next year starts (2024-25: 1,854 → 1,769, the 85 April-25 trucks move on).
+  - ⭐ **Reader fixes:** rows from existing cells (a stray far-off cell hung the range walk) · a huge sheet made small
+    before parsing (2023-24 purchase book: 2.2 crore formatted empty cells, 422 MB XML, >1 h → 8 s) — but **SheetJS keeps
+    an empty cell whose style has a FILL** (a flag colour), so only unfilled empty cells are dropped; identical read on
+    865/867 books (2 = number format of empty commented cells). · `run.cjs --list` (fy | month | path | families).
+  - ⚠️ **The Supabase query endpoint refuses 18 MB (413)** → `sql.cjs --parts 2`: 13 replayable parts (ids fixed, on
+    conflict do nothing); run twice on PGlite = the single transaction exactly. Same path for prod.
+  - **128 chassis the vehicle check saw in the books are NOT loaded:** 90 on no AL sheet, gone from later copies
+    (typos/removed rows) · **36 on AL's Aug + Sep 2025 sheets as "IBND", on no later AL sheet or book** (inferred:
+    returned to AL around the 22 Sep 2025 GST change — owner's team to confirm) · 2 on AL's Apr-26 sheet only.
+  - ❓ **Owner:** 1,362 trucks from earlier years show refund "pending" with an amount (2025-26: 908) — real
+    outstanding refunds or a column never closed? They keep the working set at 3,140 real trucks (this year 1,507).
+  - ⏭️ **Next:** owner signs in on `localhost:3001` (3000 is another worktree's) → open `/tracker` and measure the real
+    book on screen (notes on cells: 15,785 — the grid has only drawn ~10 so far) → then the real 2025-26 AL sheets
+    through the monthly check.
+
 ## Current state (2026-10-25)
 
 - **✅ `log-error` v20 LIVE ON PROD** (the owner said "you do it"; the CLI deploy went through this time):

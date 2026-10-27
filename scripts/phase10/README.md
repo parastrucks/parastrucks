@@ -42,8 +42,8 @@ Real data passes through these; they print COUNTS ONLY and write their output OU
 |---|---|---|
 | 1 | `import/read.cjs` | Workbooks → rows, each cell with value, formula, comment, fill, number format. A file is recognised by its sheets + headers, never its name |
 | 2 | `import/merge.cjs` | One record per truck: a HOME file per column (`RULES`, measured), every other file's different value kept as a note; comments, flag colours, hand formulas, overrides, incentives, rebill links |
-| — | `import/run.cjs` | `node scripts/phase10/import/run.cjs <scratch folder> [files/folders]` → `import.json` + counts. No files given = EVERY year on this PC (2022-23 →), ordered by year then month; refuses two copies of one year's purchase/sales book (`ALLOW_OVERLAP=1` overrides) |
-| 3 | `import/sql.cjs` | `node scripts/phase10/import/sql.cjs <scratch folder> <actor uuid>` → `import.sql`: ONE transaction, `recompute = false`, one import batch |
+| — | `import/run.cjs` | `node scripts/phase10/import/run.cjs <scratch folder> [files/folders]` → `import.json` + counts. No files given = EVERY year on this PC (2022-23 →), ordered by year then month; refuses two copies of one year's purchase/sales book (`ALLOW_OVERLAP=1` overrides). **`--list <file>`** (lines `fy \| month \| path [\| families]`, from `import/pile-analysis/pick-books.cjs`) = the books, their order and which sheets to read — how the 2026-10-27 all-years load ran |
+| 3 | `import/sql.cjs` | `node scripts/phase10/import/sql.cjs <scratch folder> <actor uuid>` → `import.sql`: ONE transaction, `recompute = false`, one import batch. **`--parts 2`** → `import-01.sql …` of ≤ 2 MB each, replayable (the Supabase query endpoint refuses 18 MB: 413) — run them in order with `db query --linked -f` |
 | 4 | `import/recompute-diff.sql` | Self-aborting: per worked-out column, how many imported rows the database's rules would give another figure |
 | 4b | `import/recompute-by-year.sql` | The same, split by financial year — do the rules hold for older years? |
 | test | `selftest-import-merge.cjs` | The merge rules on made-up rows (39 checks) — `node scripts/phase10/selftest-import-merge.cjs` |

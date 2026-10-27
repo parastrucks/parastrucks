@@ -975,7 +975,20 @@ Also: a phone view (read-only cards) and the local save queue across reloads (E5
      monthly files are snapshots). Exact duplicates (2,76,020) + installers moved to `Backup data\_To delete` (85.8 GB),
      byte-verified 0 problems → the owner deletes it. Vehicle check: 8,906 trucks in the pile, 7,387 in the sorted books,
      the 1,519 others explained (CLAUDE.md 2026-10-25 block). The sorted books feed step 1. Only that folder may be read.
-  1. **When the owner's UPDATED files arrive: run the importer onto STAGING** (the repository/archive) — now
+  1. ✅ **DONE 2026-10-27 (owner: "go") — all years of the sorted books on STAGING: 136 books → 7,259 trucks**
+     (15,785 notes, 1,857 colours, 3,847 incentive rows, 4 rebill links; one batch "first load 2026-10-27"; DEMO rows
+     kept beside them). How it ran (repeat this for prod, on command):
+     `pile-analysis/books-for-load.cjs <Backup data> --older <kind>` (every copy: families, trucks, months) →
+     `pile-analysis/pick-books.cjs <Backup data> <list> <books-*.txt>` (latest-saved copy per year / month, the master
+     + the 2025-26 year book; list kept in `_Sorted\_Inventory\load-list-2026-10-27.txt`) →
+     `run.cjs <scratch> --list <list>` → `sql.cjs <scratch> <actor> [--parts 2]` → PGlite (12 migrations + import.sql
+     → recompute-diff, probe-foundation 42/0, probe-working-set 16/0; parts run TWICE = same counts) → staging, the 13
+     parts in order (one `db query -f` each — the endpoint refuses 18 MB in one request: 413) → counts = PGlite,
+     recompute-diff identical, working-set 16/0. Checked against the vehicle scan: every loaded truck was seen; 128
+     seen are not loaded (90 typos/removed rows, 36 AL "IBND" Aug–Sep 2025 then gone — returned to AL?, 2 AL Apr-26
+     only). ❓ Owner: 1,362 earlier-year trucks show refund "pending" with an amount. ⏭️ The screen check (below) waits
+     for the owner's sign-in. Record: history "Session log — 2026-10-27".
+     *The original step:* run the importer onto STAGING (the repository/archive) — now
      ALL years at once (`run.cjs <scratch>` with no files, or the owner's folders):
      `node scripts/phase10/import/run.cjs <scratch> [files/folders]` → `node scripts/phase10/import/sql.cjs
      <scratch> <admin uuid>` → rehearse on PGlite (all 12 tracker migrations, then `import.sql`, then

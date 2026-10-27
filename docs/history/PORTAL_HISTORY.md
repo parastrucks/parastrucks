@@ -26,6 +26,52 @@
 
 ---
 
+## Session log — 2026-10-27 (PC): every year of the real books loaded onto STAGING
+
+Same session and branch (`10b-foundation`). Owner, answering the three waiting items: `_To delete` **deleted by him**
+("done") · the yard **does** handle AL/other dealers' stock ("Yes" — the 330 stock-register-only trucks closed) ·
+**"go"** for the all-years load. Staging only; prod untouched. Only `D:\PTB\Finances\Backup data` was read.
+
+- **Choosing the books (`pile-analysis/books-for-load.cjs`, `copies-by-month.cjs`, `pick-books.cjs`).** Every copy in
+  `_Sorted` (top + "Older copies") was read for its families, trucks and months. Measured patterns: a purchase book is
+  one per year and is CUT BACK when the next year starts (2024-25 1,854 → 1,769: the 85 April-25 trucks move to
+  2025-26) → the latest-saved copy; a month's retail list has working copies (with undelivered trucks) and a final one
+  saved weeks later with a steady count → the latest-saved copy per month (month from the name); retention → per family,
+  per month from the SHEET name (a 2025-26 file named "APR'24" holds "APR'25"); sales book = the master (Nov 2022 → Jul
+  2025) + the 2025-26 year book; before the lists (Nov 2022 → Mar 2024) only each month's OTHER DEALER sheet. ⭐ The
+  sort's "Older copies" choice went by truck count and held the NEWEST 2026-27 purchase book (saved 23 Oct 2026) and the
+  latest 2025-26 copy (15 Oct) — never trust it for "final". One correction to "latest": the 2022-23 OTHER DEALER sheet
+  comes from the fullest copy (a December snapshot re-saved in 2025 held 6 of 11). → **136 books.**
+- **Reader fixes (`read.cjs`).** (1) Rows from the cells that exist, never a walk of the range (the stray-cell hang the
+  inventory met). (2) The 2023-24 purchase book's INVOICE TRACKER sheet is formatted down to row 10,48,576 — 2.2 crore
+  empty cells, 422 MB of XML — SheetJS ran over an hour; such a sheet is now slimmed before parsing (8 s). ⭐ The first
+  slim dropped every empty cell and the equivalence run said **487 books differ**: with `cellStyles` SheetJS KEEPS an
+  empty cell whose style has a fill, and the importer keeps that colour. Now only unfilled empty cells go (fills read from
+  `styles.xml`): **865 of 867 identical**, 2 differ only in the number format of empty cells that carry a comment. The
+  old reader vs the new: identical on all 842 books it can walk. `selftest-import-read` 15/0 (a stray cell at XFD1048576;
+  the old reader never finishes it — exit 124 at 45 s). (3) `run.cjs --list` lines `fy | month | path | families`.
+- **Rehearsal (PGlite 0.5.11, all 12 tracker migrations):** 7,259 trucks · 15,785 notes (12,179 file disagreements,
+  2,568 hand formulas, 1,038 Excel comments) · 1,857 colours · 3,847 incentive rows · 4 rebill links, one transaction
+  in ~27 s; probe-foundation 42/0, probe-working-set 16/0. Per FY by invoice date: 458 · 1,260 · 1,907 · 2,099 · 1,260
+  (to Sep 2026) · 275 undated (the 10-24 rehearsal had 2024-25 at 1,453 — no sales book then). Recompute-diff:
+  diff_base/GST 2,383 (the /1.28 on every row), retention_dealer 1,310, retention_internal 1,069, net_refund 631 …
+- **Staging.** ⚠️ `db query -f import.sql` → **413 request entity too large** (18 MB; nothing written). `sql.cjs --parts
+  2` → 13 parts, each its own transaction and replayable (every row keeps this run's id, on conflict do nothing; links
+  set only where unset). On PGlite all 13 run TWICE = the single transaction to the row (audit 7,267, no doubles).
+  Staging: 13/13 ok → counts identical to PGlite, recompute-diff identical, probe-working-set 16/0. 24,606 DEMO rows
+  untouched. tracker_book's first 2,500-row working page: 601 ms.
+- **Checked against the vehicle scan (`load-vs-scan`, `left-out-trucks`, `left-out-al`, `left-out-al-lines`).** All
+  7,259 loaded trucks were seen by the scan; 128 seen in the sorted books are not loaded. Deciding test: AL's own monthly
+  Balance Sheets (68 copies, 5,912 chassis; 5,874 of the loaded trucks are on one). 90 are on no AL sheet and vanished
+  from later copies (typos / removed rows). **36 are on AL's Aug + Sep 2025 sheets as OFFTAKE MODE "IBND" and on no later
+  sheet or book** — inferred: returned to AL around the 22 Sep 2025 GST change (owner's team to confirm). 2 are on AL's
+  Apr-26 sheet only. A "near-twin" test (1–2 characters apart) was inconclusive — VINs run in sequence.
+- **Working set (real trucks):** 3,140 = this year 1,507 + 5 undated + 1,628 older still open, of which **1,362 only
+  because the refund reads "pending" with an amount** (2022-23 36 · 2023-24 160 · 2024-25 258 · 2025-26 908) — owner
+  question. 4× DEMO + real = 6,828 in the working set on staging.
+- ⏭️ The screen check: the owner signs in on `localhost:3001` (3000 is another worktree's dev server) → `/tracker`
+  with the real book; how the grid draws 15,785 notes is still unmeasured.
+
 ## Session log — 2026-10-26 → 10-27 (PC): the team's file pile inventoried, sorted, de-duplicated and checked end to end
 
 Same session and branch (`10b-foundation`, worktree `bold-meitner-a9cb2f`). **Nothing on staging or prod changed.** Only
