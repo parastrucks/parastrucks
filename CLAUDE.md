@@ -83,11 +83,23 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   `alChecks.js` `fyOfMonth` / `inFy` / `reviewYears`; selftest-al-sheet **28/0**; build + no-undef clean. Seen in the
   owner's Chrome: **2026-27 1,206 · 2025-26 2,163 · 2024-25 2,119 · 2023-24 1,189 = 6,677**, each year's groups add
   up to its total. Biggest in 2026-27: "AL took the truck, but it is on no sheet" 895, "Credit typed in" 230.
-  ⚠️ 2026-27 still carries the DUMMY Oct 2026 upload (its months chip; part of that year's count). ⏭️ Read the review
-  with the owner, a year at a time.
+  ✅ **The DUMMY Oct 2026 AL upload DELETED** (owner: "1. yes"; staging; checked as that one row first — `-1026.xlsx`,
+  25 Oct, 195 lines — in one transaction that refused any other count): uploads 39 → 38, current 37 → **36 (all real,
+  Oct 2023 → Sep 2026)**, lines 8,802 → 8,607. Kept (not asked): the two REPLACED dummy Sep uploads (not in the
+  review) and the one "marked right" ctd_diff note from the dummy Sep test. Now **2026-27 1,145** (not_on_sheet 842,
+  typed_credit 228) · 2025-26 2,163 · 2024-25 2,119 · 2023-24 1,189 = 6,616.
+  ⚠️ **The review still FAILED on the first call after a quiet spell** (then 6.4 s, then ~3 s) — and the panel is
+  opened about monthly, so nearly always cold. BUFFERS: `units` = a Seq Scan of all of vehicle_units (55 MB, 6,997
+  pages, 1.1 s even in memory) + temp spills (work_mem 2 MB). ✅ Migration `20261028_phase10_tracker_al_review_index.sql`
+  on STAGING: a narrow covering index `vehicle_units_al_review` (chassis_no INCLUDE the 7 columns, current only; 3.5 MB)
+  → Index Only Scan 0.07 s, pages 7,383 → 1,208 (rolled-back try) + `alter function … set work_mem = '16MB'` (no
+  spill). Function body unchanged (md5 `a79e49a7…`); probe-al-sheet 21/0; API warm **2.0–2.6 s, 4/4**. ⚠️ A truly
+  cold call not yet measured (a 30-min idle test was started). **16 tracker migrations for prod.**
+  ⏭️ Suspect most of 2026-27's 842 not_on_sheet are DEMO trucks (they carry AL statuses, are on no real sheet) —
+  check; then read the review with the owner, a year at a time.
 - ⚠️ **Open / owner:** the 36 AL "IBND" Aug–Sep 2025 trucks (returned to AL?) still unconfirmed · the DUMMY Oct 2026 AL
   upload is the current Oct 2026 (delete needs the owner's yes) · DEMO x4 rows stay · prod ONLY on command —
-  **15 tracker migrations** for prod now (LF), + EF `admin-vehicle-units`.
+  **16 tracker migrations** for prod now (LF), + EF `admin-vehicle-units`.
 - **Local only:** the worktree `.env` has `VITE_TURNSTILE_SITE_KEY` commented out (gitignored; staging never checks
   it) so a local sign-in works; the dev server runs on :3000; a Claude-in-Chrome tab is open on `/tracker`.
 
