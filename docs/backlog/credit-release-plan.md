@@ -419,8 +419,50 @@ PDF and phone alerts ("Forbidden"), and direct reads returned **0 rows** from `g
 `gate_documents`, `gate_bills`, `vehicle_catalog`, `quotations` and `proforma_invoices` (`gate_push_subscriptions`:
 permission denied). The guard's tap is in `gate_checks`.
 
+**Alerts seen in a real browser, 2026-10-28 (the owner's own Chrome, through Claude in Chrome, localhost:3001,
+staging admin):** "Turn on alerts" → Chrome's own permission box (the owner clicked Allow — a page cannot) → "Phone
+alerts are on for this device"; the service worker registered and subscribed. "Ask again" on GJ01ZZ0002 → *"Asked.
+The GM was alerted on 1 phone."* → Chrome showed **"Release asked: GJ01ZZ0002 — Demo Mahadev Travels · ₹19,890.00 —
+tap to approve or hold"**, staying until tapped. So the whole chain works on a real browser: our own RFC 8291
+encryption decrypted by Chrome, our VAPID signature accepted by Google's push service, the worker showing it.
+
+**Owner decisions (2026-10-28):**
+| Question | Decision |
+|---|---|
+| How should alerts behave? | **Like an instant-messaging app on Android**, in the installed app: the admin or the GM gets the notification, taps it, and approves. |
+| Stay signed in on a phone with alerts on? | **Yes.** Turning alerts on ticks "Remember me" for that device (and the screen says so); a later sign-in there keeps it; turning alerts off undoes only what the alerts set; **signing out ends it and also drops that device's alert subscription** (a signed-out phone must not keep showing customers and amounts). |
+| How to test on a real Android phone before go-live? | **A staging website** (see below). |
+| The page's name | **"Invoices & Payments"** (was "Send Invoice"): nav, page title, access-rules list. |
+
+**Built for that (`5c6fc8e`):** once someone approves, holds or withdraws, the OTHER approvers' "asked" alert is
+replaced quietly (same tag, no sound, dismissable) by who answered — *"GJ01ZZ0002: released by … until …"* — so
+nobody taps a request that is already decided; the person who acted gets nothing (a browser must show something for
+every push, hence a quiet replacement rather than nothing). "Asked" alerts vibrate and stay until tapped. Android
+status-bar badge `public/badge-96.png` (white "P" on transparent); the 512 px icon is also offered as **maskable**,
+so the home-screen icon is not boxed in a white circle.
+
+**The staging website (2026-10-28, owner: "Yes, set it up"):** Vercel already builds every branch as a preview;
+this branch's fixed address is **https://portal-git-cr2-release-gate-parastrucks-projects.vercel.app**. Done:
+(1) Vercel `portal` project — `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY` added for the **Preview** target =
+staging's address and publishable key (the Production pair untouched; until then a preview had no database at all);
+(2) staging `ALLOWED_ORIGINS` = the three localhost origins + that address (the old value was confirmed by its
+sha256 `d4ed322d…` before the change; new `212814fc…`); (3) Vercel's login wall on previews stays on — the owner
+signs in to Vercel once on the phone. The GM's phone cannot pass that wall without a Vercel account, so the GM
+tests at go-live (or later with a Vercel share link). ⚠️ **Every** branch's preview now talks to staging — which is
+what a preview should do; no preview can reach the live data.
+(4) **Turnstile** (found on the first load: "Unable to connect to website"): the live site key is a TEAM-wide Vercel
+setting that also reaches previews, and Cloudflare accepts it only on the live hostname. Owner chose **Cloudflare's
+published test key for Preview builds** (`1x00000000000000000000AA`, always passes) as a `portal` project setting —
+staging never checked Turnstile (no `TURNSTILE_SECRET`, `REQUIRE_CAPTCHA=false`), same as signing in on the PC.
+Production keeps the real team-wide key; the live sign-in still enforces it.
+`gate-invoices` with the quiet-replacement change reached staging on the 6th try — Supabase's bundler kept timing
+out fetching `jsr:@supabase/functions-js` (jsr.io answered in 0.8 s from the PC); a retry loop, not a code change.
+
 **Not yet done:**
-- ⏭️ **Alerts in a desktop browser** — the pane blocks notifications; needs the owner's own Chrome.
+- ⏭️ **Android test on the staging website** — the owner opens the address on the phone, signs in to Vercel, signs
+  in to the portal as admin, installs it (Add to Home screen), turns alerts on; then a release is asked from the
+  PC and the phone should ring with the app closed; tapping opens the request; approving from the phone.
+- ⏭️ **Alerts in a desktop browser** — ✅ done 2026-10-28 (above); the click-through on desktop not yet confirmed.
 - ⏭️ **Credit used / limit on the approval card** — after Service Payments is live (owner, 2026-10-27).
 - ⏭️ **A real phone alert** — a phone cannot reach localhost; test at go-live, or from an https test origin.
 - Promised-by date, responsible person, "mark paid" and the follow-up list = **step 3** (the design above lists

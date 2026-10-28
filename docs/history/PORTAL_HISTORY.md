@@ -26,6 +26,66 @@
 
 ---
 
+## Session log — 2026-10-27 → 10-28 (PC): credit release step 2 seen working, the gate list, a test guard, real alerts, a staging website
+
+All on branch `cr2-release-gate` (stacked on `cr1-invoice-send`, PR #140 still open and unmerged) and STAGING only;
+nothing live changed. Commits `7e5edb5` → `e4d59e3` → `5c6fc8e` + this docs commit. ⭐ Detail: plan → "Step 2 — as built".
+
+**1. The first browser check (10-27, browser pane, owner signed in as the staging admin, phone width).** Ask →
+approve (48 h) → gate MAY GO with the plate typed `gj 01 zz-0001`; never asked / asked / held → HOLD with the right
+words; hold with no reason refused; the "no approver has alerts on" toast. Two screen fixes: the ask form on the last
+row opened under the phone's bottom bar (now `revealForm` + `scroll-margin`, measured 588 px vs bar 604 px), and the
+hold form showed two "Hold" buttons (now one, "Hold {plate}").
+
+**2. Owner decisions after it (10-27):** (a) **the gate screen is a LIST with a search** — "easier for the guards";
+rows = plate + **customer name** + until when (revises "no names") → EF action `gateList` (Security + admin; authority
+self-test **241/0**, opening it to service/accounts/spares fails 12×); (b) **credit used + credit limit on the approval
+card: wanted, but nothing holds them today → they come with the full Service Payments module** (do not build, do not
+placeholder); (c) **the guard reads only TWO words — "RELEASE" and "HOLD"** (cards and list headings; a waiting vehicle
+sits under Hold). Stored values stay `may_go` / `hold`.
+
+**3. A test guard (10-27).** The owner made `guard@parastrucks.test` on Employees (PTB, Security, Security Guard,
+Ahmedabad, no brand — the slot read "Not applicable — …"); saved with **0 brands**. First sign-in → **the forced
+password change, run end to end for the first time** (via create; the HR-reset path is still untested) → lands on
+/gate, phone bar Gate + Profile; /invoices, /catalog, /employees, /quotation, /tiv-forecast all bounce to /gate. With
+the guard's own token: approve / ask / PDF / alerts → "Forbidden"; 0 rows from gate_*, catalog, quotations, PIs;
+push table "permission denied"; the tap is in `gate_checks`. ⚠️ A second pane tab does NOT share the sign-in.
+
+**4. A real alert in the owner's own Chrome (10-28, Claude in Chrome, localhost:3001 — port 3000 was held by another
+dev server, PID 18516, left alone).** Turn on alerts → Chrome's own permission box (the owner clicked Allow) → "on";
+"Ask again" on GJ01ZZ0002 → *"Asked. The GM was alerted on 1 phone."* → Chrome showed **"Release asked: GJ01ZZ0002 —
+Demo Mahadev Travels · ₹19,890.00 — tap to approve or hold"**. Our own RFC 8291 encryption decrypted by Chrome, our
+VAPID signature accepted by Google's push service. The desktop click-through was not confirmed. ⚠️ That request
+(release `72671792…`) is **still waiting** on staging.
+
+**5. Owner: "like instant messaging apps" on ANDROID, in the installed app, for the admin or the GM** → decisions:
+**stay signed in** on a device with alerts on (signing out ends it and drops the device's subscription); test on a
+**staging website**; rename **"Send Invoice" → "Invoices & Payments"**. Built `5c6fc8e`: keep-signed-in helpers in
+`src/lib/supabase.js` (`ALERTS_KEY` remembers that the alerts, not the person, ticked "Remember me"); the other
+approvers' alert is **quietly replaced** once someone answers (`kind: closed`, same tag, silent; the actor gets
+nothing); Android badge `public/badge-96.png`, vibration, maskable icon. `gate-invoices` reached staging on the **6th**
+try — Supabase's bundler timed out fetching `jsr:@supabase/functions-js` five times (jsr.io answered in 0.8 s from the PC).
+
+**6. The staging website (owner: "Yes, set it up").** https://portal-git-cr2-release-gate-parastrucks-projects.vercel.app
+— Vercel already built every branch as a preview, but previews had NO database settings. Now, on the `portal` project:
+**Preview** `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY` = staging (Production pair untouched); staging
+`ALLOWED_ORIGINS` += that address (old value sha256-confirmed `d4ed322d…`, new `212814fc…`); Vercel's login wall on
+previews stays ON (the owner signed in to Vercel in Chrome). Checked in the owner's Chrome: the built app points only
+at staging; `sw.js`, the badge and the manifest are served. ⚠️ **Turnstile's site key is a TEAM-wide Vercel env
+(all targets)** and Cloudflare refused it off the live hostname ("Unable to connect to website") → owner chose
+**Cloudflare's test key `1x00000000000000000000AA` as a Preview-only project setting** (staging never checks Turnstile;
+Production keeps the real key). ⚠️ Every branch's preview now talks to staging.
+⚠️ My first rebuild request took the newest preview, which was the tracker branch `10b-foundation` (harmless, a
+preview); cancelling it was **refused by the classifier ("Interfere With Workloads") — not retried**. This branch's
+rebuild `dpl_7qprQZ9AXTBAw5JnupWE4iQjh1Pu` was **QUEUED** behind it when the session paused.
+
+**Where it stands:** step 2 complete on staging except the Android test. ⏭️ When that build is READY: open the staging
+site, confirm the sign-in page has no Cloudflare error, then the owner on an Android phone — sign in to Vercel, sign in
+as admin, Add to Home screen, turn alerts on — a release asked from the PC should ring with the app closed; tap →
+the request → approve from the phone. Prod only on the owner's command, after #140.
+
+---
+
 ## Session log — 2026-10-26 → 10-27 (PC): credit release step 2 — release request, approval, gate screen, guard logins (staging)
 
 **Housekeeping first (10-26).** The owner's replies: deploy `log-error` — **already live on prod as v20**, deployed
