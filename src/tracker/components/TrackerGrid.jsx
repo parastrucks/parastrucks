@@ -188,6 +188,8 @@ const TrackerGrid = forwardRef(function TrackerGrid({ columns, rows, formats, no
     },
     // keep at least SPARE empty rows below the book (after creates have used some)
     ensureSpare() { engine.current?.ensureSpare() },
+    // more trucks after the grid has drawn — rows [{ id, …columns }], formats / notes Maps "unitId|column" → …
+    appendRows(list, fmts, nts) { return list.length ? engine.current?.appendRows(list, fmts, nts) ?? -1 : -1 },
 
     // ── LAYOUTS: a layout is the columns left showing. People hide columns as in Excel (right-click →
     // Hide); a layout saves what is showing and brings it back. Shown/hidden as MUTATIONS, so choosing a
@@ -426,6 +428,57 @@ const TrackerGrid = forwardRef(function TrackerGrid({ columns, rows, formats, no
         for (let r = from; r < from + more; r++) for (const c of Object.keys(line)) cells.push({ r, c: Number(c), s: line[c].s })
         write(cells)
         readIds()
+      },
+      // MORE TRUCKS after the grid has drawn (owner, 2026-10-28: "load this year first, rest in background").
+      // Written below the last truck AND below anything typed under it (a row still being typed is never
+      // written over), as mutations — off the undo stack, like every write of ours. Their notes are drawn
+      // the same way; spare rows are topped up after. Returns the sheet row of the first one.
+      appendRows: (list, fmts, nts) => {
+        readIds()
+        const cols = columns.length
+        let used = 0
+        for (let r = 1; r < rowIds.current.length; r++) if (rowIds.current[r]) used = r
+        const max = sheet().getMaxRows()
+        if (max > used + 1) {
+          const raw = sheet().getRange(used + 1, 0, max - used - 1, cols).getRawValues()
+          // an empty cell that only carries its column's look reads back undefined, not null (measured 2026-10-28:
+          // the first version took the 250 spare rows for typed ones and put the trucks below them)
+          for (let i = raw.length - 1; i >= 0; i--) if (raw[i].some((v) => v != null && v !== '')) { used += i + 1; break }
+        }
+        const start = used + 1
+        if (start + list.length > max) {
+          univerAPI.syncExecuteCommand('sheet.mutation.set-worksheet-row-count', {
+            unitId: workbook.getId(), subUnitId: sheet().getSheetId(), rowCount: start + list.length,
+          })
+        }
+        const cells = []
+        list.forEach((row, i) => {
+          const r = start + i
+          columns.forEach((c, ci) => {
+            const v = toCell(c.spec, row[c.key])
+            const s = styleWith(c, fmts.get(`${row.id}|${c.key}`))
+            cells.push(v === null ? { r, c: ci, v: null, s } : { r, c: ci, v, s })
+          })
+          cells.push({ r, c: cols, v: row.id })
+        })
+        write(cells)
+        readIds()
+        drawingNotes = true
+        try {
+          const colOf = new Map(columns.map((c, i) => [c.key, i]))
+          const rowOf = new Map(list.map((row, i) => [row.id, start + i]))
+          for (const [k, text] of nts) {
+            const bar = k.indexOf('|')
+            const r = rowOf.get(k.slice(0, bar)), c = colOf.get(k.slice(bar + 1))
+            if (r === undefined || c === undefined) continue
+            noteText.current.set(k, text)
+            noteMutation('sheet.mutation.update-note', {
+              row: r, col: c, note: { id: `n-${r}-${c}`, row: r, col: c, width: 220, height: 90, note: text },
+            })
+          }
+        } finally { drawingNotes = false }
+        engine.current?.ensureSpare()
+        return start
       },
     }
 

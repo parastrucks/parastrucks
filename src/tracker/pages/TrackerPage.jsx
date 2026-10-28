@@ -31,6 +31,26 @@ const NOTE_SETTLE_MS = 2500 // Univer reports a note while it is typed (after ea
 // reported the whole book's formats at once (seen 2026-10-25). A big paste or colouring could too.
 const append = (a, b) => { for (const x of b) a.push(x) }
 const scopeKey = (s) => s.scope === 'year' ? `year-${s.year}` : s.scope
+// the financial year (April of) of an India date "yyyy-mm-dd"
+const fyOfIso = (iso) => (Number(iso.slice(5, 7)) >= 4 ? Number(iso.slice(0, 4)) : Number(iso.slice(0, 4)) - 1)
+
+// A loaded page of the book → what the page keeps: rows with their screen columns, formats and notes by
+// "unitId|column", the slab base (that month's trucks NOT loaded — the server counts the whole month).
+// base: the slab base so far (null for the first load), updated in place for months this page adds.
+function takeBook({ rows, formats: fmts, notes: noteRows, dseCounts }, base) {
+  // the slab counts the whole month: the server's count, less the trucks of it loaded here — a month an
+  // earlier load already counted keeps its base, less these rows
+  const fresh = new Map(Object.entries(dseCounts ?? {}).filter(([k]) => !base?.has(k)))
+  const slab = base ?? new Map()
+  for (const [k, n] of fresh) slab.set(k, n)
+  for (const r of rows) { const k = !r.superseded_at && dseMonthKey(r); if (k && slab.has(k)) slab.set(k, slab.get(k) - 1) }
+  const formats = new Map()
+  for (const f of fmts ?? []) if (Object.keys(f.format ?? {}).length) formats.set(`${f.unit_id}|${f.column_key}`, f.format)
+  // a cell shows its latest note; the earlier versions stay on the server as its history
+  const notes = new Map()
+  for (const n of noteRows ?? []) notes.set(`${n.unit_id}|${n.column_key}`, n.body)
+  return { rows: withScreenColumns(rows, todayIst(), slab), formats, notes, slab }
+}
 
 export default function TrackerPage() {
   const [scope, setScope] = useState({ scope: 'working' })
@@ -38,6 +58,7 @@ export default function TrackerPage() {
   const [notice, setNotice] = useState(null)
   const [saving, setSaving] = useState({ waiting: 0, failed: false })
   const [added, setAdded] = useState(0) // vehicles created since the book was loaded
+  const [rest, setRest] = useState({ status: null, n: 0 }) // the working set's older open trucks, loaded after this year
   const grid = useRef(null)
   const noticeTimer = useRef(null)
   const shadow = useRef(new Map()) // id → row as the database last confirmed it (+ screen columns)
@@ -58,34 +79,55 @@ export default function TrackerPage() {
     if (!sticky) noticeTimer.current = setTimeout(() => setNotice(null), 7000)
   }, [])
 
+  // The working set opens THIS financial year first (owner, 2026-10-28: "make it load this year first, rest in
+  // background"): the grid draws it, then the rest of the working set — no date yet, dated later, older and
+  // still open (scope 'rest') — is fetched and added below (the effect after this one).
   useEffect(() => {
     let cancelled = false
     setState({ status: 'loading' })
     setAdded(0)
-    loadBook(STORED_KEYS, scope, (got, of) => !cancelled && of > 2500 && setState({ status: 'loading', got, of }))
-      .then(({ rows, hidden, formats: fmts, notes: noteRows, dseCounts, fyStart, total }) => {
+    setRest({ status: null, n: 0 })
+    const first = scope.scope === 'working' ? { scope: 'year', year: fyOfIso(todayIst()) } : scope
+    loadBook(STORED_KEYS, first, (got, of) => !cancelled && of > 2500 && setState({ status: 'loading', got, of }))
+      .then((book) => {
         if (cancelled) return
-        // the slab counts the whole month: the server's count, less the trucks of it this page holds
-        const base = new Map(Object.entries(dseCounts ?? {}))
-        for (const r of rows) { const k = !r.superseded_at && dseMonthKey(r); if (k && base.has(k)) base.set(k, base.get(k) - 1) }
-        slabBase.current = base
-        const formats = new Map()
-        for (const f of fmts ?? []) if (Object.keys(f.format ?? {}).length) formats.set(`${f.unit_id}|${f.column_key}`, f.format)
+        const { rows: full, formats, notes, slab } = takeBook(book, null)
+        slabBase.current = slab
         savedFormat.current = new Map(formats)
-        // a cell shows its latest note; the earlier versions stay on the server as its history
-        const notes = new Map()
-        for (const n of noteRows ?? []) notes.set(`${n.unit_id}|${n.column_key}`, n.body)
-        const hide = new Set(hidden)
+        const hide = new Set(book.hidden)
         // DSE incentive is worked out on screen from the same figures — hidden with them
         if (hide.size) hide.add('dse_incentive')
         const columns = ALL_COLUMNS.filter((c) => !hide.has(c.key))
-        const full = withScreenColumns(rows, todayIst(), slabBase.current)
         shadow.current = new Map(full.map((r) => [r.id, { ...r }]))
-        setState({ status: 'ready', columns, rows: full, formats, notes, fyStart, total })
+        setState({ status: 'ready', columns, rows: full, formats, notes, fyStart: book.fyStart, total: book.total,
+          restPending: scope.scope === 'working' })
       })
       .catch((e) => !cancelled && setState({ status: 'error', message: e.message }))
     return () => { cancelled = true }
   }, [scope])
+
+  // …then the rest of the working set, in the background, added to the drawn grid (the grid is not rebuilt:
+  // its rows prop stays the first load). A save, a sort or a filter meanwhile is not disturbed.
+  useEffect(() => {
+    if (state.status !== 'ready' || !state.restPending) return
+    let cancelled = false
+    setRest({ status: 'loading', n: 0 })
+    loadBook(STORED_KEYS, { scope: 'rest' })
+      .then((book) => {
+        if (cancelled) return
+        const { rows: full, formats, notes } = takeBook({ ...book, rows: book.rows.filter((r) => !shadow.current.has(r.id)) }, slabBase.current)
+        for (const [k, f] of formats) savedFormat.current.set(k, f)
+        for (const r of full) shadow.current.set(r.id, { ...r })
+        grid.current?.appendRows(full, formats, notes)
+        setRest({ status: 'done', n: full.length })
+      })
+      .catch((e) => {
+        if (cancelled) return
+        setRest({ status: 'error', n: 0 })
+        say(`The older open trucks could not be loaded (${e.message}). This year's book is all here — reload to try again.`, 'warn', true)
+      })
+    return () => { cancelled = true }
+  }, [state, say])
 
   // a truck Find brought from another year: go to it once the grid has drawn
   useEffect(() => {
@@ -361,10 +403,13 @@ export default function TrackerPage() {
   // the rows as this page holds them (typed edits included), for Find and History
   const bookRows = useCallback(() => [...shadow.current.values()], [])
 
-  const count = state.status === 'ready' ? state.rows.length + added : 0
+  const count = state.status === 'ready' ? state.rows.length + added + rest.n : 0
   const fy = state.fyStart ? Number(state.fyStart.slice(0, 4)) : null
   const fyLabel = (y) => `${y}-${String(y + 1).slice(2)}`
-  const holding = scope.scope === 'working' ? (fy ? `${fyLabel(fy)} + still open` : 'this year + still open')
+  const thisYear = fy ? fyLabel(fy) : 'this year'
+  const holding = scope.scope === 'working'
+    ? (rest.status === 'loading' ? `${thisYear} · adding the older open trucks…`
+      : rest.status === 'error' ? `${thisYear} only (the older open trucks did not load)` : `${thisYear} + still open`)
     : scope.scope === 'year' ? fyLabel(scope.year) : 'all years'
   const columns = useMemo(() => (state.status === 'ready' ? state.columns : []), [state])
   const rows = useMemo(() => (state.status === 'ready' ? state.rows : []), [state])

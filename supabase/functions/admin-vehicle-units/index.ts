@@ -183,14 +183,16 @@ Deno.serve(async (req: Request) => {
 
       // ── The book as the grid opens it: ONE call for the rows of a scope, their notes and colours ──
       // (owner, 2026-10-24: "current year only"; tracker_book, migration 20261024_phase10_tracker_working_set.sql).
-      // scope: 'working' (default — this financial year + every older truck still open) · 'year' + year ·
+      // scope: 'working' (default — this financial year + every older truck still open) · 'year' + year · 'rest' ·
       // 'all' · 'ids' + ids. The database builds the JSON (only the asked-for columns, no empty cells) and it is
       // passed through as text: parsing ~10 MB here would spend the 2 s CPU allowance for nothing.
       case "book": {
         const plan = planRead(payload.columns, seeIncentives)
         if (!plan.ok) return json({ error: plan.error }, 400)
         const scope = payload.scope === undefined ? "working" : payload.scope
-        if (!["working", "year", "all", "ids"].includes(scope as string)) return json({ error: "unknown scope" }, 400)
+        // 'rest' = the working set less this financial year: the page opens 'year' (this year) first, then this
+        // (owner, 2026-10-28; migration 20261028_phase10_tracker_working_rest.sql)
+        if (!["working", "year", "rest", "all", "ids"].includes(scope as string)) return json({ error: "unknown scope" }, 400)
         const year = scope === "year" ? payload.year : null
         if (scope === "year" && !(Number.isInteger(year) && (year as number) >= 2000 && (year as number) <= 2100)) return json({ error: "year required" }, 400)
         const ids = scope === "ids" ? payload.ids : null

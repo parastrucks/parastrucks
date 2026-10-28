@@ -1,4 +1,4 @@
--- Phase 10 — probe for 20261024_phase10_tracker_working_set.sql (tracker_book: the grid's working set).
+-- Phase 10 — probe for 20261024_phase10_tracker_working_set.sql (tracker_book: the grid's working set) + 20261028 working_rest.
 -- SELF-ABORTING: a green run ENDS IN AN ERROR that reads "PROBE COMPLETE: N passed, 0 failed".
 -- Everything it writes is rolled back with that error. Dates are relative to the function's own fy_start.
 do $probe$
@@ -100,6 +100,24 @@ begin
   if not has_function_privilege('authenticated', 'public.tracker_book(text, int, text[], text[], uuid[], boolean, text[], int, int)', 'execute')
      and not has_function_privilege('anon', 'public.tracker_book(text, int, text[], text[], uuid[], boolean, text[], int, int)', 'execute')
     then pass := pass + 1; else fail := fail + 1; msgs := msgs || ' |7 API role can execute'; end if;
+
+  -- 8. (20261028_phase10_tracker_working_rest.sql) this year first, the rest after: 'year' (this year) + 'rest' =
+  --    'working', no truck in both — a truck dated after this year included (it belongs to the rest)
+  declare
+    w text[]; y text[]; rs text[];
+  begin
+    perform public.tracker_create_unit(me, gen_random_uuid(), jsonb_build_object('chassis_no','MB1PROBEWS0000010','ptb_invoice_date', fy + 400));
+    select array_agg(x ->> 'chassis_no' order by x ->> 'chassis_no') into w
+      from jsonb_array_elements(public.tracker_book('working', null, array['chassis_no'], null, null) -> 'rows') x where x ->> 'chassis_no' like 'MB1PROBEWS%';
+    select array_agg(x ->> 'chassis_no' order by x ->> 'chassis_no') into y
+      from jsonb_array_elements(public.tracker_book('year', extract(year from fy)::int, array['chassis_no'], null, null) -> 'rows') x where x ->> 'chassis_no' like 'MB1PROBEWS%';
+    select array_agg(x ->> 'chassis_no' order by x ->> 'chassis_no') into rs
+      from jsonb_array_elements(public.tracker_book('rest', null, array['chassis_no'], null, null) -> 'rows') x where x ->> 'chassis_no' like 'MB1PROBEWS%';
+    if not (coalesce(y, '{}') && coalesce(rs, '{}'))
+       and (select array_agg(c order by c) from unnest(coalesce(y, '{}') || coalesce(rs, '{}')) c) = w
+       and 'MB1PROBEWS0000010' = any (rs) and 'MB1PROBEWS0000001' = any (y) and 'MB1PROBEWS0000004' = any (rs)
+      then pass := pass + 1; else fail := fail + 1; msgs := msgs || format(' |8 year %s + rest %s <> working %s', y, rs, w); end if;
+  end;
 
   raise exception 'PROBE COMPLETE: % passed, % failed%', pass, fail, case when fail > 0 then ' —' || msgs else '' end;
 end;
