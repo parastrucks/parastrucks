@@ -63,15 +63,22 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   server on 127.0.0.1:3999 — no copy in the repo, no figures in the chat; stopped after). One 503 mid-way; the re-run
   replayed the 7 already in (same file = no-op). **Real Sep 2026 REPLACED the dummy Sep 2026** (the dummy is kept,
   marked replaced — nothing deleted). Staging: 39 uploads, 37 current (36 real + the DUMMY Oct 2026), 8,802 lines.
-  ⚠️ **`tracker_al_review()` now takes 11–15 s → over PostgREST's 8 s → the panel's review fails** ("The save failed
-  on the server"); 6,677 issues, 1.7 MB (was 0.48 s at 12 sheets). EXPLAIN ANALYZE of its body (scratch
-  `al/explain.sql`): every CTE < 1 s; the `issues` UNION ALL = **~14.5 s**. ⚠️ **Inferred, not proven:** the
-  `not_on_sheet` branch (`not exists … credits` per unit — 31,860 units × 6,717 credits, CTEs not indexed). ⏭️ NEXT:
-  read that branch's plan line, fix (precompute the credited chassis set / index), re-time under 8 s, then read the
-  review with the owner. Also consider reviewing one FY at a time (1.7 MB, 6,677 issues is a lot for one screen).
+  ✅ **The review timeout FIXED (owner: "go")** — migration `20261028_phase10_tracker_al_review_fast.sql` on STAGING
+  (md5 `a79e49a7…` = file). It WAS 11–15 s through the API (18 s under EXPLAIN ANALYZE) > PostgREST's 8 s → the panel
+  failed. **Measured:** the `not_on_sheet` branch alone = 14.3 s, a Nested Loop Anti Join, 11,461 trucks × 4,937
+  credit lines = **56,575,262 comparisons** — `not exists` against a CTE (no statistics → the planner guessed both
+  sides tiny). One line changed: `u.chassis not in (select chassis_no from credits where chassis_no is not null)` →
+  a **hashed SubPlan**. ⭐ NOT IN ≠ NOT EXISTS only on NULLs — the list drops null chassis and `vehicle_units.chassis_no`
+  is NOT NULL, so the result is identical: **old vs new md5 of the whole review on the real data = same, 6,677
+  issues**. DB: **1.1–1.2 s** warm (6 s cold — `vehicle_units` 55 MB vs 224 MB shared_buffers on the free tier).
+  API from the owner's Chrome: **2.3–4.2 s, 6 of 6 ok** — but the first 3 calls right after the change failed at
+  11–14 s, cause NOT found (a cold database is the likely one; not reproduced). probe-al-sheet **21/0**; mutant
+  without `is not null` fails it (19/2). ⭐ The probe had 2 failures on the OLD function too: its "before the first
+  month" truck was dated 2098 — inside the window once real sheets (Oct 2023 →) were uploaded → now 2000.
+  **15 tracker migrations for prod.** ⏭️ Read the review with the owner (6,677 issues, 1.7 MB — one FY at a time?).
 - ⚠️ **Open / owner:** the 36 AL "IBND" Aug–Sep 2025 trucks (returned to AL?) still unconfirmed · the DUMMY Oct 2026 AL
   upload is the current Oct 2026 (delete needs the owner's yes) · DEMO x4 rows stay · prod ONLY on command —
-  **14 tracker migrations** for prod now (LF), + EF `admin-vehicle-units`.
+  **15 tracker migrations** for prod now (LF), + EF `admin-vehicle-units`.
 - **Local only:** the worktree `.env` has `VITE_TURNSTILE_SITE_KEY` commented out (gitignored; staging never checks
   it) so a local sign-in works; the dev server runs on :3000; a Claude-in-Chrome tab is open on `/tracker`.
 

@@ -27,7 +27,8 @@ begin
   perform public.tracker_create_unit(me, gen_random_uuid(), jsonb_build_object('chassis_no','MB1PROBEAL11','ctd',1000,'al_payment_status','Cash Invoiced','al_payment_date','2099-01-20'));  -- on no sheet
   perform public.tracker_create_unit(me, gen_random_uuid(), jsonb_build_object('chassis_no','MB1PROBEAL12','ctd',1000));                                -- twice
   perform public.tracker_create_unit(me, gen_random_uuid(), jsonb_build_object('chassis_no','MB1PROBEAL13'));                                           -- no CTD
-  perform public.tracker_create_unit(me, gen_random_uuid(), jsonb_build_object('chassis_no','MB1PROBEAL14','ctd',1000,'al_payment_status','Cash Invoiced','al_payment_date','2098-06-01'));  -- before the first month
+  perform public.tracker_create_unit(me, gen_random_uuid(), jsonb_build_object('chassis_no','MB1PROBEAL14','ctd',1000,'al_payment_status','Cash Invoiced','al_payment_date','2000-06-01'));  -- before the first month
+  -- (2000, not 2098: the real sheets on staging start Oct 2023, so the review's window runs 2023 → 2099 — 2098 fell inside it)
 
   -- January: [row, chassis, mode, sheet CTD, credit, formula]
   jan := jsonb_build_array(jsonb_build_object('row_no', 2, 'line_date', '2098-12-31', 'details', 'CARRY OVER', 'debit', 5000));

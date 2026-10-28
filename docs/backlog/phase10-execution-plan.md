@@ -1002,9 +1002,10 @@ Also: a phone view (read-only cards) and the local save queue across reloads (E5
      in the owner's Chrome, details in CLAUDE.md 2026-10-28 + history. **14 tracker migrations for prod now.**
   2. 🔨 **2026-10-28: the REAL AL sheets are on staging** — Oct 2023 → Sep 2026 (36 months; latest-saved copy per month
      from `Backup data\_Sorted\AL Balance Sheet` via `pile-analysis/al-sheets-pick.mjs`; Oct 2026 left out, still open;
-     real Sep 2026 replaced the dummy). ⚠️ **The review now takes 11–15 s and fails through PostgREST (8 s)** — the
-     `issues` union is ~14.5 s; suspect `not_on_sheet`'s per-unit `not exists` over the credits CTE (inferred). NEXT: fix +
-     re-time, then read the review with the owner.
+     real Sep 2026 replaced the dummy). ✅ **The review's timeout fixed** (11–15 s → 2.3–4.2 s through the API; migration
+     `…_al_review_fast`, staging: `not_on_sheet`'s `not exists` over a CTE became a hashed `not in`; same review to the
+     md5; details CLAUDE.md 2026-10-28). **15 tracker migrations for prod.** NEXT: read the review with the owner
+     (6,677 issues — one FY at a time?).
      *Earlier:* ✅ **AL Balance Sheet monthly upload BUILT on staging 2026-10-25** (see step 0). After the real load: upload the
      owner's REAL 2025-26 sheets on staging and read the review with him (the 23-Oct rehearsal predicts ~172
      CTD differences, 43 trucks on no sheet, 51 unfinished splits, 55 spellings — the first month will be long;

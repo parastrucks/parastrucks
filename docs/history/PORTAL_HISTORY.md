@@ -60,6 +60,17 @@ Same session and branch (`10b-foundation`). Staging only; prod untouched. Only `
   replaced). ⚠️ **`tracker_al_review()` = 11–15 s → over PostgREST's 8 s; the panel's review fails.** 6,677 issues /
   1.7 MB over 37 months. EXPLAIN ANALYZE: all CTEs < 1 s, the `issues` union ~14.5 s — suspect `not_on_sheet`
   (inferred). Stopped there (owner: "take a break").
+- **Later, owner "go" — the timeout FIXED** (migration `20261028_phase10_tracker_al_review_fast.sql`, staging md5
+  `a79e49a7…` = file). The plan line proved the guess: `not_on_sheet` = 14.3 s, Nested Loop Anti Join, 11,461 trucks
+  × 4,937 credits = 56,575,262 comparisons (`not exists` against a CTE — no statistics, so the planner guessed both
+  sides tiny). One line → `u.chassis not in (select chassis_no from credits where chassis_no is not null)` = a hashed
+  SubPlan; the null filter + `vehicle_units.chassis_no NOT NULL` make it equal to NOT EXISTS — and the WHOLE review's
+  md5 old vs new on the real data matched (6,677 issues). DB 1.1–1.2 s warm, 6 s cold (55 MB table, 224 MB
+  shared_buffers); API from the owner's Chrome 2.3–4.2 s, 6/6 ok — the first 3 calls just after the change failed at
+  11–14 s, cause not found (cold database likely, not reproduced). probe-al-sheet 21/0; a mutant without
+  `is not null` fails it (19/2). The probe also had 2 failures on the OLD function: its "before the first month"
+  truck was dated 2098, inside the window once real months from Oct 2023 were uploaded → 2000. 15 tracker
+  migrations for prod.
 
 ## Session log — 2026-10-27 (PC): every year of the real books loaded onto STAGING
 
