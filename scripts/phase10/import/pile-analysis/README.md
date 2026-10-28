@@ -21,6 +21,7 @@ written at the top of each; they read the outputs of `inventory.cjs` / `vehicle-
 | `load-vs-scan.cjs` | The load (`import.json`) vs the vehicle scan: every loaded truck seen? how many seen are not loaded |
 | `left-out-trucks.cjs` | The trucks not loaded: which sorted books hold them, the latest copy that still did, on an AL sheet or not |
 | `left-out-twins.cjs` | A near-twin (1–2 characters) among the loaded trucks — inconclusive (VINs run in sequence), kept for the record |
+| `al-sheets-pick.mjs` | (2026-10-28) Every AL Balance Sheet copy read with the panel's OWN reader → the latest-saved per month (37 months, Oct 2023 → Oct 2026) and a JSON list of them |
 | `left-out-al.cjs` / `left-out-al-lines.cjs` | The deciding test: are they on AL's own Balance Sheets — and which line kind (36 "IBND" on Aug–Sep 2025 only) |
 
 Results and conclusions: `docs/history/PORTAL_HISTORY.md` → "Session log — 2026-10-26 → 10-27".

@@ -26,6 +26,41 @@
 
 ---
 
+## Session log — 2026-10-28 (PC): the real book on screen, this year first, the refund rule, the real AL sheets
+
+Same session and branch (`10b-foundation`). Staging only; prod untouched. Only `D:\PTB\Finances\Backup data` was read.
+
+- **The screen check.** The browser pane could not sign in on localhost (Cloudflare error); the owner: "use Claude in
+  Chrome". The worktree `.env`'s local Turnstile key was commented out (gitignored; staging never checks it) and the
+  owner signed in on `localhost:3000` in his Chrome. 6,828 trucks (3,140 real + 3,688 DEMO) opened in 34–37 s — but
+  ⭐ `React.StrictMode` double-mounts in DEV, so two whole loads ran at once; one load alone = 5.8 + 4.8 + 3.6 s
+  (download 0.4–0.5 s of each; database 1.3 s a page, 5.5 s cold; the rest the EF) + ~6 s building the grid. Sort
+  6.4 s / undo 7.6 s, 0 of 8,404 notes off their truck, an edit saved in ~1 s (a put-back once ~8 s server-side).
+  (Hidden-pane timings are throttled — measure in a visible tab.) `7a22c5c`.
+- **Owner's three answers:** (1) "make it load this year first, rest in background" (2) "AL Balance sheets are already
+  there in the backup data" (3) "No refunds that old will be pending. Refunds are generally pending only from the
+  current month."
+- **The refund rule** (`d74bf2b`): `tracker_still_open` stops reading the refund (migration
+  `20261028_phase10_tracker_refund_not_open.sql`; the partial index dropped and rebuilt around the replace — Postgres
+  lets an immutable function change under an index and the index keeps the old answers). Real working set 3,140 →
+  1,811. probe-working-set 16/0 on PGlite + staging; the old rule fails it (the old pending-refund probe truck is back);
+  selftest-vehicle-units now reads the NEWEST definition (`findLast`).
+- **This year first** (`55ec666`): scope `rest` in `tracker_book` (migration `20261028_phase10_tracker_working_rest.sql`,
+  generated from the 10-24 body with two checked replacements) = no date · dated after this FY · older and still open;
+  `year` + `rest` = `working` exactly (probe 8 — a planted `rest` that overlaps this year fails it; without the
+  migration: "unknown scope rest"). EF accepts `rest` (staging deploy; the first try failed on a jsr.io timeout inside
+  Supabase's bundler — a retry worked). The page draws `year`, then `appendRows` adds `rest` to the drawn grid (the
+  grid's `rows` prop never changes, so it is not rebuilt). Seen: 3,557 → 5,499 (= the DB), 0 duplicates/gaps, notes on
+  their trucks, sort fine, an edit on an added row saved. ⭐ Found: a style-only empty cell reads back `undefined` —
+  the first version put the added trucks below the 250 spare rows. One load alone: this year 6.2 s, rest 2.4 s.
+- **The AL sheets** (`pile-analysis/al-sheets-pick.mjs`): 68 copies read with the panel's own reader → 37 months
+  Oct 2023 → Oct 2026, latest-saved each, 0 warnings. Oct 2026 left out (74 lines, still open). 36 uploaded from the
+  owner's Chrome through the panel's own read + `alUpload` (a throwaway 127.0.0.1:3999 server served only those files;
+  stopped after). One 503; the retry replayed 7 (same file = no-op). Real Sep 2026 replaced the dummy (kept, marked
+  replaced). ⚠️ **`tracker_al_review()` = 11–15 s → over PostgREST's 8 s; the panel's review fails.** 6,677 issues /
+  1.7 MB over 37 months. EXPLAIN ANALYZE: all CTEs < 1 s, the `issues` union ~14.5 s — suspect `not_on_sheet`
+  (inferred). Stopped there (owner: "take a break").
+
 ## Session log — 2026-10-27 (PC): every year of the real books loaded onto STAGING
 
 Same session and branch (`10b-foundation`). Owner, answering the three waiting items: `_To delete` **deleted by him**

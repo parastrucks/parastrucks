@@ -30,6 +30,51 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ---
 
+## Current state (2026-10-28)
+
+- **✅ Owner, 2026-10-28:** (1) "make it load this year first, rest in background" → BUILT · (2) "AL Balance sheets are
+  already there in the backup data" → 36 months UPLOADED to staging · (3) **"No refunds that old will be pending.
+  Refunds are generally pending only from the current month"** → the rule changed (below). Plus: the browser pane
+  hits Cloudflare's error on localhost → owner: **use Claude in Chrome** (the owner signed in there on `localhost:3000`).
+- **✅ Refund rule** (`d74bf2b`): migration `20261028_phase10_tracker_refund_not_open.sql` on STAGING —
+  `tracker_still_open` no longer reads the refund (same arguments; its partial index dropped + rebuilt, since an
+  immutable function replaced under an index keeps the old answers). The refund COLUMN is untouched. Real trucks in
+  the working set **3,140 → 1,811**. probe-working-set 16/0 (old rule fails it), staging md5 `ef9f7127…` = file.
+- **✅ This year first, the rest in the background** (`55ec666`): migration `20261028_phase10_tracker_working_rest.sql`
+  on STAGING — `tracker_book` scope **`rest`** = working set less this FY (no date · dated after this FY · older and
+  still open); `year` + `rest` = `working`, no truck in both (probe check 8; a planted overlap fails it). Staging md5
+  `a87579b6…` = file. EF `admin-vehicle-units` accepts `rest` — **deployed to staging** (first try: jsr.io timeout,
+  retry fine). Page: loads `year` → draws → loads `rest` → `TrackerGrid.appendRows` (mutations, off the undo stack,
+  below the last truck and anything typed; notes drawn; spare rows topped up; the grid is NOT rebuilt). Header
+  "2026-27 · adding the older open trucks…". Seen in the owner's Chrome: 3,557 drawn, then 5,499 = the DB's working
+  set; 0 duplicates, 0 gaps, 250 spare below, 5,497 notes all on their trucks; a sort keeps every note on its truck;
+  an edit on an added row saves (DEMO Remarks, put back). ⭐ A style-only empty Univer cell reads back `undefined`,
+  not null — the first version put the trucks below the 250 spare rows. One load alone: this year 6.2 s, rest 2.4 s.
+  ⭐ `React.StrictMode` double-mounts in DEV → every load runs twice on the dev server (open ~20 s there); measure
+  one call alone. Tests: probe-working-set 17/0, tracker-cells 155, load-book 19, vehicle-units 653, build + no-undef.
+- **✅ Earlier the same day — the real book measured on screen** (`7a22c5c`, before the two changes): 6,828 trucks open
+  34–37 s on the dev server (double load), one load = 14 s data + 6 s grid; sort 6.4 s; 0 of 8,404 notes moved;
+  an edit saves ~1 s.
+- **🔨 AL Balance Sheets — 36 real months on staging, but the REVIEW TIMES OUT.** `pile-analysis/al-sheets-pick.mjs`
+  read all 68 copies in `_Sorted\AL Balance Sheet` with the panel's OWN reader (`src/tracker/lib/alSheet.js`), picked
+  the latest-saved per month: **Oct 2023 → Oct 2026, 37 months, 0 warnings** (1 file not an AL sheet: PARTS PKG).
+  **Oct 2026 NOT uploaded** (74 lines, saved 23 Oct — the month is still open). Uploaded **Oct 2023 → Sep 2026 (36)**
+  from the owner's Chrome through the panel's own read + `alUpload` (files served to the page by a throwaway local
+  server on 127.0.0.1:3999 — no copy in the repo, no figures in the chat; stopped after). One 503 mid-way; the re-run
+  replayed the 7 already in (same file = no-op). **Real Sep 2026 REPLACED the dummy Sep 2026** (the dummy is kept,
+  marked replaced — nothing deleted). Staging: 39 uploads, 37 current (36 real + the DUMMY Oct 2026), 8,802 lines.
+  ⚠️ **`tracker_al_review()` now takes 11–15 s → over PostgREST's 8 s → the panel's review fails** ("The save failed
+  on the server"); 6,677 issues, 1.7 MB (was 0.48 s at 12 sheets). EXPLAIN ANALYZE of its body (scratch
+  `al/explain.sql`): every CTE < 1 s; the `issues` UNION ALL = **~14.5 s**. ⚠️ **Inferred, not proven:** the
+  `not_on_sheet` branch (`not exists … credits` per unit — 31,860 units × 6,717 credits, CTEs not indexed). ⏭️ NEXT:
+  read that branch's plan line, fix (precompute the credited chassis set / index), re-time under 8 s, then read the
+  review with the owner. Also consider reviewing one FY at a time (1.7 MB, 6,677 issues is a lot for one screen).
+- ⚠️ **Open / owner:** the 36 AL "IBND" Aug–Sep 2025 trucks (returned to AL?) still unconfirmed · the DUMMY Oct 2026 AL
+  upload is the current Oct 2026 (delete needs the owner's yes) · DEMO x4 rows stay · prod ONLY on command —
+  **14 tracker migrations** for prod now (LF), + EF `admin-vehicle-units`.
+- **Local only:** the worktree `.env` has `VITE_TURNSTILE_SITE_KEY` commented out (gitignored; staging never checks
+  it) so a local sign-in works; the dev server runs on :3000; a Claude-in-Chrome tab is open on `/tracker`.
+
 ## Current state (2026-10-27)
 
 - **✅ Phase 10: ALL YEARS OF REAL BOOKS LOADED ONTO STAGING** (owner: "go"; `10b-foundation`, `361e74a` → `3ccbf5c`).

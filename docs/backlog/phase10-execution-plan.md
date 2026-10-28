@@ -996,7 +996,16 @@ Also: a phone view (read-only cards) and the local save queue across reloads (E5
      `recompute-diff.sql` on staging → open `/tracker` and MEASURE how the grid draws ~5,000 notes (only ~10
      so far). ✅ The DEMO rows STAY (owner 2026-10-24) — the real trucks load beside them (their chassis all
      start `DEMO-`, so nothing clashes). Importer answers: see "Owner, 2026-10-24" below; two still open.
-  2. ✅ **AL Balance Sheet monthly upload BUILT on staging 2026-10-25** (see step 0). After the real load: upload the
+  1b. ✅ **2026-10-28 (owner):** refunds are never pending for old trucks → `tracker_still_open` ignores the refund
+     (migration `…_refund_not_open`, staging; working set real 3,140 → 1,811) · **this year first, the rest in the
+     background** (migration `…_working_rest`: scope `rest`; EF deployed to staging; `TrackerGrid.appendRows`) — seen
+     in the owner's Chrome, details in CLAUDE.md 2026-10-28 + history. **14 tracker migrations for prod now.**
+  2. 🔨 **2026-10-28: the REAL AL sheets are on staging** — Oct 2023 → Sep 2026 (36 months; latest-saved copy per month
+     from `Backup data\_Sorted\AL Balance Sheet` via `pile-analysis/al-sheets-pick.mjs`; Oct 2026 left out, still open;
+     real Sep 2026 replaced the dummy). ⚠️ **The review now takes 11–15 s and fails through PostgREST (8 s)** — the
+     `issues` union is ~14.5 s; suspect `not_on_sheet`'s per-unit `not exists` over the credits CTE (inferred). NEXT: fix +
+     re-time, then read the review with the owner.
+     *Earlier:* ✅ **AL Balance Sheet monthly upload BUILT on staging 2026-10-25** (see step 0). After the real load: upload the
      owner's REAL 2025-26 sheets on staging and read the review with him (the 23-Oct rehearsal predicts ~172
      CTD differences, 43 trucks on no sheet, 51 unfinished splits, 55 spellings — the first month will be long;
      "It is right" makes it shrink). Staging keeps 3 DUMMY uploads (Sep, Sep v2, Oct 2026) until the owner says.
