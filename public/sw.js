@@ -34,6 +34,10 @@ self.addEventListener('notificationclick', (event) => {
   const target = new URL(event.notification.data?.url || '/', self.location.origin)
   const url = target.origin === self.location.origin ? target.href : self.location.origin + '/'
   event.waitUntil((async () => {
+    // Android: always OPEN — Chrome hands a link inside the app's scope to the installed app.
+    // Reusing an open window would pick a Chrome tab of the portal over the app (owner, 10-28:
+    // the tap landed in Chrome, not the app), and a worker cannot tell the two apart.
+    if (/Android/i.test(self.navigator.userAgent)) { await self.clients.openWindow(url); return }
     const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
     for (const w of wins) {
       if (new URL(w.url).origin === self.location.origin && 'focus' in w) {
