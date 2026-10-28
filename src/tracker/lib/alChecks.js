@@ -25,6 +25,19 @@ export const AL_CHECKS = [
 ].map(([key, title, hint]) => ({ key, title, hint }))
 export const AL_CHECK_BY_KEY = Object.fromEntries(AL_CHECKS.map((c) => [c.key, c]))
 
+// One financial year at a time (owner, 2026-10-28: 6,677 issues over 36 months is too many for one list).
+// 'YYYY-MM' → the year its April starts (2026-03 → 2025). An issue with no month (MTO per CBN, counted over
+// every sheet) belongs to no single year, so it shows in every one.
+export const fyOfMonth = (mk) => (mk ? Number(mk.slice(0, 4)) - (Number(mk.slice(5, 7)) < 4 ? 1 : 0) : null)
+export const inFy = (mk, fy) => fy === null || mk == null || fyOfMonth(mk) === fy
+// the years that have an uploaded month or an issue, newest first
+export function reviewYears(review) {
+  const ys = new Set()
+  for (const m of review?.months ?? []) ys.add(fyOfMonth(m.month))
+  for (const i of review?.issues ?? []) if (i.month) ys.add(fyOfMonth(i.month))
+  return [...ys].sort((a, b) => b - a)
+}
+
 // issues → [{ check, open: [...], settled: [...] }] in the panel's order; an unknown key goes last, by its name
 export function groupIssues(issues) {
   const order = new Map(AL_CHECKS.map((c, i) => [c.key, i]))

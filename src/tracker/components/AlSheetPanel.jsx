@@ -6,8 +6,8 @@
 import { useEffect, useState } from 'react'
 import { alReview, alSettle, alUpload, findAnywhere } from '../lib/trackerApi'
 import { readAlWorkbook, sheetTotals, monthLabel } from '../lib/alSheet'
-import { groupIssues } from '../lib/alChecks'
-import { fyOfTruck } from '../lib/bookYear'
+import { groupIssues, inFy, reviewYears } from '../lib/alChecks'
+import { fyOfTruck, fyLabel } from '../lib/bookYear'
 
 // −₹1,42,05,424, not ₹-1,42,05,424
 const rupees = (v) => (v == null ? '—' : `${v < 0 ? '−' : ''}₹${Math.abs(Math.round(v)).toLocaleString('en-IN')}`)
@@ -27,6 +27,7 @@ export default function AlSheetPanel({ grid, bookRows, fyStart, onScope, say, on
   const [settling, setSettling] = useState(null)  // { check, subject, reason }
   const [showSettled, setShowSettled] = useState(false)
   const [open, setOpen] = useState({})            // check key → expanded
+  const [pickedFy, setPickedFy] = useState(undefined) // a year's April, null = all years; undefined = the newest
 
   const load = () => alReview().then((r) => { setReview(r); setError('') }).catch((e) => setError(e.message))
   useEffect(() => { load() }, [])
@@ -78,7 +79,11 @@ export default function AlSheetPanel({ grid, bookRows, fyStart, onScope, say, on
     } catch (e) { say(`Not saved: ${e.message}`, 'warn') }
   }
 
-  const groups = groupIssues(review?.issues)
+  const years = reviewYears(review)
+  const fy = pickedFy === undefined ? (years[0] ?? null) : pickedFy
+  const openIn = (y) => (review?.issues ?? []).filter((i) => !i.settled && inFy(i.month, y)).length
+  const months = (review?.months ?? []).filter((m) => inFy(m.month, fy))
+  const groups = groupIssues((review?.issues ?? []).filter((i) => inFy(i.month, fy)))
   const openCount = groups.reduce((n, g) => n + g.open.length, 0)
   const settledCount = groups.reduce((n, g) => n + g.settled.length, 0)
 
@@ -125,18 +130,27 @@ export default function AlSheetPanel({ grid, bookRows, fyStart, onScope, say, on
       {!review && !error && <p className="trk-history-empty"><span className="spinner" /> Loading…</p>}
       {review && (
         <>
+          {years.length > 1 && (
+            <label className="trk-al-year">
+              Year{' '}
+              <select value={fy ?? 'all'} onChange={(e) => { setPickedFy(e.target.value === 'all' ? null : Number(e.target.value)); setOpen({}); setSettling(null) }}>
+                {years.map((y) => <option key={y} value={y}>{fyLabel(y)} — {openIn(y)} to look at</option>)}
+                <option value="all">All years — {openIn(null)} to look at</option>
+              </select>
+            </label>
+          )}
           <div className="trk-al-months">
-            {review.months.length
-              ? review.months.map((m) => (
+            {months.length
+              ? months.map((m) => (
                 <span key={m.month} className={`trk-al-month ${m.net !== null && Math.abs(m.net - (m.paid - m.owed)) < 1 ? '' : 'trk-al-month--bad'}`}
                   title={`${m.file_name} · ${m.lines} lines · uploaded ${when(m.uploaded_at)}${m.uploaded_by ? ` by ${m.uploaded_by}` : ''}`}>
                   {label(m.month)}</span>))
-              : <span className="trk-history-empty">No month uploaded yet.</span>}
+              : <span className="trk-history-empty">{review.months.length ? 'No month of this year uploaded.' : 'No month uploaded yet.'}</span>}
           </div>
           {review.months.length > 0 && (
             <p className="trk-al-summary">
               {openCount ? `${openCount} to look at` : 'Nothing to look at'}
-              {review.explained?.gst ? ` · ${review.explained.gst} CTDs explained by the GST date (not listed)` : ''}
+              {review.explained?.gst ? ` · ${review.explained.gst} CTDs explained by the GST date (not listed${fy === null ? '' : ', all years'})` : ''}
               {settledCount > 0 && (
                 <> · <button type="button" className="trk-al-link" onClick={() => setShowSettled(!showSettled)}>
                   {showSettled ? 'hide' : 'show'} {settledCount} marked right</button></>

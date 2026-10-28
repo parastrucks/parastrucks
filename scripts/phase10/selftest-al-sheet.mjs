@@ -105,6 +105,17 @@ const march = [
     'grouped in the panel order, settled apart, an unknown check last under its own name')
 }
 
+// ── one financial year at a time (April → March); an issue with no month shows in every year
+{
+  const { fyOfMonth, inFy, reviewYears } = await import('../../src/tracker/lib/alChecks.js')
+  ok(fyOfMonth('2026-03') === 2025 && fyOfMonth('2026-04') === 2026 && fyOfMonth('2023-10') === 2023 && fyOfMonth('2027-01') === 2026 && fyOfMonth(null) === null,
+    'month → financial year: Mar is the year before, Apr starts the year')
+  ok(inFy('2026-02', 2025) && !inFy('2026-04', 2025) && inFy(null, 2025) && inFy('2023-10', null),
+    'in a year: its months only · no month = every year · "All years" = everything')
+  const ys = reviewYears({ months: [{ month: '2025-09' }, { month: '2026-04' }], issues: [{ month: '2023-12' }, { month: null }, { month: '2026-05' }] })
+  ok(ys.join() === '2026,2025,2023', 'the years: from months and issues, newest first, none for a month-less issue', ys)
+}
+
 // ── the real files (counts only)
 const ri = process.argv.indexOf('--real')
 if (ri > 0) {

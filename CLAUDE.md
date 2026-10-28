@@ -75,7 +75,16 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   11–14 s, cause NOT found (a cold database is the likely one; not reproduced). probe-al-sheet **21/0**; mutant
   without `is not null` fails it (19/2). ⭐ The probe had 2 failures on the OLD function too: its "before the first
   month" truck was dated 2098 — inside the window once real sheets (Oct 2023 →) were uploaded → now 2000.
-  **15 tracker migrations for prod.** ⏭️ Read the review with the owner (6,677 issues, 1.7 MB — one FY at a time?).
+  **15 tracker migrations for prod.**
+- **✅ The review ONE FINANCIAL YEAR AT A TIME** (owner: "build the one FY at a time view first") — in the panel only
+  (no server change; the review still sends all years, 1.7 MB): a Year picker (newest first, "— N to look at" on each,
+  + "All years"), opens on the newest year; the month chips, the summary and the groups follow it; an issue with no
+  month (MTO per CBN) shows in every year; the GST-explained count says "all years" (the DB sends one total).
+  `alChecks.js` `fyOfMonth` / `inFy` / `reviewYears`; selftest-al-sheet **28/0**; build + no-undef clean. Seen in the
+  owner's Chrome: **2026-27 1,206 · 2025-26 2,163 · 2024-25 2,119 · 2023-24 1,189 = 6,677**, each year's groups add
+  up to its total. Biggest in 2026-27: "AL took the truck, but it is on no sheet" 895, "Credit typed in" 230.
+  ⚠️ 2026-27 still carries the DUMMY Oct 2026 upload (its months chip; part of that year's count). ⏭️ Read the review
+  with the owner, a year at a time.
 - ⚠️ **Open / owner:** the 36 AL "IBND" Aug–Sep 2025 trucks (returned to AL?) still unconfirmed · the DUMMY Oct 2026 AL
   upload is the current Oct 2026 (delete needs the owner's yes) · DEMO x4 rows stay · prod ONLY on command —
   **15 tracker migrations** for prod now (LF), + EF `admin-vehicle-units`.
