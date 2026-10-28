@@ -53,9 +53,19 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
     returned to AL around the 22 Sep 2025 GST change — owner's team to confirm) · 2 on AL's Apr-26 sheet only.
   - ❓ **Owner:** 1,362 trucks from earlier years show refund "pending" with an amount (2025-26: 908) — real
     outstanding refunds or a column never closed? They keep the working set at 3,140 real trucks (this year 1,507).
-  - ⏭️ **Next:** owner signs in on `localhost:3001` (3000 is another worktree's) → open `/tracker` and measure the real
-    book on screen (notes on cells: 15,785 — the grid has only drawn ~10 so far) → then the real 2025-26 AL sheets
-    through the monthly check.
+  - ✅ **2026-10-28 — measured on screen** (owner's Chrome via Claude in Chrome, `localhost:3000`, staging, 6,828 trucks
+    in the working set = 3,140 real + 3,688 DEMO, 8,404 notes drawn): **open 34–37 s on the dev server** — but
+    ⭐ `React.StrictMode` mounts the page twice in DEV, so TWO full book loads ran at once; one load alone = **3 pages,
+    5.8 + 4.8 + 3.6 s** (download only 0.4–0.5 s of each, 3.8–5.7 MB; the rest is the server: the database 1.3 s a
+    page, 5.5 s cold, + the EF) + **~6 s building the grid** (worst freeze 4.4 s) → **~20 s in production for this
+    book; ~10 s estimated for the real 3,140 alone** (not measured). Memory 408 MB. **Sort (Customer Name) 6.4 s,
+    undo 7.6 s** (was ~2 s at 3,688 / ~2,000 notes) · **0 of 8,404 notes off their truck** after a sort and after its
+    undo · **an edit saves in ~1 s** (one put-back took ~8 s server-side; the free instance varies). Test edit on a
+    DEMO truck's Remarks, put back (2 audit rows). ⚠️ The browser pane hits Cloudflare's error on localhost and its
+    hidden-pane timers are throttled → measure in Claude in Chrome; the worktree `.env` has the local Turnstile key
+    commented out (gitignored; staging never checks it).
+  - ⏭️ **Next:** the real 2025-26 AL sheets through the monthly check (owner uploads) · optional: a smaller first page
+    or lighter payload if ~10 s to open feels slow · owner's two questions above.
 
 ## Current state (2026-10-25)
 
