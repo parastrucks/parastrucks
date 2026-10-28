@@ -3,6 +3,7 @@
 // server's public key, and hand the subscription to the gate-invoices Edge Function, which
 // keeps it where no browser can read it. The server signs and encrypts every alert (push.ts).
 import { callEdge } from '../../lib/api'
+import { keepSignedInForAlerts } from '../../lib/supabase'
 
 const SW_URL = '/sw.js'
 
@@ -45,11 +46,14 @@ export async function turnAlertsOn() {
   await callEdge('gate-invoices', 'pushSubscribe', {
     endpoint: j.endpoint, p256dh: j.keys?.p256dh, auth: j.keys?.auth, user_agent: navigator.userAgent.slice(0, 300),
   })
+  // Like a messaging app: a phone that gets alerts stays signed in (owner, 2026-10-28).
+  keepSignedInForAlerts(true)
 }
 
 export async function turnAlertsOff() {
   const reg = await navigator.serviceWorker?.getRegistration('/')
   const sub = await reg?.pushManager.getSubscription()
+  keepSignedInForAlerts(false)
   if (!sub) return
   const endpoint = sub.endpoint
   await sub.unsubscribe()

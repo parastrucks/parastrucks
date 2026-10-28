@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
-import { supabase, REMEMBER_KEY } from '../lib/supabase'
+import { supabase, REMEMBER_KEY, ALERTS_KEY, keepSignedInIfAlertsOn } from '../lib/supabase'
 import { callEdgePublic } from '../lib/api'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -278,6 +278,7 @@ export function AuthProvider({ children }) {
     // adapter picks the right bucket for the session that's about to land.
     if (rememberMe) localStorage.setItem(REMEMBER_KEY, '1')
     else            localStorage.removeItem(REMEMBER_KEY)
+    localStorage.removeItem(ALERTS_KEY)
 
     let resp
     try {
@@ -345,6 +346,8 @@ export function AuthProvider({ children }) {
     // populated before Login.jsx calls navigate('/').
     await Promise.resolve()
     if (dataLoadRef.current) await dataLoadRef.current
+    // A phone that gets approval alerts stays signed in even if the box was left unticked.
+    keepSignedInIfAlertsOn()
   }
 
   // Map EF error codes to user-visible strings. Kept as a bare function
@@ -374,6 +377,12 @@ export function AuthProvider({ children }) {
     // Clear the remember-me flag so the next login defaults back to session
     // storage. The user has to re-tick the checkbox to opt back in.
     localStorage.removeItem(REMEMBER_KEY)
+    localStorage.removeItem(ALERTS_KEY)
+    // Signing out stops this device's approval alerts too (a signed-out phone must not keep
+    // showing customers and amounts). Dropping the subscription needs no sign-in; the server
+    // deletes its copy the next time the push service answers "gone".
+    navigator.serviceWorker?.getRegistration('/')
+      .then((r) => r?.pushManager.getSubscription()).then((s) => s?.unsubscribe()).catch(() => {})
     setSession(null)
     setProfile(null)
     setAccessRules([])

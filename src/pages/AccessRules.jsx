@@ -20,7 +20,7 @@ const ALL_ROUTES = [
   { route: '/catalog',        label: 'Vehicle Catalog' },
   { route: '/bus-calculator', label: 'Bus Calculator'  },
   { route: '/tiv-forecast',   label: 'TIV Forecast'    },
-  { route: '/invoices',       label: 'Send Invoice'    },
+  { route: '/invoices',       label: 'Invoices & Payments' },
   { route: '/gate',           label: 'Gate Check'      },
 ]
 

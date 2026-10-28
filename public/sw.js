@@ -6,16 +6,24 @@
 self.addEventListener('install', () => self.skipWaiting())
 self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()))
 
+// Two kinds of message, both carrying the release's tag so the newer one replaces the older:
+//  - "asked" (default): rings and vibrates, and stays until tapped — like a chat message.
+//  - "closed": someone has already answered; it quietly replaces the asked alert (no sound,
+//    no buzz, dismissable) so nobody taps a request that is already decided.
 self.addEventListener('push', (event) => {
   let msg = {}
   try { msg = event.data ? event.data.json() : {} } catch { msg = {} }
+  const closed = msg.kind === 'closed'
   const title = typeof msg.title === 'string' ? msg.title : 'Paras portal'
   event.waitUntil(self.registration.showNotification(title, {
     body: typeof msg.body === 'string' ? msg.body : '',
     tag: typeof msg.tag === 'string' ? msg.tag : undefined,
-    renotify: true,
-    requireInteraction: true,
+    renotify: !closed,
+    silent: closed,
+    requireInteraction: !closed,
+    vibrate: closed ? [] : [200, 100, 200, 100, 200],
     icon: '/icon-192.png',
+    badge: '/badge-96.png',       // Android's status-bar icon: white on transparent
     data: { url: typeof msg.url === 'string' ? msg.url : '/' },
   }))
 })

@@ -1,4 +1,4 @@
-// Credit release step 1 — Send Invoice (/invoices).
+// Credit release step 1 — Invoices & Payments (/invoices; "Send Invoice" until 2026-10-28).
 // Service / spares / accounts upload the SAP invoice PDF; the portal reads it in the
 // browser (nobody types the values), shows what it read, and on one tap stores it and
 // emails it to the customer. Reads are direct under RLS (gate_* tables); every write goes
@@ -160,7 +160,7 @@ export default function InvoicesPage() {
       <div className="page-head">
         <div>
           <div className="page-head-crumb">Service Tools</div>
-          <h1 className="page-head-title">Send Invoice<span className="period-accent">.</span></h1>
+          <h1 className="page-head-title">Invoices &amp; Payments<span className="period-accent">.</span></h1>
           <div className="page-head-sub">Upload the invoice PDF from SAP. The portal reads it and emails it to the customer.</div>
         </div>
       </div>

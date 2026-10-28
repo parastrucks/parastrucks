@@ -1,4 +1,4 @@
-/* Send Invoice (/invoices) — credit release step 1.
+/* Invoices & Payments (/invoices; was "Send Invoice") — credit release step 1.
    Kept out of index.css on purpose: the parked payments branch adds ~470 lines there,
    and a separate file means the two never conflict. Uses the shared tokens only. */
 

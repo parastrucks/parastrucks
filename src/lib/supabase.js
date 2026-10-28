@@ -46,9 +46,39 @@ const rememberMeStorage = {
   },
 }
 
+// Credit release step 2 (owner, 2026-10-28): a phone with approval alerts on stays signed
+// in, like a messaging app — tapping an alert opens the request, not the sign-in page.
+// ALERTS_KEY records that the ALERTS (not the person's own "Remember me" tick) kept it, so
+// turning alerts off undoes only what the alerts did. Signing in or out clears it.
+export const ALERTS_KEY = 'sb-remember-for-alerts'
+const SESSION_KEY = 'sb-session'
+
+export function keepSignedInForAlerts(on) {
+  if (on) {
+    if (localStorage.getItem(REMEMBER_KEY) === '1') return
+    localStorage.setItem(REMEMBER_KEY, '1')
+    localStorage.setItem(ALERTS_KEY, '1')
+  } else {
+    if (localStorage.getItem(ALERTS_KEY) !== '1') return
+    localStorage.removeItem(REMEMBER_KEY)
+    localStorage.removeItem(ALERTS_KEY)
+  }
+  // Move the live session to the store the flag now names.
+  const value = rememberMeStorage.getItem(SESSION_KEY)
+  if (value) rememberMeStorage.setItem(SESSION_KEY, value)
+}
+
+/** After a sign-in: if this device already gets approval alerts, keep it signed in. */
+export async function keepSignedInIfAlertsOn() {
+  try {
+    const reg = await navigator.serviceWorker?.getRegistration('/')
+    if (await reg?.pushManager?.getSubscription()) keepSignedInForAlerts(true)
+  } catch { /* no service worker here — nothing to keep */ }
+}
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     storage: rememberMeStorage,
-    storageKey: 'sb-session',
+    storageKey: SESSION_KEY,
   }
 })

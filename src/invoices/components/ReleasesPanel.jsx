@@ -1,4 +1,4 @@
-// Credit releases (step 2) — the list on the Send Invoice page's "Releases" tab.
+// Credit releases (step 2) — the list on the Invoices & Payments page's "Credit releases" tab.
 // Everyone with the page sees each request and its answer; ONLY the Service GM of that
 // company and the admin get Approve / Hold (owner, 2026-10-26 — enforced by the Edge
 // Function; the buttons follow the same authority.ts). Reads under RLS; writes via the EF.
@@ -10,6 +10,7 @@ import { callEdge } from '../../lib/api'
 import { formatRupees } from '../lib/sapInvoice'
 import { istTime, isApprover, mayDecideFor, RELEASE_HOURS, releaseState, revealForm } from '../lib/releases'
 import { alertStatus, turnAlertsOff, turnAlertsOn } from '../lib/pushAlerts'
+import { keepSignedInForAlerts } from '../../lib/supabase'
 
 const SELECT = `id, entity_id, document_id, regn_no, status, request_note, requested_at, requested_by, decided_at,
   decision_note, valid_until, card,
@@ -58,7 +59,9 @@ function AlertsLine() {
   const toast = useToast()
   const [s, setS] = useState(null)
   const [busy, setBusy] = useState(false)
-  useEffect(() => { alertStatus().then(setS).catch(() => setS('unsupported')) }, [])
+  useEffect(() => {
+    alertStatus().then((st) => { if (st === 'on') keepSignedInForAlerts(true); setS(st) }).catch(() => setS('unsupported'))
+  }, [])
   if (!s) return null
   const run = async (fn, okMsg) => {
     setBusy(true)
@@ -67,7 +70,7 @@ function AlertsLine() {
   return (
     <div className="rel-alerts">
       <Icon name="info" size={15} />
-      {s === 'on' && <><span>Phone alerts are <strong>on</strong> for this device.</span>
+      {s === 'on' && <><span>Phone alerts are <strong>on</strong> for this device, and it stays signed in.</span>
         <button className="btn btn-sm btn-secondary" disabled={busy} onClick={() => run(turnAlertsOff, 'Alerts turned off on this device.')}>Turn off</button></>}
       {s === 'off' && <><span>Get a phone alert when a release is asked.</span>
         <button className="btn btn-sm btn-primary" disabled={busy} onClick={() => run(turnAlertsOn, 'Alerts are on for this device.')}>Turn on alerts</button></>}

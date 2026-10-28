@@ -166,24 +166,19 @@ Deno.serve(async (req: Request) => {
     return { rel }
   }
 
-  // Wake the phones of everyone who may decide: the Service GMs of the invoice's company
-  // and the admin. Never fails the request — the release is saved either way, and the
-  // screen says how many phones were reached so nobody assumes the GM knows.
-  async function alertApprovers(doc: Record<string, unknown>, rel: { id: string; regn_no: string }) {
+  // Wake the phones of everyone who may decide: the Service GMs of that company and the
+  // admin — except `exceptId`, the person who just acted, whose own phone stays quiet.
+  // Never fails the request — the release is saved either way, and the screen says how many
+  // phones were reached so nobody assumes the GM knows.
+  async function alertApprovers(entityId: string, message: Record<string, unknown>, exceptId?: string) {
     const v = vapid()
     if (!v) return { approvers: 0, phones: 0, sent: 0, set_up: false }
     const { data: svc } = await admin.from("departments").select("id").eq("code", "service").single()
     const { data: people } = await admin.from("users").select("id").eq("is_active", true)
-      .or(`permission_level.eq.admin,and(permission_level.eq.gm,department_id.eq.${svc?.id},entity_id.eq.${doc.entity_id})`)
-    const ids = (people ?? []).map((p: { id: string }) => p.id)
+      .or(`permission_level.eq.admin,and(permission_level.eq.gm,department_id.eq.${svc?.id},entity_id.eq.${entityId})`)
+    const ids = (people ?? []).map((p: { id: string }) => p.id).filter((id: string) => id !== exceptId)
     if (ids.length === 0) return { approvers: 0, phones: 0, sent: 0, set_up: true }
     const { data: subs } = await admin.from("gate_push_subscriptions").select("id, endpoint, p256dh, auth, failures").in("user_id", ids)
-    const message = {
-      title: `Release asked: ${rel.regn_no}`,
-      body: `${properName(String(doc.customer_name))} · ${rupees(Number(doc.total_paise))} — tap to approve or hold`,
-      url: `/invoices?tab=releases&release=${rel.id}`,
-      tag: `release-${rel.id}`,
-    }
     const timed: typeof fetch = (url, init) => fetch(url, { ...init, signal: AbortSignal.timeout(PUSH_TIMEOUT_MS) })
     let sent = 0
     await Promise.all((subs ?? []).map(async (s: { id: string; endpoint: string; p256dh: string; auth: string; failures: number }) => {
@@ -198,6 +193,24 @@ Deno.serve(async (req: Request) => {
     }))
     return { approvers: ids.length, phones: subs?.length ?? 0, sent, set_up: true }
   }
+  // The alert that asks: one per release (its tag), so a later message replaces it.
+  const askMessage = (doc: Record<string, unknown>, rel: { id: string; regn_no: string }) => ({
+    title: `Release asked: ${rel.regn_no}`,
+    body: `${properName(String(doc.customer_name))} · ${rupees(Number(doc.total_paise))} — tap to approve or hold`,
+    url: `/invoices?tab=releases&release=${rel.id}`,
+    tag: `release-${rel.id}`,
+  })
+  // Once someone has answered, the other approvers' "asked" alert is replaced — quietly — by
+  // who answered, so nobody taps a request that is already decided (2026-10-28: "like
+  // instant messaging apps"). A browser must show something for every push, hence a quiet
+  // replacement rather than nothing.
+  const closedMessage = (rel: { id: string; regn_no: string }, what: string) => ({
+    kind: "closed",
+    title: `${rel.regn_no}: ${what}`,
+    body: "Nothing to do — tap to see it.",
+    url: `/invoices?tab=releases&release=${rel.id}`,
+    tag: `release-${rel.id}`,
+  })
 
   try {
     switch (action) {
@@ -387,7 +400,7 @@ Deno.serve(async (req: Request) => {
         }
         await audit(admin, { actorId: caller.id, action: "gate_release_asked", targetId: rel.id,
           after: { document_id: doc.id, regn_no: doc.regn_no, total_paise: doc.total_paise } })
-        const alerted = await alertApprovers(doc, rel)
+        const alerted = await alertApprovers(doc.entity_id, askMessage(doc, rel))
         return json({ ok: true, release: rel, alerted })
       }
 
@@ -399,6 +412,7 @@ Deno.serve(async (req: Request) => {
         if (error) return json({ error: "The request could not be withdrawn." }, 500)
         if (!data) return json({ error: "This request was already answered." }, 409)
         await audit(admin, { actorId: caller.id, action: "gate_release_withdrawn", targetId: data.id })
+        await alertApprovers(data.entity_id, closedMessage(data, `request withdrawn by ${caller.full_name || "the asker"}`), caller.id)
         return json({ ok: true, release: data })
       }
 
@@ -442,6 +456,9 @@ Deno.serve(async (req: Request) => {
         }
         await audit(admin, { actorId: caller.id, action: decision === "approve" ? "gate_release_approved" : "gate_release_held",
           targetId: data.id, after: { regn_no: data.regn_no, valid_until: data.valid_until, note, card } })
+        const who = caller.full_name || "an approver"
+        await alertApprovers(data.entity_id, closedMessage(data, decision === "approve"
+          ? `released by ${who} until ${istTime(data.valid_until)}` : `held by ${who}`), caller.id)
         return json({ ok: true, release: data })
       }
 
