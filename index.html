@@ -10,8 +10,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="robots" content="noindex, nofollow" />
     <!-- Installable to the home screen: the guards' gate screen, and on iPhone the only way
-         an approver can receive the phone alert for a credit release (iOS 16.4+). -->
-    <link rel="manifest" href="/manifest.webmanifest" />
+         an approver can receive the phone alert for a credit release (iOS 16.4+).
+         use-credentials: a browser fetches the manifest WITHOUT cookies otherwise, and on a
+         Vercel preview (login wall on) that returns Vercel's sign-in page → "cannot be installed". -->
+    <link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="theme-color" content="#2563EB" />
     <meta name="apple-mobile-web-app-title" content="Paras" />
