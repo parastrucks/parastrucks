@@ -70,8 +70,8 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
     **installed app** on that request → Approve → 48 h (staging: 34 s ask→approve, 0 delivery failures). Fixed on the
     way: ⭐ the manifest link needs `crossorigin="use-credentials"` or a protected preview can't be installed
     (`8603092`) · ⭐ on Android a tap must OPEN, not reuse a window, or it lands in a Chrome tab (`e1da92e`) · home
-    screen card "Invoices & Payments" (`6c14b72`, owner). ⚠️ Owner to decide: the "already answered" alert skips the
-    PERSON, so the same person's other device keeps the old alert.
+    screen card "Invoices & Payments" (`6c14b72`, owner). ⭐ Owner: the "already answered" alert skips the PERSON, so the
+    same person's other device keeps the old alert (seen on the PC) — **"not exactly necessary" to clear it; don't build.**
   - **Owner decisions (2026-10-26):** approve / hold = ONLY the **Service GM of the invoice's company**, or the admin
     (no Sales / Back Office GM) · approvers get a **phone notification** (web push) · an approval lets the vehicle
     out for **48 hours** (no tap needed) · guard logins are made by **HR on Employees** (new **Security** department,
@@ -103,8 +103,8 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
     the card shows earlier releases through the portal and says it is NOT the Busy balance · alerts switch for
     approvers · `/gate`: big MAY GO (who, until when) / HOLD ("waiting for the GM" when asked) · guards land on
     /gate; phone bar Gate + Profile. Build + no-undef clean.
-  - ✅ **Android test done (bullet above).** ⏭️ Owner decides whether the "already answered" alert should also clear
-    the answering person's OTHER devices. Staging: GJ01ZZ0002 **released until 30 Oct 8:06 pm** (the Android test);
+  - ✅ **Android test done (bullet above); step 2 is complete on staging** — next is prod, only on the owner's command.
+    Staging: GJ01ZZ0002 **released until 30 Oct 8:06 pm** (the Android test);
     two TEST withdrawals before it. Alerts on for the staging admin in the owner's Chrome (`localhost:3001`) and in
     the installed app on the owner's Android phone. Record: `PORTAL_HISTORY.md` → "Session log — 2026-10-27 → 10-28". **Prod ONLY on the owner's command, after #140:** migration → EF → VAPID keys
     (`make-vapid-keys.mjs mmmxvjaavdtwlpcnjgzy`) → `admin-users` from `portal` → merge.

@@ -473,9 +473,10 @@ Three things it found, each fixed and seen fixed:
   link to the installed app (`e1da92e`). Elsewhere it still reuses the open window.
 - **No "Invoices & Payments" card on the home screen** (owner) — the Dashboard keeps its own card list, separate from
   the sidebar's; added under Service Tools after Vendor Jobs (`6c14b72`).
-⚠️ **Found, NOT changed (owner to decide):** the quiet "already answered" alert skips the PERSON who answered, not just
-the device — so someone with a phone AND a PC who answers on one keeps the old alert on the other (read in the code
-`alertApprovers(…, exceptId)`; not yet seen on the PC). For two different people (GM ↔ admin) it works as built.
+**Owner decision (2026-10-28): the answering person's OTHER devices are NOT cleared — "not exactly necessary".** The quiet
+"already answered" alert skips the PERSON who answered (`alertApprovers(…, exceptId)`), so someone with a phone AND a
+PC who answers on one keeps the old alert on the other — seen: the PC kept "Release asked: GJ01ZZ0002" after the
+phone approved. For two different people (GM ↔ admin) it works as built. Do not build or re-raise.
 
 **Not yet done:**
 - ⏭️ **Alerts in a desktop browser** — ✅ done 2026-10-28 (above); the click-through on desktop not yet confirmed.
