@@ -94,9 +94,12 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   on STAGING: a narrow covering index `vehicle_units_al_review` (chassis_no INCLUDE the 7 columns, current only; 3.5 MB)
   → Index Only Scan 0.07 s, pages 7,383 → 1,208 (rolled-back try) + `alter function … set work_mem = '16MB'` (no
   spill). Function body unchanged (md5 `a79e49a7…`); probe-al-sheet 21/0; API warm **2.0–2.6 s, 4/4**. ⚠️ A truly
-  cold call not yet measured (a 30-min idle test was started). **16 tracker migrations for prod.**
-  ⏭️ Suspect most of 2026-27's 842 not_on_sheet are DEMO trucks (they carry AL statuses, are on no real sheet) —
-  check; then read the review with the owner, a year at a time.
+  cold call: after 30 min idle the first call = **1.97 s** in the DB (was 6 s cold), then 1.0 s; API 3.3 s.
+  **16 tracker migrations for prod.**
+  ⭐ **5,091 of the 6,616 issues are DEMO trucks** (`DEMO-` chassis, all `not_on_sheet`: they carry AL statuses and
+  dates but are on no real sheet). **Real issues: 2023-24 283 · 2024-25 422 · 2025-26 466 · 2026-27 354 = 1,525.**
+  Prod has no DEMO rows, so no code change. ❓ Owner: the DEMO x4 rows were kept "until the real load" — it is done;
+  delete them now (needs his yes)? ⏭️ Then read the review with the owner, a year at a time.
 - ⚠️ **Open / owner:** the 36 AL "IBND" Aug–Sep 2025 trucks (returned to AL?) still unconfirmed · the DUMMY Oct 2026 AL
   upload is the current Oct 2026 (delete needs the owner's yes) · DEMO x4 rows stay · prod ONLY on command —
   **16 tracker migrations** for prod now (LF), + EF `admin-vehicle-units`.
