@@ -458,13 +458,29 @@ Production keeps the real team-wide key; the live sign-in still enforces it.
 `gate-invoices` with the quiet-replacement change reached staging on the 6th try — Supabase's bundler kept timing
 out fetching `jsr:@supabase/functions-js` (jsr.io answered in 0.8 s from the PC); a retry loop, not a code change.
 
+**✅ Android test PASSED on the staging website (2026-10-28, the owner's phone, Android 10, Chrome):**
+installed from Chrome (Install, not "Create shortcut") → alerts on in the app → app swiped closed → a release asked
+from the PC → the phone showed *"Release asked: GJ01ZZ0002 · Demo Mahadev Travels · ₹19,890.00 — tap to approve"*
+with the Paras icon, like a chat message, and the PC's Chrome showed the same alert at the same minute → tap →
+**opened in the installed app** on Credit releases, that request marked → Approve → "released for 48 hours".
+Staging: approved 34 s after the ask, `valid_until` − `decided_at` = 48 h, both devices delivered, 0 failures.
+Three things it found, each fixed and seen fixed:
+- ⭐ **"This app cannot be installed" (Vercel's "V" icon)** — a browser fetches the manifest WITHOUT cookies unless
+  the link says `crossorigin="use-credentials"`, so Vercel's login wall answered 302 to its sign-in page (`8603092`;
+  without cookies → redirect, with → 200 + 3 icons). Harmless on the live site, which has no wall.
+- ⭐ **The tap opened a Chrome tab of the portal, not the app** — the click handler reused any open window, and a
+  service worker cannot tell an app window from a tab. On Android it now always *opens*; Chrome hands an in-scope
+  link to the installed app (`e1da92e`). Elsewhere it still reuses the open window.
+- **No "Invoices & Payments" card on the home screen** (owner) — the Dashboard keeps its own card list, separate from
+  the sidebar's; added under Service Tools after Vendor Jobs (`6c14b72`).
+⚠️ **Found, NOT changed (owner to decide):** the quiet "already answered" alert skips the PERSON who answered, not just
+the device — so someone with a phone AND a PC who answers on one keeps the old alert on the other (read in the code
+`alertApprovers(…, exceptId)`; not yet seen on the PC). For two different people (GM ↔ admin) it works as built.
+
 **Not yet done:**
-- ⏭️ **Android test on the staging website** — the owner opens the address on the phone, signs in to Vercel, signs
-  in to the portal as admin, installs it (Add to Home screen), turns alerts on; then a release is asked from the
-  PC and the phone should ring with the app closed; tapping opens the request; approving from the phone.
 - ⏭️ **Alerts in a desktop browser** — ✅ done 2026-10-28 (above); the click-through on desktop not yet confirmed.
 - ⏭️ **Credit used / limit on the approval card** — after Service Payments is live (owner, 2026-10-27).
-- ⏭️ **A real phone alert** — a phone cannot reach localhost; test at go-live, or from an https test origin.
+- ⏭️ **The GM's own phone** — at go-live (no Vercel account to pass the preview's login wall).
 - Promised-by date, responsible person, "mark paid" and the follow-up list = **step 3** (the design above lists
   promised-by on approve; it was left for step 3 with the rest of the promise tracking).
 - Prod — **only on the owner's command, after #140**: apply `20261026_gate_releases.sql`, deploy `gate-invoices` and

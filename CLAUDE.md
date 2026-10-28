@@ -64,8 +64,14 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
     branch's preview now talks to staging. ⚠️ **Turnstile's site key is a TEAM-WIDE Vercel env (all targets)** and
     Cloudflare rejects it off the live hostname → owner chose Cloudflare's test key `1x00000000000000000000AA` as a
     `portal` **Preview** project setting (staging never checks Turnstile; Production keeps the real key).
-    ⚠️ Supabase's bundler timed out on `jsr:@supabase/functions-js` 5× on 10-28 — just retry the deploy. ⏭️ **Next: the Android test on that address** (install, alerts on, ring
-    with the app closed, tap → approve).
+    ⚠️ Supabase's bundler timed out on `jsr:@supabase/functions-js` 5× on 10-28 — just retry the deploy.
+  - ✅ **2026-10-28 evening — ANDROID TEST PASSED on the owner's phone:** installed from Chrome → alerts on → app
+    closed → asked from the PC → the phone rang like a chat message (and the PC at the same minute) → tap opened the
+    **installed app** on that request → Approve → 48 h (staging: 34 s ask→approve, 0 delivery failures). Fixed on the
+    way: ⭐ the manifest link needs `crossorigin="use-credentials"` or a protected preview can't be installed
+    (`8603092`) · ⭐ on Android a tap must OPEN, not reuse a window, or it lands in a Chrome tab (`e1da92e`) · home
+    screen card "Invoices & Payments" (`6c14b72`, owner). ⚠️ Owner to decide: the "already answered" alert skips the
+    PERSON, so the same person's other device keeps the old alert.
   - **Owner decisions (2026-10-26):** approve / hold = ONLY the **Service GM of the invoice's company**, or the admin
     (no Sales / Back Office GM) · approvers get a **phone notification** (web push) · an approval lets the vehicle
     out for **48 hours** (no tap needed) · guard logins are made by **HR on Employees** (new **Security** department,
@@ -97,11 +103,10 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
     the card shows earlier releases through the portal and says it is NOT the Busy balance · alerts switch for
     approvers · `/gate`: big MAY GO (who, until when) / HOLD ("waiting for the GM" when asked) · guards land on
     /gate; phone bar Gate + Profile. Build + no-undef clean.
-  - ⏭️ **Next: the Android test on the staging website** (2026-10-28 bullet above). When the session paused (10-28)
-    this branch's preview rebuild `dpl_7qprQZ9AXTBAw5JnupWE4iQjh1Pu` (with the Turnstile test key) was QUEUED behind
-    an accidental `10b-foundation` rebuild → first check it is READY and the sign-in page shows no Cloudflare error.
-    Staging has a release **waiting** for GJ01ZZ0002 (asked 10-28 for the alert test). The owner's Chrome has alerts
-    on for `localhost:3001` (staging admin). Record: `PORTAL_HISTORY.md` → "Session log — 2026-10-27 → 10-28". **Prod ONLY on the owner's command, after #140:** migration → EF → VAPID keys
+  - ✅ **Android test done (bullet above).** ⏭️ Owner decides whether the "already answered" alert should also clear
+    the answering person's OTHER devices. Staging: GJ01ZZ0002 **released until 30 Oct 8:06 pm** (the Android test);
+    two TEST withdrawals before it. Alerts on for the staging admin in the owner's Chrome (`localhost:3001`) and in
+    the installed app on the owner's Android phone. Record: `PORTAL_HISTORY.md` → "Session log — 2026-10-27 → 10-28". **Prod ONLY on the owner's command, after #140:** migration → EF → VAPID keys
     (`make-vapid-keys.mjs mmmxvjaavdtwlpcnjgzy`) → `admin-users` from `portal` → merge.
   - ⚠️ **A prod read (active GMs by department) was refused by the classifier ("Production Reads")** — not
     retried; the owner named the approvers instead.
@@ -1049,8 +1054,8 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   (2026-10-26) — do NOT merge before the prod migration + EF**; prod (migration + EF + `GATE_SMTP_PASSWORD` on prod + drop `GATE_EMAIL_ONLY_TO` there) **only on
   the owner's command**. ✅ **Step 2 BUILT on staging and seen working 2026-10-27** (branch `cr2-release-gate`, see the
   2026-10-26 block; gate = list + search, words RELEASE / HOLD, owner; test guard login ✅; alert seen in the
-  owner's Chrome ✅; page = "Invoices & Payments") — next: the Android test on the staging website
-  (https://portal-git-cr2-release-gate-parastrucks-projects.vercel.app).
+  owner's Chrome ✅; page = "Invoices & Payments"; ✅ Android test passed 2026-10-28 on the staging website
+  https://portal-git-cr2-release-gate-parastrucks-projects.vercel.app) — step 2 is ready for prod on the owner's command.
   Credit limit / used on the approval card waits for Service Payments (owner).
 - **💡 Credit release + invoice sending + gate app — PLAN v0.2 (2026-10-24):**
   `docs/backlog/credit-release-plan.md`. Owner: standalone (`gate_*` tables, payments DB stays off prod) ·
