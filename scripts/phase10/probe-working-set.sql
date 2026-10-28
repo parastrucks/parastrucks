@@ -30,9 +30,10 @@ begin
   -- 1. the working set: this year from its first day, no-date rows, and every still-open older truck
   b := public.tracker_book('working', null, array['chassis_no','ctc','model'], null, null);
   select array_agg(x ->> 'chassis_no') into ids from jsonb_array_elements(b -> 'rows') x where x ->> 'chassis_no' like 'MB1PROBEWS%';
-  if ids @> array['MB1PROBEWS0000001','MB1PROBEWS0000003','MB1PROBEWS0000004','MB1PROBEWS0000005','MB1PROBEWS0000006','MB1PROBEWS0000007']
+  if ids @> array['MB1PROBEWS0000001','MB1PROBEWS0000004','MB1PROBEWS0000005','MB1PROBEWS0000006','MB1PROBEWS0000007']
     then pass := pass + 1; else fail := fail + 1; msgs := msgs || ' |1 working missing ' || coalesce(array_to_string(ids, ','), '-'); end if;
-  if not (ids && array['MB1PROBEWS0000002','MB1PROBEWS0000008','MB1PROBEWS0000009'])
+  -- …0003 (last year, refund still "Pending") stays OUT since 2026-10-28: an old refund is never really pending (owner)
+  if not (ids && array['MB1PROBEWS0000002','MB1PROBEWS0000003','MB1PROBEWS0000008','MB1PROBEWS0000009'])
     then pass := pass + 1; else fail := fail + 1; msgs := msgs || ' |1b working has closed/old/superseded ' || array_to_string(ids, ','); end if;
 
   -- 2. only the asked-for columns, no empty cells, id always

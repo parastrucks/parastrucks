@@ -47,7 +47,7 @@ const applySql = later.filter((t) => t.includes('editable constant text[] := arr
 // the working set's "still open" rule (20261024_phase10_tracker_working_set.sql) says paid with the grid's own words
 {
   const { PAID_WORDS } = await import('../../src/tracker/lib/cellFormats.js')
-  const ws = later.find((t) => t.includes('function public.tracker_still_open')) ?? ''
+  const ws = later.findLast((t) => t.includes('function public.tracker_still_open')) ?? '' // the newest definition
   const m = /not in \(([^)]*)\)\)/.exec(ws)
   const sqlWords = m ? m[1].split(',').map((w) => w.trim().replace(/^'|'$/g, '')) : []
   ok(eqSet(sqlWords, PAID_WORDS), `still-open rule's paid words = PAID_WORDS (${sqlWords.join(' / ')})`)
