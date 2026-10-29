@@ -1004,8 +1004,10 @@ Also: a phone view (read-only cards) and the local save queue across reloads (E5
      from `Backup data\_Sorted\AL Balance Sheet` via `pile-analysis/al-sheets-pick.mjs`; Oct 2026 left out, still open;
      real Sep 2026 replaced the dummy). ✅ **The review's timeout fixed** (11–15 s → 2.3–4.2 s through the API; migration
      `…_al_review_fast`, staging: `not_on_sheet`'s `not exists` over a CTE became a hashed `not in`; same review to the
-     md5; details CLAUDE.md 2026-10-28). **15 tracker migrations for prod.** NEXT: read the review with the owner
-     (6,677 issues — one FY at a time?).
+     md5; details CLAUDE.md 2026-10-28). ✅ One FY at a time (panel Year picker) · ✅ cold-start fix (migration
+     `…_al_review_index`: covering index + work_mem; **16 tracker migrations for prod**) · ✅ dummy Oct 2026 upload and
+     ✅ ALL DEMO trucks deleted (owner, 10-28/29) → **1,525 real issues** (2023-24 283 · 2024-25 422 · 2025-26 466 ·
+     2026-27 354), API 1.5–2.9 s. NEXT: read the review with the owner, a year at a time (2026-27 first?).
      *Earlier:* ✅ **AL Balance Sheet monthly upload BUILT on staging 2026-10-25** (see step 0). After the real load: upload the
      owner's REAL 2025-26 sheets on staging and read the review with him (the 23-Oct rehearsal predicts ~172
      CTD differences, 43 trucks on no sheet, 51 unfinished splits, 55 spellings — the first month will be long;
@@ -1018,7 +1020,10 @@ Also: a phone view (read-only cards) and the local save queue across reloads (E5
   `…_import_notes` (note source 'import'), `…_al_retail_date`, `…_two_ctc` (compute md5 `ee1a22a6…`, apply
   `08ff1a12…` = file), `…_working_set` (tracker_book `504093d3…`, tracker_still_open `8d2c7186…` = file), `…_al_sheet`
   (2026-10-25: tracker_al_upload `a1c93d3d…`, tracker_al_review `f28f533b…`, tracker_al_settle `d3833fae…`,
-  tracker_al_mode `8b459ecb…`, tracker_al_kind `45f5974c…` = file; 3 DUMMY uploads, 435 lines, 1 settled line); Edge Functions
+  tracker_al_mode `8b459ecb…`, tracker_al_kind `45f5974c…` = file; 3 DUMMY uploads, 435 lines, 1 settled line) — since
+  10-28/29 also `…_refund_not_open`, `…_working_rest`, `…_al_review_fast` (tracker_al_review `a79e49a7…`) and
+  `…_al_review_index` (index `vehicle_units_al_review` + work_mem 16MB); 36 REAL AL months (the dummy Oct deleted; the 2
+  replaced dummy Sep kept); NO DEMO trucks any more (deleted 10-29; 7,259 real); Edge Functions
   `admin-vehicle-units` (endhan_date + mto_advance + al_retail_date + al_ctc; actions `book` + `find` + `alUpload` /
   `alReview` / `alSettle`, BOOK_PAGE 2500) and `admin-users` (tracker actions) as in
   this branch. **2,056 tracker rows, all DUMMY** (2,050 `DEMO seed` + `DEMO-PROBE-202610220945` original and

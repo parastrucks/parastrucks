@@ -26,6 +26,41 @@
 
 ---
 
+## Session log — 2026-10-28 (late) → 10-29 (PC): the AL review fixed, one year at a time, dummy + DEMO data deleted
+
+Same session and branch (`10b-foundation`). Staging only; prod untouched. Commits `507821f` · `642393f` · `015170f` ·
+`db428b7` · `66100c0` (+ this docs commit).
+
+- **Owner "go" → the review timeout fixed** (`507821f`, migration `20261028_phase10_tracker_al_review_fast.sql`):
+  `not_on_sheet` = 14.3 s of 18 (a Nested Loop Anti Join, 56.6 M comparisons; `not exists` against a CTE has no
+  statistics) → one line, `not in (… where chassis_no is not null)` = a hashed SubPlan; the whole review's md5 old vs
+  new on the real data matched. probe-al-sheet 21/0 after moving its "before the first month" truck from 2098 to
+  2000 (the 2098 date fell inside the window once real sheets from Oct 2023 were uploaded — the OLD function failed
+  the same 2 checks); a mutant without `is not null` fails it.
+- **Owner: "build the one FY at a time view first"** (`642393f`, panel only): Year picker (newest first, each with its
+  count, + All years), months/summary/groups follow it; an issue with no month shows in every year; the GST count says
+  "all years". selftest-al-sheet 28/0. Seen in the owner's Chrome; years add up to the total.
+- **Owner "1. yes" → the DUMMY Oct 2026 AL upload deleted** (`AL Balance Sheet -1026.xlsx`, 25 Oct, 195 lines; checked
+  as that one row first, in a transaction that refused any other count): 36 current months, all real. Kept: the two
+  replaced dummy Sep uploads and one "marked right" note from the dummy test.
+- **The review still failed on the FIRST call after a quiet spell** (then 6.4 s, ~3 s after) — and the panel is opened
+  about monthly. BUFFERS: `units` read all of vehicle_units (55 MB) + temp spills (work_mem 2 MB). ✅ `015170f`:
+  migration `20261028_phase10_tracker_al_review_index.sql` — narrow covering index `vehicle_units_al_review` (chassis_no
+  INCLUDE the 7 columns, current trucks; 3.5 MB → Index Only Scan 0.07 s vs 1.1 s) + `alter function … set work_mem =
+  '16MB'`. Cold after 30 min idle: 1.97 s in the DB (was 6 s). **16 tracker migrations for prod.**
+- **5,091 of the 6,616 issues were the DEMO trucks** (all `not_on_sheet`) → owner (asked what the review is — the AL
+  Balance Sheet check, explained in plain words) then said **"yes" to deleting the DEMO trucks** (10-29). Counted first:
+  24,606 trucks + 34,004 notes + 6,604 colours, 0 incentives, no real↔demo link. One transaction hit the CLI query
+  timeout (nothing deleted) → batches of 2,000; ⚠️ one DEMO original pointed at its DEMO rebill (`superseded_by_id`) →
+  split across batches → FK refusal (12 blind retries did nothing — the retry loop should have stopped on the first
+  non-numeric answer); deleted the original first, then the rest. **Left = exactly the real load: 7,259 trucks · 15,785
+  notes · 1,857 colours · 3,847 incentives.** Kept (not asked): the DEMO trucks' 24,652 `tracker_audit` rows.
+  `vacuum (analyze)`: vehicle_units 55 MB → 6.4 MB. **Now: AL review 1,525 real issues (2023-24 283 · 2024-25 422 ·
+  2025-26 466 · 2026-27 354), 400 KB, API 1.5–2.9 s; tracker working set 1,811 (year 1,507 in 1.1 s + rest 304 in
+  1.3 s).**
+- ⏭️ Read the review with the owner, a year at a time (suggested: 2026-27 first). Open: the 36 IBND Aug–Sep 2025 trucks;
+  prod only on command (16 tracker migrations + EF `admin-vehicle-units` + frontend).
+
 ## Session log — 2026-10-28 (PC): the real book on screen, this year first, the refund rule, the real AL sheets
 
 Same session and branch (`10b-foundation`). Staging only; prod untouched. Only `D:\PTB\Finances\Backup data` was read.
