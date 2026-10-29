@@ -1,0 +1,193 @@
+// scripts/payments/probe-ef-authority.mjs
+// Live check that the DEPLOYED service-payments Edge Function enforces the
+// authority ladder — signed in as real users, over the real network.
+//
+//   node scripts/payments/probe-ef-authority.mjs
+//
+// STAGING ONLY. Reads VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY from .env and
+// refuses to run against anything but the staging project.
+//
+// WRITES NOTHING. Every request is built to get past the authority gate and then
+// stop on a deliberately missing field: an ALLOWED caller gets 400/404 ("…
+// required", "not found"), a REFUSED caller gets 403 with the ladder's message.
+// A 200 would mean a write happened — the probe treats that as a hard failure.
+//
+// The password is asked for once (typed, not echoed) and never stored, logged
+// or written anywhere. The staging test accounts share one password.
+//
+// What this does NOT cover: departments with no staging test account (Sales,
+// HR, Back Office, Spares, PDI). Those are covered offline, for every rank, by
+// scripts/payments/selftest-authority.mjs — which also proves index.ts takes
+// every role decision from authority.ts, the file that test checks.
+
+import fs from 'node:fs'
+import path from 'node:path'
+import readline from 'node:readline'
+import { Writable } from 'node:stream'
+import { randomUUID } from 'node:crypto'
+import { createClient } from '@supabase/supabase-js'
+
+const STAGING_REF = 'klpnhpnlotcbbovwswmq'
+
+// ── Config from .env (public values only — URL and publishable key) ────────
+const env = Object.fromEntries(
+  fs.readFileSync(path.join(process.cwd(), '.env'), 'utf8')
+    .split(/\r?\n/).filter(l => /^[A-Z_]+=/.test(l))
+    .map(l => { const i = l.indexOf('='); return [l.slice(0, i), l.slice(i + 1).trim()] }),
+)
+const URL = env.VITE_SUPABASE_URL
+const KEY = env.VITE_SUPABASE_ANON_KEY
+if (!URL || !KEY) { console.error('.env must define VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY'); process.exit(2) }
+if (!URL.includes(STAGING_REF)) {
+  console.error(`Refusing: .env points at ${URL}, not staging (${STAGING_REF}).`)
+  process.exit(2)
+}
+const EF = `${URL}/functions/v1/service-payments`
+
+const ACCOUNTS = [
+  'admin@parastrucks.test',
+  'tester@parastrucks.test',
+  'gm@parastrucks.test',
+  'svc.mgr@parastrucks.test',
+  'svc.exec@parastrucks.test',
+  'pt.mgr@parastrucks.test',
+]
+
+// ── The plan's ladder, written out by hand (same table as the self-test) ───
+const admin    = (p) => p.level === 'admin'
+const inDept   = (p) => p.dept === 'service' || p.dept === 'accounts'
+const accounts = (p) => admin(p) || p.dept === 'accounts'
+const payGm    = (p) => admin(p) || (p.level === 'gm' && inDept(p))
+const EXPECT = {
+  allocate:              (p) => admin(p) || inDept(p),
+  on_account:            accounts,
+  reverse_allocation:    (p) => admin(p) || inDept(p),
+  classify_receipt:      accounts,
+  close_tds:             (p) => accounts(p) || payGm(p),
+  manual_receipt:        accounts,
+  void_receipt:          accounts,
+  import_invoices:       accounts,
+  import_receipts:       accounts,
+  create_group:          payGm,
+  assign_customer_group: payGm,
+  set_credit_limit:      payGm,
+}
+// Payloads that pass the gate and then stop on a missing or unknown field.
+const PAYLOAD = {
+  allocate:              () => ({ receipt_id: randomUUID(), targets: [{ invoice_id: randomUUID(), amount_paise: 100 }] }),
+  on_account:            () => ({}),
+  reverse_allocation:    () => ({}),
+  classify_receipt:      () => ({}),
+  close_tds:             () => ({}),
+  manual_receipt:        () => ({}),
+  void_receipt:          () => ({}),
+  import_invoices:       () => ({}),
+  import_receipts:       () => ({}),
+  create_group:          () => ({}),
+  assign_customer_group: () => ({}),
+  set_credit_limit:      () => ({}),
+}
+
+// ── Password prompt ────────────────────────────────────────────────────────
+// readline with a muted output stream — the portable way. The first version
+// drove stdin in raw mode itself, which accepts neither typing nor paste in the
+// VS Code integrated terminal (2026-09-20): the prompt appeared and swallowed
+// everything. readline keeps paste, backspace and Ctrl+C working everywhere.
+function askHidden(question) {
+  if (process.env.PROBE_PASSWORD) return Promise.resolve(process.env.PROBE_PASSWORD)
+  if (!process.stdin.isTTY) {
+    console.error('Run this in a terminal, or set PROBE_PASSWORD first:')
+    console.error('  PowerShell:  $env:PROBE_PASSWORD = \'...\'; node scripts/payments/probe-ef-authority.mjs')
+    process.exit(2)
+  }
+  return new Promise((resolve) => {
+    const muted = new Writable({
+      write(chunk, enc, cb) { if (!muted.muted) process.stdout.write(chunk, enc); cb() },
+    })
+    muted.muted = false
+    const rl = readline.createInterface({ input: process.stdin, output: muted, terminal: true })
+    rl.question(question, (answer) => { rl.close(); process.stdout.write('\n'); resolve(answer) })
+    muted.muted = true   // after question() has printed the prompt
+  })
+}
+
+// ── Run ────────────────────────────────────────────────────────────────────
+const password = await askHidden('Staging test-account password: ')
+let pass = 0, fail = 0
+const problems = []
+
+for (const email of ACCOUNTS) {
+  const sb = createClient(URL, KEY, { auth: { persistSession: false, autoRefreshToken: false } })
+  let signIn = null, sErr = null
+  for (let attempt = 1; attempt <= 3 && !signIn?.session; attempt++) {
+    const r = await sb.auth.signInWithPassword({ email, password })
+    signIn = r.data; sErr = r.error
+    // "fetch failed" is a transport blip, not a wrong password — retry those only.
+    if (!signIn?.session && !/fetch failed|network|timeout/i.test(sErr?.message ?? '')) break
+    if (!signIn?.session && attempt < 3) await new Promise(r => setTimeout(r, 1500 * attempt))
+  }
+  if (!signIn?.session) {
+    fail++; problems.push(`${email}: sign-in failed (${sErr?.message ?? 'no session'})`)
+    console.log(`\n${email}: SIGN-IN FAILED — ${sErr?.message ?? 'no session'}`)
+    continue
+  }
+  // Expectations come from the account's REAL profile, not from its email.
+  // Read the department in its OWN query: the first version embedded it as
+  // departments(code), whose shape this did not unpack, so every account came
+  // back department-less and the probe expected EVERYTHING to be refused —
+  // 22 false failures (2026-09-20). A profile that cannot be resolved must
+  // stop the run, never quietly become "no department": an expectation built
+  // from a failed read is not an expectation.
+  const { data: prof, error: pErr } = await sb.from('users')
+    .select('permission_level, department_id, entity_id')
+    .eq('id', signIn.user.id).maybeSingle()
+  if (pErr || !prof) {
+    fail++; problems.push(`${email}: could not read own profile (${pErr?.message ?? 'no row'})`)
+    console.log(`\n${email}: PROFILE READ FAILED — ${pErr?.message ?? 'no row'}`)
+    continue
+  }
+  let dept = null
+  if (prof.department_id) {
+    const { data: d, error: dErr } = await sb.from('departments')
+      .select('code').eq('id', prof.department_id).maybeSingle()
+    if (dErr || !d?.code) {
+      fail++; problems.push(`${email}: could not resolve department ${prof.department_id} (${dErr?.message ?? 'no row'})`)
+      console.log(`\n${email}: DEPARTMENT READ FAILED — ${dErr?.message ?? 'no row'}`)
+      continue
+    }
+    dept = d.code
+  }
+  const p = { level: prof.permission_level ?? null, dept }
+  if (!p.level || (!p.dept && p.level !== 'admin')) {
+    fail++; problems.push(`${email}: incomplete profile (level=${p.level}, dept=${p.dept})`)
+    console.log(`\n${email}: INCOMPLETE PROFILE — level=${p.level}, dept=${p.dept}`)
+    continue
+  }
+  console.log(`\n${email}  —  ${p.level} · ${p.dept ?? '(no dept)'}`)
+
+  for (const action of Object.keys(EXPECT)) {
+    const want = EXPECT[action](p)
+    const res = await fetch(EF, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${signIn.session.access_token}` },
+      body: JSON.stringify({ action, payload: PAYLOAD[action]() }),
+    })
+    const body = await res.json().catch(() => ({}))
+    let ok, verdict
+    if (res.status === 200) {
+      ok = false; verdict = 'WROTE SOMETHING (200) — the probe must never write'
+    } else if (want) {
+      ok = res.status === 400 || res.status === 404
+      verdict = ok ? `allowed (${res.status}: ${body.error})` : `expected ALLOWED, got ${res.status}: ${body.error}`
+    } else {
+      ok = res.status === 403
+      verdict = ok ? `refused (403: ${body.error})` : `expected REFUSED, got ${res.status}: ${body.error}`
+    }
+    ok ? pass++ : (fail++, problems.push(`${email} ${action}: ${verdict}`))
+    console.log(`  ${ok ? '✓' : '✗'} ${action.padEnd(22)} ${verdict}`)
+  }
+  await sb.auth.signOut({ scope: 'local' })
+}
+
+console.log(`\nprobe-ef-authority: ${pass} passed, ${fail} failed`)
+if (fail) { console.log(problems.map(x => '  ✗ ' + x).join('\n')); process.exit(1) }

@@ -3,7 +3,9 @@ import { useEffect } from 'react'
 import useFocusTrap from '../../hooks/useFocusTrap'
 import Icon from '../Icon'
 
-/* "Create new" bottom sheet, opened by the raised (+) in the mobile dock.
+/* "Quick actions" bottom sheet, opened by the raised (+) in the mobile dock.
+   Was "Create new" — but "Match Payments" sat under it and read as "create a
+   new payment" (red team 4, R4-14).
    `actions` is already canAccess-filtered by the caller. */
 export default function CreateSheet({ open, onClose, actions }) {
   const navigate = useNavigate()
@@ -22,9 +24,9 @@ export default function CreateSheet({ open, onClose, actions }) {
 
   return (
     <div className="sheet-backdrop" onClick={onClose}>
-      <div className="sheet-panel" ref={trapRef} onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Create new">
+      <div className="sheet-panel" ref={trapRef} onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Quick actions">
         <div className="sheet-head">
-          <span className="sheet-title">Create new</span>
+          <span className="sheet-title">Quick actions</span>
           <button className="sheet-close" onClick={onClose} aria-label="Close"><Icon name="x" size={20} /></button>
         </div>
         {actions.map(a => (

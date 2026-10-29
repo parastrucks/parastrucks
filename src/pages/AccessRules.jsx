@@ -22,6 +22,7 @@ const ALL_ROUTES = [
   { route: '/tiv-forecast',   label: 'TIV Forecast'    },
   { route: '/invoices',       label: 'Invoices & Payments' },
   { route: '/gate',           label: 'Gate Check'      },
+  { route: '/payments',       label: 'Match Payments'  },
 ]
 
 /* ══════════════════════════════════════════════════════════════
