@@ -38,14 +38,27 @@ eq('no + at all: every tab, nothing dropped',
    (() => { const { left, right } = bottomNavLayout({ deptCode: 'service', hasCreate: false, canAccess: () => true }); return [left.length, right.length] })(), [4, 0])
 
 console.log('\n── the tab itself ─────────────────────────────────────────')
-const t = DEPT_TABS.service.find((x) => x.to === '/payments')
-ok('it goes to /payments, with the ₹ icon, and is gated by the access rules', t && t.icon === 'rupee' && t.gated === true)
+// One tool (owner, 2026-10-29): matching is the Match tab of Invoices & Payments. The
+// button opens that tab, and the /payments ACCESS RULE still decides who sees it.
+const MATCH_TAB = '/invoices?tab=match'
+const t = DEPT_TABS.service.find((x) => x.label === 'Payments')
+ok('it opens the Match tab of Invoices & Payments, with the ₹ icon, gated by the /payments rule',
+   t && t.to === MATCH_TAB && t.access === '/payments' && t.icon === 'rupee' && t.gated === true)
+ok('accounts\' Payments button is the same', JSON.stringify(DEPT_TABS.accounts.find((x) => x.label === 'Payments')) === JSON.stringify(t))
 ok('no bar ever has more than four tabs beside the + (five slots on a 360 px phone)',
    [...Object.values(DEPT_TABS), ADMIN_TABS].every((tabs) => tabs.length <= 4))
 ok('no tab is gated anywhere it would vanish unasked (only Payments is gated)',
-   [...Object.values(DEPT_TABS), ADMIN_TABS].flat().filter((x) => x.gated).every((x) => x.to === '/payments'))
-ok('Match Payments is still in the + sheet (admins and everyone else reach it there)',
-   CREATE_ACTIONS.some((a) => a.to === '/payments'))
+   [...Object.values(DEPT_TABS), ADMIN_TABS].flat().filter((x) => x.gated).every((x) => x.label === 'Payments' && x.access === '/payments'))
+const qa = CREATE_ACTIONS.find((a) => a.label === 'Match Payments')
+ok('Match Payments is still in the + sheet (one tap), opening the Match tab behind the /payments rule',
+   qa && qa.to === MATCH_TAB && qa.access === '/payments')
+ok('the + sheet still offers Invoices & Payments itself', CREATE_ACTIONS.some((a) => a.to === '/invoices'))
+
+console.log('\n── the gate guard (credit release step 2) ─────────────────')
+eq('a guard: Gate and Profile, no + (guards may use no quick action)',
+   (() => { const { left, right } = bottomNavLayout({ deptCode: 'security', hasCreate: false, canAccess: () => true }); return [...left, ...right].map((x) => x.label) })(),
+   ['Gate', 'Profile'])
+ok('the guard\'s Gate tab opens /gate', DEPT_TABS.security?.[0]?.to === '/gate')
 
 console.log(`\n${'═'.repeat(64)}`)
 console.log(`${fail === 0 ? 'ALL PASS' : 'FAILURES'}   ${pass} passed, ${fail} failed`)

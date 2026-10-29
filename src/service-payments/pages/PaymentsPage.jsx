@@ -43,7 +43,10 @@ const plainError = (e, fallback) => {
   return msg || fallback
 }
 
-export default function PaymentsPage() {
+// Embedded (owner, 2026-10-29: one tool) = the Match / Import / Cash & cheque tabs of
+// "Invoices & Payments": that page owns the heading and the one tab row, and passes the
+// tab in; this page only reports how many payments are left to match, for the tab label.
+export default function PaymentsPage({ embedded = false, tab: tabProp, onTab, onCount } = {}) {
   const { profile } = useAuth()
   const toast = useToast()
 
@@ -66,7 +69,9 @@ export default function PaymentsPage() {
   const [pendingId, setPendingId] = useState(null)
   const [override, setOverride] = useState(null)  // { receiptId, result } from search
   const [searching, setSearching] = useState(false)
-  const [tab, setTab] = useState('match')          // match | import | cash (import, cash: accounts/admin)
+  const [ownTab, setOwnTab] = useState('match')    // match | import | cash (import, cash: accounts/admin)
+  const tab = embedded ? (tabProp ?? 'match') : ownTab
+  const setTab = embedded ? (t) => onTab?.(t) : setOwnTab
   const [showWaiting, setShowWaiting] = useState(false) // looking at "bill not made yet" payments
 
   // One idempotency key per (receipt, candidate, amount). A retry after a
@@ -160,6 +165,8 @@ export default function PaymentsPage() {
   ), [receipts, index, memory, invoicesById, today, undoneIds])
   const pool = showWaiting ? waiting : queue
   useEffect(() => { if (showWaiting && waiting.length === 0) setShowWaiting(false) }, [showWaiting, waiting.length])
+  // Waiting payments are not unfinished work, so the tab counts only today's list.
+  useEffect(() => { if (phase === 'ready') onCount?.(queue.length) }, [phase, queue.length, onCount])
 
   const skippedSet = useMemo(() => new Set(skipped), [skipped])
   const ordered = useMemo(() => orderQueue(pool, skipped), [pool, skipped])
@@ -382,7 +389,7 @@ export default function PaymentsPage() {
     />
   ) : null)
 
-  const header = (
+  const header = embedded ? null : (
     <>
       <div className="page-head pay-page-head">
         <div>

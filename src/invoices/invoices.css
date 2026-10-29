@@ -70,9 +70,18 @@
 }
 
 /* ── Step 2: tabs, release requests, the gate screen ── */
-.inv-tabs { display: flex; gap: 4px; margin: 0 0 18px; border-bottom: 1px solid var(--border-default); }
+/* Up to five tabs (accounts) on a 360 px phone: the row scrolls sideways, tabs never wrap or squeeze.
+   The row's line is an inset shadow, not a border, so the selected tab's underline sits ON it without
+   the -1px overlap a scrolling row would clip. */
+.inv-tabs {
+  position: relative;   /* the tabs' offsetLeft is measured from the row (keep the open tab in view) */
+  display: flex; gap: 4px; margin: 0 0 18px; box-shadow: inset 0 -1px 0 var(--border-default);
+  overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch;
+}
+.inv-tabs::-webkit-scrollbar { display: none; }
 .inv-tab {
-  padding: 9px 14px; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  flex: 0 0 auto; white-space: nowrap;
+  padding: 9px 14px; border: 0; border-bottom: 2px solid transparent;
   background: none; font: inherit; font-size: 14px; font-weight: 600; color: var(--text-secondary); cursor: pointer;
 }
 .inv-tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }

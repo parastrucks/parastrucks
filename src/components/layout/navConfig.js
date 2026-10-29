@@ -25,7 +25,6 @@ export const NAV_SECTIONS = [
       { type: 'link', to: '/vendor-jobs', icon: 'wrench',   label: 'Vendor Jobs' },
       { type: 'link', to: '/invoices',    icon: 'mail',     label: 'Invoices & Payments' },
       { type: 'link', to: '/gate',        icon: 'shield',   label: 'Gate Check' },
-      { type: 'link', to: '/payments',    icon: 'rupee',    label: 'Match Payments' },
       { type: 'erp',                      icon: 'landmark', label: 'HD Hyundai ERP', external: true },
     ],
   },
@@ -88,13 +87,13 @@ export const DEPT_TABS = {
   // (red team 4, R4-14). With it the bar has four tabs, so Profile is back too.
   service: [
     { to: '/',            icon: 'dashboard', label: 'Home' },
-    { to: '/payments',    icon: 'rupee',     label: 'Payments', gated: true },
+    { to: '/invoices?tab=match', access: '/payments', icon: 'rupee', label: 'Payments', gated: true },
     { to: '/vendor-jobs', icon: 'wrench',    label: 'Jobs' },
     { to: '/profile',     icon: 'user',      label: 'Profile' },
   ],
   accounts: [
     { to: '/',            icon: 'dashboard', label: 'Home' },
-    { to: '/payments',    icon: 'rupee',     label: 'Payments', gated: true },
+    { to: '/invoices?tab=match', access: '/payments', icon: 'rupee', label: 'Payments', gated: true },
     { to: '/vendor-jobs', icon: 'wrench',    label: 'Jobs' },
     { to: '/profile',     icon: 'user',      label: 'Profile' },
   ],
@@ -128,7 +127,7 @@ export const FALLBACK_TABS = [
  */
 export function bottomNavLayout({ isAdmin, deptCode, canAccess, hasCreate }) {
   let tabs = (isAdmin ? ADMIN_TABS : (DEPT_TABS[deptCode] || FALLBACK_TABS))
-    .filter((t) => !t.gated || canAccess?.(t.to))
+    .filter((t) => !t.gated || canAccess?.(t.access ?? t.to))
   if (hasCreate && tabs.length % 2 === 1) tabs = tabs.slice(0, -1)
   const mid = tabs.length / 2
   return {
@@ -143,10 +142,11 @@ export const CREATE_ACTIONS = [
   { to: '/proforma-invoice', icon: 'files',    label: 'New Proforma',    desc: 'Proforma invoice for physical vehicles' },
   { to: '/financier-copy',   icon: 'landmark', label: 'New Copy',        desc: "Financier's copy (Tax Invoice)" },
   { to: '/vendor-jobs',      icon: 'wrench',   label: 'New Vendor Job',  desc: 'Outside-workshop / ancillary repair job', openNew: true },
-  { to: '/invoices',         icon: 'mail',     label: 'Invoices & Payments', desc: 'Send the SAP invoice; ask for and approve credit releases' },
+  { to: '/invoices',         icon: 'mail',     label: 'Invoices & Payments', desc: 'Send SAP invoices, credit releases, match payments' },
   // Matching is done on staff phones (owner: the cornerstone), so it must be
-  // one tap from the mobile Create sheet, not three menus deep.
-  { to: '/payments',         icon: 'rupee',    label: 'Match Payments',  desc: 'Which bill is this payment for?' },
+  // one tap from the mobile Create sheet, not three menus deep. Since 2026-10-29 it is
+  // the Match tab of Invoices & Payments (one tool); `access` = the rule that still gates it.
+  { to: '/invoices?tab=match', access: '/payments', icon: 'rupee', label: 'Match Payments', desc: 'Which bill is this payment for?' },
 ]
 
 /* Is a nav item reachable for this user? Groups need ≥1 accessible child.

@@ -3,7 +3,10 @@
 // browser (nobody types the values), shows what it read, and on one tap stores it and
 // emails it to the customer. Reads are direct under RLS (gate_* tables); every write goes
 // through the gate-invoices Edge Function. Plan: docs/backlog/credit-release-plan.md.
-import { useCallback, useEffect, useRef, useState } from 'react'
+// ONE tool (owner, 2026-10-29): payments matching lives here too, as the Match / Import /
+// Cash & cheque tabs (PaymentsPage, embedded). Those tabs keep their own rules: the
+// /payments access rule (PTB service + accounts) AND the service-payments authority.
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import Icon from '../../components/Icon'
 import { useAuth } from '../../context/AuthContext'
@@ -14,7 +17,26 @@ import { formatRupees } from '../lib/sapInvoice'
 import { readInvoiceFile, toBase64 } from '../lib/readInvoiceFile'
 import { istTime, latestRelease, mayUse, releaseState, revealForm, useDeptCode, whoFrom } from '../lib/releases'
 import ReleasesPanel from '../components/ReleasesPanel'
+import { capabilitiesFor } from '../../service-payments/lib/matchQueue.js'
 import '../invoices.css'
+
+const PaymentsPage = lazy(() => import('../../service-payments/pages/PaymentsPage'))
+
+// Every tab of the one tool, in order. `pay` tabs are the payments screen's own.
+const TABS = [
+  { key: 'invoices', label: 'Invoices' },
+  { key: 'releases', label: 'Credit releases' },
+  { key: 'match',    label: 'Match',          pay: true },
+  { key: 'import',   label: 'Import',         pay: true },
+  { key: 'cash',     label: 'Cash & cheque',  pay: true },
+]
+const SUBTITLE = {
+  invoices: 'Upload the invoice PDF from SAP. The portal reads it and emails it to the customer.',
+  releases: 'Ask for a vehicle to leave on credit; the GM approves or holds it.',
+  match:    'Which bill is this payment for?',
+  import:   'Load the SAP Billing Report and the HDFC payments report.',
+  cash:     'Record money that did not come through the HDFC report.',
+}
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 const day = (iso) => { const [y, m, d] = iso.slice(0, 10).split('-').map(Number); return `${d} ${MONTHS[m - 1]} ${y}` }
@@ -53,14 +75,31 @@ function ReleaseLine({ rel }) {
 
 export default function InvoicesPage() {
   const toast = useToast()
-  const { profile } = useAuth()
+  const { profile, canAccess } = useAuth()
   const deptCode = useDeptCode(profile)
   const who = whoFrom(profile, deptCode)
+  // The payments tabs: the access rule for /payments first (it stays the switch per company and
+  // department), then the same rules the service-payments Edge Function holds.
+  const pay = deptCode !== undefined && canAccess('/payments') ? capabilitiesFor(profile, deptCode) : null
+  const shown = TABS.filter((t) => !t.pay || (pay?.canMatch && (
+    t.key === 'match' || (t.key === 'import' && pay.canImport) || (t.key === 'cash' && pay.canRecordCash))))
   const [params, setParams] = useSearchParams()
-  const tab = params.get('tab') === 'releases' ? 'releases' : 'invoices'
+  const asked = params.get('tab')
+  const tab = shown.some((t) => t.key === asked) ? asked : 'invoices'
   const focusRelease = params.get('release')
-  const setTab = (t) => setParams(t === 'releases' ? { tab: 'releases' } : {}, { replace: true })
+  const setTab = (t) => setParams(t === 'invoices' ? {} : { tab: t }, { replace: true })
+  const [toMatch, setToMatch] = useState(0)
   const [waiting, setWaiting] = useState(0)
+  // On a phone the tab row scrolls sideways: keep the open tab in view (the row only, never the page).
+  const tabsRef = useRef(null)
+  useEffect(() => {
+    const row = tabsRef.current
+    const b = row?.querySelector('[aria-selected="true"]')
+    if (!b) return
+    const left = b.offsetLeft, right = left + b.offsetWidth
+    if (left < row.scrollLeft) row.scrollLeft = left - 8
+    else if (right > row.scrollLeft + row.clientWidth) row.scrollLeft = right - row.clientWidth + 8
+  }, [tab, shown.length, toMatch, waiting])   // the count badges widen tabs after they load
   const [askFor, setAskFor] = useState(null)      // { id, note } — the inline "ask to release" row
   const fileRef = useRef(null)
   const [busy, setBusy] = useState(null)          // 'reading' | 'saving' | null
@@ -161,16 +200,26 @@ export default function InvoicesPage() {
         <div>
           <div className="page-head-crumb">Service Tools</div>
           <h1 className="page-head-title">Invoices &amp; Payments<span className="period-accent">.</span></h1>
-          <div className="page-head-sub">Upload the invoice PDF from SAP. The portal reads it and emails it to the customer.</div>
+          <div className="page-head-sub">{SUBTITLE[tab]}</div>
         </div>
       </div>
 
-      <div className="inv-tabs" role="tablist">
-        <button className="inv-tab" role="tab" aria-selected={tab === 'invoices'} onClick={() => setTab('invoices')}>Invoices</button>
-        <button className="inv-tab" role="tab" aria-selected={tab === 'releases'} onClick={() => setTab('releases')}>
-          Credit releases{waiting > 0 && <span className="badge badge-amber">{waiting} waiting</span>}
-        </button>
+      <div className="inv-tabs" role="tablist" aria-label="Invoices & Payments" ref={tabsRef}>
+        {shown.map((t) => (
+          <button key={t.key} className="inv-tab" role="tab" aria-selected={tab === t.key} onClick={() => setTab(t.key)}>
+            {t.label}
+            {t.key === 'releases' && waiting > 0 && <span className="badge badge-amber">{waiting} waiting</span>}
+            {/* Payments waiting for their bill are not counted (they are not unfinished work). */}
+            {t.key === 'match' && toMatch > 0 && <span className="badge badge-blue">{toMatch}</span>}
+          </button>
+        ))}
       </div>
+
+      {TABS.find((t) => t.key === tab)?.pay && (
+        <Suspense fallback={<div className="full-center"><div className="spinner" /></div>}>
+          <PaymentsPage embedded tab={tab} onTab={setTab} onCount={setToMatch} />
+        </Suspense>
+      )}
 
       {tab === 'releases' && <ReleasesPanel who={who} focusId={focusRelease} onChanged={load} />}
 

@@ -33,7 +33,6 @@ const FinancierCopyLog = lazy(() => import('./pages/FinancierCopyLog'))
 const ServiceJobs      = lazy(() => import('./pages/ServiceJobs'))
 const InvoicesPage     = lazy(() => import('./invoices/pages/InvoicesPage'))
 const GatePage         = lazy(() => import('./invoices/pages/GatePage'))
-const PaymentsPage     = lazy(() => import('./service-payments/pages/PaymentsPage'))
 
 // Placeholder for pages not yet built
 const Soon = ({ name }) => (
@@ -116,7 +115,9 @@ export default function App() {
             <Route path="/vendor-jobs"          element={<ProtectedRoute><ServiceJobs /></ProtectedRoute>} />
             <Route path="/invoices"             element={<ProtectedRoute><InvoicesPage /></ProtectedRoute>} />
             <Route path="/gate"                 element={<ProtectedRoute><GatePage /></ProtectedRoute>} />
-            <Route path="/payments"             element={<ProtectedRoute><PaymentsPage /></ProtectedRoute>} />
+            {/* One tool (2026-10-29): matching is the Match tab of Invoices & Payments. The old
+                address still works — behind the same /payments access rule. */}
+            <Route path="/payments"             element={<ProtectedRoute><Navigate to="/invoices?tab=match" replace /></ProtectedRoute>} />
 
             {/* Access rules — always admin-only (hardcoded safety net) */}
             <Route

@@ -39,7 +39,7 @@ export default function BottomNav() {
   // for that one fetch round-trip rather than flashing the wrong FALLBACK tabs.
   if (!isAdmin && profile.department_id && !deptResolved) return null
 
-  const createActions = CREATE_ACTIONS.filter(a => canAccess(a.to))
+  const createActions = CREATE_ACTIONS.filter(a => canAccess(a.access ?? a.to))
   const hasCreate = createActions.length > 0
   const { left, right } = bottomNavLayout({ isAdmin, deptCode, canAccess, hasCreate })
 

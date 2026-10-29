@@ -26,7 +26,7 @@ const SECTIONS = [
     label: 'Service Tools',
     cards: [
       { type: 'link', icon: 'wrench', title: 'Vendor Jobs', desc: 'Track outside-workshop & ancillary repair jobs.', to: '/vendor-jobs' },
-      { type: 'link', icon: 'mail', title: 'Invoices & Payments', desc: 'Send the SAP invoice; ask for and approve credit releases.', to: '/invoices' },
+      { type: 'link', icon: 'mail', title: 'Invoices & Payments', desc: 'Send SAP invoices, release vehicles on credit, match payments to bills.', to: '/invoices' },
       { type: 'erp', icon: 'landmark', title: 'HD Hyundai Service ERP', desc: 'Service ops — job cards, spares, stock & billing.' },
     ],
   },
