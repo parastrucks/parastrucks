@@ -30,6 +30,45 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ---
 
+## Current state (2026-10-30)
+
+- **AL review — where to start (owner: "Let's rather start from 22-23" → "whatever is the earliest point"):** there
+  are **no 2022-23 AL sheets** (the earliest of the 68 copies is Oct 2023) and **0 of the 458 trucks of 2022-23 are on
+  any later sheet** → the review starts at **2023-24 (283 issues)**: Oct-23 22 · Nov 39 · Dec 35 · Jan-24 58 · Feb 64 ·
+  Mar 65; 0 marked right yet. The panel (Year = 2023-24) was left open in the owner's Chrome; NOT yet read through.
+- ⭐ **Owner rule — Tally Bill ≠ PTB CTC:** the bill (column `tally_bill`, "Tally Bill" = the billing value) is raised
+  HIGHER than PTB CTC to justify a higher financier DO; a credit note brings it down to PTB CTC (read as **PTB CTC =
+  bill − credit note**; the owner wrote "Billing amount = PTB CTC − Credit note" — the direction was asked, not
+  answered, the data says bill ≥ CTC). The portal already keeps them apart (TCS + pre-Aug-25 road tax on the bill,
+  Total = PTB CTC + TCS). **No Credit Note column** (owner: "automatically understood"). A "same/different" column was
+  **temporary only** (owner: "not needed in the final trackers") → reverted, never committed. **Cohorts (counts,
+  7,255 current trucks):** same 3,582 · bill higher 3,114 · **bill lower 10** · a figure missing 549 (275 = no PTB
+  invoice date). Financier named: 2,936 same / 3,036 higher; **cash/self: 637 same / 77 higher**; bill higher by year
+  63% (23-24) → 59% → 37% → 21% (26-27). Of the 77: 46 have Finance Recd (likely financed, financier not typed), 31
+  none; one customer 28, another 11. Lists were shown on screen only (in-page box), never in the chat.
+- **✅ YES/NO CHECKS FOR THE TEAM — BUILT on staging (`120e3d6`).** Owner: *"Each check … should have the chassis
+  number against the value … hosted on the staging site so that I can ask my team … yes/no … If No, give option to
+  record the correct value which would then be approved by me."* Page **`/tracker-checks`** ("Tracker Checks" in the
+  menu; opened by the tracker switch, phone-first, no grid): one card = chassis + ONE value + a few figures beside it;
+  Yes (done, no approval) / No (+ right value, optional, + note) → **only admin approves** → written into the truck,
+  audited `source='check'` (History: "corrected by a check"); refused if the truck changed since (shows what it holds);
+  Send back → answered again. Migration **`20261030_phase10_tracker_checks.sql`** on STAGING (table `tracker_checks`,
+  flat; `tracker_check_answer` / `tracker_check_review`; no API grants) → **17 tracker migrations for prod**. EF
+  `admin-vehicle-units` + `checksList`/`checkAnswer`/`checkReview` — **deployed to staging**. Check sets are made by
+  SQL: `scripts/phase10/checks/2026-10-30-bill-vs-ctc.sql` (re-runnable) → "Tally Bill lower than PTB CTC" (10 trucks ×
+  tally_bill + ctc = 20) · "Cash / self, but billed higher than PTB CTC" (77, column finance_bank). Tests: probe-checks
+  **18/0** (planted: no "changed" guard → 16/2; a Yes keeping a value → the table CHECK refuses) · vehicle-units **704** ·
+  tracker-cells **162** · build + no-undef clean. Seen in the owner's Chrome on a TEST truck: No → Send back → No →
+  Approve → value written, TCS recomputed, audit `check`. **No real check answered.**
+  ⚠️ **TEST truck `ZZPROBE-CHECK-01` + check set "TEST — delete me" stay on staging — delete only with the owner's yes
+  (asked, not answered).** Staging `ALLOWED_ORIGINS` += `https://portal-git-10b-foundation-parastrucks-projects.vercel.app`
+  (old value sha `212814fc…` checked first; new `9c262ed3…`).
+  ⏭️ **Owner, before the team can use it:** (1) sign in on the branch's staging site (left open on its login page in
+  Chrome; the new build not yet seen there) · (2) staging logins for the team with the Tracker switch (Claude does not
+  create accounts for real people) · (3) **Vercel's login wall on previews** blocks anyone without a Vercel account —
+  the owner decides (Vercel → portal → Settings → Deployment Protection); staging now holds real data, the portal login
+  still guards it.
+
 ## Current state (2026-10-28)
 
 - **✅ Owner, 2026-10-28:** (1) "make it load this year first, rest in background" → BUILT · (2) "AL Balance sheets are

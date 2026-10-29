@@ -26,6 +26,35 @@
 
 ---
 
+## Session log — 2026-10-30 (PC): where the AL review starts, Tally Bill vs PTB CTC, Yes/No checks for the team
+
+Same session and branch (`10b-foundation`). Staging only; prod untouched. Commit `120e3d6` (+ this docs commit).
+
+- **AL review start.** Owner: "start from 22-23" → there are no 2022-23 AL sheets (earliest Oct 2023) and none of the
+  458 trucks of 2022-23 appear on a later sheet; owner: "whatever is the earliest point" → 2023-24, 283 issues
+  (Oct-23 22 · Nov 39 · Dec 35 · Jan-24 58 · Feb 64 · Mar 65). Panel opened on 2023-24 in the owner's Chrome; the
+  read-through itself has not started.
+- **Tally Bill vs PTB CTC (owner rule).** The billing value is raised higher than PTB CTC to justify a higher financier
+  DO; a credit note brings it down. The portal already kept them apart. Owner: no Credit Note column; a same/different
+  column only as a temporary check → built, then reverted on the owner's word (never committed); the check ran as SQL
+  in cohorts instead: 7,255 current trucks — same 3,582, bill higher 3,114, bill lower 10, a figure missing 549; cash/self
+  637 same / 77 higher; bill-higher share falling 63% → 21% from 2023-24 to 2026-27. The 10 and the 77 were shown
+  in an in-page box in the owner's Chrome (no figures in the chat). Of the 77, 46 have Finance Recd; two customers hold
+  39 of them.
+- **Owner: "These checks are not easy to do"** → each check = the chassis against ONE value, Yes/No, a No records the
+  right value, the owner approves; hosted on the staging site for the team. Built: migration
+  `20261030_phase10_tracker_checks.sql` (table `tracker_checks`, flat; `tracker_check_answer`, `tracker_check_review` —
+  approval writes through the same `jsonb_populate_record` update as `tracker_apply_changes`, with `tracker.source =
+  'check'`, and refuses if the truck no longer holds the value shown); EF actions `checksList` / `checkAnswer` (tracker
+  switch) / `checkReview` (admin only); page `/tracker-checks` (phone-first cards); History says "corrected by a
+  check". Check sets come from SQL (`scripts/phase10/checks/2026-10-30-bill-vs-ctc.sql`): 20 + 77 questions.
+  Tests: probe-checks 18/0 (planted bugs: no "changed" guard → 16/2; a Yes keeping a value → the table CHECK refuses),
+  vehicle-units 704, tracker-cells 162, build + no-undef. Seen end to end on a TEST truck (`ZZPROBE-CHECK-01`, check set
+  "TEST — delete me", kept until the owner says) through No → Send back → No → Approve.
+- **Staging site for the team.** `ALLOWED_ORIGINS` on staging += the `10b-foundation` preview address (old value
+  checked by sha256 first). Still the owner's: team logins on staging with the Tracker switch, and Vercel's login wall on
+  previews (people without a Vercel account cannot open it; staging now holds real data).
+
 ## Session log — 2026-10-28 (late) → 10-29 (PC): the AL review fixed, one year at a time, dummy + DEMO data deleted
 
 Same session and branch (`10b-foundation`). Staging only; prod untouched. Commits `507821f` · `642393f` · `015170f` ·

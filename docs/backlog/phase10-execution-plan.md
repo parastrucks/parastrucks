@@ -1007,7 +1007,15 @@ Also: a phone view (read-only cards) and the local save queue across reloads (E5
      md5; details CLAUDE.md 2026-10-28). ✅ One FY at a time (panel Year picker) · ✅ cold-start fix (migration
      `…_al_review_index`: covering index + work_mem; **16 tracker migrations for prod**) · ✅ dummy Oct 2026 upload and
      ✅ ALL DEMO trucks deleted (owner, 10-28/29) → **1,525 real issues** (2023-24 283 · 2024-25 422 · 2025-26 466 ·
-     2026-27 354), API 1.5–2.9 s. NEXT: read the review with the owner, a year at a time (2026-27 first?).
+     2026-27 354), API 1.5–2.9 s. NEXT: read the review with the owner, a year at a time — **owner 2026-10-30: from the
+     earliest point** = 2023-24 (no 2022-23 AL sheets exist; 0 of the 458 2022-23 trucks on any later sheet).
+  2b. ✅ **2026-10-30: Yes/No CHECKS for the team BUILT on staging (`120e3d6`)** — `/tracker-checks`; chassis + ONE
+     value per card, Yes / No + the right value, only admin approves (written into the truck, audit `source='check'`,
+     refused if the truck changed since). Migration `…_tracker_checks` (**17 tracker migrations for prod**), EF actions
+     `checksList` / `checkAnswer` / `checkReview` (staging). Check sets are made by SQL (`scripts/phase10/checks/`):
+     "Tally Bill lower than PTB CTC" (20) · "Cash / self, but billed higher than PTB CTC" (77). Owner rule the same
+     day: Tally Bill ≠ PTB CTC (bill higher for the financier's DO, a credit note down to PTB CTC; no Credit Note
+     column). Waiting on the owner: team logins on staging + Vercel's preview login wall. Details CLAUDE.md 2026-10-30.
      *Earlier:* ✅ **AL Balance Sheet monthly upload BUILT on staging 2026-10-25** (see step 0). After the real load: upload the
      owner's REAL 2025-26 sheets on staging and read the review with him (the 23-Oct rehearsal predicts ~172
      CTD differences, 43 trucks on no sheet, 51 unfinished splits, 55 spellings — the first month will be long;
@@ -1022,7 +1030,8 @@ Also: a phone view (read-only cards) and the local save queue across reloads (E5
   (2026-10-25: tracker_al_upload `a1c93d3d…`, tracker_al_review `f28f533b…`, tracker_al_settle `d3833fae…`,
   tracker_al_mode `8b459ecb…`, tracker_al_kind `45f5974c…` = file; 3 DUMMY uploads, 435 lines, 1 settled line) — since
   10-28/29 also `…_refund_not_open`, `…_working_rest`, `…_al_review_fast` (tracker_al_review `a79e49a7…`) and
-  `…_al_review_index` (index `vehicle_units_al_review` + work_mem 16MB); 36 REAL AL months (the dummy Oct deleted; the 2
+  `…_al_review_index` (index `vehicle_units_al_review` + work_mem 16MB), and since 10-30 `…_tracker_checks` (97 real
+  checks + 1 TEST check on test truck `ZZPROBE-CHECK-01` — delete only with the owner's yes); 36 REAL AL months (the dummy Oct deleted; the 2
   replaced dummy Sep kept); NO DEMO trucks any more (deleted 10-29; 7,259 real); Edge Functions
   `admin-vehicle-units` (endhan_date + mto_advance + al_retail_date + al_ctc; actions `book` + `find` + `alUpload` /
   `alReview` / `alSettle`, BOOK_PAGE 2500) and `admin-users` (tracker actions) as in

@@ -69,7 +69,7 @@ text (`5K-DSA`), stored as text + a parsed amount and kind · **HID** = hidden f
 | 40 | `do_date` | date | IN | `DO DATE` | |
 | 41 | `do_amount` | numeric | IN | `DO AMOUNT` | |
 | 42 | `mrp` | numeric | IN | `MRP` | |
-| 43 | `tally_bill` | numeric | IN | RETAIL `TALLY BILL` · FY `CUSTOMER BILL` | |
+| 43 | `tally_bill` | numeric | IN | RETAIL `TALLY BILL` · FY `CUSTOMER BILL` | the **billing value** — NOT PTB CTC (owner 2026-10-30): raised higher to justify a higher financier DO, a credit note brings it down to PTB CTC (PTB CTC = bill − credit note). No credit-note column ("automatically understood"). Measured: bill ≥ PTB CTC on all but 10 trucks |
 | 44 | `amc_charged_to_customer` | text | TXT$ | RETAIL/FY `AMC` | 99% text |
 | 45 | `tcs` | numeric | DB | `TCS` | `tally_bill × 1%` (NOT ctc — R2-14) |
 | 46 | `total` | numeric | DB | `TOTAL` | `ctc + tcs` (PTB CTC) |
