@@ -98,10 +98,19 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   **16 tracker migrations for prod.**
   ⭐ **5,091 of the 6,616 issues are DEMO trucks** (`DEMO-` chassis, all `not_on_sheet`: they carry AL statuses and
   dates but are on no real sheet). **Real issues: 2023-24 283 · 2024-25 422 · 2025-26 466 · 2026-27 354 = 1,525.**
-  Prod has no DEMO rows, so no code change. ❓ Owner: the DEMO x4 rows were kept "until the real load" — it is done;
-  delete them now (needs his yes)? ⏭️ Then read the review with the owner, a year at a time.
-- ⚠️ **Open / owner:** the 36 AL "IBND" Aug–Sep 2025 trucks (returned to AL?) still unconfirmed · the DUMMY Oct 2026 AL
-  upload is the current Oct 2026 (delete needs the owner's yes) · DEMO x4 rows stay · prod ONLY on command —
+  Prod has no DEMO rows, so no code change.
+- **✅ 2026-10-29 — ALL DEMO TRUCKS DELETED FROM STAGING (owner: "yes").** Counted first: 24,606 `DEMO-` trucks + their
+  34,004 notes + 6,604 colours (cascade), 0 incentives; no real↔demo link. One transaction hit the CLI query timeout
+  (nothing deleted) → batches of 2,000 (`where chassis_no like 'DEMO-%'`, re-runnable). ⚠️ One DEMO original pointed
+  at its DEMO rebill (`superseded_by_id`, the 22-Oct probe pair) → a batch split them → FK refusal; deleted the
+  original first. **Left = exactly the real load: 7,259 trucks · 15,785 notes · 1,857 colours · 3,847 incentives.**
+  KEPT (not asked): the DEMO trucks' 24,652 `tracker_audit` rows (no FK; inert). `vacuum (analyze)`: vehicle_units
+  55 MB → **6.4 MB**, 808/808 pages all-visible. Now: AL review **1,525 issues, 36 months, 0 DEMO** (2023-24 283 ·
+  2024-25 422 · 2025-26 466 · 2026-27 354), 400 KB; DB 0.9–1.3 s, API 1.5–2.9 s. Tracker (dev, double load): drawn
+  at 7.8 s; `year` 1,507 in 1.1 s + `rest` 304 in 1.3 s = **working 1,811**. ⏭️ Read the review with the owner, a
+  year at a time.
+- ⚠️ **Open / owner:** the 36 AL "IBND" Aug–Sep 2025 trucks (returned to AL?) still unconfirmed · ✅ dummy Oct 2026 AL
+  upload + DEMO trucks DELETED (10-28/29) · prod ONLY on command —
   **16 tracker migrations** for prod now (LF), + EF `admin-vehicle-units`.
 - **Local only:** the worktree `.env` has `VITE_TURNSTILE_SITE_KEY` commented out (gitignored; staging never checks
   it) so a local sign-in works; the dev server runs on :3000; a Claude-in-Chrome tab is open on `/tracker`.
