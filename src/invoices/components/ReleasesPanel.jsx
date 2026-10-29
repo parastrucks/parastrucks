@@ -8,13 +8,17 @@ import { useToast } from '../../context/ToastContext'
 import { supabase } from '../../lib/supabase'
 import { callEdge } from '../../lib/api'
 import { formatRupees } from '../lib/sapInvoice'
-import { istTime, isApprover, mayDecideFor, RELEASE_HOURS, releaseState, revealForm } from '../lib/releases'
+import {
+  customerSummary, dayLabel, istTime, istToday, isApprover, lastPromiseDay, loadReleased, mayDecideFor,
+  RELEASE_HOURS, releaseState, revealForm,
+} from '../lib/releases'
 import { alertStatus, turnAlertsOff, turnAlertsOn } from '../lib/pushAlerts'
 import { keepSignedInForAlerts } from '../../lib/supabase'
 
 const SELECT = `id, entity_id, document_id, regn_no, status, request_note, requested_at, requested_by, decided_at,
-  decision_note, valid_until, card,
+  decision_note, valid_until, card, promised_by,
   requester:users!gate_releases_requested_by_fkey(full_name), decider:users!gate_releases_decided_by_fkey(full_name),
+  responsible:users!gate_releases_responsible_id_fkey(full_name),
   gate_documents(doc_no, customer_name, sap_customer_code, total_paise, gate_bills(bill_no, amount_paise, terms))`
 
 function StateBadge({ rel }) {
@@ -26,32 +30,83 @@ function StateBadge({ rel }) {
   return <span className="badge badge-gray">Withdrawn</span>
 }
 
-// What this customer already took on credit through this tool. No "paid" status exists yet
-// (step 3), so this is a count of earlier releases — NOT what they owe in Busy. Said so.
-function Earlier({ rel }) {
+// What this customer already took on credit through this tool, and — from matching (step 3) —
+// what of it is still unpaid. Only invoices released through the portal: NOT their Busy balance,
+// and said so. Someone who cannot read the matching tool gets the count only, never a guess.
+function Earlier({ rel, seesPaid }) {
   const [e, setE] = useState(null)
   const code = rel.gate_documents?.sap_customer_code
   useEffect(() => {
     let off = false
-    supabase.from('gate_releases')
-      .select('id, decided_at, gate_documents!inner(sap_customer_code, total_paise)')
-      .eq('entity_id', rel.entity_id).eq('status', 'approved').neq('id', rel.id)
-      .eq('gate_documents.sap_customer_code', code)
-      .then(({ data }) => {
-        if (off || !data) return
-        setE({ n: data.length, total: data.reduce((s, x) => s + Number(x.gate_documents.total_paise), 0),
-          last: data.map((x) => x.decided_at).sort().at(-1) })
-      })
+    loadReleased(supabase, { entityId: rel.entity_id, sapCode: code, excludeDocumentId: rel.document_id, canSeePayments: seesPaid })
+      .then((rows) => { if (!off) setE({ rows, s: customerSummary(rows, istToday()) }) })
+      .catch(() => { if (!off) setE({ error: true }) })
     return () => { off = true }
-  }, [rel.id, rel.entity_id, code])
+  }, [rel.entity_id, rel.document_id, code, seesPaid])
   if (!e) return null
+  const note = <span className="rel-earlier-note"> Only what was released through the portal — not their Busy balance.</span>
+  if (e.error) return <div className="rel-earlier">Could not read this customer’s earlier releases.</div>
+  const s = e.s
+  if (s.invoices === 0) return <div className="rel-earlier">Nothing released on credit to this customer before.{note}</div>
+  const last = e.rows.map((x) => x.released_at).sort().at(-1)
+  if (!seesPaid) {
+    return (
+      <div className="rel-earlier">
+        Released on credit before: {s.invoices} · {formatRupees(e.rows.reduce((t, x) => t + x.total_paise, 0))} · last {istTime(last)}.{note}
+      </div>
+    )
+  }
   return (
     <div className="rel-earlier">
-      {e.n === 0
-        ? 'No earlier credit release for this customer in the portal.'
-        : `Earlier credit releases in the portal: ${e.n} · ${formatRupees(e.total)} · last ${istTime(e.last)}.`}
-      <span className="rel-earlier-note"> Not their Busy balance — paid status comes later.</span>
+      Released on credit before: {s.invoices}
+      {s.unpaid > 0
+        ? <> · <strong>{s.unpaid} not paid, {formatRupees(s.due_paise)} due</strong> (oldest {istTime(s.oldest_unpaid_at)})</>
+        : s.unknown === 0 && <> · all paid</>}
+      {s.unknown > 0 && <> · {s.unknown} can’t tell yet</>}
+      {s.broken > 0 && <> · <strong className="fu-broken">{s.broken} promise{s.broken === 1 ? '' : 's'} broken</strong></>}.
+      {note}
     </div>
+  )
+}
+
+// The staff a promise can name: active people of the invoice's company (and the owner), not guards.
+function useStaff(entityId, open) {
+  const [staff, setStaff] = useState([])
+  useEffect(() => {
+    if (!open) return
+    let off = false
+    supabase.from('users').select('id, full_name, departments(code)')
+      .eq('is_active', true).or(`entity_id.eq.${entityId},permission_level.eq.admin`).order('full_name')
+      .then(({ data }) => { if (!off) setStaff((data ?? []).filter((u) => u.departments?.code !== 'security')) })
+    return () => { off = true }
+  }, [entityId, open])
+  return staff
+}
+
+function PromiseForm({ rel, busy, onApprove, onCancel }) {
+  const toast = useToast()
+  const today = istToday()
+  const [day, setDay] = useState('')
+  const [who, setWho] = useState('')
+  const staff = useStaff(rel.entity_id, true)
+  return (
+    <form className="inv-send rel-promise" ref={revealForm} onSubmit={(e) => {
+      e.preventDefault()
+      if (!day && !who) { toast.error('Pick the day they will pay by, or who is responsible — or just Approve.'); return }
+      onApprove({ promised_by: day || null, responsible_id: who || null })
+    }}>
+      <label>Pays by
+        <input className="form-input" type="date" min={today} max={lastPromiseDay(today)} value={day} onChange={(e) => setDay(e.target.value)} />
+      </label>
+      <label>Responsible
+        <select className="form-input" value={who} onChange={(e) => setWho(e.target.value)}>
+          <option value="">— nobody named —</option>
+          {staff.map((u) => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+        </select>
+      </label>
+      <button className="btn btn-sm rel-approve" type="submit" disabled={busy}>{busy ? 'Approving…' : `Approve ${rel.regn_no}`}</button>
+      <button className="btn btn-sm btn-secondary" type="button" onClick={onCancel}>Cancel</button>
+    </form>
   )
 }
 
@@ -81,12 +136,14 @@ function AlertsLine() {
   )
 }
 
-export default function ReleasesPanel({ who, focusId, onChanged }) {
+export default function ReleasesPanel({ who, focusId, onChanged, seesPaid = false }) {
   const toast = useToast()
   const [rels, setRels] = useState(null)
   const [err, setErr] = useState(null)
   const [busy, setBusy] = useState(null)
   const [holdFor, setHoldFor] = useState(null)   // { id, note }
+  const [promiseFor, setPromiseFor] = useState(null)   // release id with the promise form open
+  const today = istToday()
 
   const load = useCallback(async () => {
     const { data, error } = await supabase.from('gate_releases').select(SELECT).order('requested_at', { ascending: false }).limit(40)
@@ -108,6 +165,7 @@ export default function ReleasesPanel({ who, focusId, onChanged }) {
       await callEdge('gate-invoices', action, { release_id: rel.id, ...payload })
       toast.success(okMsg)
       setHoldFor(null)
+      setPromiseFor(null)
     } catch (e) { toast.error(e.message) }
     finally { setBusy(null); await load(); onChanged?.() }
   }
@@ -135,7 +193,14 @@ export default function ReleasesPanel({ who, focusId, onChanged }) {
                     <div className="inv-meta">{r.status === 'withdrawn' ? 'Withdrawn' : r.status === 'held' ? 'Held' : 'Approved'} by {r.decider?.full_name ?? '—'} · {istTime(r.decided_at)}</div>
                   )}
                   {r.decision_note && <div className={r.status === 'held' ? 'inv-fail' : 'rel-note'}>{r.status === 'held' ? 'Reason: ' : ''}{r.decision_note}</div>}
-                  {r.status === 'asked' && <Earlier rel={r} />}
+                  {r.status === 'approved' && (r.promised_by || r.responsible) && (
+                    <div className="rel-note">
+                      Promise: {r.promised_by && <>pays by {dayLabel(r.promised_by, today)}</>}
+                      {r.promised_by && r.responsible && ' · '}
+                      {r.responsible && <>{r.responsible.full_name} responsible</>}
+                    </div>
+                  )}
+                  {r.status === 'asked' && <Earlier rel={r} seesPaid={seesPaid} />}
                 </div>
                 <div className="inv-row-side">
                   <div className="inv-amount">{formatRupees(Number(d?.total_paise ?? 0))}</div>
@@ -149,7 +214,10 @@ export default function ReleasesPanel({ who, focusId, onChanged }) {
                           onClick={() => act(r, 'decideRelease', { decision: 'approve' }, `${r.regn_no} released for ${RELEASE_HOURS} hours.`)}>
                           <Icon name="check" size={14} /> Approve
                         </button>
-                        {holdFor?.id !== r.id && <button className="btn btn-sm btn-secondary" disabled={busy === r.id} onClick={() => setHoldFor({ id: r.id, note: '' })}>Hold</button>}
+                        {holdFor?.id !== r.id && <button className="btn btn-sm btn-secondary" disabled={busy === r.id} onClick={() => { setPromiseFor(null); setHoldFor({ id: r.id, note: '' }) }}>Hold</button>}
+                        {/* About 1 approval in 10 carried a promise in the WhatsApp group: Approve stays
+                            one tap, the promise is one link away (owner, 2026-10-29). */}
+                        {promiseFor !== r.id && <button type="button" className="rel-link" disabled={busy === r.id} onClick={() => { setHoldFor(null); setPromiseFor(r.id) }}>Approve with a promise</button>}
                       </>
                     )}
                     {(r.requested_by === who.id || who.permission_level === 'admin') && !decide && (
@@ -157,6 +225,11 @@ export default function ReleasesPanel({ who, focusId, onChanged }) {
                         onClick={() => act(r, 'withdrawRelease', {}, 'Request withdrawn.')}>Withdraw</button>
                     )}
                   </div>
+                )}
+                {promiseFor === r.id && (
+                  <PromiseForm rel={r} busy={busy === r.id} onCancel={() => setPromiseFor(null)}
+                    onApprove={(promise) => act(r, 'decideRelease', { decision: 'approve', ...promise },
+                      `${r.regn_no} released for ${RELEASE_HOURS} hours, with the promise.`)} />
                 )}
                 {holdFor?.id === r.id && (
                   <form className="inv-send" ref={revealForm} onSubmit={(e) => {

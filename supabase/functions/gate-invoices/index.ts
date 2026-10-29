@@ -38,6 +38,8 @@ import { pushEndpointAllowed, sendPush, type Vapid } from "./push.ts"
 import { invoiceEmail, mimeMessage, properName, rupees, senderFor } from "./mail.ts"
 import { AL_LOGO_PNG_B64, PARAS_LOGO_PNG_B64 } from "./logos.ts"
 import { sendSmtp, SmtpError } from "./smtp.ts"
+import { cleanPromiseDay, customerSummary, istToday, PROMISE_MAX_DAYS } from "./paid.ts"
+import { loadReleased } from "./released.ts"
 
 type Caller = {
   id: string
@@ -423,27 +425,49 @@ Deno.serve(async (req: Request) => {
         const note = cleanNote(payload.note)
         if (note === false) return json({ error: "The note is longer than 300 characters." }, 400)
         if (decision === "hold" && !note) return json({ error: "Say why it is held — the service team sees the note." }, 400)
+        // Step 3: an approval MAY carry a promise — the day the customer will pay by, and/or the
+        // staff member responsible (owner, 2026-10-28/29). A hold never does.
+        const today = istToday()
+        const promisedBy = cleanPromiseDay(payload.promised_by, today)
+        if (promisedBy === false) return json({ error: `The promise date must be a day from today to ${PROMISE_MAX_DAYS} days ahead.` }, 400)
+        const responsibleId = payload.responsible_id === undefined || payload.responsible_id === null || payload.responsible_id === "" ? null : payload.responsible_id
+        if (responsibleId !== null && (typeof responsibleId !== "string" || !UUID.test(responsibleId))) return json({ error: "Pick the responsible person from the list." }, 400)
+        if (decision === "hold" && (promisedBy || responsibleId)) return json({ error: "A promise goes with an approval, not a hold." }, 400)
+
         const r = await loadRelease(payload.release_id); if ("err" in r) return r.err
         const rel = r.rel
         if (!mayDecideFor(caller, rel.entity_id)) return json({ error: "Only the Service GM of this company or the owner can approve or hold." }, 403)
 
-        // What the card showed: this customer's earlier releases through this tool. (No paid
-        // status until step 3, and nothing billed outside the tool — so it is a count, not a
-        // balance; the screen says so.)
+        // The responsible person is an active staff member of the invoice's company (or the owner),
+        // never a guard — someone the Follow-up list can name and, later, remind.
+        let responsibleName: string | null = null
+        if (responsibleId) {
+          const { data: who } = await admin.from("users").select("full_name, is_active, entity_id, permission_level, departments(code)")
+            .eq("id", responsibleId).maybeSingle() as unknown as
+            { data: { full_name: string; is_active: boolean; entity_id: string | null; permission_level: string; departments: { code: string } | null } | null }
+          const fits = who && who.is_active && who.departments?.code !== "security" &&
+            (who.permission_level === "admin" || who.entity_id === rel.entity_id)
+          if (!fits) return json({ error: "The responsible person must be an active staff member of this company." }, 400)
+          responsibleName = who.full_name
+        }
+
+        // What the card showed: this customer's earlier releases through this tool and — from the
+        // matching tool — what is still unpaid on them (step 3; paid comes only from matching).
+        // Only invoices released through the portal: NOT their whole Busy balance.
         const { data: doc } = await admin.from("gate_documents").select("sap_customer_code, total_paise, regn_no").eq("id", rel.document_id).single()
-        const { data: earlier } = await admin.from("gate_releases")
-          .select("id, decided_at, gate_documents!inner(sap_customer_code, total_paise)")
-          .eq("entity_id", rel.entity_id).eq("status", "approved").neq("id", rel.id)
-          .eq("gate_documents.sap_customer_code", doc?.sap_customer_code ?? "") as unknown as
-          { data: { id: string; decided_at: string; gate_documents: { total_paise: number } }[] | null }
+        const earlier = await loadReleased(admin, {
+          entityId: rel.entity_id, sapCode: doc?.sap_customer_code ?? "", excludeDocumentId: rel.document_id,
+        }).catch((e) => { console.error("decideRelease earlier:", (e as Error).message); return null })
         const card = {
           regn_no: doc?.regn_no, total_paise: Number(doc?.total_paise ?? 0),
           earlier_releases: earlier?.length ?? 0,
-          earlier_total_paise: (earlier ?? []).reduce((s, e) => s + Number(e.gate_documents.total_paise), 0),
+          earlier_total_paise: (earlier ?? []).reduce((s, e) => s + e.total_paise, 0),
+          ...(earlier ? { earlier_unpaid: customerSummary(earlier, today) } : { earlier_unpaid_error: true }),
         }
         const now = new Date()
         const patch = decision === "approve"
-          ? { status: "approved", valid_until: new Date(now.getTime() + RELEASE_HOURS * 3600_000).toISOString() }
+          ? { status: "approved", valid_until: new Date(now.getTime() + RELEASE_HOURS * 3600_000).toISOString(),
+              promised_by: promisedBy, responsible_id: responsibleId }
           : { status: "held" }
         const { data, error } = await admin.from("gate_releases")
           .update({ ...patch, decided_by: caller.id, decided_at: now.toISOString(), decision_note: note, card })
@@ -455,7 +479,8 @@ Deno.serve(async (req: Request) => {
           return json({ error: `Already ${cur.status === "approved" ? "approved" : cur.status === "held" ? "held" : cur.status} by ${cur.users?.full_name ?? "someone"}${cur.decided_at ? ` at ${istTime(cur.decided_at)}` : ""}.` }, 409)
         }
         await audit(admin, { actorId: caller.id, action: decision === "approve" ? "gate_release_approved" : "gate_release_held",
-          targetId: data.id, after: { regn_no: data.regn_no, valid_until: data.valid_until, note, card } })
+          targetId: data.id, after: { regn_no: data.regn_no, valid_until: data.valid_until, note, card,
+            promised_by: data.promised_by ?? null, responsible: responsibleName } })
         const who = caller.full_name || "an approver"
         await alertApprovers(data.entity_id, closedMessage(data, decision === "approve"
           ? `released by ${who} until ${istTime(data.valid_until)}` : `held by ${who}`), caller.id)

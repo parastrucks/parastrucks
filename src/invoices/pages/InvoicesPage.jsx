@@ -17,6 +17,7 @@ import { formatRupees } from '../lib/sapInvoice'
 import { readInvoiceFile, toBase64 } from '../lib/readInvoiceFile'
 import { istTime, latestRelease, mayUse, releaseState, revealForm, useDeptCode, whoFrom } from '../lib/releases'
 import ReleasesPanel from '../components/ReleasesPanel'
+import FollowUpPanel from '../components/FollowUpPanel'
 import { capabilitiesFor } from '../../service-payments/lib/matchQueue.js'
 import '../invoices.css'
 
@@ -26,6 +27,8 @@ const PaymentsPage = lazy(() => import('../../service-payments/pages/PaymentsPag
 const TABS = [
   { key: 'invoices', label: 'Invoices' },
   { key: 'releases', label: 'Credit releases' },
+  // Paid comes only from matching, so Follow-up needs the matching tool too (step 3).
+  { key: 'followup', label: 'Follow-up',      needsPaid: true },
   { key: 'match',    label: 'Match',          pay: true },
   { key: 'import',   label: 'Import',         pay: true },
   { key: 'cash',     label: 'Cash & cheque',  pay: true },
@@ -33,6 +36,7 @@ const TABS = [
 const SUBTITLE = {
   invoices: 'Upload the invoice PDF from SAP. The portal reads it and emails it to the customer.',
   releases: 'Ask for a vehicle to leave on credit; the GM approves or holds it.',
+  followup: 'Released on credit and not paid yet — broken promises first.',
   match:    'Which bill is this payment for?',
   import:   'Load the SAP Billing Report and the HDFC payments report.',
   cash:     'Record money that did not come through the HDFC report.',
@@ -81,7 +85,7 @@ export default function InvoicesPage() {
   // The payments tabs: the access rule for /payments first (it stays the switch per company and
   // department), then the same rules the service-payments Edge Function holds.
   const pay = deptCode !== undefined && canAccess('/payments') ? capabilitiesFor(profile, deptCode) : null
-  const shown = TABS.filter((t) => !t.pay || (pay?.canMatch && (
+  const shown = TABS.filter((t) => t.needsPaid ? Boolean(pay?.canMatch) : !t.pay || (pay?.canMatch && (
     t.key === 'match' || (t.key === 'import' && pay.canImport) || (t.key === 'cash' && pay.canRecordCash))))
   const [params, setParams] = useSearchParams()
   const asked = params.get('tab')
@@ -221,7 +225,8 @@ export default function InvoicesPage() {
         </Suspense>
       )}
 
-      {tab === 'releases' && <ReleasesPanel who={who} focusId={focusRelease} onChanged={load} />}
+      {tab === 'releases' && <ReleasesPanel who={who} focusId={focusRelease} onChanged={load} seesPaid={Boolean(pay?.canMatch)} />}
+      {tab === 'followup' && <FollowUpPanel />}
 
       {tab === 'invoices' && <>
       <section className="card inv-upload">

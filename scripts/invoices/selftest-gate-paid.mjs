@@ -90,5 +90,39 @@ eq('broken (oldest first) · promised (soonest first, today included) · no prom
    ['broken-old', 'broken-recent', 'promise-today', 'promise-soon', 'promise-later', 'no-promise-old', 'no-promise-new'])
 eq('it does not change the list it was given', rows.length, 8)
 
+console.log('\n── a promise day as sent ─────────────────────────────────')
+const { cleanPromiseDay, lastPromiseDay } = mod
+eq('no date → no promise date', [cleanPromiseDay(undefined, '2026-10-29'), cleanPromiseDay(null, '2026-10-29'), cleanPromiseDay('', '2026-10-29')], [null, null, null])
+eq('today is allowed', cleanPromiseDay('2026-10-29', '2026-10-29'), '2026-10-29')
+eq('yesterday is not', cleanPromiseDay('2026-10-28', '2026-10-29'), false)
+eq('90 days ahead is allowed — and crosses the year end correctly', [lastPromiseDay('2026-10-29'), cleanPromiseDay('2027-01-27', '2026-10-29')], ['2027-01-27', '2027-01-27'])
+eq('91 days ahead is not', cleanPromiseDay('2027-01-28', '2026-10-29'), false)
+eq('31 Feb is not a day', cleanPromiseDay('2027-02-31', '2026-12-30'), false)
+eq('29 Feb only in a leap year', [cleanPromiseDay('2028-02-29', '2028-02-01'), cleanPromiseDay('2027-02-29', '2027-02-01')], ['2028-02-29', false])
+eq('another shape is refused', [cleanPromiseDay('29/10/2026', '2026-10-29'), cleanPromiseDay('2026-10-29T00:00', '2026-10-29'), cleanPromiseDay(20261029, '2026-10-29')], [false, false, false])
+
+console.log('\n── one customer, for the approval card ───────────────────')
+const { customerSummary } = mod
+const pd = (state, due) => ({ state, due_paise: due, paid_paise: 0, unknown: [], amount_differs: [] })
+eq('nothing released before → all zero', customerSummary([], '2026-10-29'),
+   { invoices: 0, unpaid: 0, due_paise: 0, unknown: 0, broken: 0, oldest_unpaid_at: null })
+eq('two unpaid, one paid, one cannot tell (with ₹500 known due), one broken promise',
+   customerSummary([
+     { document_id: 'a', released_at: '2026-10-10T10:00:00Z', promised_by: '2026-10-15', paid: pd('unpaid', 1000000) },
+     { document_id: 'b', released_at: '2026-10-20T10:00:00Z', promised_by: null, paid: pd('part', 250000) },
+     { document_id: 'c', released_at: '2026-10-05T10:00:00Z', promised_by: '2026-10-06', paid: pd('paid', 0) },
+     { document_id: 'd', released_at: '2026-10-25T10:00:00Z', promised_by: '2026-11-01', paid: pd('unknown', 50000) },
+   ], '2026-10-29'),
+   { invoices: 4, unpaid: 2, due_paise: 1300000, unknown: 1, broken: 1, oldest_unpaid_at: '2026-10-10T10:00:00Z' })
+eq('an invoice released twice is ONE invoice; its LATEST approval\'s promise counts',
+   customerSummary([
+     { document_id: 'a', released_at: '2026-10-10T10:00:00Z', promised_by: '2026-10-12', paid: pd('unpaid', 1000000) },
+     { document_id: 'a', released_at: '2026-10-28T10:00:00Z', promised_by: '2026-11-05', paid: pd('unpaid', 1000000) },
+   ], '2026-10-29'),
+   { invoices: 1, unpaid: 1, due_paise: 1000000, unknown: 0, broken: 0, oldest_unpaid_at: '2026-10-28T10:00:00Z' })
+eq('a paid invoice with a past promise is not broken and not counted as unpaid',
+   customerSummary([{ document_id: 'a', released_at: '2026-10-10T10:00:00Z', promised_by: '2026-10-12', paid: pd('paid', 0) }], '2026-10-29'),
+   { invoices: 1, unpaid: 0, due_paise: 0, unknown: 0, broken: 0, oldest_unpaid_at: null })
+
 console.log(`\n${'═'.repeat(64)}\n${fail ? 'FAILURES' : 'ALL PASS'}   ${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

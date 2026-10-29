@@ -5,6 +5,17 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 export { isApprover, mayDecideFor, mayUse, RELEASE_HOURS } from '../../../supabase/functions/gate-invoices/authority.ts'
+// Step 3: paid comes only from matching — the same rule and reader the Edge Function uses.
+export { customerSummary, followUpOrder, istToday, lastPromiseDay, promiseBroken } from '../../../supabase/functions/gate-invoices/paid.ts'
+export { loadReleased } from '../../../supabase/functions/gate-invoices/released.ts'
+
+const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+/** "2 Nov" for a promise day — already India's calendar day, so no time zone is applied.
+ *  The year is shown only when it is not this year. */
+export function dayLabel(ymd, todayIst) {
+  const [y, m, d] = ymd.split('-').map(Number)
+  return `${d} ${MON[m - 1]}${todayIst && y !== Number(todayIst.slice(0, 4)) ? ` ${y}` : ''}`
+}
 
 export function useDeptCode(profile) {
   const [code, setCode] = useState(undefined)   // undefined = still loading

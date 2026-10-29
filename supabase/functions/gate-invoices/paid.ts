@@ -66,6 +66,54 @@ export function istToday(now: Date = new Date()): string {
   return new Date(now.getTime() + 330 * 60_000).toISOString().slice(0, 10)
 }
 
+/** A promise is for today up to this many days ahead (the table holds the same rule —
+ *  migration 20261029_gate_promises.sql). */
+export const PROMISE_MAX_DAYS = 90
+
+/** The last day a promise made today may name (the date picker's max; today is its min). */
+export function lastPromiseDay(todayIst: string): string {
+  const [y, m, d] = todayIst.split("-").map(Number)
+  return new Date(Date.UTC(y, m - 1, d + PROMISE_MAX_DAYS)).toISOString().slice(0, 10)
+}
+
+/** A promise day as sent: "YYYY-MM-DD", a real date, today to PROMISE_MAX_DAYS ahead in India.
+ *  null when empty (no promise date), false when it is anything else. */
+export function cleanPromiseDay(s: unknown, todayIst: string): string | null | false {
+  if (s === undefined || s === null || s === "") return null
+  if (typeof s !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false
+  const [y, m, d] = s.split("-").map(Number)
+  const t = new Date(Date.UTC(y, m - 1, d))
+  if (t.getUTCFullYear() !== y || t.getUTCMonth() !== m - 1 || t.getUTCDate() !== d) return false   // 31 Feb
+  return s >= todayIst && s <= lastPromiseDay(todayIst) ? s : false
+}
+
+/**
+ * One customer's released invoices, for the approval card: how many are not known to be paid,
+ * what is known to be due on them, how many cannot be told yet, how many promises are broken,
+ * and since when the oldest has been out. Each invoice is counted once (its latest approval
+ * carries the promise), however many times it was released.
+ */
+export type Released = { document_id: string; released_at: string; promised_by: string | null; paid: Paid }
+export type CustomerSummary = {
+  invoices: number; unpaid: number; due_paise: number; unknown: number; broken: number; oldest_unpaid_at: string | null
+}
+export function customerSummary(released: Released[], todayIst: string): CustomerSummary {
+  const latest = new Map<string, Released>()
+  for (const r of released) {
+    const cur = latest.get(r.document_id)
+    if (!cur || r.released_at > cur.released_at) latest.set(r.document_id, r)
+  }
+  const s: CustomerSummary = { invoices: latest.size, unpaid: 0, due_paise: 0, unknown: 0, broken: 0, oldest_unpaid_at: null }
+  for (const r of latest.values()) {
+    s.due_paise += r.paid.due_paise
+    if (r.paid.state === "unpaid" || r.paid.state === "part") s.unpaid++
+    if (r.paid.state === "unknown") s.unknown++
+    if (promiseBroken(r.promised_by, r.paid.state, todayIst)) s.broken++
+    if (r.paid.state !== "paid" && (!s.oldest_unpaid_at || r.released_at < s.oldest_unpaid_at)) s.oldest_unpaid_at = r.released_at
+  }
+  return s
+}
+
 /**
  * The Follow-up list: released invoices not yet paid. Broken promises first (the oldest promise
  * first), then promises still to come (the soonest first), then those with no promise (the
