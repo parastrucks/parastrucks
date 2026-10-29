@@ -30,6 +30,33 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ---
 
+## Current state (2026-10-29)
+
+- **⭐ ONE TOOL (owner, 2026-10-29): "Everything that we are building in this session is one tool, exactly."**
+  Invoice sending, credit release, the gate AND Service Payments matching = ONE tool, **"Invoices & Payments"**. The
+  24 Oct "standalone" meant ORDER: credit release live first, then the payments setup is brought to it. **Paid comes
+  ONLY from matching payments to bills — no "mark paid" button, ever** (owner). Memory `project_one_tool.md`.
+- **🔨 CREDIT RELEASE STEP 3 = THE JOIN — BUILT, STAGING ONLY** (branch **`cr3-one-tool`** from `cr2-release-gate`,
+  pushed, no PR). ⭐ **Record: plan → "Step 3 — as built"; history "Session log — 2026-10-28 evening → 10-29".**
+  - `c5c5908` the payments branch merged in (4 app files conflicted, both kept; every test of both lines green).
+  - `db86489` **one page, more tabs** (owner): Invoices · Credit releases · Follow-up · Match · Import · Cash & cheque;
+    payments tabs keep the `/payments` access rule + the service-payments authority (nobody gains access);
+    `/payments` → `/invoices?tab=match`; "Match Payments" menu item gone; nav items carry an `access` field.
+  - `paid.ts` (shared EF + screens): bill no. on the PDF = Billing Report invoice no. (unique per company); only
+    `active` bills are owed; "can't tell" (not loaded / pre_opening / parked / unknown) is never shown as paid or
+    unpaid; promises judged by India's day. `selftest-gate-paid` 45/0. `released.ts` = the one reader.
+  - Migration **`20261029_gate_promises.sql` (STAGING)**: `promised_by` + `responsible_id` (a STAFF member — owner);
+    probe 8/0, UTC negative control caught. "Approve with a promise" (Approve stays one tap), the unpaid line on the
+    approval card, the **Follow-up tab** (broken promises first; on the list only — owner). `gate-invoices` on staging.
+  - ⏭️ **Owner to say yes to the end-to-end staging run** (new DEMO invoice → approve with a promise → DEMO Billing
+    Report holding its bills → match part, then the rest). ⚠️ **Before the live site: one REAL SAP invoice PDF + the
+    Billing Report holding it** — prove the PDF's bill number IS the Billing Report's invoice number (only demo files
+    we wrote agree so far); also the SAP customer code width (6 vs 10 digits in the demos).
+  - Go-live (owner): steps 1–2 first, on command, after #140; step 3 with the payments rollout.
+- **✅ Step 2 Android test PASSED 2026-10-28** on the owner's phone (see the 2026-10-26 block). ⚠️ `.claude/launch.json`
+  carries an uncommitted `portal-3001` entry — the owner's staging login (and alerts) live on `localhost:3001`.
+- ✅ **Urban VPN item CLOSED** (owner, 10-29: "removed now"). 45 new CBNs: "later".
+
 ## Current state (2026-10-26)
 
 - **🔨 CREDIT RELEASE STEP 2 — release request + GM/owner approval + gate screen + guard logins — BUILT, STAGING
@@ -210,8 +237,8 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   in Dec 2025 (Koi Security) for harvesting page content and selling it via a data broker — running inside
   the page that holds customer names, mobiles, addresses and GSTINs. **One user: Manish Patel (Back
   Office).** ✅ **Owner had it uninstalled 2026-10-23**; last extension row 12:28 UTC 10-22. Whether any
-  portal data left through it **cannot be known from our side**. ⏭️ Owner: who installed it, and do other
-  office PCs have it (the log only sees an extension when it crashes on our page).
+  portal data left through it **cannot be known from our side**. ✅ **Closed by the owner 2026-10-29 ("removed
+  now")** — do not raise the "who installed it / other PCs" question again.
   - ⚠️ **The only 3 other rows are also Manish's** — `Lock "lock:sb-session" was released because another
     request stole it`, on `/proforma-invoice`. **Inferred, not proven:** our reporter called `getSession()`
     for every error, ~2/s, contending with the app's own auth lock. Watch whether it recurs.
@@ -1042,13 +1069,18 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ## Next actions
 
-- ✅ `log-error` live on prod (v20 = `portal`, checked 2026-10-26). **⏭️ Owner:** ask who installed Urban VPN on
-  Manish Patel's PC + check the other office PCs.
-  Extension noise itself is ✅ resolved (PR #137, extension uninstalled, 8,960 rows cleared).
+- ✅ `log-error` live on prod (v20 = `portal`, checked 2026-10-26). ✅ Urban VPN item closed by the owner (2026-10-29,
+  "removed now"). Extension noise itself is ✅ resolved (PR #137, extension uninstalled, 8,960 rows cleared).
+- **⭐ ONE TOOL — credit release STEP 3 = matching joined in, BUILT on staging (2026-10-29)**, branch `cr3-one-tool`
+  (see the 2026-10-29 block). ⏭️ Owner: yes/no to the end-to-end staging run; one REAL SAP invoice PDF + its Billing
+  Report to prove bill numbers match. Paid comes only from matching (no mark-paid). Go-live: steps 1–2 first, step 3
+  with the payments rollout — both only on the owner's command.
 - ✅ Test PI `PI-PTB-2026-0983` stays (owner, 2026-10-22) — do not re-raise. PI no-chassis hotfix: Optional:
   RTO/Insurance per-unit instead of per-PI, and a DB rule that non-admins need a chassis — both only if asked.
 - **⏸️ Service Payments parked, waiting on HDFC (2026-10-21)** — see the 2026-10-21 block. Its own list
   stays below (items 8–10 + the three go-live gates); do not start it until the owner says so.
+  **2026-10-29: it is now part of the ONE tool** — merged into `cr3-one-tool` as the Match / Import / Cash tabs of
+  Invoices & Payments (the payments branch itself is unchanged). Its go-live gates below still stand.
 - **🔨 Credit release STEP 1 ("Send Invoice") BUILT on staging, real email proven (2026-10-25)** — branch
   `cr1-invoice-send`, see the 2026-10-25 block. ✅ Signature Mobile confirmed. **PR #140 open
   (2026-10-26) — do NOT merge before the prod migration + EF**; prod (migration + EF + `GATE_SMTP_PASSWORD` on prod + drop `GATE_EMAIL_ONLY_TO` there) **only on

@@ -30,8 +30,8 @@ The new way:
    responsible"*.
 5. **The guard's phone shows a list of the vehicles that may go**, with a search: vehicle number, customer name,
    until when (owner, 2026-10-27). Tap one, or type the number → green "RELEASE" or red "HOLD" — the only two words. No amounts.
-6. **When a promised date passes unpaid**, it appears on a follow-up list for the GM and the owner. Accounts
-   marks a release paid when the money arrives.
+6. **When a promised date passes unpaid**, it appears on a follow-up list for the GM and the owner. *(2026-10-29,
+   owner: nobody "marks paid" — an invoice is paid when payments are **matched** to its bills in the same tool.)*
 
 Paid vehicles do not change: accounts issues their gate pass as today, and the guard does not look at the
 app for them. Counter credit sales get the invoice sent, with no gate step.
@@ -110,6 +110,11 @@ Facts that shape the design:
 ## Part 2 — design
 
 ### Standalone, but ready to join payments later
+> ⭐ **2026-10-29, owner: "Everything that we are building in this session is one tool, exactly."** Invoice
+> sending, credit release, the gate and Service Payments matching are ONE tool ("Invoices & Payments"). The
+> 24 Oct "standalone" decision was about **order**, not separation: credit release goes live first, then the
+> payments setup is brought to it. Step 3 is where they joined (see "Step 3 — as built").
+
 The payments tables stay on staging (owner). This feature gets **its own small set of tables, prefixed
 `gate_`** — the payments migrations already create `customers` and `service_invoices`, so those names must
 stay free or the payments rollout would fail on prod. Each row carries the keys payments uses — **SAP
@@ -184,8 +189,10 @@ so nobody mistakes it for the Busy figure.
 - Every lookup is logged (which guard, which vehicle, when) — the record of what left the gate.
 
 ### Follow-up list
-Approved releases with a promise date: overdue first, with the responsible person. **Accounts marks a release
-paid** when the money arrives (until the payments tool is live and can do it by matching).
+Approved releases with a promise date: overdue first, with the responsible person. ~~Accounts marks a release
+paid when the money arrives (until the payments tool is live and can do it by matching).~~ **Owner, 2026-10-29:
+no manual "mark paid" — "this is why we are building the matching feature in the first place."** Paid comes
+only from matching; built that way in step 3.
 
 ## Build order (owner, 2026-10-24: WhatsApp last)
 
@@ -486,6 +493,86 @@ phone approved. For two different people (GM ↔ admin) it works as built. Do no
   promised-by on approve; it was left for step 3 with the rest of the promise tracking).
 - Prod — **only on the owner's command, after #140**: apply `20261026_gate_releases.sql`, deploy `gate-invoices` and
   `admin-users` (from `portal`), run `make-vapid-keys.mjs mmmxvjaavdtwlpcnjgzy`, then merge.
+
+## Step 3 — as built (2026-10-29, branch `cr3-one-tool`, staging only)
+
+Branch `cr3-one-tool` starts from `cr2-release-gate` (so it carries steps 1 and 2) and **merges the Service
+Payments branch into it**. Nothing is live. Go-live order (owner): steps 1–2 first, on command; step 3 — which now
+includes matching — after the payments go-live items (HDFC, the scheduled Billing Report, Busy).
+
+### Owner decisions (2026-10-29)
+
+| Question | Decision |
+|---|---|
+| Is credit release a separate tool from payments matching? | **No — "Everything that we are building in this session is one tool, exactly. If it is not so, then let's start making it so."** The 24 Oct "standalone" meant: credit release live first, then the payments setup is brought to it. |
+| Who is the "responsible person" on a promise? | **A staff member** (a portal user), not free text. |
+| Who marks an invoice paid, and what does it record? | **Nobody marks it.** "This is why we are building the matching feature in the first place." / "Instead of just marking paid, we will be matching the payments against the invoices." |
+| How is anyone told a promise passed unpaid? | **On the list only** (no morning alert, no scheduled job). |
+| How does matching appear in the one tool? | **One page, more tabs** — "Invoices & Payments": Invoices · Credit releases · Follow-up · Match · Import · Cash & cheque; each person sees only theirs; the "Match Payments" menu item goes. |
+| (Earlier, 10-28) Clear the "already answered" alert on the answering person's OTHER devices? | "Not exactly necessary" — not built. |
+
+### What was built (commits on `cr3-one-tool`)
+- **`c5c5908` the join.** The payments branch merged in: only four app files conflicted (`App.jsx`, `AccessRules.jsx`,
+  `navConfig.js`, `BottomNav.jsx`), both sides kept; the guard's phone bar (Gate + Profile) moved into navConfig's
+  `DEPT_TABS` because the payments line moved the bar's layout there. The databases do not collide (`gate_*` vs
+  `customers` / `service_invoices` / `payment_*`; both were already on staging). Every test of both lines passed on the
+  merged tree (payments authority 659 · match-queue 143 · matcher 67 · import-plan 86 · cash-receipt 47 · parse-hdfc 35 ·
+  parsers 146 · bottom-nav 13 · mobile-render 151; gate-authority 241 · web-push 44 · gate-mail 79 · sap-invoice 56;
+  user-shape 27; log-error 33).
+- **`db86489` one page.** `PaymentsPage` is embedded as the Match / Import / Cash tabs (its own chunk, loaded only when
+  one opens; it reports the Match count for the tab). **Nobody gains access:** the payments tabs need the `/payments`
+  access rule (staging: PTB service + accounts) AND the service-payments authority (Import, Cash = accounts + admin);
+  the `/invoices` rule is wider (PTB + PT, service/accounts/spares). `/payments` now lands on `/invoices?tab=match`
+  behind the same rule. The + sheet keeps one-tap "Match Payments" (red team R4-14) and the phone bar's Payments
+  button opens the Match tab — both carry `access: '/payments'` (new field, honoured by `bottomNavLayout` and the +
+  sheet). The subtitle follows the tab; the tab row scrolls sideways on a phone (360 px: 313 px row, 480 px of tabs,
+  the page never widens) and keeps the open tab in view, re-measured when the count badges load (first try left
+  "Cash & cheque" half off-screen — the badge widened "Match" after the scroll). `selftest-bottom-nav` 17/0 (new: the
+  guard's bar; the Match tab + `/payments` rule); a planted ungated old-address button fails it 3×.
+- **`66a0a1f` + `7c1533c` the paid rule** — `supabase/functions/gate-invoices/paid.ts`, shared by the Edge Function and
+  the screens (as `service-payments/authority.ts` is). An uploaded bill (`gate_bills.bill_no`) is the Billing Report
+  bill (`service_invoices.invoice_number`); both are unique per (company, bill number). `active`: owed = total −
+  matched · `not_payable` / `cancelled`: owe nothing · `pre_opening`, `parked`, an unknown status, or a bill the Billing
+  Report has not brought in: **"can't tell"** — never shown as paid or unpaid (a wrong "unpaid" chases a customer who
+  paid). A promise is broken when its day has passed **in India** and the invoice is not paid. Follow-up order: broken
+  (oldest first) · promised (soonest first) · no promise (oldest release first); paid left out. Customer summary for
+  the card counts each invoice once (its latest approval's promise). Promise day: today → 90 days, a real date.
+  `selftest-gate-paid` **45/0**; six planted bugs fail it (2–5 checks each).
+- **`released.ts`** — the one reader: approved releases (paged past PostgREST's 1000-row cap), latest per invoice,
+  their bills, and the matching tool's bills per company (bill numbers in chunks of 150). With a reader who cannot see
+  the matching tables, every invoice is "can't tell" — never a false "unpaid".
+- **`08cd6d3` migration `20261029_gate_promises.sql` (STAGING):** `gate_releases.promised_by` (a day in India) +
+  `responsible_id` (→ users). Only on an approval; no earlier than the approval day in India, at most 90 days out
+  (`coalesce(…, false)` — a NULL CHECK passes). No paid column. `probe-gate-promises.sql` **8/0**; negative control (the
+  same check by UTC's day, no coalesce, swapped in inside the rolled-back run) → 7/1: it stored a promise for the 1st
+  on an approval made at 00:30 IST on the 2nd.
+- **`7c1533c` screens + server:** Approve stays one tap; **"Approve with a promise"** opens a day picker and a staff
+  picker (active people of the invoice's company + the owner, no guards — read under `users_select`, which already lets
+  anyone read their own company's staff). `decideRelease` checks the day (paid.ts) and the person (active, same company
+  or admin, not Security), refuses a promise on a hold, stores both and audits them. The **card** (screen and the
+  server's record) now carries, from matching: earlier released invoices not paid, due, oldest, broken promises, can't
+  tell — "Only what was released through the portal — not their Busy balance." Someone without the matching tool sees
+  the count only. **Follow-up tab** (only for people who can read matching): released and not paid, broken promises
+  first in red, "Can't tell yet" with the reason, a note when the PDF and the Billing Report disagree on a bill's total.
+  `gate-invoices` deployed to staging (paid.ts + released.ts uploaded, first try).
+- Seen on staging (owner's Chrome, staging admin, localhost:3001): the five tabs, `/payments` → Match ("Match 1" =
+  DEMO KISAN ₹30), Import / Cash / Invoices / Releases switch with their subtitles, no "Match Payments" in the sidebar,
+  phone width; Follow-up lists GJ01ZZ0001 + GJ01ZZ0002 as "Can't tell yet — a bill is not in the Billing Report yet"
+  (staging's Billing Report is the payments demo, without these invoices' bills). No console errors after the fix.
+
+### Not yet done
+- ⏭️ **The end-to-end run on staging** (proposed 2026-10-29, waiting for the owner's yes): upload a new DEMO workshop
+  invoice (one demo email to ceo@) → ask → "Approve with a promise" (admin) → import a DEMO Billing Report holding its
+  bills → match a DEMO payment to part, then the rest → watch the card and Follow-up go unpaid → part → paid. Both DEMO
+  workshop invoices on staging were still inside their 48 h, so nothing could be approved with a promise on screen yet.
+- ⚠️ **Unproven on real files:** that the bill number printed on the SAP PDF is EXACTLY the Billing Report's invoice
+  number (the demo files agree because both were written by us), and the SAP customer code's width (demo: 6 digits on
+  the invoices, 10 with leading zeros in payments). Needs one real invoice PDF + the Billing Report that holds it.
+- The Follow-up tab exists only where matching does — PTB today (payments is PTB-first); PT sees no Follow-up.
+- No count badge on the Follow-up tab (the list loads only when opened).
+- The parked "your outstanding is ₹X" email idea (step 1) — raise again now that paid exists; owner to pick.
+- Prod — only on the owner's command: steps 1–2 first (after #140); step 3 with the payments rollout (its nine
+  migrations + `20261029_gate_promises.sql`, `gate-invoices` with paid.ts/released.ts, `service-payments`).
 
 ## Sources (outside the repo, not committed)
 - WhatsApp export "Vehicle Gate Pass" (owner, 2026-10-24) — analysed by a throwaway script; aggregates only.

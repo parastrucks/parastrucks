@@ -1,6 +1,13 @@
 <!--
 REPO COPY of the approved planning document (session 2026-08-29).
 
+⭐ 2026-10-29 — ONE TOOL (owner): Service Payments matching and credit release (invoice
+sending, release approval, the gate) are ONE tool, "Invoices & Payments". Matching is now its
+Match / Import / Cash & cheque tabs (/payments opens the Match tab). Credit release goes live
+first; matching joins it with credit-release step 3, where an invoice released on credit is
+"paid" ONLY when payments are matched to its bills (no "mark paid"). Branch `cr3-one-tool`
+(merges this payments branch). Record: docs/backlog/credit-release-plan.md → "Step 3 — as built".
+
 ⚠️ BUILD STATUS 2026-09-08 — THIS PLAN IS NO LONGER AHEAD OF THE CODE.
 Phase A1's core is BUILT and PROVED ON STAGING (klpnhpnlotcbbovwswmq): 14 tables,
 28 policies, 2 views, 10 SECURITY DEFINER RPCs, probe 24/0 with zero residue; plus

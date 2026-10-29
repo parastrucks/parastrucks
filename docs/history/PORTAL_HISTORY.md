@@ -26,6 +26,73 @@
 
 ---
 
+## Session log — 2026-10-28 evening → 10-29 (PC): the Android test passed, and ONE tool — matching joined credit release (step 3, staging)
+
+Branches `cr2-release-gate` (finished step 2: `8603092`, `6c14b72`, `e1da92e`, docs `0cb9e85`, `decc8c5`) and the new
+`cr3-one-tool` (`c5c5908` → `db86489` → `66a0a1f` → `08cd6d3` → `7c1533c` + this docs commit), both pushed, no PR.
+STAGING only; nothing live changed. ⭐ Detail: plan → "Step 2 — as built" (✅ Android test) and "Step 3 — as built".
+
+**1. The staging website was READY** (the docs push `467f388` built after the Cloudflare test key; the branch alias
+pointed at it). In the owner's Chrome: Cloudflare "Success!" (+ the test key's expected "For testing only" line),
+bundle = staging ref in 2 chunks, prod in 0.
+
+**2. The Android test (owner's phone, Android 10, Chrome) — PASSED, after three fixes it found:**
+- *"This app cannot be installed"* with Vercel's "V" icon → a browser fetches the **manifest without cookies** unless
+  `<link rel="manifest" crossorigin="use-credentials">`; Vercel's login wall answered 302 (`8603092`; proven in-page:
+  without cookies → redirect, with → 200 + three icons). Harmless on the live site (no wall).
+- *No "Invoices & Payments" card on the home screen* (owner) → the Dashboard keeps its OWN card list, separate from the
+  sidebar's; added under Service Tools (`6c14b72`). ⭐ A new page needs a Dashboard card too.
+- *The tap opened a Chrome tab of the portal, not the installed app* (owner had Chrome open) → the click handler reused
+  any open window, and a service worker cannot tell an app window from a tab → on Android it now always `openWindow`s,
+  which Chrome hands to the installed app (`e1da92e`).
+Then: installed → alerts on → app swiped closed → asked from the PC → the phone rang like a chat message (Paras icon) and
+the PC at the same minute ("alerted on 2 phones") → tap → the installed app on Credit releases with the request marked →
+Approve → "released for 48 hours". Staging: 34 s ask→approve, 48 h exactly, both devices delivered, 0 failures.
+⚠️ The quiet "already answered" alert skips the PERSON, not the device: the PC kept "Release asked" after the phone
+approved (seen in the owner's screenshot). **Owner: "Not exactly necessary" to clear it** — not built.
+To send the second alert the admin's own request had to be withdrawn through the EF (an approver's screen shows
+Approve/Hold, not Withdraw — by design); two TEST withdrawals now sit on staging; GJ01ZZ0002 released until 30 Oct 8:06 pm.
+
+**3. Owner, small items:** Urban VPN on Manish Patel's PC — **"removed now"** (item closed). The 45 new CBNs — "later".
+The forced-password **reset** path explained (create path seen 10-27; reset — a different code path that also signs the
+person out everywhere — still untested; owner signs in, never Claude).
+
+**4. ⭐ ONE TOOL (owner, 10-29).** Asked to build step 3 (promises, mark paid, follow-up), the owner answered the "who
+marks paid" question with *"This is why we are building the matching feature in the first place"* / *"we will be matching
+the payments against the invoices"*, then: **"Everything that we are building in this session is one tool, exactly. If
+it is not so, then let's start making it so."** Clarified: the 24 Oct "standalone" decision meant **credit release goes
+live first, then the payments setup is brought to it**. Decisions: responsible = a **staff member**; overdue = **on the
+list only**; **one page, more tabs**. Memory `project_one_tool.md`.
+
+**5. Built on `cr3-one-tool` (from `cr2-release-gate`):**
+- `c5c5908` **merge of the payments branch** — 4 app files conflicted (routes, Access Rules list, menu, phone bar), both
+  sides kept; the guard's bar moved into navConfig (the payments line had moved the bar's layout there). Databases do
+  not collide. Every test of both lines green on the merged tree.
+- `db86489` **one page** — Invoices & Payments: Invoices · Credit releases · (Follow-up) · Match · Import · Cash & cheque.
+  Payments tabs keep their own rules (`/payments` access rule + the service-payments authority) — nobody gains access.
+  `/payments` → `/invoices?tab=match`. Tab row scrolls on a phone and keeps the open tab in view — the first try left
+  "Cash & cheque" half off-screen because the Match badge loads later; re-measured on the badges. A use-before-declare
+  (`waiting` in an effect's deps above its `useState`) crashed the page in the hot-reload; fixed before commit — the
+  build and no-undef pass do NOT catch a temporal-dead-zone error, only the browser did.
+- `66a0a1f` / `7c1533c` **`paid.ts`** — paid only from matching (bill no. = Billing Report invoice no., unique per
+  company); "can't tell" never shown as paid or unpaid; promise broken by India's day; Follow-up order; customer summary;
+  promise-day rule. `selftest-gate-paid` 45/0, six planted bugs each fail it. **`released.ts`** — the one reader (paged,
+  chunked), used by the EF and the screens.
+- `08cd6d3` **migration `20261029_gate_promises.sql` (staging)** — `promised_by` + `responsible_id`; probe 8/0; the
+  UTC-day negative control caught (7/1).
+- `7c1533c` **"Approve with a promise"**, the unpaid line on the approval card (screen + server record), the **Follow-up
+  tab**; `gate-invoices` deployed to staging first try. Seen: five tabs, `/payments` → Match, phone width, Follow-up lists
+  both DEMO invoices as "Can't tell yet — a bill is not in the Billing Report yet" (staging's Billing Report has none of
+  their bills). No console errors after the fix.
+
+**Where it stands:** ⏭️ owner to say yes to the end-to-end staging run (new DEMO invoice → approve with a promise →
+DEMO Billing Report with its bills → match part, then the rest → card + Follow-up go unpaid → part → paid). ⚠️ Before
+the live site: one REAL SAP invoice PDF + the Billing Report holding it, to prove the PDF's bill number IS the Billing
+Report's invoice number. Prod only on the owner's command: steps 1–2 first (after #140); step 3 with the payments
+rollout. `.claude/launch.json` has an uncommitted `portal-3001` entry (the owner's staging login lives on :3001).
+
+---
+
 ## Session log — 2026-10-27 → 10-28 (PC): credit release step 2 seen working, the gate list, a test guard, real alerts, a staging website
 
 All on branch `cr2-release-gate` (stacked on `cr1-invoice-send`, PR #140 still open and unmerged) and STAGING only;
