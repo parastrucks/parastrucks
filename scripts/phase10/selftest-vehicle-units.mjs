@@ -106,14 +106,16 @@ const people = {
 const opens = ['admin', 'bo_exec_on', 'bo_exec_export', 'hr_mgr_on', 'accounts_mgr_on', 'no_dept_on']
 for (const [name, c] of Object.entries(people)) {
   for (const a of auth.ACTIONS) {
-    const want = opens.includes(name)
+    // approving a check's correct value is the owner's alone (owner, 2026-10-30) — not HR, not a GM, not the switch
+    const want = a === 'checkReview' ? name === 'admin' : opens.includes(name)
     const got = auth.gate(a, c).ok
     ok(got === want, `${name} → ${a}: expected ${want ? 'allowed' : 'refused'}`)
   }
   ok(auth.gate('dropTable', c).ok === false && auth.gate('dropTable', c).status === 400, `${name} → unknown action refused`)
 }
 ok(eqSet([...auth.ACTIONS], ['list','book','find','history','listNotes','listFormats','listViews','applyChanges','createUnit','createUnits',
-  'supersedeUnit','addNote','setFormats','saveView','deleteView','logExport','alUpload','alReview','alSettle']), 'the action list is the planned one')
+  'supersedeUnit','addNote','setFormats','saveView','deleteView','logExport','alUpload','alReview','alSettle',
+  'checksList','checkAnswer','checkReview']), 'the action list is the planned one')
 
 // hasTrackerAccess on its own (gate() checks is_active first; this keeps the second line honest)
 for (const [name, c] of Object.entries(people)) ok(auth.hasTrackerAccess(c) === opens.includes(name), `${name} hasTrackerAccess`)
@@ -274,6 +276,27 @@ ok(val.requestKey('A', 'short') === null && val.requestKey('A', 7) === null && v
   ok(s.ok && s.subject === '2026-03|MB1' && s.reason === 'AL corrected it', 'AL settle: trimmed')
   ok(!val.validateAlSettle({ check: 'ctd_diff', subject: 'x', reason: '  ' }).ok && !val.validateAlSettle({ check: 'DROP TABLE', subject: 'x', reason: 'r' }).ok
      && !val.validateAlSettle({ check: 'ctd_diff', subject: '', reason: 'r' }).ok && !val.validateAlSettle({ check: 'ctd_diff', subject: 'x', reason: 'r'.repeat(501) }).ok, 'AL settle: reason, check and subject required')
+}
+
+// ── 6. Yes/No checks (checkAnswer / checkReview; owner, 2026-10-30) ──
+{
+  const A = val.validateCheckAnswer
+  let a = A({ answer: 'yes', correct: '999' }, 'tally_bill')
+  ok(a.ok && a.answer === 'yes' && a.correct === null, 'check: a Yes drops any value')
+  a = A({ answer: 'no', correct: '1300', note: '  as billed ' }, 'tally_bill')
+  ok(a.ok && a.correct === 1300 && a.note === 'as billed', 'check: a No with a money value, note trimmed')
+  a = A({ answer: 'no', correct: '' }, 'tally_bill')
+  ok(a.ok && a.correct === null, 'check: a No without a value is allowed (nothing to write)')
+  ok(A({ answer: 'no', correct: 'HDFC BANK' }, 'finance_bank').correct === 'HDFC BANK', 'check: a text value')
+  ok(A({ answer: 'no', correct: '2025-07-31' }, 'ptb_invoice_date').correct === '2025-07-31', 'check: a date value')
+  ok(!A({ answer: 'no', correct: 'lots' }, 'tally_bill').ok, 'check refused: not a number for money')
+  ok(!A({ answer: 'no', correct: '31/07/2025' }, 'ptb_invoice_date').ok, 'check refused: a date not sent as yyyy-mm-dd (the page converts)')
+  ok(!A({ answer: 'no', correct: '13' }, 'tcs').ok, 'check refused: a worked-out column cannot be corrected')
+  ok(!A({ answer: 'maybe' }, 'tally_bill').ok && !A({}, 'tally_bill').ok, 'check refused: an answer other than yes / no')
+  ok(!A({ answer: 'yes', note: 'x'.repeat(501) }, 'tally_bill').ok, 'check refused: a note over 500 characters')
+  const R = val.validateCheckReview, id = crypto.randomUUID()
+  ok(R({ id, decision: 'approve' }).ok && R({ id, decision: 'send_back', note: ' why? ' }).note === 'why?', 'review: approve / send back')
+  ok(!R({ id, decision: 'delete' }).ok && !R({ id: 'x', decision: 'approve' }).ok, 'review refused: another decision, a bad id')
 }
 
 console.log(`selftest-vehicle-units: ${pass} passed, ${fail} failed`)

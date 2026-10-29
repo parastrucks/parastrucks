@@ -33,6 +33,7 @@ export const ACTIONS = [
   "list", "book", "find", "history", "listNotes", "listFormats", "listViews",
   "applyChanges", "createUnit", "createUnits", "supersedeUnit", "addNote", "setFormats",
   "saveView", "deleteView", "logExport", "alUpload", "alReview", "alSettle",
+  "checksList", "checkAnswer", "checkReview",
 ] as const
 export type Action = typeof ACTIONS[number]
 
@@ -57,6 +58,11 @@ export const ROLE_GATES: Record<Action, (c: Caller) => boolean> = {
   alUpload:      hasTrackerAccess,
   alReview:      hasTrackerAccess,
   alSettle:      hasTrackerAccess,
+  // Yes/No checks for the team (owner, 2026-10-30): anyone with the tracker answers; only the owner (admin)
+  // approves a No — approval writes its correct value into the truck
+  checksList:    hasTrackerAccess,
+  checkAnswer:   hasTrackerAccess,
+  checkReview:   (c) => c.is_active && isAdmin(c),
 }
 
 export function gate(action: string, c: Caller): { ok: true } | { ok: false; status: number; error: string } {

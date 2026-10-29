@@ -1,0 +1,33 @@
+/* Phase 10 — the Checks page (Yes/No checks for the team). Phone first: one column of cards. */
+.ck-page { max-width: 760px; }
+.ck-loading, .ck-empty { color: var(--text-secondary); font-size: 14px; }
+.ck-set { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; margin-bottom: 10px; }
+.ck-set select { flex: 1; min-width: 0; }
+.ck-filters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.ck-filter { border: 1px solid var(--border, #D1D5DB); background: #fff; border-radius: 16px; padding: 5px 10px; font: inherit; font-size: 13px; cursor: pointer; }
+.ck-filter--on { background: var(--primary, #1D4ED8); border-color: var(--primary, #1D4ED8); color: #fff; }
+.ck-filter-n { font-weight: 700; margin-left: 2px; }
+.ck-search { width: 100%; margin-bottom: 12px; }
+.ck-list { display: flex; flex-direction: column; gap: 10px; }
+.ck-card { border: 1px solid var(--border, #D1D5DB); border-left: 4px solid #F59E0B; border-radius: 8px; padding: 12px; background: #fff; display: flex; flex-direction: column; gap: 6px; }
+.ck-card--waiting { border-left-color: #2563EB; }
+.ck-card--yes, .ck-card--approved { border-left-color: #16A34A; }
+.ck-chassis { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 17px; font-weight: 700; letter-spacing: .5px; word-break: break-all; }
+.ck-q { font-size: 14px; color: var(--gray-800, #1F2937); }
+.ck-value { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; background: #EFF6FF; border-radius: 6px; padding: 8px 10px; }
+.ck-value-label { font-size: 13px; color: var(--text-secondary); }
+.ck-value-v { font-size: 20px; font-weight: 700; color: #1E3A8A; }
+.ck-context { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 4px 12px; margin: 0; font-size: 13px; }
+.ck-context dt { color: var(--text-secondary); font-size: 12px; }
+.ck-context dd { margin: 0; font-weight: 600; word-break: break-word; }
+.ck-warn, .ck-sent { margin: 0; font-size: 13px; color: #92400E; background: #FEF3C7; border-radius: 6px; padding: 6px 8px; }
+.ck-done { margin: 0; font-size: 13px; color: #166534; }
+.ck-no { margin: 0; font-size: 13px; color: #1E3A8A; }
+.ck-wait { margin: 0; font-size: 13px; color: var(--text-secondary); }
+.ck-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.ck-buttons .btn { min-height: 40px; }
+.ck-yes, .ck-nob { flex: 1; min-width: 120px; }
+.ck-form { display: flex; flex-direction: column; gap: 8px; }
+.ck-form .form-label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.ck-change-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 13px; color: var(--text-secondary); }
+.ck-link { background: none; border: 0; padding: 0; color: var(--primary, #1D4ED8); text-decoration: underline; cursor: pointer; font: inherit; }

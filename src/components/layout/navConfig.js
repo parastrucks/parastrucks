@@ -47,6 +47,7 @@ export const NAV_SECTIONS = [
       },
       { type: 'link', to: '/tiv-forecast', icon: 'trending', label: 'TIV Forecast' },
       { type: 'link', to: '/tracker',      icon: 'clipboard', label: 'Vehicle Tracker' },
+      { type: 'link', to: '/tracker-checks', icon: 'clipboard', label: 'Tracker Checks' },
     ],
   },
   {

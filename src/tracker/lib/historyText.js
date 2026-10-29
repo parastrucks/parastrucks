@@ -4,7 +4,7 @@ import { showValue } from './showValue.js'
 
 const HOW = {
   typed: 'typed', paste: 'pasted', fill: 'filled', undo: 'undone', redo: 'redone', delete: 'cleared',
-  create: 'added', import: 'imported', revert: 'reverted', unknown: '',
+  create: 'added', import: 'imported', revert: 'reverted', check: 'corrected by a check', unknown: '',
 }
 
 const when = new Intl.DateTimeFormat('en-IN', {

@@ -396,7 +396,7 @@ export function AuthProvider({ children }) {
     if (!profile) return false
     if (profile.permission_level === 'admin') return true
     if (route === '/access-rules') return false
-    if (route === '/tracker') return session?.user?.app_metadata?.tracker_access === true
+    if (route === '/tracker' || route === '/tracker-checks') return session?.user?.app_metadata?.tracker_access === true
     return accessRules.some(rule => rule.route === route && ruleMatches(rule, profile))
   }
 

@@ -84,3 +84,8 @@ export const logExport = (kind, rows, columns) => callEdge(FN, 'logExport', { ki
 export const alUpload = (upload) => callEdge(FN, 'alUpload', upload)
 export const alReview = () => callEdge(FN, 'alReview').then((r) => r.review ?? { months: [], issues: [], explained: {} })
 export const alSettle = (check, subject, reason) => callEdge(FN, 'alSettle', { check, subject, reason })
+
+// Yes/No checks for the team; the owner (admin) approves a No → its correct value is written into the truck
+export const checksList = () => callEdge(FN, 'checksList').then((r) => r.checks ?? [])
+export const checkAnswer = (id, answer, correct, note) => callEdge(FN, 'checkAnswer', { id, answer, correct, note })
+export const checkReview = (id, decision, note) => callEdge(FN, 'checkReview', { id, decision, note })

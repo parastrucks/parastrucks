@@ -205,6 +205,34 @@ export function validateAlSettle(p: Record<string, unknown>):
   return { ok: true, check, subject, reason }
 }
 
+// checkAnswer: Yes / No on one check (migration 20261030_phase10_tracker_checks.sql). column = the check's own
+// column (read from the row, never from the payload); a No may carry the correct value, checked as a typed cell is.
+export function validateCheckAnswer(p: Record<string, unknown>, column: string):
+  { ok: true; answer: "yes" | "no"; correct: string | number | null; note: string | null } | { ok: false; error: string } {
+  const answer = p.answer
+  if (answer !== "yes" && answer !== "no") return { ok: false, error: "answer must be yes or no" }
+  const note = typeof p.note === "string" && p.note.trim() ? p.note.trim() : null
+  if (note && note.length > 500) return { ok: false, error: "note: at most 500 characters" }
+  const raw = p.correct
+  if (answer === "yes" || raw === null || raw === undefined || (typeof raw === "string" && raw.trim() === "")) {
+    return { ok: true, answer, correct: null, note }
+  }
+  if (!isEditable(column)) return { ok: false, error: "this column cannot be corrected here" }
+  const c = checkValue(COLUMNS[column], raw)
+  if (!c.ok) return { ok: false, error: `The correct value ${c.reason}` }
+  return { ok: true, answer, correct: c.value as string | number | null, note }
+}
+
+// checkReview: the owner approves a No (its value is written into the truck) or sends it back.
+export function validateCheckReview(p: Record<string, unknown>):
+  { ok: true; id: string; decision: "approve" | "send_back"; note: string | null } | { ok: false; error: string } {
+  if (!isUuid(p.id)) return { ok: false, error: "check id required" }
+  if (p.decision !== "approve" && p.decision !== "send_back") return { ok: false, error: "decision must be approve or send_back" }
+  const note = typeof p.note === "string" && p.note.trim() ? p.note.trim() : null
+  if (note && note.length > 500) return { ok: false, error: "note: at most 500 characters" }
+  return { ok: true, id: p.id, decision: p.decision, note }
+}
+
 // The request id is namespaced by the caller, so one person's id can never replay (or block)
 // another person's save.
 export function requestKey(callerId: string, clientRequestId: unknown): string | null {

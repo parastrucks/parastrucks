@@ -16,6 +16,7 @@ import { describeChange } from '../../src/tracker/lib/historyText.js'
 import { ageingDays, interestOnAgeing, slab, withScreenColumns, todayIst } from '../../src/tracker/lib/screenColumns.js'
 import { ALL_COLUMNS, COLUMN_BY_KEY, visibleColumns } from '../../src/tracker/lib/columnMeta.js'
 import { fyOfTruck, fyLabel } from '../../src/tracker/lib/bookYear.js'
+import { stateOf, counts as checkCounts, readValue, parseCorrection, changedSince } from '../../src/tracker/lib/checkItems.js'
 import { COLUMNS, EDITABLE } from '../../supabase/functions/admin-vehicle-units/columns.ts'
 
 let pass = 0, fail = 0
@@ -215,6 +216,22 @@ const w = withScreenColumns(rows, '2026-10-22')
 ok(w.find((r) => r.id === 'r0').dse_incentive === 1200, '5 in August (case/space-insensitive DSE) → 1,200; the rebilled row not counted', w.find((r) => r.id === 'r0'))
 ok(w.find((r) => r.id === 'sep').dse_incentive === 0 && w.find((r) => r.id === 'old').dse_incentive === null && w.find((r) => r.id === 'none').dse_incentive === null,
   'September alone → 0; rebilled and DSE-less rows → none')
+// ── Yes/No checks (checkItems; owner, 2026-10-30) ──
+{
+  const st = (o) => stateOf({ answer: null, review: null, ...o })
+  ok(st({}) === 'open' && st({ answer: 'no', review: 'sent_back' }) === 'open' && st({ answer: 'yes' }) === 'yes'
+     && st({ answer: 'no' }) === 'waiting' && st({ answer: 'no', review: 'approved' }) === 'approved', 'check states')
+  const n = checkCounts([{}, { answer: 'yes' }, { answer: 'no' }, { answer: 'no', review: 'sent_back' }])
+  ok(n.open === 2 && n.yes === 1 && n.waiting === 1 && n.approved === 0 && n.all === 4, 'check counts', n)
+  ok(readValue('tally_bill', 1940000) === '₹19,40,000' && readValue('ptb_invoice_date', '2024-12-31') === '31/12/24'
+     && readValue('finance_bank', 'SELF') === 'SELF' && readValue('tally_bill', null) === '(blank)', 'check values read as on screen')
+  ok(parseCorrection('tally_bill', '19,40,000').value === 1940000 && parseCorrection('tally_bill', '₹1940000.50').value === 1940000.5
+     && parseCorrection('tally_bill', 'abc').error && parseCorrection('tally_bill', '  ').value === null, 'check: typed money')
+  ok(parseCorrection('ptb_invoice_date', '31/12/2024').value === '2024-12-31' && parseCorrection('ptb_invoice_date', '2024/31/12').error, 'check: typed date, day first')
+  ok(parseCorrection('finance_bank', ' HDFC BANK ').value === 'HDFC BANK', 'check: typed text trimmed')
+  ok(!changedSince({ shown_value: 1310.5, current_value: '1310.50' }) && changedSince({ shown_value: 1000, current_value: 1111 })
+     && changedSince({ shown_value: 'SELF', current_value: null }) && !changedSince({ shown_value: null, current_value: null }), 'check: changed since it was made')
+}
 ok(todayIst(new Date('2026-10-21T19:00:00Z')) === '2026-10-22' && todayIst(new Date('2026-10-21T18:00:00Z')) === '2026-10-21', 'today in IST (midnight IST = 18:30 UTC)')
 
 // ── slice 5: a value as people read it, find a vehicle, Copy for mail, a row's history

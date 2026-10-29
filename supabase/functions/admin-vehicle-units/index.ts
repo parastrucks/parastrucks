@@ -24,7 +24,7 @@ import { type Caller, gate, canSeeIncentives, canExport, canManageSharedViews, c
 import { INCENTIVE_COLUMNS, isIncentive } from "./columns.ts"
 import {
   EDIT_SOURCES, isUuid, isKnownColumn, planRead, requestKey,
-  validateAlSettle, validateAlUpload, validateChanges, validateFormats, validateLayoutColumns, validateNewRows, validateValues,
+  validateAlSettle, validateAlUpload, validateChanges, validateCheckAnswer, validateCheckReview, validateFormats, validateLayoutColumns, validateNewRows, validateValues,
 } from "./validate.ts"
 
 const PAGE = 1000          // PostgREST's row cap; `list` pages at it
@@ -464,6 +464,45 @@ Deno.serve(async (req: Request) => {
         if (!v.ok) return json({ error: v.error }, 400)
         const { data, error } = await admin.rpc("tracker_al_settle", {
           p_actor: caller.id, p_check: v.check, p_subject: v.subject, p_reason: v.reason,
+        })
+        if (error) { const d = dbError(error); return json({ error: d.error }, d.status) }
+        return json(data as Record<string, unknown>)
+      }
+
+      // ── Yes/No checks for the team; the owner approves a No (migration 20261030_phase10_tracker_checks.sql) ──
+      case "checksList": {
+        const items = await fetchAll("tracker_checks", "*", ["check_set", "created_at", "id"])
+        // what each truck holds NOW, so a check whose truck changed since says so before anyone approves it
+        const units = new Map((await rowsById(items.map((i) => i.unit_id as string))).map((u) => [u.id as string, u]))
+        const names = await namesFor(items.flatMap((i) => [i.answered_by as string, i.reviewed_by as string]))
+        return json({
+          ok: true,
+          checks: items.map((i) => ({
+            ...i,
+            current_value: units.get(i.unit_id as string)?.[i.column_key as string] ?? null,
+            answered_by_name: names[i.answered_by as string] ?? null,
+            reviewed_by_name: names[i.reviewed_by as string] ?? null,
+          })),
+        })
+      }
+      case "checkAnswer": {
+        if (!isUuid(payload.id)) return json({ error: "check id required" }, 400)
+        const { data: item, error: readErr } = await admin.from("tracker_checks").select("id, column_key").eq("id", payload.id).maybeSingle()
+        if (readErr) throw readErr
+        if (!item) return json({ error: "Check not found" }, 404)
+        const v = validateCheckAnswer(payload, item.column_key as string)
+        if (!v.ok) return json({ error: v.error }, 400)
+        const { data, error } = await admin.rpc("tracker_check_answer", {
+          p_actor: caller.id, p_id: payload.id, p_answer: v.answer, p_correct: v.correct, p_note: v.note,
+        })
+        if (error) { const d = dbError(error); return json({ error: d.error }, d.status) }
+        return json(data as Record<string, unknown>)
+      }
+      case "checkReview": {
+        const v = validateCheckReview(payload)
+        if (!v.ok) return json({ error: v.error }, 400)
+        const { data, error } = await admin.rpc("tracker_check_review", {
+          p_actor: caller.id, p_id: v.id, p_decision: v.decision, p_note: v.note,
         })
         if (error) { const d = dbError(error); return json({ error: d.error }, d.status) }
         return json(data as Record<string, unknown>)
