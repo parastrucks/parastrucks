@@ -240,9 +240,21 @@ Deno.serve(async (req: Request) => {
         }
         const sameDoc = (d: NonNullable<Awaited<ReturnType<typeof existing>>>) =>
           d.file_sha256 === sha || (Number(d.total_paise) === reading.total_paise && sameBills(d.gate_bills, reading.bills))
+        // The bills go into matching the same day (owner, 2026-10-30: "invoices first"). Called on
+        // every save AND every repeat of one, so a call that failed heals on the next upload. A
+        // failure never fails the save: the invoice is the customer's; the Billing Report brings
+        // the same bills the next morning anyway.
+        const toMatching = async (documentId: string) => {
+          const { data, error } = await admin.rpc("payments_bills_from_gate_document", { p_document_id: documentId })
+          if (error) {
+            console.error("saveDocument: bills to matching failed:", error.message)
+            return { matching_error: "The invoice is saved, but its bills did not reach matching yet. They will come with the next Billing Report." }
+          }
+          return { matching: data }
+        }
         const before = await existing()
         if (before) {
-          if (sameDoc(before)) return json({ ok: true, document_id: before.id, already: true })
+          if (sameDoc(before)) return json({ ok: true, document_id: before.id, already: true, ...(await toMatching(before.id)) })
           return json({ error: `${reading.doc_no} was uploaded before (${before.created_at.slice(0, 10)}) with different bills or amounts. Nothing was saved — check with accounts which one is right.` }, 409)
         }
         const { data: clash } = await admin.from("gate_bills").select("bill_no, gate_documents(doc_no)")
@@ -272,14 +284,14 @@ Deno.serve(async (req: Request) => {
         if (error) {
           // A second click racing the first lands here on the unique key: answer like the first.
           const after = await existing()
-          if (after && sameDoc(after)) return json({ ok: true, document_id: after.id, already: true })
+          if (after && sameDoc(after)) return json({ ok: true, document_id: after.id, already: true, ...(await toMatching(after.id)) })
           if (uploadedNow) await admin.storage.from("gate-invoices").remove([path])
           console.error("saveDocument: record failed:", error.message)
           return json({ error: /duplicate|unique/i.test(error.message) ? "This job card or one of its bills was just saved by someone else with different details." : "The invoice could not be saved." }, /duplicate|unique/i.test(error.message) ? 409 : 500)
         }
         await audit(admin, { actorId: caller.id, action: "gate_document_saved", targetId: id as string,
           after: { doc_no: reading.doc_no, layout: reading.layout, bills: reading.bills.length, total_paise: reading.total_paise, sha256: sha } })
-        return json({ ok: true, document_id: id })
+        return json({ ok: true, document_id: id, ...(await toMatching(id as string)) })
       }
 
       case "sendEmail": {

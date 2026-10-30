@@ -265,13 +265,30 @@ export async function fetchExistingInvoices(entityId, invoiceNumbers) {
   for (let i = 0; i < unique.length; i += 150) {
     const { data, error } = await supabase
       .from('service_invoices')
-      .select('id, invoice_number, customer_name, total_paise, allocated_paise, status, cancelled_flag, customer:customers(sap_customer_code)')
+      .select('id, invoice_number, customer_name, total_paise, allocated_paise, status, cancelled_flag, origin, invoice_date, customer:customers(sap_customer_code)')
       .eq('entity_id', entityId)
       .in('invoice_number', unique.slice(i, i + 150))
     if (error) throw error
     out.push(...(data || []))
   }
   return out
+}
+
+/**
+ * Bills born from uploaded invoice PDFs and not yet taken over by a Billing
+ * Report, dated inside [from, to] — the Import screen lists the ones a report
+ * for those days does not hold (pdfBillsNotInReport).
+ */
+export async function fetchPdfBillsInRange(entityId, from, to) {
+  if (!from || !to) return []
+  return fetchAllRows(() => supabase
+    .from('service_invoices')
+    .select('id, invoice_number, customer_name, total_paise, allocated_paise, status, cancelled_flag, origin, invoice_date, customer:customers(sap_customer_code)')
+    .eq('entity_id', entityId)
+    .eq('origin', 'invoice_pdf')
+    .gte('invoice_date', from)
+    .lte('invoice_date', to)
+    .order('invoice_number').order('id'))
 }
 
 /**

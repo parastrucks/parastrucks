@@ -174,6 +174,8 @@ export default function InvoicesPage() {
     try {
       const r = await callEdge('gate-invoices', 'saveDocument', { file_b64: toBase64(picked.bytes), reading: picked.reading })
       if (r.already) toast.success(`${picked.reading.doc_no} was saved before — using that copy.`)
+      // Only the people who match payments need to know; the invoice itself is saved.
+      if (r.matching_error && pay?.canMatch) toast.error(r.matching_error)
       if (withEmail) await sendEmail(r.document_id, email)
       else if (!r.already) toast.success(`${picked.reading.doc_no} saved.`)
       setPicked(null); setEmail('')

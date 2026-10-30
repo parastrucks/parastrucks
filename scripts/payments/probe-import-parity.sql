@@ -60,6 +60,7 @@ BEGIN
   PERFORM pg_temp.zz_check('bills #1 amended', (v_res->>'amended')::int, 0);
   PERFORM pg_temp.zz_check('bills #1 unchanged', (v_res->>'unchanged')::int, 0);
   PERFORM pg_temp.zz_check('bills #1 conflicts', jsonb_array_length(v_res->'conflicts'), 0);
+  PERFORM pg_temp.zz_check('bills #1 uploaded bills confirmed', coalesce((v_res->>'confirmed')::int, 0), 0);
 
   -- Match money: all of C, 1,500 of D (paise 300000 / 150000).
   INSERT INTO public.payment_receipts (entity_id, mode, source, amount_paise, received_at, payer_name, classification)
@@ -84,12 +85,60 @@ BEGIN
   PERFORM pg_temp.zz_check('bills #2 amended', (v_res->>'amended')::int, 1);
   PERFORM pg_temp.zz_check('bills #2 unchanged', (v_res->>'unchanged')::int, 1);
   PERFORM pg_temp.zz_check('bills #2 conflicts', jsonb_array_length(v_res->'conflicts'), 3);
+  PERFORM pg_temp.zz_check('bills #2 uploaded bills confirmed', coalesce((v_res->>'confirmed')::int, 0), 0);
 
   -- Invariant: a bill with money matched to it is never left cancelled.
   SELECT count(*) INTO v_n FROM public.service_invoices
    WHERE entity_id = v_entity AND invoice_number LIKE 'ZZPROBE-%'
      AND status <> 'active' AND allocated_paise > 0;
   PERFORM pg_temp.zz_check('bills: none left non-active while holding money', v_n::int, 0);
+
+  -- ══ INVOICES FIRST: bills from uploaded PDFs, then the Billing Report ═══
+  INSERT INTO public.customers (entity_id, sap_customer_code, display_name)
+  VALUES (v_entity, 'ZZC5', 'ZZ PROBE ZZC5'), (v_entity, '00ZZC9', 'ZZ PROBE 00ZZC9');
+  INSERT INTO public.service_invoices (entity_id, invoice_number, invoice_kind, invoice_date, customer_id,
+    customer_name, payment_terms, net_paise, tax_paise, total_paise, status, origin)
+  SELECT v_entity, 'ZZPROBE-' || x.n, 'counter_sale', DATE '2026-09-20', c.id, 'ZZ PROBE ' || x.code,
+         'cash', x.total, 0, x.total, 'active', 'invoice_pdf'
+    FROM (VALUES ('P1', 'ZZC5', 80000), ('P2', 'ZZC5', 90000), ('P3', '00ZZC9', 70000), ('P4', 'ZZC5', 60000), ('P5', 'ZZC5', 60000), ('P6', 'ZZC5', 40000)) AS x(n, code, total)
+    JOIN public.customers c ON c.entity_id = v_entity AND c.sap_customer_code = x.code;
+  INSERT INTO public.payment_receipts (entity_id, mode, source, amount_paise, received_at, payer_name, classification)
+  VALUES (v_entity, 'cash', 'manual', 50000, now(), 'ZZ PROBE PAYER', 'service') RETURNING id INTO v_rcpt;
+  SELECT id INTO v_c FROM public.service_invoices WHERE entity_id = v_entity AND invoice_number = 'ZZPROBE-P5';
+  PERFORM public.payments_allocate(v_entity, v_rcpt,
+    jsonb_build_array(jsonb_build_object('invoice_id', v_c, 'amount_paise', 50000)), v_actor, NULL, 'probe');
+
+  
+  BEGIN
+    v_res := public.payments_import_invoices(v_entity, '[{"invoice_number":"ZZPROBE-P1","sap_customer_code":"ZZC5","customer_name":"ZZ PROBE 5","invoice_kind":"counter_sale","invoice_date":"2026-09-20","payment_terms":"cash","net_paise":80000,"tax_paise":0,"total_paise":80000,"status":"active","cancelled_flag":null},{"invoice_number":"ZZPROBE-P2","sap_customer_code":"ZZC5","customer_name":"ZZ PROBE 5","invoice_kind":"counter_sale","invoice_date":"2026-09-20","payment_terms":"cash","net_paise":95000,"tax_paise":0,"total_paise":95000,"status":"active","cancelled_flag":null},{"invoice_number":"ZZPROBE-P3","sap_customer_code":"ZZC9","customer_name":"ZZ PROBE 9","invoice_kind":"counter_sale","invoice_date":"2026-09-20","payment_terms":"cash","net_paise":70000,"tax_paise":0,"total_paise":70000,"status":"active","cancelled_flag":null},{"invoice_number":"ZZPROBE-P4","sap_customer_code":"ZZC7","customer_name":"ZZ PROBE 7","invoice_kind":"counter_sale","invoice_date":"2026-09-20","payment_terms":"cash","net_paise":60000,"tax_paise":0,"total_paise":60000,"status":"active","cancelled_flag":null},{"invoice_number":"ZZPROBE-P5","sap_customer_code":"ZZC5","customer_name":"ZZ PROBE 5","invoice_kind":"counter_sale","invoice_date":"2026-09-20","payment_terms":"cash","net_paise":60000,"tax_paise":0,"total_paise":60000,"status":"cancelled","cancelled_flag":"X"},{"invoice_number":"ZZPROBE-P6","sap_customer_code":"ZZC5","customer_name":"ZZ PROBE 5","invoice_kind":"counter_sale","invoice_date":"2026-09-20","payment_terms":"cash","net_paise":40000,"tax_paise":0,"total_paise":40000,"status":"cancelled","cancelled_flag":"X"},{"invoice_number":"ZZPROBE-A","sap_customer_code":"ZZC1","customer_name":"ZZ PROBE 1","invoice_kind":"counter_sale","invoice_date":"2026-09-20","payment_terms":"cash","net_paise":100000,"tax_paise":0,"total_paise":100000,"status":"active","cancelled_flag":null}]'::jsonb, '{"source":"probe","parser_version":"probe"}'::jsonb, v_actor);
+  EXCEPTION WHEN others THEN
+    v_res := jsonb_build_object('error', SQLERRM);
+    PERFORM pg_temp.zz_fail('bills #3 THREW: ' || SQLERRM);
+  END;
+  
+  PERFORM pg_temp.zz_check('bills #3 new', (v_res->>'new')::int, 0);
+  PERFORM pg_temp.zz_check('bills #3 amended', (v_res->>'amended')::int, 0);
+  PERFORM pg_temp.zz_check('bills #3 unchanged', (v_res->>'unchanged')::int, 1);
+  PERFORM pg_temp.zz_check('bills #3 conflicts', jsonb_array_length(v_res->'conflicts'), 2);
+  PERFORM pg_temp.zz_check('bills #3 uploaded bills confirmed', coalesce((v_res->>'confirmed')::int, 0), 4);
+
+  SELECT count(*) INTO v_n FROM public.service_invoices
+   WHERE entity_id = v_entity AND invoice_number LIKE 'ZZPROBE-P%' AND origin = 'invoice_pdf';
+  PERFORM pg_temp.zz_check('invoices first: only the clashing PDF bills are still waiting for SAP', v_n::int, 2);
+  SELECT total_paise INTO v_n FROM public.service_invoices WHERE entity_id = v_entity AND invoice_number = 'ZZPROBE-P2';
+  PERFORM pg_temp.zz_check('invoices first: SAP''s total replaced the PDF''s', v_n::int, 95000);
+  SELECT count(*) INTO v_n FROM public.service_invoices s JOIN public.customers c ON c.id = s.customer_id
+   WHERE s.entity_id = v_entity AND s.invoice_number = 'ZZPROBE-P3' AND c.sap_customer_code = 'ZZC9';
+  PERFORM pg_temp.zz_check('invoices first: the bill now belongs to the customer as SAP prints the code', v_n::int, 1);
+  SELECT count(*) INTO v_n FROM public.service_invoices
+   WHERE entity_id = v_entity AND invoice_number = 'ZZPROBE-P5' AND status = 'active' AND allocated_paise = 50000;
+  PERFORM pg_temp.zz_check('invoices first: a PDF bill with money on it is not cancelled under it', v_n::int, 1);
+  SELECT count(*) INTO v_n FROM public.service_invoices
+   WHERE entity_id = v_entity AND invoice_number = 'ZZPROBE-P6' AND status = 'cancelled';
+  PERFORM pg_temp.zz_check('invoices first: a PDF bill SAP cancelled, with nothing on it, is cancelled', v_n::int, 1);
+  SELECT count(*) INTO v_n FROM public.service_invoices
+   WHERE entity_id = v_entity AND invoice_number LIKE 'ZZPROBE-%' AND status <> 'active' AND allocated_paise > 0;
+  PERFORM pg_temp.zz_check('invoices first: still none left non-active while holding money', v_n::int, 0);
 
   -- ══ PAYMENTS ══════════════════════════════════════════════════════════
   -- Hand-keyed first, the way a parser outage would leave them.

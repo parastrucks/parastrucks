@@ -1,4 +1,4 @@
-// Import — bills from SAP, payments from BharatPe and Google Pay.
+// Import — bills from SAP, payments from HDFC (BharatPe and Google Pay retired).
 //
 // The chain the TIV upload proved, and nothing looser:
 //   1. read and parse the file IN THE BROWSER (nothing is sent yet)
@@ -18,11 +18,11 @@ import { parseHdfcSmartHub } from '../lib/parseHdfc.js'
 import {
   KIND_LABEL, parseImportFile, existingInvoiceFromRow, diffInvoices, diffReceipts,
   importGates, rowsToCommit, expectedCounts, reconcile, billCoverage, notImported,
-  newBillsSummary, importActionLabel, clashUndoPlan,
+  newBillsSummary, importActionLabel, clashUndoPlan, pdfBillsNotInReport,
   billRowText, paymentRowText, sortBills, sortPayments,
 } from '../lib/importPlan.js'
 import {
-  fetchOutlets, findPriorBatch, fetchExistingInvoices,
+  fetchOutlets, findPriorBatch, fetchExistingInvoices, fetchPdfBillsInRange,
   fetchExistingReceiptsByTxn, fetchExistingReceiptsByUtr, fetchAllocationsOnInvoice,
 } from '../lib/paymentsData.js'
 import { UNDO_REASONS } from '../lib/signalLabels.js'
@@ -35,7 +35,7 @@ const LIST_CAP = 50
 // The server's count names, said as words: "It said 10 new, the import did 9"
 // — "new: expected 10, got 9" was a log line (red team 4, L5-27).
 const COUNT_WORD = {
-  new: 'new', amended: 'changed', unchanged: 'unchanged', conflicts: 'not agreeing',
+  new: 'new', amended: 'changed', unchanged: 'unchanged', confirmed: 'uploaded bills confirmed', conflicts: 'not agreeing',
   already_present: 'already there', already_present_manual: 'linked to hand entries', held: 'held back',
 }
 
@@ -69,9 +69,15 @@ export default function ImportPanel({ entityId, onImported, onGoMatch, undoRefus
       const priorBatch = await findPriorBatch(entityId, batchKind, hash)
 
       let diff
+      let notInReport = []
       if (kind === 'billing_report') {
-        const rows = await fetchExistingInvoices(entityId, parsed.invoices.map((v) => v.invoice_number))
+        const dates = parsed.invoices.map((v) => v.invoice_date).filter(Boolean).sort()
+        const [rows, pdfRows] = await Promise.all([
+          fetchExistingInvoices(entityId, parsed.invoices.map((v) => v.invoice_number)),
+          fetchPdfBillsInRange(entityId, dates[0], dates[dates.length - 1]),
+        ])
         diff = diffInvoices(parsed.invoices, rows.map(existingInvoiceFromRow))
+        notInReport = pdfBillsNotInReport(parsed.invoices, pdfRows.map(existingInvoiceFromRow))
       } else {
         const [byTxn, byUtr] = await Promise.all([
           // Ids AND bank references: a hand-keyed HDFC payment carries the RRN,
@@ -84,7 +90,7 @@ export default function ImportPanel({ entityId, onImported, onGoMatch, undoRefus
 
       setPlan({
         file: { name: file.name, lastModified: file.lastModified },
-        kind, hash, parsed, diff, priorBatch,
+        kind, hash, parsed, diff, priorBatch, notInReport,
         gates: importGates({ kind, parsed, diff, priorBatch }),
         coverage: kind === 'billing_report' ? billCoverage(parsed.invoices, file.lastModified) : null,
         expected: expectedCounts(kind, diff),
@@ -218,7 +224,7 @@ export default function ImportPanel({ entityId, onImported, onGoMatch, undoRefus
 }
 
 function Preview({ plan, committing, onCommit, onCancel, notice = '', onUndoClash }) {
-  const { kind, parsed, diff, gates, coverage, file } = plan
+  const { kind, parsed, diff, gates, coverage, file, notInReport = [] } = plan
   const bills = kind === 'billing_report'
   const { failedAttempts, unreadable } = notImported(kind, parsed)
   const settles = Object.entries(parsed.summary?.settles_by_day_paise ?? {}).sort(([a], [b]) => a.localeCompare(b))
@@ -257,6 +263,7 @@ function Preview({ plan, committing, onCommit, onCancel, notice = '', onUndoClas
         <Count label={bills ? 'New bills' : 'New payments'} n={newCount} sub={newSub} strong />
         {bills ? (
           <>
+            <Count label="From uploaded invoices — SAP confirms them" n={diff.confirmed.length} />
             <Count label="Changed since last import" n={diff.amended.length} />
             <Count label="Already saved, no change" n={diff.unchanged.length} />
             <Count label="Does not agree with the saved bill" n={diff.conflict.length} warn />
@@ -314,6 +321,17 @@ function Preview({ plan, committing, onCommit, onCancel, notice = '', onUndoClas
         <ul className="pay-import-list pay-import-warn">{gates.warnings.map((w, i) => <li key={i}>{w}</li>)}</ul>
       )}
 
+      {/* The proof the owner asked for, every morning: a bill number read off
+          an uploaded PDF that SAP's report for that day does not have. */}
+      {notInReport.length > 0 && (
+        <p className="pay-banner pay-banner-warn" role="alert">
+          {notInReport.length === 1
+            ? '1 bill from an uploaded invoice is not in this report, though the report covers its day.'
+            : `${notInReport.length} bills from uploaded invoices are not in this report, though the report covers their days.`}
+          {' '}Check the bill number with accounts (listed below). Nothing is changed.
+        </p>
+      )}
+      <Fold title="From uploaded invoices, not in this report" open items={notInReport} render={billRowText} />
       <Fold title="Held back" items={diff.held} render={(h) => `${label(h.row)} — ${h.reason}`} />
       {bills && <Fold title="Does not agree" open items={diff.conflict}
             render={(c) => <ClashRow c={c} onUndo={onUndoClash} disabled={committing} />} />}
@@ -322,6 +340,8 @@ function Preview({ plan, committing, onCommit, onCancel, notice = '', onUndoClas
               `${r.payer_name ? ` from ${r.payer_name}` : ''}${r.when ? `, ${r.when}` : ''}. Not imported. The customer most likely paid again.`} />
       <Fold title="Could not be read" items={unreadable}
             render={(r) => `Row ${r.row}${r.invoice_number || r.txnId ? ` (${r.invoice_number || r.txnId})` : ''} — ${r.reason}`} />
+      {bills && <Fold title="From uploaded invoices — SAP confirms them" items={diff.confirmed}
+            render={(c) => `${c.row.invoice_number} — ${c.differs.length ? c.differs.join('; ') : 'same as the PDF'}`} />}
       {bills && <Fold title="Changed since last import" items={diff.amended}
             render={(a) => `${a.row.invoice_number} — ${a.changed.join(', ')}: ${formatINR(a.was.total_paise)} → ${formatINR(a.row.total_paise)}${a.row.status !== a.was.status ? `, ${a.was.status} → ${a.row.status}` : ''}`} />}
 
@@ -356,7 +376,7 @@ function Done({ plan, done, onAnother, onGoMatch }) {
       <h2 className="pay-empty-title">Imported</h2>
       <p className="pay-empty-sub">
         {bills
-          ? `${res.new ?? 0} new · ${res.amended ?? 0} changed · ${res.unchanged ?? 0} unchanged${conflicts ? ` · ${conflicts} left as ${conflicts === 1 ? 'it was' : 'they were'}` : ''}`
+          ? `${res.new ?? 0} new · ${res.amended ?? 0} changed · ${res.unchanged ?? 0} unchanged${res.confirmed ? ` · ${res.confirmed} uploaded bill${res.confirmed === 1 ? '' : 's'} confirmed` : ''}${conflicts ? ` · ${conflicts} left as ${conflicts === 1 ? 'it was' : 'they were'}` : ''}`
           : `${res.new ?? 0} new · ${res.already_present ?? 0} already there${res.already_present_manual ? ` · ${res.already_present_manual} linked to hand entries` : ''}`}
       </p>
       {/* Money too, not only counts — and only when the server did exactly

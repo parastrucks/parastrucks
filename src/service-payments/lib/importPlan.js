@@ -104,7 +104,20 @@ export function existingInvoiceFromRow(row) {
     allocated_paise: Number(row.allocated_paise ?? 0),
     status: row.status,
     cancelled_flag: row.cancelled_flag ?? null,
+    origin: row.origin ?? 'billing_report',
+    invoice_date: row.invoice_date ?? null,
   }
+}
+
+/**
+ * The same SAP customer code, printed at another width? An uploaded invoice PDF
+ * and the Billing Report may pad the code differently (unproven on real files;
+ * the demos differ), so a bill born from a PDF compares codes without leading
+ * zeros. Mirrors ltrim(code, '0') in payments_import_invoices.
+ */
+export function sameCustomerCode(a, b) {
+  const strip = (x) => String(x ?? '').replace(/^0+/, '')
+  return strip(a) === strip(b)
 }
 
 /**
@@ -115,12 +128,15 @@ export function existingInvoiceFromRow(row) {
  *   different customer                            -> conflict (number reused / wrong file)
  *   new total below what is already paid          -> conflict
  *   no longer active while money is matched to it -> conflict (it would strand the money)
+ *   came from an uploaded invoice PDF             -> confirmed (the report takes the row over)
  *   total, status or cancelled flag differ        -> amended
  *   otherwise                                     -> unchanged
+ * and, as of 20261030_payments_bills_from_invoices.sql, a PDF-born bill's
+ * customer code is compared without leading zeros (sameCustomerCode).
  */
 export function diffInvoices(parsed, existing) {
   const byNumber = new Map(existing.map((e) => [e.invoice_number, e]))
-  const out = { new: [], amended: [], unchanged: [], conflict: [], held: [] }
+  const out = { new: [], amended: [], unchanged: [], confirmed: [], conflict: [], held: [] }
   for (const v of parsed) {
     const e = byNumber.get(v.invoice_number)
     if (!e) { out.new.push(v); continue }
@@ -128,7 +144,8 @@ export function diffInvoices(parsed, existing) {
       out.held.push({ row: v, reason: 'could not read the existing bill’s customer — reload and try again' })
       continue
     }
-    if (e.sap_customer_code !== v.sap_customer_code) {
+    const fromPdf = e.origin === 'invoice_pdf'
+    if (fromPdf ? !sameCustomerCode(e.sap_customer_code, v.sap_customer_code) : e.sap_customer_code !== v.sap_customer_code) {
       out.conflict.push({ row: v, reason: `the customer changed (was ${e.customer_name ?? e.sap_customer_code}) — an invoice number reused, or a different export` })
       continue
     }
@@ -141,6 +158,7 @@ export function diffInvoices(parsed, existing) {
     if (e.total_paise !== v.total_paise) changed.push('total')
     if (e.status !== status) changed.push('status')
     if ((e.cancelled_flag ?? null) !== (v.cancelled_flag ?? null)) changed.push('cancelled')
+    if (fromPdf && !changed.length) { out.confirmed.push({ row: v, was: e, differs: pdfDiffers(e, v) }); continue }
     if (!changed.length) { out.unchanged.push(v); continue }
     if (status !== 'active' && e.status === 'active' && e.allocated_paise > 0) {
       // The one clash a person can clear from here: undo the match, and the
@@ -154,9 +172,37 @@ export function diffInvoices(parsed, existing) {
       })
       continue
     }
+    if (fromPdf) { out.confirmed.push({ row: v, was: e, differs: pdfDiffers(e, v) }); continue }
     out.amended.push({ row: v, was: e, changed })
   }
   return out
+}
+
+/** Where SAP's record of a bill differs from what its uploaded PDF said. */
+function pdfDiffers(e, v) {
+  const out = []
+  if (e.total_paise !== v.total_paise) out.push(`the PDF said ${formatINR(e.total_paise)}, SAP says ${formatINR(v.total_paise)}`)
+  if ((v.status ?? 'active') !== 'active') out.push(`SAP marks it ${v.status}`)
+  if (e.invoice_date && v.invoice_date && e.invoice_date !== v.invoice_date) out.push(`dated ${v.invoice_date} in SAP, ${e.invoice_date} on the PDF`)
+  return out
+}
+
+/**
+ * Bills that came from uploaded invoice PDFs, dated inside this report's days,
+ * that the report does not hold. Each is a bill number on a PDF that is NOT a
+ * Billing Report invoice number — the one thing the owner asked to have proved
+ * before the live site. Listed, never changed.
+ *
+ * @param parsed  the report's bills
+ * @param pdfRows stored PDF-born bills (existingInvoiceFromRow shape) in its date range
+ */
+export function pdfBillsNotInReport(parsed, pdfRows) {
+  const dates = parsed.map((v) => v.invoice_date).filter(Boolean).sort()
+  if (!dates.length) return []
+  const inFile = new Set(parsed.map((v) => v.invoice_number))
+  const [first, last] = [dates[0], dates[dates.length - 1]]
+  return (pdfRows ?? []).filter((e) => e.origin === 'invoice_pdf' && !inFile.has(e.invoice_number) &&
+    e.invoice_date && e.invoice_date >= first && e.invoice_date <= last)
 }
 
 /**
@@ -291,7 +337,7 @@ export function importGates({ kind, parsed, diff, priorBatch, entityPlants = Obj
   }
 
   const nothingNew = diff && (kind === 'billing_report'
-    ? diff.new.length + diff.amended.length === 0
+    ? diff.new.length + diff.amended.length + (diff.confirmed?.length ?? 0) === 0
     : diff.new.length + diff.linkManual.length === 0)
   if (!blocking.length && nothingNew) warnings.push('Nothing in this file is new — importing it changes nothing.')
 
@@ -386,8 +432,11 @@ export function importActionLabel(kind, diff) {
     const parts = []
     if (diff.new.length) parts.push(n(diff.new.length, 'new bill', 'new bills'))
     if (diff.amended.length) parts.push(n(diff.amended.length, 'change', 'changes'))
+    if (diff.confirmed?.length) parts.push(`confirm ${n(diff.confirmed.length, 'uploaded bill', 'uploaded bills')}`)
     if (!parts.length) return 'Record this file (nothing new)'
-    return `${diff.new.length ? 'Import' : 'Apply'} ${parts.join(' and ')}`
+    const verb = diff.new.length ? 'Import' : diff.amended.length ? 'Apply' : ''
+    const text = parts.join(' and ')
+    return verb ? `${verb} ${text}` : text.charAt(0).toUpperCase() + text.slice(1)
   }
   const parts = []
   if (diff.new.length) parts.push(n(diff.new.length, 'new payment', 'new payments'))
@@ -407,7 +456,8 @@ export function rowsToCommit(kind, parsed, diff) {
 /** What the preview promised, in the server's own vocabulary. */
 export function expectedCounts(kind, diff) {
   return kind === 'billing_report'
-    ? { new: diff.new.length, amended: diff.amended.length, unchanged: diff.unchanged.length, conflicts: diff.conflict.length }
+    ? { new: diff.new.length, amended: diff.amended.length, unchanged: diff.unchanged.length,
+        confirmed: diff.confirmed?.length ?? 0, conflicts: diff.conflict.length }
     // held: 0 — held rows are never sent, so the server holding any means the
     // stored data moved between the preview and the commit.
     : { new: diff.new.length, already_present: diff.already.length, already_present_manual: diff.linkManual.length, held: 0 }

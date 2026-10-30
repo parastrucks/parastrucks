@@ -16,6 +16,7 @@ import {
   diffReceipts, importGates, rowsToCommit, expectedCounts, reconcile, parseImportFile,
   sha256Hex, MAX_ROWS_PER_IMPORT, clashUndoPlan,
   billRowText, paymentRowText, sortBills, sortPayments,
+  sameCustomerCode, pdfBillsNotInReport, importActionLabel,
 } from '../../src/service-payments/lib/importPlan.js'
 import { capabilitiesFor } from '../../src/service-payments/lib/matchQueue.js'
 import { parseBillingReport } from '../../src/service-payments/lib/parseBillingReport.js'
@@ -339,6 +340,65 @@ section('R4-18 — the rows behind a count, one line each, in tick-off order')
   const input = [pay({ payer_name: 'b', received_at: '2026-10-09T01:00:00Z' }), pay({ payer_name: 'a', received_at: '2026-10-08T01:00:00Z' })]
   sortPayments(input)
   eq('...without reordering the preview\'s own list (it is what gets committed)', input.map((r) => r.payer_name), ['b', 'a'])
+}
+
+section('invoices first — a bill from an uploaded PDF, then the Billing Report takes it over')
+{
+  eq('a stored bill without an origin is a Billing Report bill', existingInvoiceFromRow({ invoice_number: 'X', total_paise: 1 }).origin, 'billing_report')
+  eq('...and a PDF-born one says so', existingInvoiceFromRow({ invoice_number: 'X', total_paise: 1, origin: 'invoice_pdf' }).origin, 'invoice_pdf')
+  ok('the same code at another width is the same customer', sameCustomerCode('0012040678', '12040678'))
+  ok('...a different code is not', !sameCustomerCode('0012040678', '0012040679'))
+  ok('...nor a code that only ENDS alike', !sameCustomerCode('112040678', '12040678'))
+
+  const pdf = (n, o = {}) => ({ invoice_number: n, sap_customer_code: '12040678', customer_name: 'GURPAL', total_paise: 100000,
+    allocated_paise: 0, status: 'active', cancelled_flag: null, origin: 'invoice_pdf', invoice_date: '2026-10-02', ...o })
+  const rep = (n, o = {}) => ({ invoice_number: n, sap_customer_code: '0012040678', customer_name: 'GURPAL', total_paise: 100000,
+    status: 'active', cancelled_flag: null, invoice_date: '2026-10-02', ...o })
+  const d = diffInvoices([
+    rep('SAME'), rep('MORE', { total_paise: 120000 }), rep('OTHERCUST', { sap_customer_code: '0099999999' }),
+    rep('CANCEL-PAID', { status: 'cancelled', cancelled_flag: 'X' }), rep('BELOW-PAID', { total_paise: 40000 }),
+    rep('CANCEL-FREE', { status: 'cancelled', cancelled_flag: 'X' }), rep('UNREAD'), rep('OLD-WIDTH'),
+  ], [
+    pdf('SAME'), pdf('MORE'), pdf('OTHERCUST'), pdf('CANCEL-PAID', { allocated_paise: 50000 }),
+    pdf('BELOW-PAID', { allocated_paise: 50000 }), pdf('CANCEL-FREE'), pdf('UNREAD', { sap_customer_code: undefined }),
+    // A Billing Report bill keeps the exact-code rule: widths differing there is a different export.
+    pdf('OLD-WIDTH', { origin: 'billing_report' }),
+  ])
+  eq('confirmed: the same bill, a changed total, and a no-money cancellation',
+     d.confirmed.map((c) => c.row.invoice_number), ['SAME', 'MORE', 'CANCEL-FREE'])
+  eq('...a bill the same as its PDF says nothing differs', d.confirmed[0].differs, [])
+  ok('...a changed total names both amounts', d.confirmed[1].differs.length === 1 &&
+     /1,000/.test(d.confirmed[1].differs[0]) && /1,200/.test(d.confirmed[1].differs[0]), JSON.stringify(d.confirmed[1].differs))
+  ok('...a cancellation is said', d.confirmed[2].differs.some((x) => /cancelled/.test(x)))
+  eq('clashes still come first: another customer, cancelled under money, below what is paid, and an exact-code bill at another width',
+     d.conflict.map((c) => c.row.invoice_number).sort(), ['BELOW-PAID', 'CANCEL-PAID', 'OLD-WIDTH', 'OTHERCUST'])
+  eq('...the cancelled-under-money one can still be undone from the screen',
+     d.conflict.find((c) => c.row.invoice_number === 'CANCEL-PAID').kind, 'cancelled_under_money')
+  eq('an unreadable customer is held, PDF-born or not', d.held.map((h) => h.row.invoice_number), ['UNREAD'])
+  eq('nothing PDF-born is counted as amended or unchanged', [d.amended.length, d.unchanged.length], [0, 0])
+  eq('the server is told to expect the confirmations', expectedCounts('billing_report', d).confirmed, 3)
+  eq('...and a server that did them all agrees',
+     reconcile(expectedCounts('billing_report', d), { new: 0, amended: 0, unchanged: 0, confirmed: 3, conflicts: [1, 2, 3, 4] }), [])
+  eq('...one that confirmed fewer is caught',
+     reconcile(expectedCounts('billing_report', d), { new: 0, amended: 0, unchanged: 0, confirmed: 2, conflicts: [1, 2, 3, 4] }).map((m) => m.key), ['confirmed'])
+
+  const onlyConfirm = diffInvoices([rep('SAME')], [pdf('SAME')])
+  eq('the button says what it does when it only confirms', importActionLabel('billing_report', onlyConfirm), 'Confirm 1 uploaded bill')
+  eq('...and alongside new bills', importActionLabel('billing_report', diffInvoices([rep('SAME'), rep('NEW')], [pdf('SAME')])),
+     'Import 1 new bill and confirm 1 uploaded bill')
+  const parsedFile = { invoices: [rep('SAME')], refused: [], summary: { by_plant: { 6370: 1 } } }
+  ok('a file that only confirms is not called "nothing new"',
+     !importGates({ kind: 'billing_report', parsed: parsedFile, diff: onlyConfirm, priorBatch: null }).warnings.some((w) => /Nothing in this file is new/.test(w)))
+
+  const file = [rep('A', { invoice_date: '2026-10-01' }), rep('B', { invoice_date: '2026-10-03' })]
+  eq('PDF bills inside the report\'s days but not in it are listed — nothing else',
+     pdfBillsNotInReport(file, [
+       pdf('A', { invoice_date: '2026-10-01' }),           // in the file
+       pdf('LOST', { invoice_date: '2026-10-02' }),        // inside its days, missing: the proof failed
+       pdf('LATER', { invoice_date: '2026-10-05' }),       // after its last day: tomorrow's report
+       pdf('BR', { invoice_date: '2026-10-02', origin: 'billing_report' }),
+     ]).map((e) => e.invoice_number), ['LOST'])
+  eq('...an empty report lists nothing', pdfBillsNotInReport([], [pdf('LOST')]), [])
 }
 
 console.log(`\n${'═'.repeat(64)}`)
