@@ -8,6 +8,12 @@ first; matching joins it with credit-release step 3, where an invoice released o
 "paid" ONLY when payments are matched to its bills (no "mark paid"). Branch `cr3-one-tool`
 (merges this payments branch). Record: docs/backlog/credit-release-plan.md → "Step 3 — as built".
 
+⭐ 2026-10-30 — UNPARKED WITHOUT THE HDFC API (owner): daily HDFC SmartHub report + the SAP Billing Report
+(month to date, made by the owner's SAP Automation tool in every day's SAP run, PTB only). Bills: "both, invoices
+first" — an uploaded invoice PDF's bills enter matching the same day, the Billing Report takes them over
+(migration 20261030_payments_bills_from_invoices.sql). Next: a Google Apps Script bridge that imports both files
+automatically. Record: docs/backlog/credit-release-plan.md → "Step 3b".
+
 ⚠️ BUILD STATUS 2026-09-08 — THIS PLAN IS NO LONGER AHEAD OF THE CODE.
 Phase A1's core is BUILT and PROVED ON STAGING (klpnhpnlotcbbovwswmq): 14 tables,
 28 policies, 2 views, 10 SECURITY DEFINER RPCs, probe 24/0 with zero residue; plus

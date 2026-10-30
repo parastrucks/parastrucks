@@ -574,6 +574,134 @@ includes matching — after the payments go-live items (HDFC, the scheduled Bill
 - Prod — only on the owner's command: steps 1–2 first (after #140); step 3 with the payments rollout (its nine
   migrations + `20261029_gate_promises.sql`, `gate-invoices` with paid.ts/released.ts, `service-payments`).
 
+## Step 3b — invoices first, the daily files, and the bridge (2026-10-30, branch `cr3-one-tool`, staging only)
+
+### Owner decisions (2026-10-30)
+| Question | Owner's answer |
+|---|---|
+| Wait for the HDFC API? | **No — "HDFC API may take a while."** Accounts uploads the HDFC SmartHub report DAILY (Import tab, already built). |
+| Where do matching's bills come from? | **"Both, invoices first."** Every uploaded invoice PDF's bills enter matching the same day; the SAP Billing Report fills in the rest and the cancellations, and takes the PDF bills over. |
+| Confirm against a PDF bill before the Billing Report covers the payment's day? | **No — "Wait for the Billing Report."** The stale-bills brake is unchanged. |
+| Where do the first real days run? | **A staging trial first (~2 weeks), real files** (real payer names on staging accepted). |
+| Who uploads during the trial? | **The owner** (accounts sends the files). The Vercel login wall on staging stays on. |
+| The SAP Billing Report | ⭐ **"This needs to be incorporated as a part of every day's SAP run."** A scheduled job of the owner's SAP Automation tool (on the owner's PC), **PTB only**. |
+| SAP Automation's questions 5 + 6 | **5a** a new folder `billing_reports\` inside SAP Automation, every day's file kept, housekeeping never touches it · **6a** a note file (`PTB Billing Report <date> FAILED.txt` with the reason) + one status line (saved / failed / no bills) in the nightly PTB mail. A month-to-date file is never empty, so "no bills" means something to look into. |
+| Automate the uploads? | ⭐ **Yes — the Google route:** Google Drive for desktop syncs `billing_reports\` into a Drive folder; a Gmail filter catches HDFC's report email; a **Google Apps Script** (Google's cloud, the company Workspace account) sends both files to the portal. |
+| Import automatically? | **"Import, hold what needs a person."** Safe rows are written; clashes, unreadable rows and "uploaded bill not in this report" are held and listed, with a phone alert. Matching stays a human tap. |
+
+Why not PDFs only (said to the owner, who chose "both"): most counter UPI payments belong to PAID vehicles that never
+come through the upload (they keep accounts' gate pass), and a PDF cannot say SAP later cancelled a bill.
+Why not Claude reading the mailbox: ⛔ the Gmail connector reads mail but cannot open attachments.
+
+### The prompt given to the SAP Automation tool (2026-10-30, as sent)
+The tool answered: all 33 SAP columns, rows from other plants dropped · the file follows the nightly run's data date ·
+the selection screen filled like its other reports, column names checked on every export · an SAP probe "tomorrow,
+while you're at the laptop" · it does NOT send email (hence 5 + 6). The prompt:
+
+```text
+Add a new daily scheduled job: the PTB Billing Report.
+
+WHO IT IS FOR
+- Company: Paras Trucks and Buses (PTB) ONLY — plants 5756 (Ahmedabad) and 6370 (Anand).
+- Do NOT include Paras Trucks (PT) or any other company, company code or plant. If a row from any
+  other plant appears, leave it out. A file holding another company's bills is refused by the portal.
+
+WHAT IT IS
+- The SAP "Billing Report" that is exported by hand today: one row per billing document / dealer invoice.
+- Include EVERY billing type: ZMSI (workshop parts and labour), ZMPI (counter sale, cash),
+  ZMCI (counter sale, credit), ZFCI (free of cost), ZMPR (parts return).
+- Include cancelled documents, with the "Cancelled" column filled in for them. Do not drop them.
+
+WHEN
+- Every day, as part of the daily SAP run, after the day's billing is closed; ready before the working day.
+
+DATE RANGE (month to date)
+- From the 1st of the month of the last completed billing day, up to and including that day.
+  Example: the run on 15 Nov covers 1 Nov - 14 Nov. The run on 1 Dec covers 1 Nov - 30 Nov
+  (never an empty file). Every run repeats the earlier days of the month — that is intended.
+
+FORMAT (keep it identical every day — save it as a fixed variant/layout)
+- Excel .xlsx, one sheet.
+- Row 1: a title. Row 2: the number of entries. Row 3: blank. Row 4: the column headings. Data from row 5.
+- Column headings EXACTLY these names (same spelling, spacing and capitals). Order does not matter,
+  but do not rename, merge or drop any. The portal finds columns by name and refuses the file if a
+  required one is missing.
+  Required: Billing Date · Plant · Customer Name · Dealer invoice number · Net value · Tax Value ·
+            Total · Billing Type · Customer Number · Billing Document · Payment terms
+  Also include, with these names: Cancelled · Reg.No · Order number · Dealer specific order number ·
+            Split Order Type description · Customer GSTN · Customer PAN · Chassis · IRN No
+- Billing Date as a date (a billing time is NOT needed).
+- Net value + Tax Value must equal Total on every row. Amounts as plain numbers in rupees.
+- Customer Number: keep its leading zeros (store as text, not a number).
+- Dealer invoice number: exactly as SAP prints it on the invoice (e.g. LCS5756…, PCR5756…, MPI6370…).
+- Payment terms: the SAP code as is (D001 = cash, D002 = credit).
+
+FILE NAME
+- PTB Billing Report <YYYY-MM-DD of the last day covered>.xlsx
+
+DELIVERY
+- Email the file as an attachment to ceo@parastrucks.in, subject "PTB Billing Report <same date>".
+- If the job fails or finds no bills, still send an email saying so — never skip a day silently.
+```
+(Delivery was then replaced by the folder + note file + mail line in 5a / 6a, since the tool sends no email.)
+Said to the owner: a cancellation of a LAST-month bill during the first days of a month is outside the range — the tool
+can be asked to cover the previous month too for the first 5 days (not decided).
+
+### What was built (`ea86d5c`)
+- **Migration `20261030_payments_bills_from_invoices.sql` (STAGING):** `service_invoices.origin` (`billing_report` |
+  `invoice_pdf`) + `gate_bill_id`; `payments_bills_from_gate_document(document_id)` — service role only, idempotent: kind
+  from the bill-number prefix (the Billing Report parser's own map: PCS/PCR/LCS/LCR/MPI/MCI; free of cost, returns and
+  unknown prefixes are skipped and named), only PTB's plants 5756/6370, the customer found by SAP code **ignoring leading
+  zeros**, one job card's bills share a job key (parts + labour offered as one order); `payments_import_invoices` — a
+  Billing Report row whose bill came from a PDF **takes the row over** (counted `confirmed`): every SAP field written,
+  origin becomes `billing_report`, the customer becomes the report's. The same clash checks come first (another
+  customer — codes compared without leading zeros only for a PDF-born bill — a total below what is matched, a
+  cancellation under matched money). The migration back-filled the 3 DEMO invoices on staging: 5 bills, origin
+  `invoice_pdf`.
+- **`gate-invoices`** calls it after every save AND every repeat of one (a failed call heals on the next upload); a
+  failure never fails the save (`matching_error`, shown only to people who match). Deployed to staging.
+- **Import preview:** "From uploaded invoices — SAP confirms them (n)" with what differs ("the PDF said ₹4,550, SAP says
+  ₹4,600"), and an orange warning "bill from an uploaded invoice is not in this report, though the report covers its
+  day" — ⭐ the daily proof that a PDF bill number IS the Billing Report invoice number. Button e.g. "Import 1 new bill
+  and confirm 4 uploaded bills". The upload screen reads the PDF bills in the report's date range
+  (`fetchPdfBillsInRange`).
+- **Tests:** `selftest-import-plan` **107/0** · `probe-import-parity` **54/0** on staging (generated; a third import over
+  PDF-born bills; negative control `node scripts/payments/gen-probe-import-parity.mjs --mutant <out.sql>` swaps in the
+  20260926 rule: **6 fail**) · new `scripts/invoices/probe-bills-from-invoices.sql` **23/0** (negative control
+  `node scripts/invoices/make-bills-probe-mutant.mjs <out.sql>`, exact-code lookup: **2 fail**) · demo-files 87 ·
+  match-queue 143 · matcher 67 · parse-hdfc 35 · parsers 146 · cash-receipt 47 · bottom-nav 17 · build + no-undef clean.
+- **Seen in the owner's Chrome (Claude in Chrome, staging admin, localhost:3001):** a DEMO Billing Report
+  (`node_modules/payments-demo-files/DEMO-billing-report-invoices-first.xlsx`, gitignored, made by a scratch script;
+  codes at 10 digits, one total changed, one uploaded bill left out, one bill nobody uploaded) gave 1 new · 4 confirmed
+  (3 "same as the PDF", 1 "the PDF said ₹4,550, SAP says ₹4,600") · the warning naming MCI5756269900001 (DEMO SHIV
+  SPARES) · **NOT imported** (the tab was reloaded). `?tab=import` lands on Import once the profile has loaded.
+- ⚠️ Consequence: the Follow-up tab now shows GJ01ZZ0001 / GJ01ZZ0002 as **unpaid** (their bills are in matching), no
+  longer "Can't tell yet".
+
+### Next — the bridge (to build; owner chose the Google route + "import, hold what needs a person")
+1. **Server: an "import a file" action** (Edge Function) — the raw .xlsx in, the SAME parsers + gates + diff the Import
+   tab uses (one copy of the code, not a second implementation), commit what is safe, hold and list the rest, record the
+   run for the Import tab ("Imported automatically at 6:05 am: …") and send a phone alert when anything is held. Its
+   own **import-only key** (an EF secret the owner sets) — it can import files and nothing else.
+2. **Google Apps Script** (owner's Workspace account): a time trigger reads new files in the synced Drive folder and new
+   HDFC report emails (Gmail filter/label), sends each once (remembers what it sent), never deletes anything.
+3. **Owner steps:** install Google Drive for desktop and sync `SAP Automation\billing_reports\`; create the Gmail
+   filter; approve the script's access (I cannot grant OAuth consent); set the import key in both places.
+4. ⚠️ Unknown: whether HDFC sends the SmartHub report daily on its own (today: on request from the app).
+
+### The trial routine (until the bridge runs; waiting for the owner's yes)
+1. The Billing Report from `billing_reports\` (SAP Automation) + the HDFC report from accounts.
+2. The owner drops both on Import — HDFC first, then the Billing Report.
+3. Matching on the Match tab. The first morning also: **one real SAP invoice PDF** saved on Invoices ("Save only", no
+   email) — the next Billing Report then shows whether the PDF's bill numbers are SAP's.
+
+### Not yet done
+- The owner's yes to start the trial; the SAP Automation probe + daily job; the bridge.
+- An opening-balance rule for PDF-born bills (Billing Report bills dated on/before the go-live opening date import as
+  `pre_opening`; a PDF bill does not yet) — before the live site, not for the trial.
+- Prod: `20261030_payments_bills_from_invoices.sql` joins the step-3 rollout (after the nine payments migrations and
+  `20261024_gate_invoices.sql`), then `probe-import-parity.sql` + `probe-bills-from-invoices.sql`.
+
 ## Sources (outside the repo, not committed)
 - WhatsApp export "Vehicle Gate Pass" (owner, 2026-10-24) — analysed by a throwaway script; aggregates only.
 - Three SAP invoice PDFs in the main checkout's `docs/` (a counter sale and two workshop jobs; Aug + Oct 2026).

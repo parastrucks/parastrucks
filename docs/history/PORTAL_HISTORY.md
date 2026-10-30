@@ -26,6 +26,37 @@
 
 ---
 
+## Session log — 2026-10-30 (PC): matching unparked — daily files, invoices first, the SAP daily run, and the bridge decided
+
+Branch `cr3-one-tool`: `ea86d5c` (code) + this docs commit, pushed, no PR. Staging only; prod untouched.
+⭐ Full record: `docs/backlog/credit-release-plan.md` → "Step 3b".
+
+- **Owner:** start matching without waiting for HDFC's API — accounts uploads the HDFC SmartHub report daily, and the
+  billing information comes in daily alongside the invoice uploads. Said to the owner: the Import tab already takes the
+  HDFC report; HDFC's Mintoak-id question is not blocking (the import also refuses a second receipt with the same RRN);
+  bills from uploaded PDFs ALONE would leave most counter UPI payments unmatched (paid vehicles never come through the
+  upload) and cannot see cancellations.
+- **Owner's picks:** "Both, invoices first" · Confirm waits for the Billing Report · a ~2-week staging trial with real
+  files · the owner uploads (Vercel wall stays).
+- **Built `ea86d5c`:** migration `20261030_payments_bills_from_invoices.sql` (staging; back-filled the 3 DEMO invoices →
+  5 bills) · `gate-invoices` sends every saved invoice's bills to matching (staging) · Import preview: confirmed bills +
+  the "not in this report" warning. ⭐ Caught in review before any run: in PL/pgSQL every SELECT resets FOUND — the first
+  draft read FOUND after a second lookup, so a bill with no customer would have been inserted again (`v_found` now).
+  Tests 107/0 · 54/0 (old rule: 6 fail) · 23/0 (exact-code mutant: 2 fail) · all other payments suites green · build +
+  no-undef clean. The Bash tool again mangled a backslash in a heredoc'd node script (the insert threw, nothing written)
+  — the Edit tool was used instead.
+- **Seen in the owner's Chrome** (Claude in Chrome, staging admin): a DEMO Billing Report → 1 new · 4 confirmed (one
+  "the PDF said ₹4,550, SAP says ₹4,600") · the warning naming the left-out bill · not imported.
+- **Owner: "This needs to be incorporated as a part of every day's SAP run."** A prompt for the owner's SAP Automation
+  tool (PTB only, plants 5756/6370, every billing type incl. cancelled, month to date, fixed .xlsx layout, exact column
+  names, leading zeros kept, failure never silent) — verbatim in the plan. The tool: 33 columns, other plants dropped,
+  sends no email → owner answered **5a** (`billing_reports\` folder, files kept) and **6a** (FAILED note + nightly-mail
+  status line), as recommended.
+- **Owner asked for a bridge** that fetches the files and loads them automatically ("a connector of some sort"). Options
+  given: a bridge on this PC (Billing Report only) or the Google route (Drive for desktop + Gmail filter + an Apps
+  Script — both files). **Owner chose the Google route and "import, hold what needs a person".** Not built yet — next.
+- Docs: CLAUDE.md 2026-10-30 block, plan "Step 3b", payments-plan pointer, this entry; memory updated.
+
 ## Session log — 2026-10-28 evening → 10-29 (PC): the Android test passed, and ONE tool — matching joined credit release (step 3, staging)
 
 Branches `cr2-release-gate` (finished step 2: `8603092`, `6c14b72`, `e1da92e`, docs `0cb9e85`, `decc8c5`) and the new

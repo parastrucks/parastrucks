@@ -30,6 +30,33 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
 
 ---
 
+## Current state (2026-10-30)
+
+- **⭐ MATCHING UNPARKED WITHOUT THE HDFC API (owner: "HDFC API may take a while").** Daily files instead: the HDFC
+  SmartHub report + the SAP Billing Report (month to date). ⭐ **Record: `docs/backlog/credit-release-plan.md` → "Step 3b".**
+  - **"Both, invoices first" (owner):** an uploaded invoice PDF's bills enter matching the SAME day; the Billing Report
+    fills in the rest + cancellations and TAKES the PDF bills over. Confirm still **waits for the Billing Report** that
+    covers the payment's day (owner; brake unchanged). Built `ea86d5c` (cr3-one-tool, pushed): migration
+    **`20261030_payments_bills_from_invoices.sql` (STAGING)** — `service_invoices.origin` + `gate_bill_id`,
+    `payments_bills_from_gate_document` (service role; prefix → kind; PTB plants only; SAP code ignoring leading zeros),
+    import RPC counts `confirmed`; `gate-invoices` calls it after every save (staging). Import preview lists confirmed
+    bills (what differs) + ⚠️ "uploaded bill not in this report" = **the daily proof PDF bill no. == Billing Report
+    invoice no.** probe-bills-from-invoices **23/0** (mutant 2 fail) · probe-import-parity **54/0** (old rule 6 fail) ·
+    import-plan **107/0**. Seen in the owner's Chrome with a DEMO report (not imported). Follow-up now shows the two DEMO
+    vehicles as unpaid.
+  - **Staging trial first (~2 weeks, real files, owner uploads)** — waiting for the owner's yes; first morning also one
+    REAL SAP invoice PDF ("Save only").
+  - ⭐ **SAP Billing Report = part of every day's SAP run, PTB ONLY (owner).** The owner's **SAP Automation tool (on the
+    owner's PC)** got the prompt (verbatim in the plan): saves `PTB Billing Report <date>.xlsx` into
+    `SAP Automation\billing_reports\` (kept forever), a `… FAILED.txt` note + a status line in the nightly PTB mail; it
+    sends no email. Its SAP probe: "tomorrow, while you're at the laptop".
+  - ⏭️ **THE BRIDGE — owner chose the GOOGLE ROUTE + "import, hold what needs a person":** Drive for desktop syncs
+    `billing_reports\` → a Google Apps Script (Workspace) also reads HDFC's report email (Gmail filter) → sends both to a
+    NEW server "import a file" action (same parsers/gates/diff as the Import tab; import-only key as an EF secret);
+    safe rows written, clashes / unreadable / not-in-report held + listed + phone alert; matching stays human. Owner
+    steps: Drive for desktop, Gmail filter, approve the script (Claude cannot grant OAuth), set the key. ⛔ The Gmail
+    connector cannot open attachments — Claude cannot be the mailbox reader.
+
 ## Current state (2026-10-29)
 
 - **⭐ ONE TOOL (owner, 2026-10-29): "Everything that we are building in this session is one tool, exactly."**
@@ -1075,6 +1102,10 @@ Leyland, Switch Mobility, HD Hyundai CE). Live at **https://team.parastrucks.in*
   (see the 2026-10-29 block). ⏭️ Owner: yes/no to the end-to-end staging run; one REAL SAP invoice PDF + its Billing
   Report to prove bill numbers match. Paid comes only from matching (no mark-paid). Go-live: steps 1–2 first, step 3
   with the payments rollout — both only on the owner's command.
+- **⭐ 2026-10-30 — matching unparked on daily files (see the 2026-10-30 block):** invoices first `ea86d5c` (staging);
+  ⏭️ BUILD THE BRIDGE (Google route: Drive for desktop + Gmail filter + Apps Script → a new server "import a file"
+  action, import-only key; import safe rows, hold the rest + alert) · owner's yes to the staging trial · SAP Automation
+  probe + daily job (PTB only) · one REAL invoice PDF on the first morning.
 - ✅ Test PI `PI-PTB-2026-0983` stays (owner, 2026-10-22) — do not re-raise. PI no-chassis hotfix: Optional:
   RTO/Insurance per-unit instead of per-PI, and a DB rule that non-admins need a chassis — both only if asked.
 - **⏸️ Service Payments parked, waiting on HDFC (2026-10-21)** — see the 2026-10-21 block. Its own list
